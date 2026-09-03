@@ -19,8 +19,12 @@ The engine does not know React Native exists.
 
 ## Status
 
-Early. The Android engine renders and walks World Labs worlds on the emulator; real device numbers are pending.
-See `docs/ROADMAP.md` for what is next and `docs/adr` for the decisions taken so far.
+Experimental, pre alpha.
+The Android engine renders and walks World Labs worlds; it has been verified on the emulator and device numbers are pending.
+Expect the API to change until 0.1.0.
+
+Contributions are welcome.
+`docs/ROADMAP.md` lists what is open and what each item needs to prove; `CONTRIBUTING.md` says how to build and what a pull request needs.
 
 ## License
 
