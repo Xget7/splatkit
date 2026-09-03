@@ -29,6 +29,14 @@ internal class NativeEngine {
 
     fun setMotionEnabled(enabled: Boolean) = nativeSetMotionEnabled(handle, enabled)
 
+    fun setVelocity(forward: Float, right: Float) = nativeSetVelocity(handle, forward, right)
+
+    /** Safe from any thread once created. */
+    fun gpuDescription(): String = nativeGpuDescription(handle)
+
+    /** Safe from any thread: the engine publishes these atomically. */
+    fun stats(out: FloatArray) = nativeStats(handle, out)
+
     fun destroy() {
         if (handle != 0L) {
             nativeDestroy(handle)
@@ -47,6 +55,9 @@ internal class NativeEngine {
     private external fun nativeWalk(handle: Long, forward: Float, right: Float)
     private external fun nativeSetAttitude(handle: Long, rowMajor: FloatArray)
     private external fun nativeSetMotionEnabled(handle: Long, enabled: Boolean)
+    private external fun nativeSetVelocity(handle: Long, forward: Float, right: Float)
+    private external fun nativeGpuDescription(handle: Long): String
+    private external fun nativeStats(handle: Long, out: FloatArray)
 
     companion object {
         init {

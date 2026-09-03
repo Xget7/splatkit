@@ -23,6 +23,9 @@ internal class RenderThread {
     private var engine: NativeEngine? = null
     private var rendering = false
 
+    /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
+    val gpuDescription: String
+
     // Decoding runs here so frames keep flowing; the engine uploads on its next frame.
     private val loader = Executors.newSingleThreadExecutor { Thread(it, "SplatKitLoader") }
 
@@ -32,6 +35,7 @@ internal class RenderThread {
             choreographer = Choreographer.getInstance()
             engine = NativeEngine()
         }
+        gpuDescription = engine?.gpuDescription() ?: ""
     }
 
     private val frameCallback = object : Choreographer.FrameCallback {
@@ -83,6 +87,13 @@ internal class RenderThread {
     fun setAttitude(rowMajor: FloatArray) = post { engine?.setAttitude(rowMajor) }
 
     fun setMotionEnabled(enabled: Boolean) = post { engine?.setMotionEnabled(enabled) }
+
+    fun setVelocity(forward: Float, right: Float) = post { engine?.setVelocity(forward, right) }
+
+    /** Reads the latest stats into [out]; see [NativeEngine.stats] for the layout. */
+    fun stats(out: FloatArray) {
+        engine?.stats(out)
+    }
 
     /** Handler on the render thread, for listeners that should deliver there. */
     val renderHandler: Handler get() = handler

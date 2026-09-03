@@ -50,6 +50,28 @@ class SplatSurfaceView @JvmOverloads constructor(
     /** Decodes a collider GLB; enables walk mode when ready. */
     fun loadCollider(glbBytes: ByteArray) = renderThread.loadCollider(glbBytes)
 
+    /** Walks continuously at the given speed in meters per second until called again with zeros. */
+    fun setWalkVelocity(forward: Float, right: Float) = renderThread.setVelocity(forward, right)
+
+    /** GPU name and Vulkan version reported by the driver. */
+    val gpuDescription: String get() = renderThread.gpuDescription
+
+    /** True while the gyroscope drives the camera. */
+    val isMotionEnabled: Boolean get() = motionEnabled
+
+    /** Latest engine stats. Cheap; safe on the UI thread. */
+    fun readStats(into: SplatStats = SplatStats()): SplatStats {
+        renderThread.stats(statsScratch)
+        into.fps = statsScratch[0]
+        into.frameMillis = statsScratch[1]
+        into.sortMillis = statsScratch[2]
+        into.splatCount = statsScratch[3].toInt()
+        into.walking = statsScratch[4] != 0f
+        into.motion = statsScratch[5] != 0f
+        return into
+    }
+    private val statsScratch = FloatArray(6)
+
     /** Drives the camera with the phone's orientation. No-op when the sensor is missing. */
     fun setMotionEnabled(enabled: Boolean) {
         motionEnabled = enabled && motion.isAvailable

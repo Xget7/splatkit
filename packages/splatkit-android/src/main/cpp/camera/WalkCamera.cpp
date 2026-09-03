@@ -45,6 +45,11 @@ void WalkCamera::walk(float forward, float right) {
   }
 }
 
+void WalkCamera::setVelocity(float forward, float right) {
+  velocityForward_ = forward;
+  velocityRight_ = right;
+}
+
 void WalkCamera::setAttitude(const float rowMajor[9]) {
   splat::Mat4 m = splat::Mat4::identity();
   for (int row = 0; row < 3; ++row)
@@ -58,6 +63,9 @@ void WalkCamera::setMotionEnabled(bool enabled) {
 }
 
 void WalkCamera::update(float dtSeconds) {
+  if (velocityForward_ != 0 || velocityRight_ != 0) {
+    walk(velocityForward_ * dtSeconds, velocityRight_ * dtSeconds);
+  }
   if (player_) player_->update(dtSeconds);
 }
 

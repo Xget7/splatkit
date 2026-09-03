@@ -1,9 +1,11 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <android/native_window.h>
@@ -49,6 +51,19 @@ class Engine {
   void walk(float forward, float right) { camera_.walk(forward, right); }
   void setAttitude(const float rowMajor[9]) { camera_.setAttitude(rowMajor); }
   void setMotionEnabled(bool enabled) { camera_.setMotionEnabled(enabled); }
+  void setVelocity(float forward, float right) { camera_.setVelocity(forward, right); }
+
+  // Readable from any thread. Refreshed twice a second by the render loop.
+  struct Stats {
+    float fps = 0;
+    float frameMillis = 0;  // wall time between vsyncs, averaged over the window
+    float sortMillis = 0;   // last completed sort
+    uint32_t splatCount = 0;
+    bool walking = false;
+    bool motion = false;
+  };
+  Stats stats() const;
+  const std::string& gpuDescription() const { return ctx_->deviceDescription(); }
 
  private:
   Engine() = default;
@@ -81,6 +96,14 @@ class Engine {
 
   int64_t fpsWindowStart_ = 0;
   uint32_t fpsWindowFrames_ = 0;
+  uint32_t fpsWindowsSinceLog_ = 0;
+  // Written by the render thread, read by the UI thread through stats().
+  std::atomic<float> statFps_{0};
+  std::atomic<float> statFrameMillis_{0};
+  std::atomic<float> statSortMillis_{0};
+  std::atomic<uint32_t> statSplats_{0};
+  std::atomic<bool> statWalking_{false};
+  std::atomic<bool> statMotion_{false};
 };
 
 }  // namespace splatkit

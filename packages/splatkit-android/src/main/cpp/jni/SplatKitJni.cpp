@@ -101,6 +101,32 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetAttitu
   engine->setAttitude(m);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetVelocity(JNIEnv*, jobject,
+                                                                                  jlong handle,
+                                                                                  jfloat forward,
+                                                                                  jfloat right) {
+  if (auto* engine = toEngine(handle)) engine->setVelocity(forward, right);
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_com_splatkit_NativeEngine_nativeGpuDescription(JNIEnv* env,
+                                                                                        jobject,
+                                                                                        jlong handle) {
+  auto* engine = toEngine(handle);
+  return env->NewStringUTF(engine ? engine->gpuDescription().c_str() : "");
+}
+
+// Fills out[0..5]: fps, frame ms, sort ms, splat count, walking (0/1), motion (0/1).
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeStats(JNIEnv* env, jobject,
+                                                                            jlong handle,
+                                                                            jfloatArray out) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 6) return;
+  const splatkit::Engine::Stats s = engine->stats();
+  const float values[6] = {s.fps, s.frameMillis, s.sortMillis, static_cast<float>(s.splatCount),
+                           s.walking ? 1.0f : 0.0f, s.motion ? 1.0f : 0.0f};
+  env->SetFloatArrayRegion(out, 0, 6, values);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetMotionEnabled(JNIEnv*, jobject,
                                                                                        jlong handle,
                                                                                        jboolean enabled) {

@@ -284,14 +284,34 @@ void Engine::render(int64_t frameTimeNanos) {
   ++fpsWindowFrames_;
   if (fpsWindowStart_ == 0) fpsWindowStart_ = frameTimeNanos;
   const int64_t elapsed = frameTimeNanos - fpsWindowStart_;
-  if (elapsed >= 2'000'000'000LL) {
-    const splat::Vec3 p = camera_.position();
-    LOGI("%.1f fps, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fpsWindowFrames_ * 1e9 / static_cast<double>(elapsed),
-         lastSortMillis_, p.x, p.y, p.z, camera_.hasCollider() ? "walk" : "fly",
-         camera_.motionEnabled() ? ", gyro" : "");
+  if (elapsed >= 500'000'000LL) {
+    const float fps = static_cast<float>(fpsWindowFrames_ * 1e9 / static_cast<double>(elapsed));
+    statFps_.store(fps, std::memory_order_relaxed);
+    statFrameMillis_.store(1000.0f / fps, std::memory_order_relaxed);
+    statSortMillis_.store(static_cast<float>(lastSortMillis_), std::memory_order_relaxed);
+    statSplats_.store(world_ ? world_->count : 0, std::memory_order_relaxed);
+    statWalking_.store(camera_.hasCollider(), std::memory_order_relaxed);
+    statMotion_.store(camera_.motionEnabled(), std::memory_order_relaxed);
     fpsWindowStart_ = frameTimeNanos;
     fpsWindowFrames_ = 0;
+    if (++fpsWindowsSinceLog_ >= 4) {
+      fpsWindowsSinceLog_ = 0;
+      const splat::Vec3 p = camera_.position();
+      LOGI("%.1f fps, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fps, lastSortMillis_, p.x, p.y, p.z,
+           camera_.hasCollider() ? "walk" : "fly", camera_.motionEnabled() ? ", gyro" : "");
+    }
   }
+}
+
+Engine::Stats Engine::stats() const {
+  Stats s;
+  s.fps = statFps_.load(std::memory_order_relaxed);
+  s.frameMillis = statFrameMillis_.load(std::memory_order_relaxed);
+  s.sortMillis = statSortMillis_.load(std::memory_order_relaxed);
+  s.splatCount = statSplats_.load(std::memory_order_relaxed);
+  s.walking = statWalking_.load(std::memory_order_relaxed);
+  s.motion = statMotion_.load(std::memory_order_relaxed);
+  return s;
 }
 
 }  // namespace splatkit

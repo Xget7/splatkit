@@ -27,6 +27,8 @@ class WalkCamera {
   void look(float deltaYaw, float deltaPitch);
   // Touch: meters along the view direction and to its right, flattened when walking.
   void walk(float forward, float right);
+  // Joystick: meters per second, applied every update until changed. Zero stops.
+  void setVelocity(float forward, float right);
   // Device to reference (ENU, Z up) rotation, row major 3x3 as Android hands it out.
   void setAttitude(const float rowMajor[9]);
   void setMotionEnabled(bool enabled);
@@ -46,6 +48,8 @@ class WalkCamera {
   splat::Vec3 freePosition_;
   float yaw_ = 0;
   float pitch_ = 0;
+  float velocityForward_ = 0;
+  float velocityRight_ = 0;
   bool motion_ = false;
   splat::Mat4 attitude_ = splat::Mat4::identity();
   splat::Mat4 referenceToWorld_;

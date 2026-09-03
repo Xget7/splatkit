@@ -89,6 +89,10 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
   LOGI("Vulkan device: %s, API %u.%u.%u, driver 0x%x", props.deviceName,
        VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion),
        VK_VERSION_PATCH(props.apiVersion), props.driverVersion);
+  ctx->deviceDescription_ = std::string(props.deviceName) + ", Vulkan " +
+                            std::to_string(VK_VERSION_MAJOR(props.apiVersion)) + "." +
+                            std::to_string(VK_VERSION_MINOR(props.apiVersion)) + "." +
+                            std::to_string(VK_VERSION_PATCH(props.apiVersion));
   return ctx;
 }
 
