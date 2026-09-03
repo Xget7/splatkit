@@ -11,8 +11,19 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
 - `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending, walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
 - `apps/android-dev`: loads a World Labs kitchen and its collider, shows GPU, frame time, sort time and splat count.
 
-Verified on the Android emulator only.
-Adreno (Snapdragon 855) numbers are the next milestone; Mali has not been tested.
+Measured on a Xiaomi Mi 9 (Adreno 640, Vulkan 1.1.128), release build, 500k splats at 1080x2261, reproducible benchmark (`--ez benchmark true`):
+
+| Render scale | GPU ms mean | GPU ms p50 |
+|---|---|---|
+| 1.0 | 27 to 32 | 25 to 29 |
+| 0.7 | 18.7 | 16.7 |
+| 0.5 | 15.0 | 13.7 |
+
+Decode 192 ms, upload 73 ms, sort 11.5 ms on a background thread.
+Vertex fetch is an 8 ms floor; vertex math costs nothing; blended fragments are the rest.
+A compute prepass measured 4 ms slower on this GPU and was removed.
+The GPU throttles above 60 C, so every number here was taken after cooling below 48 C.
+Mali has not been tested.
 
 ## Towards 0.1.0 alpha
 
@@ -37,9 +48,10 @@ Each item says what it touches and how to prove it works.
 - **GPU sort** (help wanted, needs a real device).
   A compute radix or bitonic sort producing the order buffer on the GPU, gated behind a feature flag so the CPU sort stays the baseline.
   Proof: identical order to `DistanceSorter` in a test, and frame time on Adreno and Mali with 2M splats.
-- **Compute prepass for covariance projection** (help wanted, needs a real device).
-  The vertex shader repeats the projection and eigen decomposition for the four corners of every splat.
-  Proof: same image, lower vertex time in a GPU profiler capture.
+- **Fewer blended fragments** (help wanted, needs a real device).
+  Fragments are the cost on Adreno 640: half the pixels halve the GPU time.
+  Ideas with a measurable claim: tighter quad bounds from the projected ellipse, opacity aware culling of splats that cannot change a pixel, a depth aware early out.
+  A compute prepass was measured 4 ms slower here; do not resubmit it without a number from a device.
 - **Mali validation** (help wanted, needs a Samsung or Pixel).
   Run the dev app, report validation messages, driver behaviour and frame times.
   A crash or a black screen with logs attached is a valuable report.
@@ -50,6 +62,7 @@ Each item says what it touches and how to prove it works.
   `Engine::uploadPendingWorld` packs, uploads and waits inside `render`, which freezes the frame and needs about three times the world size at the peak.
 - **Frustum cull margin derived from the projected extent**, so large splats near the edge do not pop.
 - **Half precision covariance and colour** in the GPU layout, halving 48 bytes per splat.
+  The 8 ms vertex fetch floor is the target; measure with the benchmark.
 - **Pipeline cache persisted to disk** to cut cold start time.
 - **Offscreen render test** that draws three known splats and checks pixels, and a long stress run alternating loads, rotations and surface losses.
 
