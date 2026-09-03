@@ -18,7 +18,7 @@ float logit(float p) { return std::log(p / (1 - p)); }
 
 // One splat with a known pose, written through the reference encoder.
 // Frame is RDF, like World Labs, so the decoder must flip Y and Z.
-std::vector<std::uint8_t> encodeOneSplat() {
+spz::GaussianCloud oneSplatCloud() {
   spz::GaussianCloud cloud;
   cloud.numPoints = 1;
   cloud.shDegree = 0;
@@ -29,19 +29,43 @@ std::vector<std::uint8_t> encodeOneSplat() {
   // Color 0.8 in [0,1] is stored as an SH DC coefficient.
   const float dc = (0.8f - 0.5f) / 0.282095f;
   cloud.colors = {dc, dc, dc};
+  return cloud;
+}
 
+std::vector<std::uint8_t> encodeOneSplat(std::uint32_t version = 2) {
   spz::PackOptions pack;
-  pack.version = 2;
+  pack.version = version;
   std::vector<std::uint8_t> bytes;
-  EXPECT_TRUE(spz::saveSpz(cloud, pack, &bytes));
+  EXPECT_TRUE(spz::saveSpz(oneSplatCloud(), pack, &bytes));
   return bytes;
 }
 
 TEST(SpzDecoder, RejectsBytesThatAreNotAContainer) {
-  const std::uint8_t junk[] = {'N', 'G', 'S', 'P', 0, 0, 0, 0};
+  const std::uint8_t junk[] = {'P', 'L', 'Y', '\n', 0, 0, 0, 0};
   auto result = decodeSpz(junk, sizeof(junk));
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error().code, ErrorCode::unsupportedFormat);
+}
+
+TEST(SpzDecoder, RejectsAnNgspHeaderWithoutAPayload) {
+  const std::uint8_t junk[] = {'N', 'G', 'S', 'P', 4, 0, 0, 0};
+  auto result = decodeSpz(junk, sizeof(junk));
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error().code, ErrorCode::corrupt);
+}
+
+// Version 4 (Niantic, 2026) wraps zstd streams in an NGSP header instead of gzip.
+TEST(SpzDecoder, DecodesVersion4Containers) {
+  auto bytes = encodeOneSplat(4);
+  ASSERT_EQ(bytes[0], 'N');
+  auto result = decodeSpz(bytes.data(), bytes.size());
+  ASSERT_TRUE(result.ok()) << result.error().message;
+  const SplatCloud& cloud = result.value();
+  ASSERT_EQ(cloud.count(), 1u);
+  EXPECT_NEAR(cloud.positions[0], 1.0f, 1e-3f);
+  EXPECT_NEAR(cloud.positions[1], -2.0f, 1e-3f);
+  EXPECT_NEAR(cloud.positions[2], -3.0f, 1e-3f);
+  EXPECT_NEAR(cloud.alphas[0], 0.75f, 1e-2f);
 }
 
 TEST(SpzDecoder, RejectsTruncatedContainer) {

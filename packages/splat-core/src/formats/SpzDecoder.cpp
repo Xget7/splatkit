@@ -23,21 +23,34 @@ bool looksLikeGzip(const std::uint8_t* data, std::size_t size) {
   return size >= 2 && data[0] == 0x1f && data[1] == 0x8b;
 }
 
-bool looksLikeZstd(const std::uint8_t* data, std::size_t size) {
-  return size >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd;
+// SPZ version 4 (Niantic, 2026) wraps zstd streams in a 32 byte "NGSP" header:
+// magic, version, numPoints (uint32 each), shDegree (uint8), then layout fields.
+constexpr std::size_t kNgspHeaderBytes = 32;
+
+bool looksLikeNgsp(const std::uint8_t* data, std::size_t size) {
+  return size >= 4 && data[0] == 'N' && data[1] == 'G' && data[2] == 'S' && data[3] == 'P';
+}
+
+std::uint32_t readU32(const std::uint8_t* p) {
+  return std::uint32_t(p[0]) | (std::uint32_t(p[1]) << 8) | (std::uint32_t(p[2]) << 16) |
+         (std::uint32_t(p[3]) << 24);
 }
 
 // Decompressed size the container declares, or nullopt when it does not say.
 // gzip stores it in the last four bytes (ISIZE, little endian, modulo 2^32). A payload
 // beyond 4 GB would wrap, but deflate cannot exceed a ratio of about 1032:1, so a wrapped
 // value still needs a compressed input larger than anything this library would accept.
-// zstd may omit the size from the frame header; that case is left to the caller's ceiling
-// on the compressed input.
+// NGSP declares the point count and SH degree, so the unpacked float size follows directly:
+// position, scale, rotation, alpha and colour are 14 floats, plus 3 floats per SH coefficient.
 std::optional<std::uint64_t> declaredDecodedSize(const std::uint8_t* data, std::size_t size) {
   if (looksLikeGzip(data, size) && size >= 18) {
-    const std::uint8_t* t = data + size - 4;
-    return std::uint64_t(t[0]) | (std::uint64_t(t[1]) << 8) | (std::uint64_t(t[2]) << 16) |
-           (std::uint64_t(t[3]) << 24);
+    return readU32(data + size - 4);
+  }
+  if (looksLikeNgsp(data, size) && size >= kNgspHeaderBytes) {
+    const std::uint64_t points = readU32(data + 8);
+    const std::uint32_t degree = std::min<std::uint32_t>(data[12], 3);
+    const std::uint64_t coefficients = (degree + 1) * (degree + 1) - 1;
+    return points * (14 + 3 * coefficients) * sizeof(float);
   }
   return std::nullopt;
 }
@@ -90,8 +103,8 @@ std::array<float, 6> covariance(const float* quaternion, const float* scale) {
 
 Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
                              const SpzDecodeOptions& options) {
-  if (!looksLikeGzip(data, size) && !looksLikeZstd(data, size)) {
-    return Error{ErrorCode::unsupportedFormat, "not an SPZ container (expected gzip or zstd)"};
+  if (!looksLikeGzip(data, size) && !looksLikeNgsp(data, size)) {
+    return Error{ErrorCode::unsupportedFormat, "not an SPZ container (expected gzip or NGSP)"};
   }
 
   if (const auto declared = declaredDecodedSize(data, size);
