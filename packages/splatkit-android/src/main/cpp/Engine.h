@@ -14,6 +14,7 @@
 #include "camera/WalkCamera.h"
 #include "rendering/vulkan/DebugTrianglePipeline.h"
 #include "rendering/vulkan/FrameLoop.h"
+#include "rendering/vulkan/RenderTarget.h"
 #include "rendering/vulkan/SplatPipeline.h"
 #include "rendering/vulkan/Swapchain.h"
 #include "rendering/vulkan/VulkanContext.h"
@@ -46,6 +47,12 @@ class Engine {
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
 
+  // Fraction of the surface resolution the splats are drawn at, (0, 1]. Below one the
+  // frame is drawn offscreen and upscaled: the cost of blended fragments is what bounds
+  // splat rendering, so this is the direct lever on frame time. Render thread.
+  void setRenderScale(float scale);
+  float renderScale() const { return renderScale_; }
+
   // Input, on the render thread.
   void look(float deltaYaw, float deltaPitch) { camera_.look(deltaYaw, deltaPitch); }
   void walk(float forward, float right) { camera_.walk(forward, right); }
@@ -57,12 +64,17 @@ class Engine {
   struct Stats {
     float fps = 0;
     float frameMillis = 0;  // wall time between vsyncs, averaged over the window
+    float gpuMillis = 0;    // GPU time of the last frame, from timestamp queries
     float sortMillis = 0;   // last completed sort
     uint32_t splatCount = 0;
     bool walking = false;
     bool motion = false;
   };
   Stats stats() const;
+
+  // Runs a reproducible capture: gyroscope off, a fixed pose, one full yaw turn over
+  // `seconds`, then logs the frame time distribution. Waits for a world if none is up.
+  void startBenchmark(float seconds);
   const std::string& gpuDescription() const { return ctx_->deviceDescription(); }
 
  private:
@@ -71,14 +83,18 @@ class Engine {
   bool recreateSwapchain();
   bool createPipelines();
   bool surfaceExtentChanged() const;
+  bool createRenderTarget();
   void destroySurface();
   void uploadPendingWorld();
+  void updateBenchmark(float dt);
 
   std::unique_ptr<VulkanContext> ctx_;
   std::unique_ptr<FrameLoop> frameLoop_;
   ANativeWindow* window_ = nullptr;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<Swapchain> swapchain_;
+  std::unique_ptr<RenderTarget> target_;  // only when renderScale_ < 1
+  float renderScale_ = 1.0f;
   std::unique_ptr<DebugTrianglePipeline> triangle_;
   std::unique_ptr<SplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // swapchain format the pipelines target
@@ -94,12 +110,21 @@ class Engine {
   std::optional<splat::Vec3> lastSortedFrom_;
   double lastSortMillis_ = 0;
 
+  bool vsync_ = true;  // benchmarks turn it off so frame times are not vsync multiples
+  bool benchmarkPending_ = false;
+  bool benchmarkRunning_ = false;
+  float benchmarkSeconds_ = 0;
+  float benchmarkElapsed_ = 0;
+  std::vector<float> benchmarkFrameMillis_;
+  std::vector<float> benchmarkGpuMillis_;
+
   int64_t fpsWindowStart_ = 0;
   uint32_t fpsWindowFrames_ = 0;
   uint32_t fpsWindowsSinceLog_ = 0;
   // Written by the render thread, read by the UI thread through stats().
   std::atomic<float> statFps_{0};
   std::atomic<float> statFrameMillis_{0};
+  std::atomic<float> statGpuMillis_{0};
   std::atomic<float> statSortMillis_{0};
   std::atomic<uint32_t> statSplats_{0};
   std::atomic<bool> statWalking_{false};

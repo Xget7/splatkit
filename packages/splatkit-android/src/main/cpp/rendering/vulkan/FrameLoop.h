@@ -43,12 +43,19 @@ class FrameLoop {
   // Ends recording, submits and presents.
   Status endFrame(const Swapchain& swapchain, uint32_t imageIndex);
 
+  // GPU time of the most recently completed frame, from timestamp queries at both ends
+  // of its command buffer. Zero until the first frame completes or if unsupported.
+  // Unlike wall time, this is not quantised by vsync, so it is the number to optimise.
+  double lastGpuMillis() const { return lastGpuMillis_; }
+
  private:
   struct Frame {
     VkCommandPool pool = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     VkFence inFlight = VK_NULL_HANDLE;
     VkSemaphore imageAvailable = VK_NULL_HANDLE;
+    VkQueryPool timestamps = VK_NULL_HANDLE;  // two queries: start and end of the frame
+    bool timestampsWritten = false;
   };
 
   void destroyRenderFinished();
@@ -58,6 +65,8 @@ class FrameLoop {
   std::vector<VkSemaphore> renderFinished_;
   uint32_t current_ = 0;
   bool valid_ = false;
+  float timestampPeriodNanos_ = 0;  // zero when the queue cannot timestamp
+  double lastGpuMillis_ = 0;
 };
 
 }  // namespace splatkit

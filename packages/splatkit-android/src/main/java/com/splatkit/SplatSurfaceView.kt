@@ -50,8 +50,29 @@ class SplatSurfaceView @JvmOverloads constructor(
     /** Decodes a collider GLB; enables walk mode when ready. */
     fun loadCollider(glbBytes: ByteArray) = renderThread.loadCollider(glbBytes)
 
+    /**
+     * Fraction of the view's resolution the splats are drawn at, in (0, 1]. Below one the
+     * frame is drawn smaller and upscaled. Frame time scales almost directly with it,
+     * because splat rendering is bound by blended fragments.
+     */
+    var renderScale: Float = 1f
+        set(value) {
+            field = value.coerceIn(0.1f, 1f)
+            renderThread.setRenderScale(field)
+        }
+
     /** Walks continuously at the given speed in meters per second until called again with zeros. */
     fun setWalkVelocity(forward: Float, right: Float) = renderThread.setVelocity(forward, right)
+
+    /**
+     * Runs a reproducible capture: the gyroscope goes off, the camera takes a fixed pose
+     * and turns once over [seconds], then the frame time distribution is logged.
+     * Starts as soon as a world is loaded.
+     */
+    fun startBenchmark(seconds: Float = 10f) {
+        setMotionEnabled(false)
+        renderThread.startBenchmark(seconds)
+    }
 
     /** GPU name and Vulkan version reported by the driver. */
     val gpuDescription: String get() = renderThread.gpuDescription
@@ -68,9 +89,10 @@ class SplatSurfaceView @JvmOverloads constructor(
         into.splatCount = statsScratch[3].toInt()
         into.walking = statsScratch[4] != 0f
         into.motion = statsScratch[5] != 0f
+        into.gpuMillis = statsScratch[6]
         return into
     }
-    private val statsScratch = FloatArray(6)
+    private val statsScratch = FloatArray(7)
 
     /** Drives the camera with the phone's orientation. No-op when the sensor is missing. */
     fun setMotionEnabled(enabled: Boolean) {

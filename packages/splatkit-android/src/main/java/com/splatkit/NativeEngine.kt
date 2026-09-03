@@ -31,6 +31,10 @@ internal class NativeEngine {
 
     fun setVelocity(forward: Float, right: Float) = nativeSetVelocity(handle, forward, right)
 
+    fun startBenchmark(seconds: Float) = nativeStartBenchmark(handle, seconds)
+
+    fun setRenderScale(scale: Float) = nativeSetRenderScale(handle, scale)
+
     /** Safe from any thread once created. */
     fun gpuDescription(): String = nativeGpuDescription(handle)
 
@@ -56,6 +60,8 @@ internal class NativeEngine {
     private external fun nativeSetAttitude(handle: Long, rowMajor: FloatArray)
     private external fun nativeSetMotionEnabled(handle: Long, enabled: Boolean)
     private external fun nativeSetVelocity(handle: Long, forward: Float, right: Float)
+    private external fun nativeStartBenchmark(handle: Long, seconds: Float)
+    private external fun nativeSetRenderScale(handle: Long, scale: Float)
     private external fun nativeGpuDescription(handle: Long): String
     private external fun nativeStats(handle: Long, out: FloatArray)
 

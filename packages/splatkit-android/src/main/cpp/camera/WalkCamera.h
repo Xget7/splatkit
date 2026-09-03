@@ -25,6 +25,8 @@ class WalkCamera {
 
   // Touch: radians. Pitch is clamped and ignored while motion is on.
   void look(float deltaYaw, float deltaPitch);
+  // Absolute orientation in radians, for reproducible captures and benchmarks.
+  void setOrientation(float yaw, float pitch);
   // Touch: meters along the view direction and to its right, flattened when walking.
   void walk(float forward, float right);
   // Joystick: meters per second, applied every update until changed. Zero stops.

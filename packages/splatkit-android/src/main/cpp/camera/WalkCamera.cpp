@@ -45,6 +45,11 @@ void WalkCamera::walk(float forward, float right) {
   }
 }
 
+void WalkCamera::setOrientation(float yaw, float pitch) {
+  yaw_ = yaw;
+  pitch_ = std::clamp(pitch, -kMaxPitch, kMaxPitch);
+}
+
 void WalkCamera::setVelocity(float forward, float right) {
   velocityForward_ = forward;
   velocityRight_ = right;

@@ -7,7 +7,24 @@ namespace splatkit {
 
 FrameLoop::FrameLoop(const VulkanContext& ctx) : ctx_(ctx) {
   VkDevice device = ctx_.device();
+  VkPhysicalDeviceProperties props{};
+  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &props);
+  uint32_t familyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(ctx_.physicalDevice(), &familyCount, nullptr);
+  std::vector<VkQueueFamilyProperties> families(familyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(ctx_.physicalDevice(), &familyCount, families.data());
+  const bool canTimestamp = ctx_.queueFamily() < familyCount &&
+                            families[ctx_.queueFamily()].timestampValidBits > 0 &&
+                            props.limits.timestampPeriod > 0;
+  timestampPeriodNanos_ = canTimestamp ? props.limits.timestampPeriod : 0.0f;
+
   for (Frame& frame : frames_) {
+    if (canTimestamp) {
+      VkQueryPoolCreateInfo queryInfo{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+      queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+      queryInfo.queryCount = 2;
+      if (vkCreateQueryPool(device, &queryInfo, nullptr, &frame.timestamps) != VK_SUCCESS) return;
+    }
     VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     poolInfo.queueFamilyIndex = ctx_.queueFamily();
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
@@ -35,6 +52,7 @@ FrameLoop::~FrameLoop() {
   vkDeviceWaitIdle(device);
   destroyRenderFinished();
   for (Frame& frame : frames_) {
+    if (frame.timestamps) vkDestroyQueryPool(device, frame.timestamps, nullptr);
     if (frame.imageAvailable) vkDestroySemaphore(device, frame.imageAvailable, nullptr);
     if (frame.inFlight) vkDestroyFence(device, frame.inFlight, nullptr);
     if (frame.pool) vkDestroyCommandPool(device, frame.pool, nullptr);
@@ -82,17 +100,35 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
   // Only reset the fence once we know we will submit, or the next wait would hang.
   vkResetFences(device, 1, &frame.inFlight);
 
+  // The fence wait above guarantees this slot's previous frame finished, so its
+  // timestamps are ready to read.
+  if (frame.timestamps && frame.timestampsWritten) {
+    uint64_t ticks[2] = {0, 0};
+    if (vkGetQueryPoolResults(device, frame.timestamps, 0, 2, sizeof(ticks), ticks,
+                              sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+      lastGpuMillis_ = static_cast<double>(ticks[1] - ticks[0]) * timestampPeriodNanos_ * 1e-6;
+    }
+  }
+
   // 3. Start recording into a fresh command buffer.
   vkResetCommandPool(device, frame.pool, 0);
   VkCommandBufferBeginInfo beginInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   if (vkBeginCommandBuffer(frame.cmd, &beginInfo) != VK_SUCCESS) return Status::error;
+  if (frame.timestamps) {
+    vkCmdResetQueryPool(frame.cmd, frame.timestamps, 0, 2);
+    vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, frame.timestamps, 0);
+    frame.timestampsWritten = true;
+  }
   cmd = frame.cmd;
   return Status::ok;
 }
 
 FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t imageIndex) {
   Frame& frame = frames_[current_];
+  if (frame.timestamps) {
+    vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame.timestamps, 1);
+  }
   if (vkEndCommandBuffer(frame.cmd) != VK_SUCCESS) return Status::error;
 
   // 4. Submit: wait for the image before writing color, signal when the render is done.

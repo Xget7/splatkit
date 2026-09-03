@@ -39,6 +39,7 @@ splatkit_compile_shaders(splatkit_shaders
 add_library(splatkit SHARED
   rendering/vulkan/VulkanContext.cpp
   rendering/vulkan/Swapchain.cpp
+  rendering/vulkan/RenderTarget.cpp
   rendering/vulkan/FrameLoop.cpp
   rendering/vulkan/DebugTrianglePipeline.cpp
   rendering/vulkan/GpuBuffer.cpp

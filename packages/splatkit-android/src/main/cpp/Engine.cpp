@@ -1,6 +1,8 @@
 #include "Engine.h"
 
 #include <chrono>
+#include <fstream>
+#include <string>
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -19,6 +21,23 @@ using Clock = std::chrono::steady_clock;
 
 double millisSince(Clock::time_point t) {
   return std::chrono::duration<double, std::milli>(Clock::now() - t).count();
+}
+
+// GPU temperature in degrees Celsius from the thermal zones, or a negative value when
+// unavailable. Benchmarks log it because the GPU throttles when hot and every number
+// taken above roughly 60 degrees on Adreno is a number about the throttling.
+float gpuTemperatureCelsius() {
+  for (int i = 0; i < 120; ++i) {
+    const std::string base = "/sys/class/thermal/thermal_zone" + std::to_string(i);
+    std::ifstream type(base + "/type");
+    std::string name;
+    if (!type || !std::getline(type, name)) break;
+    if (name.rfind("gpuss-0", 0) != 0 && name != "gpu") continue;
+    std::ifstream temp(base + "/temp");
+    long milli = 0;
+    if (temp >> milli) return static_cast<float>(milli) / 1000.0f;
+  }
+  return -1.0f;
 }
 
 bool isSrgb(VkFormat format) {
@@ -81,7 +100,7 @@ bool Engine::recreateSwapchain() {
   VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
   swapchain_.reset();
 
-  auto sc = Swapchain::create(*ctx_, surface_, previous);
+  auto sc = Swapchain::create(*ctx_, surface_, previous, vsync_);
   if (previous != VK_NULL_HANDLE) vkDestroySwapchainKHR(ctx_->device(), previous, nullptr);
   if (!sc) {
     LOGE("%s", sc.error().message.c_str());
@@ -89,6 +108,7 @@ bool Engine::recreateSwapchain() {
   }
   swapchain_ = std::move(sc.value());
   if (!frameLoop_->onSwapchainCreated(*swapchain_)) return false;
+  if (!createRenderTarget()) return false;
 
   // Viewport and scissor are dynamic, so a resize or rotation does not touch the
   // pipelines. A render pass with the same attachment format is compatible with the one
@@ -96,6 +116,30 @@ bool Engine::recreateSwapchain() {
   // change, which also flips the sRGB output path, forces a rebuild.
   if (splats_ && triangle_ && pipelineFormat_ == swapchain_->format()) return true;
   return createPipelines();
+}
+
+bool Engine::createRenderTarget() {
+  target_.reset();
+  if (renderScale_ >= 1.0f) return true;
+  const VkExtent2D full = swapchain_->extent();
+  VkExtent2D scaled{std::max(1u, static_cast<uint32_t>(full.width * renderScale_)),
+                    std::max(1u, static_cast<uint32_t>(full.height * renderScale_))};
+  auto target = RenderTarget::create(*ctx_, swapchain_->format(), scaled);
+  if (!target) {
+    LOGE("%s", target.error().message.c_str());
+    return false;
+  }
+  target_ = std::move(target.value());
+  return true;
+}
+
+void Engine::setRenderScale(float scale) {
+  scale = std::clamp(scale, 0.1f, 1.0f);
+  if (scale == renderScale_) return;
+  renderScale_ = scale;
+  if (!swapchain_) return;
+  ctx_->waitIdle();
+  createRenderTarget();
 }
 
 bool Engine::createPipelines() {
@@ -150,6 +194,7 @@ void Engine::destroySurface() {
   if (ctx_) ctx_->waitIdle();
   triangle_.reset();
   splats_.reset();
+  target_.reset();
   swapchain_.reset();
   if (surface_ != VK_NULL_HANDLE) {
     vkDestroySurfaceKHR(ctx_->instance(), surface_, nullptr);
@@ -210,6 +255,59 @@ void Engine::uploadPendingWorld() {
   LOGI("uploaded %u splats in %.0f ms", world_->count, millisSince(start));
 }
 
+void Engine::startBenchmark(float seconds) {
+  benchmarkSeconds_ = seconds;
+  benchmarkPending_ = true;
+  benchmarkRunning_ = false;
+  benchmarkFrameMillis_.clear();
+  benchmarkGpuMillis_.clear();
+  if (vsync_) {
+    vsync_ = false;
+    if (swapchain_) recreateSwapchain();
+  }
+  LOGI("benchmark queued: %.0f s, waiting for a world", seconds);
+}
+
+// Steps the capture and reports when it ends. `dt` is the frame's own duration.
+void Engine::updateBenchmark(float dt) {
+  if (benchmarkPending_ && world_) {
+    benchmarkPending_ = false;
+    benchmarkRunning_ = true;
+    benchmarkElapsed_ = 0;
+    camera_.setMotionEnabled(false);
+    camera_.setOrientation(0.0f, 0.0f);
+    benchmarkFrameMillis_.reserve(static_cast<std::size_t>(benchmarkSeconds_ * 120));
+    LOGI("benchmark started: %u splats, one turn over %.0f s, gpu %.1f C", world_->count,
+         benchmarkSeconds_, gpuTemperatureCelsius());
+    return;  // the first frame after the pose change is not representative
+  }
+  if (!benchmarkRunning_) return;
+
+  benchmarkElapsed_ += dt;
+  benchmarkFrameMillis_.push_back(dt * 1000.0f);
+  benchmarkGpuMillis_.push_back(static_cast<float>(frameLoop_->lastGpuMillis()));
+  camera_.look(2.0f * static_cast<float>(M_PI) * dt / benchmarkSeconds_, 0.0f);
+  if (benchmarkElapsed_ < benchmarkSeconds_) return;
+
+  benchmarkRunning_ = false;
+  std::vector<float>& f = benchmarkFrameMillis_;
+  std::sort(f.begin(), f.end());
+  const std::size_t n = f.size();
+  if (n == 0) return;
+  double total = 0;
+  for (float ms : f) total += ms;
+  const double mean = total / static_cast<double>(n);
+  std::vector<float>& g = benchmarkGpuMillis_;
+  std::sort(g.begin(), g.end());
+  double gpuTotal = 0;
+  for (float ms : g) gpuTotal += ms;
+  const double gpuMean = gpuTotal / static_cast<double>(g.size());
+  LOGI("benchmark: %zu frames, %.1f fps mean, frame ms mean %.1f p50 %.1f p95 %.1f max %.1f", n,
+       1000.0 / mean, mean, f[n / 2], f[(n * 95) / 100], f[n - 1]);
+  LOGI("benchmark gpu ms: mean %.1f p50 %.1f p95 %.1f max %.1f, gpu %.1f C at the end", gpuMean,
+       g[g.size() / 2], g[(g.size() * 95) / 100], g.back(), gpuTemperatureCelsius());
+}
+
 void Engine::render(int64_t frameTimeNanos) {
   if (!swapchain_) return;
   uploadPendingWorld();
@@ -225,11 +323,14 @@ void Engine::render(int64_t frameTimeNanos) {
 
   std::optional<splat::Mat4> view;
   std::optional<splat::Mat4> proj;
-  VkExtent2D extent = swapchain_->extent();
+  // Splats are drawn at the target's size when a render scale is set.
+  const VkExtent2D extent = target_ ? target_->extent() : swapchain_->extent();
   if (world_) {
     const float dt = lastFrameNanos_ == 0 ? 0.0f : static_cast<float>(frameTimeNanos - lastFrameNanos_) * 1e-9f;
     lastFrameNanos_ = frameTimeNanos;
-    camera_.update(std::min(dt, 0.1f));
+    const float clampedDt = std::min(dt, 0.1f);
+    updateBenchmark(clampedDt);
+    camera_.update(clampedDt);
     const splat::Vec3 position = camera_.position();
     view = camera_.viewMatrix();
     const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -253,9 +354,9 @@ void Engine::render(int64_t frameTimeNanos) {
   VkClearValue clear{};
   clear.color = {{0.05f, 0.05f, 0.08f, 1.0f}};
   VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-  pass.renderPass = swapchain_->renderPass();
-  pass.framebuffer = swapchain_->framebuffer(imageIndex);
-  pass.renderArea.extent = swapchain_->extent();
+  pass.renderPass = target_ ? target_->renderPass() : swapchain_->renderPass();
+  pass.framebuffer = target_ ? target_->framebuffer() : swapchain_->framebuffer(imageIndex);
+  pass.renderArea.extent = extent;
   pass.clearValueCount = 1;
   pass.pClearValues = &clear;
   vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
@@ -274,6 +375,7 @@ void Engine::render(int64_t frameTimeNanos) {
   }
 
   vkCmdEndRenderPass(cmd);
+  if (target_) target_->blitTo(cmd, swapchain_->image(imageIndex), swapchain_->extent());
 
   status = frameLoop_->endFrame(*swapchain_, imageIndex);
   if (status == FrameLoop::Status::swapchainOutOfDate ||
@@ -288,6 +390,7 @@ void Engine::render(int64_t frameTimeNanos) {
     const float fps = static_cast<float>(fpsWindowFrames_ * 1e9 / static_cast<double>(elapsed));
     statFps_.store(fps, std::memory_order_relaxed);
     statFrameMillis_.store(1000.0f / fps, std::memory_order_relaxed);
+    statGpuMillis_.store(static_cast<float>(frameLoop_->lastGpuMillis()), std::memory_order_relaxed);
     statSortMillis_.store(static_cast<float>(lastSortMillis_), std::memory_order_relaxed);
     statSplats_.store(world_ ? world_->count : 0, std::memory_order_relaxed);
     statWalking_.store(camera_.hasCollider(), std::memory_order_relaxed);
@@ -297,7 +400,8 @@ void Engine::render(int64_t frameTimeNanos) {
     if (++fpsWindowsSinceLog_ >= 4) {
       fpsWindowsSinceLog_ = 0;
       const splat::Vec3 p = camera_.position();
-      LOGI("%.1f fps, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fps, lastSortMillis_, p.x, p.y, p.z,
+      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fps,
+           frameLoop_->lastGpuMillis(), lastSortMillis_, p.x, p.y, p.z,
            camera_.hasCollider() ? "walk" : "fly", camera_.motionEnabled() ? ", gyro" : "");
     }
   }
@@ -307,6 +411,7 @@ Engine::Stats Engine::stats() const {
   Stats s;
   s.fps = statFps_.load(std::memory_order_relaxed);
   s.frameMillis = statFrameMillis_.load(std::memory_order_relaxed);
+  s.gpuMillis = statGpuMillis_.load(std::memory_order_relaxed);
   s.sortMillis = statSortMillis_.load(std::memory_order_relaxed);
   s.splatCount = statSplats_.load(std::memory_order_relaxed);
   s.walking = statWalking_.load(std::memory_order_relaxed);

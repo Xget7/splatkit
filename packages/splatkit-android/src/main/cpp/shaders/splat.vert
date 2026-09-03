@@ -94,13 +94,19 @@ void main() {
   vec2 axis1, axis2;
   ellipseAxes(cov2D, axis1, axis2);
 
+  // Draw only out to where this splat's contribution drops below 1/255, which is
+  // where the fragment stage would discard anyway: exp(-r^2 / 2) * alpha = 1 / 255.
+  // Faint splats, the majority, get a much smaller quad; opaque ones keep 3 sigma.
+  float alpha = s.positionAlpha.w;
+  float radius = min(kBoundsRadius, sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
+
   vec2 corner = kCorners[gl_VertexIndex];
-  vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * kBoundsRadius / cam.screenSize;
+  vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;
   gl_Position = vec4(clip.xy + delta * clip.w, clip.z, clip.w);
-  relativePosition = kBoundsRadius * corner;
+  relativePosition = radius * corner;
 
   vec4 rgba = unpackUnorm4x8(s.rgba8);
   vec3 rgb = rgba.rgb;
   if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(2.2));
-  color = vec4(rgb, s.positionAlpha.w);
+  color = vec4(rgb, alpha);
 }

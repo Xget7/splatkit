@@ -108,6 +108,18 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetVeloci
   if (auto* engine = toEngine(handle)) engine->setVelocity(forward, right);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetRenderScale(JNIEnv*, jobject,
+                                                                                      jlong handle,
+                                                                                      jfloat scale) {
+  if (auto* engine = toEngine(handle)) engine->setRenderScale(scale);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeStartBenchmark(JNIEnv*, jobject,
+                                                                                      jlong handle,
+                                                                                      jfloat seconds) {
+  if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
+}
+
 extern "C" JNIEXPORT jstring JNICALL Java_com_splatkit_NativeEngine_nativeGpuDescription(JNIEnv* env,
                                                                                         jobject,
                                                                                         jlong handle) {
@@ -115,16 +127,16 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_splatkit_NativeEngine_nativeGpuDes
   return env->NewStringUTF(engine ? engine->gpuDescription().c_str() : "");
 }
 
-// Fills out[0..5]: fps, frame ms, sort ms, splat count, walking (0/1), motion (0/1).
+// Fills out[0..6]: fps, frame ms, sort ms, splat count, walking (0/1), motion (0/1), gpu ms.
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeStats(JNIEnv* env, jobject,
                                                                             jlong handle,
                                                                             jfloatArray out) {
   auto* engine = toEngine(handle);
-  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 6) return;
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 7) return;
   const splatkit::Engine::Stats s = engine->stats();
-  const float values[6] = {s.fps, s.frameMillis, s.sortMillis, static_cast<float>(s.splatCount),
-                           s.walking ? 1.0f : 0.0f, s.motion ? 1.0f : 0.0f};
-  env->SetFloatArrayRegion(out, 0, 6, values);
+  const float values[7] = {s.fps, s.frameMillis, s.sortMillis, static_cast<float>(s.splatCount),
+                           s.walking ? 1.0f : 0.0f, s.motion ? 1.0f : 0.0f, s.gpuMillis};
+  env->SetFloatArrayRegion(out, 0, 7, values);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetMotionEnabled(JNIEnv*, jobject,

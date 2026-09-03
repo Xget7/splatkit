@@ -55,8 +55,8 @@ class SplatHudView @JvmOverloads constructor(
         val input = if (stats.motion) "gyro" else "touch"
         text = String.format(
             Locale.US,
-            "%s\n%5.1f fps  %5.2f ms\nsort %5.1f ms\n%,d splats  %s, %s",
-            view.gpuDescription, stats.fps, stats.frameMillis, stats.sortMillis,
+            "%s\n%5.1f fps  %5.1f ms  gpu %5.1f ms\nsort %5.1f ms\n%,d splats  %s, %s",
+            view.gpuDescription, stats.fps, stats.frameMillis, stats.gpuMillis, stats.sortMillis,
             stats.splatCount, mode, input,
         )
     }

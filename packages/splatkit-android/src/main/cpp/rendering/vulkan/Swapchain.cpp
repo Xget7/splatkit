@@ -6,7 +6,8 @@ namespace splatkit {
 
 splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext& ctx,
                                                             VkSurfaceKHR surface,
-                                                            VkSwapchainKHR previous) {
+                                                            VkSwapchainKHR previous,
+                                                            bool vsync) {
   std::unique_ptr<Swapchain> sc(new Swapchain(ctx));
 
   vkb::SwapchainBuilder builder(ctx.physicalDevice(), ctx.device(), surface,
@@ -15,7 +16,10 @@ splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext&
                     .set_desired_format({VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
                     .add_fallback_format({VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
                     .add_fallback_format({VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                    .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                    .set_desired_present_mode(vsync ? VK_PRESENT_MODE_FIFO_KHR
+                                                    : VK_PRESENT_MODE_IMMEDIATE_KHR)
+                    .add_fallback_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
+                    .add_fallback_present_mode(VK_PRESENT_MODE_FIFO_KHR)
                     .set_desired_min_image_count(3)
                     .set_old_swapchain(previous)
                     .set_pre_transform_flags(VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
@@ -31,12 +35,17 @@ splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext&
     return splat::Error{splat::ErrorCode::gpuUnavailable, "swapchain image views"};
   }
   sc->imageViews_ = views.value();
+  auto images = sc->swapchain_.get_images();
+  if (!images) {
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "swapchain images"};
+  }
+  sc->images_ = images.value();
 
   if (auto r = sc->createRenderPass(); !r) return r.error();
   if (auto r = sc->createFramebuffers(); !r) return r.error();
 
-  LOGI("Swapchain %ux%u, %u images, format %d", sc->extent().width, sc->extent().height,
-       sc->imageCount(), sc->format());
+  LOGI("Swapchain %ux%u, %u images, format %d, present mode %d", sc->extent().width,
+       sc->extent().height, sc->imageCount(), sc->format(), sc->swapchain_.present_mode);
   return sc;
 }
 

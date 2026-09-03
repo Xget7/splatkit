@@ -36,13 +36,15 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
 
   const bool validation = wantValidation();
   LOGI("validation layers: %s", validation ? "on" : "off");
-  auto instanceResult = vkb::InstanceBuilder()
-                            .set_app_name("SplatKit")
-                            .set_engine_name("SplatKit")
-                            .require_api_version(1, 1, 0)
-                            .request_validation_layers(validation)
-                            .set_debug_callback(onValidationMessage)
-                            .build();
+  vkb::InstanceBuilder builder;
+  builder.set_app_name("SplatKit").set_engine_name("SplatKit").require_api_version(1, 1, 0);
+  // Only ask for the debug messenger when the layer that implements it is present.
+  // Adreno exposes VK_EXT_debug_utils but fails to create a messenger without the layer,
+  // which is why a release build died here while a debug build did not.
+  if (validation) {
+    builder.request_validation_layers(true).set_debug_callback(onValidationMessage);
+  }
+  auto instanceResult = builder.build();
   if (!instanceResult) {
     return splat::Error{splat::ErrorCode::gpuUnavailable,
                         "Vulkan instance: " + instanceResult.error().message()};
@@ -97,14 +99,21 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
 }
 
 VulkanContext::~VulkanContext() {
+  // This runs on the failure paths of create() too, where the later handles are still
+  // null. vkb::destroy_device dereferences its dispatch table without checking, so every
+  // step is guarded here.
   if (device_.device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(device_.device);
   }
   if (allocator_ != VK_NULL_HANDLE) {
     vmaDestroyAllocator(allocator_);
   }
-  vkb::destroy_device(device_);
-  vkb::destroy_instance(instance_);
+  if (device_.device != VK_NULL_HANDLE) {
+    vkb::destroy_device(device_);
+  }
+  if (instance_.instance != VK_NULL_HANDLE) {
+    vkb::destroy_instance(instance_);
+  }
 }
 
 bool VulkanContext::supportsPresent(VkSurfaceKHR surface) const {

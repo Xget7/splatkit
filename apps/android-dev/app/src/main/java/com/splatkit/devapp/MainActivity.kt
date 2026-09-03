@@ -59,7 +59,13 @@ class MainActivity : Activity() {
             splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
             splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
         }.start()
-        splatView.setMotionEnabled(true)
+        // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7
+        intent?.getFloatExtra("scale", 1f)?.let { splatView.renderScale = it }
+        if (intent?.getBooleanExtra("benchmark", false) == true) {
+            splatView.startBenchmark(10f)
+        } else {
+            splatView.setMotionEnabled(true)
+        }
         refreshGyroLabel()
     }
 

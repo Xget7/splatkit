@@ -90,6 +90,10 @@ internal class RenderThread {
 
     fun setVelocity(forward: Float, right: Float) = post { engine?.setVelocity(forward, right) }
 
+    fun startBenchmark(seconds: Float) = post { engine?.startBenchmark(seconds) }
+
+    fun setRenderScale(scale: Float) = post { engine?.setRenderScale(scale) }
+
     /** Reads the latest stats into [out]; see [NativeEngine.stats] for the layout. */
     fun stats(out: FloatArray) {
         engine?.stats(out)
