@@ -3,6 +3,12 @@
 Walkable Gaussian splat worlds (World Labs Marble `.spz`) in React Native, rendered natively.
 Android first (Vulkan), iOS second (Metal).
 
+## Why
+
+Gaussian splat viewers on Android are closed apps.
+This is an open engine instead: MIT, no app to install, no account, no cloud, and the Vulkan source is there to read, change and measure.
+Anyone can drop the Android library into their own app and experiment, and every performance claim in `docs/ROADMAP.md` comes with the device and the number.
+
 ## Layout
 
 ```
@@ -20,7 +26,8 @@ The engine does not know React Native exists.
 ## Status
 
 Experimental, pre alpha.
-The Android engine renders and walks World Labs worlds; it has been verified on the emulator and device numbers are pending.
+The Android engine renders and walks World Labs worlds, SPZ versions 2 to 4.
+On a Xiaomi Mi 9 (Adreno 640) a 500k splat scene runs at 60 fps with render scale 0.7; see `docs/ROADMAP.md` for the measurements.
 Expect the API to change until 0.1.0.
 
 Contributions are welcome.
