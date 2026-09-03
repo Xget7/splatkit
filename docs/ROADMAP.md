@@ -45,6 +45,10 @@ Each item says what it touches and how to prove it works.
 - **PLY and .splat input** (help wanted).
   A `decodePly` and `decodeSplat` in `splat-core/formats` returning the same `SplatCloud`, with the RDF to RUB conversion the SPZ decoder does.
   Proof: unit tests with hand built files, and the same scene loaded from PLY and SPZ sorting and rendering the same.
+- **SOG input** (help wanted).
+  SOG (Spatially Ordered Gaussians, from PlayCanvas SuperSplat) stores a scene as a `meta.json` plus WebP images, about a tenth of the size of a PLY, and it is what the fastest Android viewers load.
+  A `decodeSog` in `splat-core/formats` returning the same `SplatCloud` needs a WebP decoder in core (libwebp, pinned like spz) and the lookup table decode for scales, colours and rotations.
+  Proof: a scene exported from SuperSplat as SOG and as PLY renders the same, plus decode time on a device.
 - **GPU sort** (help wanted, needs a real device).
   A compute radix or bitonic sort producing the order buffer on the GPU, gated behind a feature flag so the CPU sort stays the baseline.
   Proof: identical order to `DistanceSorter` in a test, and frame time on Adreno and Mali with 2M splats.
