@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
+import com.splatkit.RenderQuality
 import com.splatkit.SplatSurfaceView
 import com.splatkit.ui.JoystickView
 import com.splatkit.ui.SplatHudView
@@ -73,14 +74,19 @@ class MainActivity : Activity() {
             override fun onColliderFailed(message: String) = toast("Collider failed: $message")
         }
         if (!splatView.isAvailable) toast("Vulkan is not available on this device")
+        // --es quality low|medium|high|ultra applies a preset; the extras below override it.
+        val quality = intent?.getStringExtra("quality")?.let { RenderQuality.named(it) } ?: RenderQuality.HIGH
+        splatView.applyQuality(quality)
         // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7
-        intent?.getFloatExtra("scale", 1f)?.let { splatView.renderScale = it }
+        if (intent?.hasExtra("scale") == true) splatView.renderScale = intent.getFloatExtra("scale", 1f)
         // --ei sh 0 drops spherical harmonics for an A/B against the same file.
-        intent?.getIntExtra("sh", 3)?.let { splatView.maxShDegree = it }
+        if (intent?.hasExtra("sh") == true) splatView.maxShDegree = intent.getIntExtra("sh", 3)
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
-        intent?.getIntExtra("budget", 0)?.let { splatView.splatBudget = it }
+        if (intent?.hasExtra("budget") == true) splatView.splatBudget = intent.getIntExtra("budget", 0)
         // --ez linear true blends in linear light, the old default, 40% slower.
-        splatView.linearBlending = intent?.getBooleanExtra("linear", false) == true
+        if (intent?.hasExtra("linear") == true) splatView.linearBlending = intent.getBooleanExtra("linear", false)
+        // --ef margin 20 widens the angular margin the cull keeps drawn around the view.
+        if (intent?.hasExtra("margin") == true) splatView.cullMarginDegrees = intent.getFloatExtra("margin", 10f)
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
         // File reads are IO; keep them off the UI thread.

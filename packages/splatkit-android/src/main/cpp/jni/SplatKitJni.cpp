@@ -163,6 +163,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetRender
   if (auto* engine = toEngine(handle)) engine->setRenderScale(scale);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetCullMargin(JNIEnv*, jobject,
+                                                                                     jlong handle,
+                                                                                     jfloat degrees) {
+  if (auto* engine = toEngine(handle)) engine->setCullMargin(degrees);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetLinearBlending(JNIEnv*, jobject,
                                                                                          jlong handle,
                                                                                          jboolean linear) {

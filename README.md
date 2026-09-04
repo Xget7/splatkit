@@ -38,6 +38,7 @@ The core has no graphics dependency and no host framework in it, so a second eng
 Experimental, pre alpha.
 The engine renders and walks World Labs worlds, SPZ versions 2 to 4.
 On a Xiaomi Mi 9 (Adreno 640) a 500k splat kitchen renders in 14 ms at full resolution, and a 2M splat house in 19 ms at full resolution and at 60 fps with render scale 0.7; `docs/BENCHMARKS.md` has every measurement.
+Four quality presets (`RenderQuality.LOW` to `ULTRA`) sit on that curve, each with a stated reason, and every setting behind them stays adjustable.
 Only `arm64-v8a` is built, and the API will change until 0.1.0.
 
 ## Contributing

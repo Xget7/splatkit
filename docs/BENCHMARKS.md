@@ -30,4 +30,12 @@ The tree pays off when the scene is bigger than what the view needs at a pixel e
 | 2026-09-04 | ADR 0011 | kitchen 500k | scale 1.0, new default | 14.8 / 14.0 / 20.7 | | | | was 19.4 |
 | 2026-09-04 | ADR 0011 | kitchen 500k | scale 0.7, new default | 12.6 / 12.8 / 15.0 | | | | |
 
+| 2026-09-04 | ADR 0012 | house 2M | preset HIGH: scale 1.0, SH 3, all splats, margin 10 | 19.8 / 19.3 / 26.2 | 43 to 47 | 10 | 216k to 419k of 2M | the default, matches the ADR 0011 row |
+| 2026-09-04 | ADR 0012 | house 2M | preset MEDIUM: scale 0.7, SH 1, all splats, margin 10 | 13.4 / 13.4 / 17.5 | | | | 60 fps |
+| 2026-09-04 | ADR 0012 | house 2M | preset LOW: scale 0.5, SH 0, budget 500k, margin 10 | 12.1 / 12.4 / 14.7 | 18 | 14 | 178k to 207k of 500k | select 89 to 101 ms, tree 2.4 s on the phone at load |
+| 2026-09-04 | ADR 0012 | house 2M | LOW without the budget: scale 0.5, SH 0 | 12.6 / 13.1 / 15.0 | | | | the budget buys 0.7 ms here; its point is scenes bigger than this |
+| 2026-09-04 | ADR 0012 | house 2M | preset ULTRA: scale 1.5 (1620x3391), SH 3, all splats, margin 20 | 39.4 / 39.1 / 50.0 | 43 | 10 | 419k of 2M | supersampled, 25 fps on the Mi 9, GPU 61 C at the end |
+
+Reading: the presets sit on the measured curve, medium is the 60 fps point on this phone, and ultra costs the square of its scale as predicted (1.5 squared times 19.3 is 43).
+
 Earlier numbers, before this log existed, are in the roadmap tables.

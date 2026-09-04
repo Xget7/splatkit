@@ -69,14 +69,42 @@ class SplatSurfaceView @JvmOverloads constructor(
     fun loadCollider(glbBytes: ByteArray) = renderThread.loadCollider(glbBytes)
 
     /**
-     * Fraction of the view's resolution the splats are drawn at, in (0, 1]. Below one the
-     * frame is drawn smaller and upscaled. Frame time scales almost directly with it,
-     * because splat rendering is bound by blended fragments.
+     * Applies a [RenderQuality] preset by setting [renderScale], [maxShDegree],
+     * [splatBudget], [linearBlending] and [cullMarginDegrees] from it. Set any of them
+     * afterwards to depart from the preset. [maxShDegree] and [splatBudget] reach worlds
+     * loaded after the call, so apply a preset before [loadWorld] when it changes them.
+     */
+    fun applyQuality(quality: RenderQuality) {
+        renderScale = quality.renderScale
+        maxShDegree = quality.maxShDegree
+        splatBudget = quality.splatBudget
+        linearBlending = quality.linearBlending
+        cullMarginDegrees = quality.cullMarginDegrees
+    }
+
+    /**
+     * Fraction of the view's resolution the splats are drawn at, in [0.1, 2]. Below one
+     * the frame is drawn smaller and upscaled; frame time scales almost directly with it,
+     * because splat rendering is bound by blended fragments. Above one the frame is
+     * supersampled and downscaled, which steadies thin splats that shimmer at about a
+     * pixel each, for about the square of the scale in frame time.
      */
     var renderScale: Float = 1f
         set(value) {
-            field = value.coerceIn(0.1f, 1f)
+            field = value.coerceIn(0.1f, 2f)
             renderThread.setRenderScale(field)
+        }
+
+    /**
+     * Angular margin around the view, in degrees, kept drawn so that what turns into
+     * view before the next cull lands is already there; the engine widens it further
+     * during a fast turn. 10 by default. Wider draws more that is off screen, narrower
+     * risks an empty edge on a flick.
+     */
+    var cullMarginDegrees: Float = 10f
+        set(value) {
+            field = value.coerceIn(0f, 80f)
+            renderThread.setCullMargin(field)
         }
 
     /**

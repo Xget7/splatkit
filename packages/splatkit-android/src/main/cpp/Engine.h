@@ -56,11 +56,20 @@ class Engine {
   using EventSink = std::function<void(Event, const std::string& message, uint32_t splatCount)>;
   void setEventSink(EventSink sink) { events_ = std::move(sink); }
 
-  // Fraction of the surface resolution the splats are drawn at, (0, 1]. Below one the
-  // frame is drawn offscreen and upscaled: the cost of blended fragments is what bounds
-  // splat rendering, so this is the direct lever on frame time. Render thread.
+  // Fraction of the surface resolution the splats are drawn at, [0.1, 2]. Away from one
+  // the frame is drawn offscreen and rescaled with a linear blit: below one it is cheaper
+  // (blended fragments bound splat rendering, so this is the direct lever on frame
+  // time), above one it supersamples, which steadies thin splats that shimmer at a
+  // pixel each. Render thread.
   void setRenderScale(float scale);
   float renderScale() const { return renderScale_; }
+
+  // Base angular margin around the view, in degrees, that the cull keeps drawn so that
+  // what turns into view before the next cull lands is already there; a fast turn adds
+  // to it. Wider costs draws that are off screen, narrower risks an empty edge on a
+  // flick. Render thread.
+  void setCullMargin(float degrees);
+  float cullMargin() const { return cullMarginDegrees_; }
 
   // Blend splats in linear light instead of the encoded space the training used. Richer
   // contrast at the cost of 40% of the frame on Adreno 640, and not what the reference
@@ -124,8 +133,9 @@ class Engine {
   ANativeWindow* window_ = nullptr;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<Swapchain> swapchain_;
-  std::unique_ptr<RenderTarget> target_;  // only when renderScale_ < 1
+  std::unique_ptr<RenderTarget> target_;  // only when renderScale_ != 1
   float renderScale_ = 1.0f;
+  float cullMarginDegrees_ = 10.0f;
   bool linearBlending_ = false;
   std::atomic<int> maxShDegree_{3};
   std::atomic<int> splatBudget_{0};

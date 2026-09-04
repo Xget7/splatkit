@@ -22,12 +22,13 @@ namespace {
 // The sorter's frustum is this much wider than the view (on the tangent of the half
 // angles), and a new sort is requested once the view turned about 5 degrees.
 // The cull keeps a margin around the view so that what turns into view before the next
-// cull lands is already drawn. The base covers splats whose centre is just outside the
-// view but whose extent is not, plus a slow turn; the rest scales with how fast the
-// camera is turning, over the time a cull result takes to reach the screen.
-constexpr float kCullMarginRadians = 10.0f * static_cast<float>(M_PI) / 180.0f;
+// cull lands is already drawn. The base (Engine::setCullMargin, 10 degrees by default)
+// covers splats whose centre is just outside the view but whose extent is not, plus a
+// slow turn; the rest scales with how fast the camera is turning, over the time a cull
+// result takes to reach the screen.
 constexpr float kCullStaleSeconds = 0.05f;
-constexpr float kMaxCullMarginRadians = 80.0f * static_cast<float>(M_PI) / 180.0f;
+constexpr float kMaxCullMarginDegrees = 80.0f;
+constexpr float kDegreesToRadians = static_cast<float>(M_PI) / 180.0f;
 // A cull is cheap, so a one degree turn asks for a new one.
 constexpr float kRecullCosine = 0.99985f;
 
@@ -139,7 +140,7 @@ VkFormat Engine::activeFormat() const {
 
 bool Engine::createRenderTarget() {
   target_.reset();
-  if (renderScale_ >= 1.0f) return true;
+  if (renderScale_ == 1.0f) return true;
   const VkExtent2D full = swapchain_->extent();
   VkExtent2D scaled{std::max(1u, static_cast<uint32_t>(full.width * renderScale_)),
                     std::max(1u, static_cast<uint32_t>(full.height * renderScale_))};
@@ -158,8 +159,13 @@ void Engine::setLinearBlending(bool linear) {
   if (swapchain_) recreateSwapchain();
 }
 
+void Engine::setCullMargin(float degrees) {
+  cullMarginDegrees_ = std::clamp(degrees, 0.0f, kMaxCullMarginDegrees);
+  lastSortedForward_ = {0.0f, 0.0f, 0.0f};  // so the next frame culls with the new margin
+}
+
 void Engine::setRenderScale(float scale) {
-  scale = std::clamp(scale, 0.1f, 1.0f);
+  scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
   if (!swapchain_) return;
@@ -404,7 +410,8 @@ void Engine::render(int64_t frameTimeNanos) {
                                std::fabs(lastSortedFrom_->z - position.z) > 0.005f;
     const bool turned = splat::dot(forward, lastSortedForward_) < kRecullCosine;
     if (moved || turned) {
-      const float margin = std::min(kMaxCullMarginRadians, kCullMarginRadians + turnRate_ * kCullStaleSeconds);
+      const float margin = std::min(kMaxCullMarginDegrees * kDegreesToRadians,
+                                    cullMarginDegrees_ * kDegreesToRadians + turnRate_ * kCullStaleSeconds);
       // A pixel at unit depth: what a node may cover on screen before it is refined.
       splat::LodSettings lod;
       lod.budget = static_cast<std::size_t>(loadedBudget_);

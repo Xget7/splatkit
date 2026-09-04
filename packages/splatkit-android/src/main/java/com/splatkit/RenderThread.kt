@@ -120,6 +120,8 @@ internal class RenderThread {
 
     fun setLinearBlending(linear: Boolean) = post { engine?.setLinearBlending(linear) }
 
+    fun setCullMargin(degrees: Float) = post { engine?.setCullMargin(degrees) }
+
     /** Reads the latest stats into [out]; see [NativeEngine.stats] for the layout. */
     fun stats(out: FloatArray) {
         engine?.stats(out)

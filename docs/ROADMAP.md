@@ -13,6 +13,7 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
 - `apps/android-dev`: loads a World Labs kitchen and its collider, or any world pushed to its files dir, shows GPU, frame time, sort time and splat count.
 - `scripts/generate_world.py`: photos of a place to a walkable world through the World Labs API, downloading the SPZ and the collider.
 - The engine draws only when the camera, the sort order, the world or the surface changed; a still scene costs no GPU time.
+- Quality presets `RenderQuality.LOW`, `MEDIUM`, `HIGH` and `ULTRA` over the individual settings, each with a reason and a benchmark row ([ADR 0012](adr/0012-quality-presets.md)); every setting stays customisable.
 
 Measured on a Xiaomi Mi 9 (Adreno 640, Vulkan 1.1.128), release build, 500k splats at 1080x2261, reproducible benchmark (`--ez benchmark true`):
 
@@ -64,6 +65,7 @@ Owned by the maintainer unless stated otherwise.
    The Gradle side is done (`./gradlew :splatkit:publishToMavenCentral` in `apps/android-dev`, credentials and signing key from the environment as the library's `build.gradle.kts` documents); what remains is the Sonatype namespace for `com.splatkit` and the first upload.
    Done: the Android CI job that builds the AAR on every pull request.
 4. Library README with a ten line integration.
+5. Thermal step down: drop one preset at `THERMAL_STATUS_SEVERE` and come back when the phone cools, opt in, so a long walk does not end at 20 fps on a throttled GPU.
 
 ## Open for contribution
 
