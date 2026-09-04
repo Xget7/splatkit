@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("com.vanniktech.maven.publish")
 }
 
 android {
@@ -32,4 +33,34 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+// Maven Central. Credentials and the signing key come from the environment on the
+// publishing machine (ORG_GRADLE_PROJECT_mavenCentralUsername, mavenCentralPassword,
+// signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.
+mavenPublishing {
+    coordinates("com.splatkit", "splatkit-android", "0.1.0-alpha01")
+    publishToMavenCentral()
+    if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
+    pom {
+        name.set("SplatKit Android")
+        description.set("Walkable Gaussian splat worlds on Android, rendered with Vulkan.")
+        url.set("https://github.com/Xget7/react-native-splat")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("xget7")
+                name.set("Juan Tupa")
+            }
+        }
+        scm {
+            url.set("https://github.com/Xget7/react-native-splat")
+            connection.set("scm:git:https://github.com/Xget7/react-native-splat.git")
+        }
+    }
 }

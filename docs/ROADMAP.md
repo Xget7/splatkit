@@ -37,7 +37,7 @@ The 2M splat World Labs house (outdoor, bounds 50 m) on the same device, render 
 The vertex fetch is a random gather through the sort order, so it is bound by memory latency, not bandwidth: a fetch only shader took 160 ms per frame on the house as decoded.
 Reordering the cloud along a Morton curve after decode (`splat::reorderSpatially`, 620 ms for 2M on the CPU) makes consecutive entries of the distance order hit the same cache lines and tripled the frame rate; the kitchen was already coherent and did not change.
 After that the frame was bound per splat processed, not per pixel: render scale 0.5 still took 41 ms, and a compute pass that copied the records into draw order so the vertex shader reads sequentially changed nothing (46.3 against 46.9 ms p50).
-The sorter now culls against a frustum 1.5 times wider than the view and re-sorts when the camera turns 5 degrees, so the GPU sees 170k to 260k of the 2M splats during a turn: 34 ms at full resolution, 60 fps at render scale 0.5, and the sort dropped from 44 to 16 ms.
+The sorter now culls against a frustum 1.5 times wider than the view and re-sorts when the camera turns 5 degrees, so the GPU sees 170k to 260k of the 2M splats during a turn: 34 ms at full resolution, 60 fps at render scale 0.5, and the sort dropped from 44 to 10 ms with the cull pass on four threads.
 Decode 530 ms, spatial reorder 470 ms, upload 270 ms for 2M.
 Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.
 Vertex math costs nothing; blended fragments are the rest.
@@ -51,7 +51,9 @@ Owned by the maintainer unless stated otherwise.
 
 1. Device numbers: decode, upload, sort and frame time for 500k, 1M and 2M splats on Adreno 640, published in the README.
 2. Done: `SplatSurfaceView.Listener` reports world and collider outcomes with messages, and `isAvailable` says whether Vulkan started.
-3. Maven Central publication of `com.splatkit:splatkit-android` with the arm64 native library inside. Done: the Android CI job that builds the AAR on every pull request.
+3. Maven Central publication of `com.splatkit:splatkit-android` with the arm64 native library inside.
+   The Gradle side is done (`./gradlew :splatkit:publishToMavenCentral` in `apps/android-dev`, credentials and signing key from the environment as the library's `build.gradle.kts` documents); what remains is the Sonatype namespace for `com.splatkit` and the first upload.
+   Done: the Android CI job that builds the AAR on every pull request.
 4. Library README with a ten line integration.
 
 ## Open for contribution

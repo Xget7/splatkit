@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <chrono>
+#include <random>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -56,4 +58,36 @@ TEST(AsyncSorter, FrustumRequestsDeliverOnlyVisibleSplats) {
   ASSERT_TRUE(result.has_value());
   ASSERT_EQ(result->order.size(), 1u);
   EXPECT_EQ(result->order[0], 0u);
+}
+
+// Large enough for the parallel cull path: every visible splat must be kept exactly once
+// and the order must still be back to front.
+TEST(DistanceSorter, SortVisibleMatchesTheSequentialAnswerOnLargeClouds) {
+  std::mt19937 rng(21);
+  std::uniform_real_distribution<float> u(-20.0f, 20.0f);
+  const std::size_t n = 450000;
+  std::vector<float> positions(n * 3);
+  for (float& v : positions) v = u(rng);
+  const Frustum f = lookingForward(1.2f);
+
+  std::vector<uint32_t> expected;
+  std::vector<float> expectedDistances;
+  for (std::size_t i = 0; i < n; ++i) {
+    const Vec3 p{positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]};
+    if (f.contains(p)) expected.push_back(static_cast<uint32_t>(i));
+  }
+
+  splat::DistanceSorter sorter(positions);
+  std::vector<uint32_t> order;
+  ASSERT_EQ(sorter.sortVisible(f, order), expected.size());
+  std::vector<uint32_t> sortedIndices = order;
+  std::sort(sortedIndices.begin(), sortedIndices.end());
+  EXPECT_EQ(sortedIndices, expected);
+  for (std::size_t k = 1; k < order.size(); ++k) {
+    const float* a = &positions[order[k - 1] * 3];
+    const float* b = &positions[order[k] * 3];
+    const float da = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+    const float db = b[0] * b[0] + b[1] * b[1] + b[2] * b[2];
+    ASSERT_GE(da, db) << "not back to front at " << k;
+  }
 }
