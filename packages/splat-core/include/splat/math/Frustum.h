@@ -1,12 +1,15 @@
 #pragma once
 
+#include <cmath>
+
 #include "splat/math/Vec3.h"
 
 namespace splat {
 
 // A camera's view volume for point tests: origin, orthonormal axes and the half extents
-// per unit of depth. `margin` widens the volume so that content entering the view during
-// a turn is already sorted in; 1.0 is the exact field of view.
+// per unit of depth. `marginRadians` widens each half angle so that content entering the
+// view before the next cull lands is already in; 0 is the exact field of view. A widened
+// half angle at or past 90 degrees leaves that axis unbounded (everything in front).
 struct Frustum {
   Vec3 origin;
   Vec3 forward;
@@ -15,15 +18,22 @@ struct Frustum {
   float tanHalfX = 1.0f;
   float tanHalfY = 1.0f;
 
-  static Frustum make(Vec3 origin, Vec3 forward, Vec3 up, float tanHalfX, float tanHalfY, float margin) {
+  static Frustum make(Vec3 origin, Vec3 forward, Vec3 up, float tanHalfX, float tanHalfY,
+                      float marginRadians) {
     Frustum f;
     f.origin = origin;
     f.forward = normalize(forward);
     f.right = normalize(cross(f.forward, up));
     f.up = cross(f.right, f.forward);
-    f.tanHalfX = tanHalfX * margin;
-    f.tanHalfY = tanHalfY * margin;
+    f.tanHalfX = widen(tanHalfX, marginRadians);
+    f.tanHalfY = widen(tanHalfY, marginRadians);
     return f;
+  }
+
+  static float widen(float tanHalf, float marginRadians) {
+    constexpr float kOpen = 1e6f;  // tan of nearly 90 degrees: no bound on that axis
+    const float half = std::atan(tanHalf) + marginRadians;
+    return half >= 1.5533f ? kOpen : std::tan(half);  // 89 degrees
   }
 
   // True when the point is in front of the camera and inside the widened field of view.

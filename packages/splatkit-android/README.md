@@ -9,7 +9,16 @@ Only `arm64-v8a` is built.
 
 ## Use it
 
-Until the first release on Maven Central, include the module from a checkout in `settings.gradle.kts`:
+```kotlin
+dependencies {
+    implementation("io.github.xget7:splatkit-android:0.1.0-alpha01")
+}
+```
+
+The AAR ships `arm64-v8a` only.
+A build that also targets `x86_64` still compiles, but the library cannot load on an x86_64 emulator; develop on a physical arm64 device.
+
+To work against a checkout instead, include the module in `settings.gradle.kts`:
 
 ```kotlin
 include(":splatkit-android")
@@ -53,11 +62,12 @@ World Labs exports both files for every world.
 
 | Member | What it does |
 |---|---|
-| `loadWorld(bytes)` | Decodes an SPZ file (versions 2 to 4) and replaces the current world when ready. |
+| `loadWorld(bytes)` | Decodes a splat file (SPZ versions 2 to 4 today; the format is detected from the bytes) and replaces the current world when ready. |
 | `loadCollider(bytes)` | Decodes a GLB mesh and switches to walk mode. |
 | `listener` | `Listener` with `onWorldReady`, `onWorldFailed`, `onColliderReady`, `onColliderFailed`, on the main thread. |
 | `isAvailable` | False when Vulkan could not start; the view stays blank and every call is a no-op. |
 | `renderScale` | Fraction of the surface resolution the splats are drawn at, then upscaled. 0.7 is hard to tell from 1.0 and much cheaper. |
+| `maxShDegree` | Highest spherical harmonics degree kept from the file, 0 to 3, for worlds loaded after it is set. Degree 3 costs 92 bytes per splat of GPU memory. World Labs worlds carry none. |
 | `setMotionEnabled(bool)` | The gyroscope drives the look direction. |
 | `setWalkVelocity(forward, right)` | Continuous walking in meters per second, for an on screen joystick. |
 | `lookSensitivity`, `walkSensitivity` | Gesture tuning: one finger looks, two fingers walk, double tap toggles the gyroscope. |

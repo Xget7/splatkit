@@ -39,7 +39,7 @@ android {
 // publishing machine (ORG_GRADLE_PROJECT_mavenCentralUsername, mavenCentralPassword,
 // signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.
 mavenPublishing {
-    coordinates("com.splatkit", "splatkit-android", "0.1.0-alpha01")
+    coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha01")
     publishToMavenCentral()
     if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
     pom {
@@ -56,11 +56,14 @@ mavenPublishing {
             developer {
                 id.set("xget7")
                 name.set("Juan Tupa")
+                email.set("juanieltupa@gmail.com")
+                url.set("https://github.com/Xget7")
             }
         }
         scm {
             url.set("https://github.com/Xget7/react-native-splat")
             connection.set("scm:git:https://github.com/Xget7/react-native-splat.git")
+            developerConnection.set("scm:git:ssh://git@github.com/Xget7/react-native-splat.git")
         }
     }
 }

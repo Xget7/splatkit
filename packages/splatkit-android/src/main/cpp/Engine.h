@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -60,6 +61,10 @@ class Engine {
   void setRenderScale(float scale);
   float renderScale() const { return renderScale_; }
 
+  // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
+  // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
+  void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, 3); }
+
   // Input, on the render thread.
   void look(float deltaYaw, float deltaPitch) { camera_.look(deltaYaw, deltaPitch); }
   void walk(float forward, float right) { camera_.walk(forward, right); }
@@ -107,6 +112,7 @@ class Engine {
   std::unique_ptr<Swapchain> swapchain_;
   std::unique_ptr<RenderTarget> target_;  // only when renderScale_ < 1
   float renderScale_ = 1.0f;
+  std::atomic<int> maxShDegree_{3};
   std::unique_ptr<DebugTrianglePipeline> triangle_;
   std::unique_ptr<SplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // swapchain format the pipelines target
@@ -120,6 +126,8 @@ class Engine {
   std::unique_ptr<splat::AsyncSorter> sorter_;
   std::optional<splat::Vec3> lastSortedFrom_;
   splat::Vec3 lastSortedForward_;
+  splat::Vec3 lastFrameForward_{0, 0, -1};
+  float turnRate_ = 0.0f;  // radians per second, decays after a turn
   uint32_t drawCount_ = 0;  // entries of the order buffer to draw: the visible splats
   std::optional<splat::AsyncSorter::Result> pendingOrder_;  // sorted, waiting for a command buffer
   bool redrawNeeded_ = true;
@@ -127,6 +135,7 @@ class Engine {
   splat::Mat4 lastDrawnView_ = splat::Mat4::identity();
   VkExtent2D lastDrawnExtent_{};
   double lastSortMillis_ = 0;
+  double lastCullMillis_ = 0;
 
   bool vsync_ = true;  // benchmarks turn it off so frame times are not vsync multiples
   bool benchmarkPending_ = false;

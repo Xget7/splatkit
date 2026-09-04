@@ -46,43 +46,68 @@ void DistanceSorter::sort(Vec3 from, std::vector<uint32_t>& order) {
   radixSort(n, order);
 }
 
-std::size_t DistanceSorter::sortVisible(const Frustum& frustum, std::vector<uint32_t>& order) {
-  const std::size_t n = count();
-  order.resize(n);
-
-  // The cull and key pass is the bulk of the work at 2M splats and is embarrassingly
-  // parallel: each worker compacts its slice into scratch, then the slices are joined.
+std::size_t DistanceSorter::cull(const std::vector<uint32_t>& sorted, const Frustum& frustum,
+                                 std::vector<uint32_t>& visible) {
+  const std::size_t n = std::min(sorted.size(), count());
+  visible.resize(n);
   const std::size_t workers = std::min<std::size_t>(kMaxWorkers, std::max<std::size_t>(1, n / kMinPerWorker));
+
+  // Two passes, both streaming. Testing positions through the sorted order would be a
+  // random gather of 12 bytes per splat, which is what memory latency punishes; instead
+  // the test runs over the positions in index order and leaves one bit per splat, and
+  // the second pass reads the bits through the order. The bits fit in cache.
+  visibleBits_.assign((count() + 63) / 64, 0);
+  {
+    const std::size_t words = visibleBits_.size();
+    const std::size_t slice = (words + workers - 1) / workers;
+    auto testSlice = [&](std::size_t w) {
+      const std::size_t begin = w * slice;
+      const std::size_t end = std::min(words, begin + slice);
+      for (std::size_t word = begin; word < end; ++word) {
+        uint64_t bits = 0;
+        const std::size_t first = word * 64;
+        const std::size_t last = std::min(count(), first + 64);
+        for (std::size_t i = first; i < last; ++i) {
+          const float* p = &positions_[i * 3];
+          if (frustum.contains({p[0], p[1], p[2]})) bits |= uint64_t{1} << (i - first);
+        }
+        visibleBits_[word] = bits;
+      }
+    };
+    std::vector<std::thread> threads;
+    for (std::size_t w = 1; w < workers; ++w) threads.emplace_back(testSlice, w);
+    testSlice(0);
+    for (auto& t : threads) t.join();
+  }
+
+  // Each worker compacts its slice of the sorted order into scratch; joining the slices
+  // in slice order keeps the sort order intact.
   const std::size_t slice = (n + workers - 1) / workers;
   std::vector<std::size_t> counts(workers, 0);
-  auto cullSlice = [&](std::size_t w) {
+  auto compactSlice = [&](std::size_t w) {
     const std::size_t begin = w * slice;
     const std::size_t end = std::min(n, begin + slice);
     std::size_t out = begin;
     for (std::size_t i = begin; i < end; ++i) {
-      const float* p = &positions_[i * 3];
-      if (!frustum.contains({p[0], p[1], p[2]})) continue;
-      keysScratch_[out] = distanceKey(p, frustum.origin);
-      orderScratch_[out] = static_cast<uint32_t>(i);
-      ++out;
+      const uint32_t index = sorted[i];
+      const bool in = (visibleBits_[index >> 6] >> (index & 63)) & 1u;
+      orderScratch_[out] = index;
+      out += in ? 1 : 0;  // branch free: the write lands anyway and is overwritten if not kept
     }
     counts[w] = out - begin;
   };
   std::vector<std::thread> threads;
-  for (std::size_t w = 1; w < workers; ++w) threads.emplace_back(cullSlice, w);
-  cullSlice(0);
+  for (std::size_t w = 1; w < workers; ++w) threads.emplace_back(compactSlice, w);
+  compactSlice(0);
   for (auto& t : threads) t.join();
 
-  std::size_t visible = 0;
+  std::size_t total = 0;
   for (std::size_t w = 0; w < workers; ++w) {
-    const std::size_t begin = w * slice;
-    std::memcpy(&keys_[visible], &keysScratch_[begin], counts[w] * sizeof(uint32_t));
-    std::memcpy(&order[visible], &orderScratch_[begin], counts[w] * sizeof(uint32_t));
-    visible += counts[w];
+    std::memcpy(&visible[total], &orderScratch_[w * slice], counts[w] * sizeof(uint32_t));
+    total += counts[w];
   }
-  order.resize(visible);
-  radixSort(visible, order);
-  return visible;
+  visible.resize(total);
+  return total;
 }
 
 void DistanceSorter::radixSort(std::size_t n, std::vector<uint32_t>& order) {

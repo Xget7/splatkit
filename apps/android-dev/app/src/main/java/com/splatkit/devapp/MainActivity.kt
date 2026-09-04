@@ -73,6 +73,10 @@ class MainActivity : Activity() {
             override fun onColliderFailed(message: String) = toast("Collider failed: $message")
         }
         if (!splatView.isAvailable) toast("Vulkan is not available on this device")
+        // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7
+        intent?.getFloatExtra("scale", 1f)?.let { splatView.renderScale = it }
+        // --ei sh 0 drops spherical harmonics for an A/B against the same file.
+        intent?.getIntExtra("sh", 3)?.let { splatView.maxShDegree = it }
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
         // File reads are IO; keep them off the UI thread.
@@ -89,10 +93,9 @@ class MainActivity : Activity() {
                 runOnUiThread { toast("Could not read the world: ${e.message}") }
             }
         }.start()
-        // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7
-        intent?.getFloatExtra("scale", 1f)?.let { splatView.renderScale = it }
         if (intent?.getBooleanExtra("benchmark", false) == true) {
-            splatView.startBenchmark(10f)
+            // --ef seconds 3 turns the full circle in 3 s: a fast turn, for the cull margin.
+            splatView.startBenchmark(intent.getFloatExtra("seconds", 10f))
         } else {
             splatView.setMotionEnabled(true)
         }

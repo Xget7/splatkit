@@ -23,6 +23,7 @@ include(cmake/dependencies.cmake)
 find_package(Threads REQUIRED)
 
 add_library(splat_core STATIC
+  src/formats/SplatDecoder.cpp
   src/formats/SpzDecoder.cpp
   src/formats/GlbDecoder.cpp
   src/navigation/Collider.cpp

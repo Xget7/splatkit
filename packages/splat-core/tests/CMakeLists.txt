@@ -1,4 +1,5 @@
 add_executable(splat_core_tests
+  formats/SplatDecoderTest.cpp
   formats/SpzDecoderTest.cpp
   formats/GlbDecoderTest.cpp
   navigation/ColliderTest.cpp

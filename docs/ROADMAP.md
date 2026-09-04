@@ -6,9 +6,9 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
 
 ## Works today
 
-- `splat-core`: SPZ v2 to v4 decoding into the internal RUB frame, GLB collider decoding, radix distance sort on a background thread, uniform grid raycasts, character controller.
+- `splat-core`: one decode entry point (`decodeSplatFile`, format detected from the bytes), SPZ v2 to v4 decoding into the internal RUB frame with spherical harmonics up to degree 3, GLB collider decoding, radix distance sort on a background thread, uniform grid raycasts, character controller.
   Unit and integration tests, CI with ThreadSanitizer and AddressSanitizer.
-- `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending, walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
+- `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending and view dependent colour from spherical harmonics (one pipeline per degree, `maxShDegree` to trade it for memory), walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
 - `apps/android-dev`: loads a World Labs kitchen and its collider, or any world pushed to its files dir, shows GPU, frame time, sort time and splat count.
 - `scripts/generate_world.py`: photos of a place to a walkable world through the World Labs API, downloading the SPZ and the collider.
 - The engine draws only when the camera, the sort order, the world or the surface changed; a still scene costs no GPU time.
@@ -37,7 +37,10 @@ The 2M splat World Labs house (outdoor, bounds 50 m) on the same device, render 
 The vertex fetch is a random gather through the sort order, so it is bound by memory latency, not bandwidth: a fetch only shader took 160 ms per frame on the house as decoded.
 Reordering the cloud along a Morton curve after decode (`splat::reorderSpatially`, 620 ms for 2M on the CPU) makes consecutive entries of the distance order hit the same cache lines and tripled the frame rate; the kitchen was already coherent and did not change.
 After that the frame was bound per splat processed, not per pixel: render scale 0.5 still took 41 ms, and a compute pass that copied the records into draw order so the vertex shader reads sequentially changed nothing (46.3 against 46.9 ms p50).
-The sorter now culls against a frustum 1.5 times wider than the view and re-sorts when the camera turns 5 degrees, so the GPU sees 170k to 260k of the 2M splats during a turn: 34 ms at full resolution, 60 fps at render scale 0.5, and the sort dropped from 44 to 10 ms with the cull pass on four threads.
+Only the splats inside a widened frustum reach the GPU, so it sees 170k to 290k of the 2M splats during a turn: 32 ms at full resolution, 60 fps at render scale 0.5.
+The distance order does not depend on where the camera looks, so turning never sorts: the sorter thread keeps the full order (44 ms, only when the camera moves) and turning runs a cull of it (10 ms for 2M on four threads, two streaming passes through a visibility bitmap).
+The cull margin is 10 degrees plus the turn rate times 50 ms, so a flick of the phone finds its edges already drawn; the first version re-sorted the culled set with a fixed margin and showed empty edges on fast turns.
+Spherical harmonics cost nothing measurable on the raccoon sample (932k splats, degree 3, 92 bytes per splat extra): p50 12.5 ms with them, 12.4 without; decode 634 ms, reorder 216 ms, upload 501 ms in release.
 Decode 530 ms, spatial reorder 470 ms, upload 270 ms for 2M.
 Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.
 Vertex math costs nothing; blended fragments are the rest.
@@ -60,16 +63,12 @@ Owned by the maintainer unless stated otherwise.
 
 Each item says what it touches and how to prove it works.
 
-- **Spherical harmonics in the shader** (help wanted).
-  The decoder already keeps degree 1 to 3 coefficients in `SplatCloud::sh`; the vertex shader uses only the base colour.
-  Touches `SplatPipeline` (a third storage buffer or a wider `GpuSplat`) and `splat.vert` (evaluate SH along the view direction).
-  Proof: a PLY with degree 3 exported from the reference 3DGS code renders view dependent highlights that match the reference viewer.
 - **PLY and .splat input** (help wanted).
-  A `decodePly` and `decodeSplat` in `splat-core/formats` returning the same `SplatCloud`, with the RDF to RUB conversion the SPZ decoder does.
+  A `decodePly` and `decodeSplat` in `splat-core/formats` returning the same `SplatCloud`, with the RDF to RUB conversion the SPZ decoder does, wired into `detectSplatFormat`.
   Proof: unit tests with hand built files, and the same scene loaded from PLY and SPZ sorting and rendering the same.
 - **SOG input** (help wanted).
   SOG (Spatially Ordered Gaussians, from PlayCanvas SuperSplat) stores a scene as a `meta.json` plus WebP images, about a tenth of the size of a PLY, and it is what the fastest Android viewers load.
-  A `decodeSog` in `splat-core/formats` returning the same `SplatCloud` needs a WebP decoder in core (libwebp, pinned like spz) and the lookup table decode for scales, colours and rotations.
+  A `decodeSog` in `splat-core/formats` returning the same `SplatCloud`, plus a branch in `detectSplatFormat` (see [ADR 0008](adr/0008-one-decode-entry-point.md)), needs a WebP decoder in core (libwebp, pinned like spz) and the lookup table decode for scales, colours and rotations.
   Proof: a scene exported from SuperSplat as SOG and as PLY renders the same, plus decode time on a device.
 - **GPU sort** (help wanted, needs a real device).
   A compute radix or bitonic sort producing the order buffer on the GPU, gated behind a feature flag so the CPU sort stays the baseline.

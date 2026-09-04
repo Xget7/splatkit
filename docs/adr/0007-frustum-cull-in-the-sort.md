@@ -1,6 +1,6 @@
 # 0007. Cull against the frustum inside the sort
 
-Status: accepted. Date: 2026-09-04. Refines [0004](0004-cpu-sort-baseline.md).
+Status: superseded by [0009](0009-sort-on-move-cull-on-turn.md). Date: 2026-09-04. Refines [0004](0004-cpu-sort-baseline.md).
 
 ## Context
 

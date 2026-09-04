@@ -12,6 +12,7 @@
 #include "splat/core/Result.h"
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"
+#include "splat/math/Vec3.h"
 
 namespace splatkit {
 
@@ -37,12 +38,18 @@ struct CameraUniform {
   float screenSize[2];
   uint32_t outputLinear;
   uint32_t pad;
+  float cameraPosition[4];
 };
 
 // The world on the GPU: splats plus the draw order the sorter writes.
 struct GpuWorld {
   std::unique_ptr<GpuBuffer> splats;
   std::unique_ptr<GpuBuffer> order;
+  // Spherical harmonics bands 1 to `shDegree`, rgb halves per coefficient, packed two per
+  // uint with no padding. A placeholder of one uint when the degree is 0, so the
+  // descriptor is always valid and the degree 0 pipeline never reads it.
+  std::unique_ptr<GpuBuffer> sh;
+  int shDegree = 0;
   // One host visible staging buffer per frame slot: the slot's fence guarantees the GPU
   // finished reading it before the CPU writes the next order into it.
   std::array<std::unique_ptr<GpuBuffer>, FrameLoop::kFramesInFlight> orderStaging;
@@ -62,8 +69,9 @@ class SplatPipeline {
   SplatPipeline(const SplatPipeline&) = delete;
   SplatPipeline& operator=(const SplatPipeline&) = delete;
 
-  // Converts a decoded cloud to the GPU layout and uploads it (blocking).
-  std::unique_ptr<GpuWorld> uploadWorld(const splat::SplatCloud& cloud) const;
+  // Converts a decoded cloud to the GPU layout and uploads it (blocking). Spherical
+  // harmonics above `maxShDegree` are dropped: degree 3 costs 92 bytes per splat.
+  std::unique_ptr<GpuWorld> uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) const;
 
   // Points the descriptor set of every frame slot at this world's buffers.
   void bindWorld(const GpuWorld& world);
@@ -76,12 +84,15 @@ class SplatPipeline {
 
   // Draws the first `count` entries of the order buffer.
   void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
-            const splat::Mat4& view, const splat::Mat4& proj, VkExtent2D extent);
+            const splat::Mat4& view, const splat::Mat4& proj, const splat::Vec3& cameraPosition,
+            VkExtent2D extent);
+
+  static constexpr int kMaxShDegree = 3;
 
  private:
   explicit SplatPipeline(const VulkanContext& ctx) : ctx_(ctx) {}
   bool createDescriptors();
-  bool createPipeline(VkRenderPass renderPass);
+  bool createPipelines(VkRenderPass renderPass);
 
   const VulkanContext& ctx_;
   bool outputLinear_ = true;
@@ -90,7 +101,8 @@ class SplatPipeline {
   std::array<VkDescriptorSet, FrameLoop::kFramesInFlight> sets_{};
   std::array<std::unique_ptr<GpuBuffer>, FrameLoop::kFramesInFlight> uniforms_{};
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
+  // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
+  std::array<VkPipeline, kMaxShDegree + 1> pipelines_{};
 };
 
 }  // namespace splatkit

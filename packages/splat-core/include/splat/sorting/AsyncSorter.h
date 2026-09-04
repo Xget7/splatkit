@@ -13,14 +13,17 @@
 
 namespace splat {
 
-// Runs DistanceSorter on its own thread. The renderer asks for a sort whenever the
-// camera has moved and keeps drawing with the last order it received; requests made
-// while a sort is running collapse into one, always with the latest camera position.
+// Runs DistanceSorter on its own thread. The renderer asks whenever the camera moved or
+// turned and keeps drawing with the last order it received; requests made while one is
+// running collapse into one, always with the latest camera. A distance order does not
+// depend on where the camera looks, so the thread sorts only when the origin changed and
+// otherwise just culls the order it has: turning costs milliseconds, not a sort.
 class AsyncSorter {
  public:
   struct Result {
     std::vector<uint32_t> order;  // only the visible splats when a frustum was given
-    double millis = 0;
+    double sortMillis = 0;        // 0 when the previous order was reused
+    double cullMillis = 0;
   };
 
   explicit AsyncSorter(std::vector<float> positions);
@@ -29,9 +32,9 @@ class AsyncSorter {
   AsyncSorter(const AsyncSorter&) = delete;
   AsyncSorter& operator=(const AsyncSorter&) = delete;
 
-  // Schedules a sort from this position. Cheap; call every frame the camera moved.
+  // Schedules a full order from this position, nothing culled.
   void request(Vec3 from);
-  // Schedules a sort of the splats inside the frustum only, from its origin.
+  // Schedules the visible order for this camera: a sort if its origin moved, then a cull.
   void requestVisible(const Frustum& frustum);
 
   // The newest finished order not yet taken, if any. Moves it out.
@@ -51,6 +54,9 @@ class AsyncSorter {
   };
   std::optional<Request> pending_;
   std::optional<Result> finished_;
+  // Worker thread only.
+  std::vector<uint32_t> fullOrder_;
+  std::optional<Vec3> sortedFrom_;
 };
 
 }  // namespace splat

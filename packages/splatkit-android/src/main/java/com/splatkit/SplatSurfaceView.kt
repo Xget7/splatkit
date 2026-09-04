@@ -79,6 +79,18 @@ class SplatSurfaceView @JvmOverloads constructor(
             renderThread.setRenderScale(field)
         }
 
+    /**
+     * Highest spherical harmonics degree kept from the file, 0 to 3, applied to worlds
+     * loaded after it is set. Spherical harmonics make colour depend on the view
+     * direction (highlights, sheen); World Labs worlds carry none, files from the
+     * reference 3DGS pipeline carry degree 3, which costs 92 bytes per splat of GPU memory.
+     */
+    var maxShDegree: Int = 3
+        set(value) {
+            field = value.coerceIn(0, 3)
+            renderThread.setMaxShDegree(field)
+        }
+
     /** Walks continuously at the given speed in meters per second until called again with zeros. */
     fun setWalkVelocity(forward: Float, right: Float) = renderThread.setVelocity(forward, right)
 

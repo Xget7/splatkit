@@ -246,3 +246,31 @@ TEST(SpzDecoder, DecodesWorldLabsKitchen) {
 
 }  // namespace
 }  // namespace splat
+
+namespace splat {
+namespace {
+
+TEST(SpzDecoder, KeepsHigherOrderShInTheInternalFrame) {
+  spz::GaussianCloud cloud = oneSplatCloud();
+  cloud.shDegree = 1;
+  // Three coefficients (y, z, x bands) times rgb, channel fastest.
+  cloud.sh = {0.5f, 0.5f, 0.5f, 0.25f, 0.25f, 0.25f, -0.5f, -0.5f, -0.5f};
+  spz::PackOptions pack;
+  pack.version = 2;
+  std::vector<std::uint8_t> bytes;
+  ASSERT_TRUE(spz::saveSpz(cloud, pack, &bytes));
+
+  auto result = decodeSpz(bytes.data(), bytes.size());
+  ASSERT_TRUE(result.ok()) << result.error().message;
+  const SplatCloud& out = result.value();
+  EXPECT_EQ(out.shDegree, 1);
+  ASSERT_EQ(out.sh.size(), 9u);
+  // RDF to RUB negates y and z, so the y and z bands change sign and the x band does not.
+  const float tol = 0.1f;  // SH is stored with 8 bits
+  EXPECT_NEAR(out.sh[0], -0.5f, tol);
+  EXPECT_NEAR(out.sh[3], -0.25f, tol);
+  EXPECT_NEAR(out.sh[6], -0.5f, tol);
+}
+
+}  // namespace
+}  // namespace splat

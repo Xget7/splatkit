@@ -24,9 +24,12 @@ class DistanceSorter {
   // Fills `order` with every splat index, farthest first.
   void sort(Vec3 from, std::vector<uint32_t>& order);
 
-  // Like `sort`, but only splats inside the frustum enter `order`, which is resized to
-  // the count returned. The GPU then never sees what is behind or beside the camera.
-  std::size_t sortVisible(const Frustum& frustum, std::vector<uint32_t>& order);
+  // Filters a sorted order down to the splats inside the frustum, keeping their relative
+  // order, so `visible` is back to front too. Linear and parallel: far cheaper than a
+  // sort, which is why turning costs a cull and only moving costs a sort. `visible` is
+  // resized to the count returned.
+  std::size_t cull(const std::vector<uint32_t>& sorted, const Frustum& frustum,
+                   std::vector<uint32_t>& visible);
 
  private:
   // Sorts the first n entries of keys_ and order together, ascending by key.
@@ -36,6 +39,7 @@ class DistanceSorter {
   std::vector<uint32_t> keys_;
   std::vector<uint32_t> keysScratch_;
   std::vector<uint32_t> orderScratch_;
+  std::vector<uint64_t> visibleBits_;  // one bit per splat, set by the last cull
 };
 
 }  // namespace splat

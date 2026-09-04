@@ -90,7 +90,7 @@ TEST(AsyncSorter, DeliversTheLatestRequest) {
   for (uint32_t i = 1; i < 2000; ++i)
     if (distance2(positions, i, from) > distance2(positions, expected, from)) expected = i;
   EXPECT_EQ(result->order.front(), expected);
-  EXPECT_GE(result->millis, 0.0);
+  EXPECT_GE(result->sortMillis, 0.0);
   // Nothing new finished: a second take must be empty.
   EXPECT_FALSE(sorter.take().has_value());
 }

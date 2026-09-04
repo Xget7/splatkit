@@ -12,7 +12,15 @@ layout(set = 0, binding = 0) uniform Camera {
   vec2 screenSize;    // pixels
   uint outputLinear;  // 1 when the swapchain is sRGB and expects linear values
   uint pad;
+  vec4 cameraPosition;  // world space, for the view direction the SH is evaluated along
 } cam;
+
+// Spherical harmonics degree of the world, 0 to 3: one pipeline per degree.
+// With degree 0 the SH buffer is never read.
+layout(constant_id = 0) const uint SH_DEGREE = 0;
+const uint SH_COEFFICIENTS = (SH_DEGREE + 1) * (SH_DEGREE + 1) - 1;
+// Coefficients are rgb halves, channel fastest, two halves per uint, no padding.
+const uint SH_STRIDE = (SH_COEFFICIENTS * 3 + 1) / 2;
 
 struct Splat {
   float px, py, pz;  // world position
@@ -25,6 +33,7 @@ struct Splat {
 
 layout(std430, set = 0, binding = 1) readonly buffer Splats { Splat splats[]; };
 layout(std430, set = 0, binding = 2) readonly buffer Order { uint order[]; };
+layout(std430, set = 0, binding = 3) readonly buffer Sh { uint shData[]; };
 
 layout(location = 0) out vec2 relativePosition;  // in units of sigma
 layout(location = 1) out vec4 color;
@@ -71,6 +80,46 @@ void ellipseAxes(vec3 cov2D, out vec2 axis1, out vec2 axis2) {
   axis2 = e2 * sqrt(max(lambda2, 0.0));
 }
 
+// Half number h of splat `base` in the SH buffer.
+float shHalf(uint base, uint h) {
+  vec2 pair = unpackHalf2x16(shData[base + h / 2u]);
+  return (h & 1u) == 0u ? pair.x : pair.y;
+}
+
+vec3 shCoefficient(uint base, uint k) {
+  return vec3(shHalf(base, k * 3u), shHalf(base, k * 3u + 1u), shHalf(base, k * 3u + 2u));
+}
+
+// Colour change along the unit direction `d` from the camera to the splat, from the
+// real spherical harmonics bands 1 to 3 in the 3DGS reference convention. The base
+// colour already contains the band 0 term (0.5 + C0 * dc).
+vec3 shColor(uint index, vec3 d) {
+  const float C1 = 0.4886025119;
+  const float C2[5] = float[](1.0925484306, -1.0925484306, 0.3153915653, -1.0925484306, 0.5462742153);
+  const float C3[7] = float[](-0.5900435899, 2.8906114426, -0.4570457995, 0.3731763326,
+                              -0.4570457995, 1.4453057213, -0.5900435899);
+  uint base = index * SH_STRIDE;
+  float x = d.x, y = d.y, z = d.z;
+  vec3 c = -C1 * y * shCoefficient(base, 0u) + C1 * z * shCoefficient(base, 1u) -
+           C1 * x * shCoefficient(base, 2u);
+  if (SH_DEGREE >= 2u) {
+    float xx = x * x, yy = y * y, zz = z * z, xy = x * y, yz = y * z, xz = x * z;
+    c += C2[0] * xy * shCoefficient(base, 3u) + C2[1] * yz * shCoefficient(base, 4u) +
+         C2[2] * (2.0 * zz - xx - yy) * shCoefficient(base, 5u) +
+         C2[3] * xz * shCoefficient(base, 6u) + C2[4] * (xx - yy) * shCoefficient(base, 7u);
+    if (SH_DEGREE >= 3u) {
+      c += C3[0] * y * (3.0 * xx - yy) * shCoefficient(base, 8u) +
+           C3[1] * xy * z * shCoefficient(base, 9u) +
+           C3[2] * y * (4.0 * zz - xx - yy) * shCoefficient(base, 10u) +
+           C3[3] * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoefficient(base, 11u) +
+           C3[4] * x * (4.0 * zz - xx - yy) * shCoefficient(base, 12u) +
+           C3[5] * z * (xx - yy) * shCoefficient(base, 13u) +
+           C3[6] * x * (xx - 3.0 * yy) * shCoefficient(base, 14u);
+    }
+  }
+  return c;
+}
+
 void main() {
   uint index = order[gl_InstanceIndex];
   Splat s = splats[index];
@@ -111,6 +160,10 @@ void main() {
   relativePosition = radius * corner;
 
   vec3 rgb = rgba.rgb;
+  if (SH_DEGREE >= 1u) {
+    vec3 dir = normalize(vec3(s.px, s.py, s.pz) - cam.cameraPosition.xyz);
+    rgb = max(rgb + shColor(index, dir), vec3(0.0));
+  }
   if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(2.2));
   color = vec4(rgb, alpha);
 }
