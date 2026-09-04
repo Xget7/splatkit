@@ -29,6 +29,7 @@ add_library(splat_core STATIC
   src/navigation/CharacterController.cpp
   src/sorting/DistanceSorter.cpp
   src/sorting/AsyncSorter.cpp
+  src/sorting/SpatialOrder.cpp
 )
 target_include_directories(splat_core PUBLIC include)
 target_link_libraries(splat_core PRIVATE spz nlohmann_json::nlohmann_json PUBLIC Threads::Threads)

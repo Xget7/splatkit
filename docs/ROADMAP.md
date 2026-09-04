@@ -22,7 +22,19 @@ Measured on a Xiaomi Mi 9 (Adreno 640, Vulkan 1.1.128), release build, 500k spla
 | 0.7 | 48 bytes | 18.7 | 16.7 |
 | 0.5 | 48 bytes | 15.0 | 13.7 |
 
-Decode 192 ms, upload 50 ms, sort 11.5 ms on a background thread.
+Decode 192 ms, spatial reorder 120 ms, upload 50 ms, sort 11.5 ms on a background thread.
+
+The 2M splat World Labs house (outdoor, bounds 50 m) on the same device, render scale 1.0:
+
+| Splat memory order | GPU ms mean | GPU ms p50 | GPU ms p95 |
+|---|---|---|---|
+| As decoded | 144 | 121 | 279 |
+| Morton order | 48.4 | 44.9 | 77.1 |
+
+The vertex fetch is a random gather through the sort order, so it is bound by memory latency, not bandwidth: a fetch only shader took 160 ms per frame on the house as decoded.
+Reordering the cloud along a Morton curve after decode (`splat::reorderSpatially`, 620 ms for 2M on the CPU) makes consecutive entries of the distance order hit the same cache lines and tripled the frame rate; the kitchen was already coherent and did not change.
+At render scale 0.5 the house is 41 ms, so 2M splats are now vertex bound on Adreno 640: the next lever is fewer vertex fetches per splat, not fewer pixels.
+Decode 595 ms, upload 300 ms, sort 44 ms for 2M.
 Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.
 Vertex math costs nothing; blended fragments are the rest.
 A compute prepass measured 4 ms slower on this GPU and was removed.
@@ -69,6 +81,11 @@ Each item says what it touches and how to prove it works.
 - **Chunked world upload off the render thread**.
   `Engine::uploadPendingWorld` packs, uploads and waits inside `render`, which freezes the frame and needs about three times the world size at the peak.
 - **Frustum cull margin derived from the projected extent**, so large splats near the edge do not pop.
+- **One fetch per splat instead of four** (help wanted, needs a real device).
+  Each of the four quad vertices reads the record; at 2M splats the fetch is the whole frame.
+  Candidates with a number to beat (45 ms p50 on the house): a geometry-free path that reads the record once per instance through a per instance vertex attribute with `VK_VERTEX_INPUT_RATE_INSTANCE` and an index buffer, or a compute prepass that writes only screen quads for visible splats (the earlier prepass was slower on the kitchen; the house may differ).
+- **Faster spatial reorder**.
+  `reorderSpatially` is a `std::sort` on 64 bit keys, 620 ms for 2M splats; a radix sort or running it on the loader thread in parallel with the collider decode would hide it.
 - **Smaller splat record** (help wanted, needs a real device).
   The record is 32 bytes with a spare word; SPZ stores positions with 24 bit fixed point, so 24 bytes is possible.
   Proof: the same image, and GPU ms from the benchmark against the 32 byte record.

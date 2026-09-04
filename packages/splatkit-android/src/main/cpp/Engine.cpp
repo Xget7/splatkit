@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "splat/formats/GlbDecoder.h"
 #include "splat/formats/SpzDecoder.h"
+#include "splat/sorting/SpatialOrder.h"
 #include "splat/math/Mat4.h"
 
 namespace splatkit {
@@ -213,6 +214,9 @@ void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
   auto cloud = std::make_unique<splat::SplatCloud>(std::move(decoded.value()));
   LOGI("decoded %zu splats in %.0f ms, bounds y [%.2f, %.2f]", cloud->count(), millisSince(start),
        cloud->bounds.min[1], cloud->bounds.max[1]);
+  const auto reorderStart = Clock::now();
+  splat::reorderSpatially(*cloud);
+  LOGI("reordered spatially in %.0f ms", millisSince(reorderStart));
   std::lock_guard<std::mutex> lock(pendingMutex_);
   pendingCloud_ = std::move(cloud);
 }
