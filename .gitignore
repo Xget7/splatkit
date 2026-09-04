@@ -12,3 +12,5 @@ node_modules/
 *.apk
 apps/android-dev/app/src/debug/jniLibs/
 .kotlin/
+__pycache__/
+*.pyc

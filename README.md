@@ -1,5 +1,10 @@
 # SplatKit
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.xget7/splatkit-android?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.xget7/splatkit-android)
+[![splatkit-android](https://github.com/Xget7/splatkit/actions/workflows/android.yml/badge.svg)](https://github.com/Xget7/splatkit/actions/workflows/android.yml)
+[![splat-core](https://github.com/Xget7/splatkit/actions/workflows/core.yml/badge.svg)](https://github.com/Xget7/splatkit/actions/workflows/core.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Walkable Gaussian splat worlds on Android, rendered with Vulkan.
 Load a World Labs Marble `.spz`, put a `SplatSurfaceView` in a layout, and walk through the scene.
 
