@@ -116,7 +116,6 @@ class Engine {
   std::unique_ptr<splat::Collider> pendingCollider_;
   WalkCamera camera_;
   int64_t lastFrameNanos_ = 0;
-  std::unique_ptr<splat::SplatCloud> cloud_;         // CPU copy of the current world
   std::unique_ptr<GpuWorld> world_;
   std::unique_ptr<splat::AsyncSorter> sorter_;
   std::optional<splat::Vec3> lastSortedFrom_;

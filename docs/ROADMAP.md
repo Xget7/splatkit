@@ -50,8 +50,8 @@ Mali has not been tested.
 Owned by the maintainer unless stated otherwise.
 
 1. Device numbers: decode, upload, sort and frame time for 500k, 1M and 2M splats on Adreno 640, published in the README.
-2. Scene domain: a load state machine (idle, decoding, uploading, ready, failed) with error values the view can show, instead of logs.
-3. Maven Central publication of `com.splatkit:splatkit-android` with the arm64 native library inside, and an Android CI job that builds the AAR on every pull request.
+2. Done: `SplatSurfaceView.Listener` reports world and collider outcomes with messages, and `isAvailable` says whether Vulkan started.
+3. Maven Central publication of `com.splatkit:splatkit-android` with the arm64 native library inside. Done: the Android CI job that builds the AAR on every pull request.
 4. Library README with a ten line integration.
 
 ## Open for contribution
@@ -77,6 +77,7 @@ Each item says what it touches and how to prove it works.
   Ideas with a measurable claim: tighter quad bounds from the projected ellipse, opacity aware culling of splats that cannot change a pixel, a depth aware early out.
   A compute prepass was measured 4 ms slower here; do not resubmit it without a number from a device.
   Also measured and rejected on the Mi 9 (house p50, base 44.9 ms): one triangle per splat instead of a quad 48.1 ms, a triangle only for splats under 1.5 px 48.9 ms, the draw split into 256k instance chunks 181 ms, and a compute gather into draw order 46.3 ms.
+  With culling in place (house 34.2, kitchen 21.8), an octagon per splat gave house 38.9 and kitchen 19.4: it trades vertices for fragments and only pays where splats are large.
 - **Mali validation** (help wanted, needs a Samsung or Pixel).
   Run the dev app, report validation messages, driver behaviour and frame times.
   A crash or a black screen with logs attached is a valuable report.

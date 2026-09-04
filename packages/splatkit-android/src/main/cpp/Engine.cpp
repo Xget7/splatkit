@@ -265,9 +265,10 @@ bool Engine::uploadPendingWorld() {
   }
   ctx_->waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
-  cloud_ = std::move(cloud);
   splats_->bindWorld(*world_);
-  sorter_ = std::make_unique<splat::AsyncSorter>(cloud_->positions);
+  // The sorter keeps its own copy of the positions; nothing else needs the cloud now.
+  sorter_ = std::make_unique<splat::AsyncSorter>(cloud->positions);
+  cloud.reset();
   lastSortedFrom_.reset();
   drawCount_ = 0;  // the first frustum sort decides what is visible
   LOGI("uploaded %u splats in %.0f ms", world_->count, millisSince(start));
