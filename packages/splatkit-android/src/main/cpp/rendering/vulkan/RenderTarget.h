@@ -26,6 +26,7 @@ class RenderTarget {
 
   VkExtent2D extent() const { return extent_; }
   VkRenderPass renderPass() const { return renderPass_; }
+  VkFormat format() const { return format_; }
   VkFramebuffer framebuffer() const { return framebuffer_; }
 
   // Records the upscale into `swapchainImage`, which is left ready for presentation.
@@ -37,6 +38,7 @@ class RenderTarget {
 
   const VulkanContext& ctx_;
   VkExtent2D extent_{};
+  VkFormat format_ = VK_FORMAT_UNDEFINED;
   VkImage image_ = VK_NULL_HANDLE;
   VmaAllocation allocation_ = VK_NULL_HANDLE;
   VkImageView view_ = VK_NULL_HANDLE;

@@ -22,7 +22,7 @@ class Swapchain {
   static splat::Result<std::unique_ptr<Swapchain>> create(const VulkanContext& ctx,
                                                           VkSurfaceKHR surface,
                                                           VkSwapchainKHR previous,
-                                                          bool vsync = true);
+                                                          bool vsync, bool linearBlending);
   ~Swapchain();
 
   Swapchain(const Swapchain&) = delete;

@@ -51,6 +51,8 @@ internal class NativeEngine {
 
     fun setSplatBudget(budget: Int) = nativeSetSplatBudget(handle, budget)
 
+    fun setLinearBlending(linear: Boolean) = nativeSetLinearBlending(handle, linear)
+
     /** Safe from any thread once created. */
     fun gpuDescription(): String = nativeGpuDescription(handle)
 
@@ -80,6 +82,7 @@ internal class NativeEngine {
     private external fun nativeSetRenderScale(handle: Long, scale: Float)
     private external fun nativeSetMaxShDegree(handle: Long, degree: Int)
     private external fun nativeSetSplatBudget(handle: Long, budget: Int)
+    private external fun nativeSetLinearBlending(handle: Long, linear: Boolean)
     private external fun nativeGpuDescription(handle: Long): String
     private external fun nativeStats(handle: Long, out: FloatArray)
 

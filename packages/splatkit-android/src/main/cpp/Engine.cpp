@@ -115,7 +115,7 @@ bool Engine::recreateSwapchain() {
   VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
   swapchain_.reset();
 
-  auto sc = Swapchain::create(*ctx_, surface_, previous, vsync_);
+  auto sc = Swapchain::create(*ctx_, surface_, previous, vsync_, linearBlending_);
   if (previous != VK_NULL_HANDLE) vkDestroySwapchainKHR(ctx_->device(), previous, nullptr);
   if (!sc) {
     LOGE("%s", sc.error().message.c_str());
@@ -129,8 +129,12 @@ bool Engine::recreateSwapchain() {
   // pipelines. A render pass with the same attachment format is compatible with the one
   // they were built against (Vulkan 1.1, 8.2 "Render Pass Compatibility"). Only a format
   // change, which also flips the sRGB output path, forces a rebuild.
-  if (splats_ && triangle_ && pipelineFormat_ == swapchain_->format()) return true;
+  if (splats_ && triangle_ && pipelineFormat_ == activeFormat()) return true;
   return createPipelines();
+}
+
+VkFormat Engine::activeFormat() const {
+  return target_ ? target_->format() : swapchain_->format();
 }
 
 bool Engine::createRenderTarget() {
@@ -148,6 +152,12 @@ bool Engine::createRenderTarget() {
   return true;
 }
 
+void Engine::setLinearBlending(bool linear) {
+  if (linear == linearBlending_) return;
+  linearBlending_ = linear;
+  if (swapchain_) recreateSwapchain();
+}
+
 void Engine::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 1.0f);
   if (scale == renderScale_) return;
@@ -155,21 +165,24 @@ void Engine::setRenderScale(float scale) {
   if (!swapchain_) return;
   ctx_->waitIdle();
   createRenderTarget();
+  if (pipelineFormat_ != activeFormat()) createPipelines();
 }
 
 bool Engine::createPipelines() {
   triangle_.reset();
   splats_.reset();
-  pipelineFormat_ = swapchain_->format();
+  pipelineFormat_ = activeFormat();
+  const VkRenderPass pass = target_ ? target_->renderPass() : swapchain_->renderPass();
+  LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_), target_ ? 1 : 0);
 
-  auto triangle = DebugTrianglePipeline::create(*ctx_, swapchain_->renderPass());
+  auto triangle = DebugTrianglePipeline::create(*ctx_, pass);
   if (!triangle) {
     LOGE("%s", triangle.error().message.c_str());
     return false;
   }
   triangle_ = std::move(triangle.value());
 
-  auto splats = SplatPipeline::create(*ctx_, swapchain_->renderPass(), isSrgb(swapchain_->format()));
+  auto splats = SplatPipeline::create(*ctx_, pass, isSrgb(pipelineFormat_));
   if (!splats) {
     LOGE("%s", splats.error().message.c_str());
     return false;

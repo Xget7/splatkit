@@ -163,6 +163,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetRender
   if (auto* engine = toEngine(handle)) engine->setRenderScale(scale);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetLinearBlending(JNIEnv*, jobject,
+                                                                                         jlong handle,
+                                                                                         jboolean linear) {
+  if (auto* engine = toEngine(handle)) engine->setLinearBlending(linear == JNI_TRUE);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetSplatBudget(JNIEnv*, jobject,
                                                                                       jlong handle,
                                                                                       jint budget) {

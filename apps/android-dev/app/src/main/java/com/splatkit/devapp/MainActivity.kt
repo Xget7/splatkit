@@ -79,6 +79,8 @@ class MainActivity : Activity() {
         intent?.getIntExtra("sh", 3)?.let { splatView.maxShDegree = it }
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
         intent?.getIntExtra("budget", 0)?.let { splatView.splatBudget = it }
+        // --ez linear true blends in linear light, the old default, 40% slower.
+        splatView.linearBlending = intent?.getBooleanExtra("linear", false) == true
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
         // File reads are IO; keep them off the UI thread.

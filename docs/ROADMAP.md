@@ -19,7 +19,8 @@ Measured on a Xiaomi Mi 9 (Adreno 640, Vulkan 1.1.128), release build, 500k spla
 | Render scale | Splat record | GPU ms mean | GPU ms p50 |
 |---|---|---|---|
 | 1.0 | 48 bytes | 29 to 31 | 27 to 29 |
-| 1.0 | 32 bytes (current) | 25.2 | 23.0 |
+| 1.0 | 32 bytes | 25.2 | 23.0 |
+| 1.0 | 32 bytes, encoded space blending (current) | 14.8 | 14.0 |
 | 0.7 | 48 bytes | 18.7 | 16.7 |
 | 0.5 | 48 bytes | 15.0 | 13.7 |
 
@@ -33,7 +34,9 @@ The 2M splat World Labs house (outdoor, bounds 50 m) on the same device, render 
 | Morton order | 1.0 | 48.4 | 44.9 | 77.1 |
 | Frustum culled in the sort (current) | 1.0 | 34.7 | 34.2 | 43.2 |
 | Frustum culled in the sort (current) | 0.7 | 18.1 | 17.5 | 24.4 |
-| Frustum culled in the sort (current) | 0.5 | 13.9 | 13.7 | 18.2 |
+| Frustum culled in the sort | 0.5 | 13.9 | 13.7 | 18.2 |
+| Blending in the encoded space (current, [ADR 0011](adr/0011-blend-in-the-encoded-space.md)) | 1.0 | 19.8 | 19.4 | 26.3 |
+| Blending in the encoded space (current) | 0.7 | 13.7 | 13.6 | 17.8 |
 
 The vertex fetch is a random gather through the sort order, so it is bound by memory latency, not bandwidth: a fetch only shader took 160 ms per frame on the house as decoded.
 Reordering the cloud along a Morton curve after decode (`splat::reorderSpatially`, 620 ms for 2M on the CPU) makes consecutive entries of the distance order hit the same cache lines and tripled the frame rate; the kitchen was already coherent and did not change.

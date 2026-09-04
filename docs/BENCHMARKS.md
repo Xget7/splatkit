@@ -19,4 +19,15 @@ Reading: at full resolution the house draws 150k to 290k splats and nearly all o
 A budget below what the view needs blurs the image without saving GPU time, because the merged nodes are bigger and cost the fragments the leaves would have.
 The tree pays off when the scene is bigger than what the view needs at a pixel each (far content, many millions of splats) or at low quality modes; it is off by default.
 
+| 2026-09-04 | ADR 0011 | house 2M | scale 0.999, sRGB attachment (old default) | 32.8 / 32.4 / 41.8 | | | | reference |
+| 2026-09-04 | ADR 0011 | house 2M | scale 0.999, RGBA8 UNORM attachment | 20.1 / 19.6 / 26.3 | | | | blending in the encoded space |
+| 2026-09-04 | ADR 0011 | house 2M | scale 0.999, RGB565 attachment | 20.1 / 19.5 / 26.8 | | | | same as UNORM8: the cost was sRGB, not the bytes |
+| 2026-09-04 | ADR 0011 | house 2M | scale 1.0, sustained performance mode | 32.6 / 32.3 / 41.8 | | | | no change: rejected |
+| 2026-09-04 | ADR 0011 | house 2M | scale 1.0, new default | 19.8 / 19.4 / 26.3 | | | | |
+| 2026-09-04 | ADR 0011 | house 2M | scale 0.7, new default | 13.7 / 13.6 / 17.8 | | | | 60 fps |
+| 2026-09-04 | ADR 0011 | house 2M | scale 0.5, new default | 12.6 / 13.2 / 15.1 | | | | no cheaper than 0.7: per splat floor |
+| 2026-09-04 | ADR 0011 | house 2M | scale 1.0, linearBlending | 32.6 / 32.2 / 41.6 | | | | the old path, still available |
+| 2026-09-04 | ADR 0011 | kitchen 500k | scale 1.0, new default | 14.8 / 14.0 / 20.7 | | | | was 19.4 |
+| 2026-09-04 | ADR 0011 | kitchen 500k | scale 0.7, new default | 12.6 / 12.8 / 15.0 | | | | |
+
 Earlier numbers, before this log existed, are in the roadmap tables.

@@ -9,6 +9,7 @@ splat::Result<std::unique_ptr<RenderTarget>> RenderTarget::create(const VulkanCo
                                                                   VkExtent2D extent) {
   std::unique_ptr<RenderTarget> rt(new RenderTarget(ctx));
   rt->extent_ = extent;
+  rt->format_ = format;
   VkDevice device = ctx.device();
 
   VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};

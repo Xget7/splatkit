@@ -80,6 +80,18 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
+     * Blend splats in linear light instead of the encoded colour space. The reference
+     * rasterizer, and so the training, blend encoded values; linear blending gives
+     * richer contrast that the training never saw and costs 40% of the frame on
+     * Adreno 640. Off by default.
+     */
+    var linearBlending: Boolean = false
+        set(value) {
+            field = value
+            renderThread.setLinearBlending(value)
+        }
+
+    /**
      * Most splats drawn per frame, or 0 to draw them all. With a budget, a world loaded
      * afterwards gets a level of detail hierarchy (about 1.5 times the splats in GPU
      * memory) and every frame draws the nodes that cover the scene at about a pixel

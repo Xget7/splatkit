@@ -7,15 +7,23 @@ namespace splatkit {
 splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext& ctx,
                                                             VkSurfaceKHR surface,
                                                             VkSwapchainKHR previous,
-                                                            bool vsync) {
+                                                            bool vsync, bool linearBlending) {
   std::unique_ptr<Swapchain> sc(new Swapchain(ctx));
 
+  // UNORM by default: splats blend in the encoded space, which is what the reference
+  // rasterizer does and what training optimised for, and an sRGB attachment costs 40%
+  // of the frame on Adreno 640 (ADR 0011). Linear blending asks for sRGB first.
   vkb::SwapchainBuilder builder(ctx.physicalDevice(), ctx.device(), surface,
                                 ctx.queueFamily(), ctx.queueFamily());
+  const VkSurfaceFormatKHR unorm[] = {{VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+                                      {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
+  const VkSurfaceFormatKHR srgb[] = {{VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+                                     {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
+  const VkSurfaceFormatKHR* first = linearBlending ? srgb : unorm;
+  const VkSurfaceFormatKHR* second = linearBlending ? unorm : srgb;
+  builder.set_desired_format(first[0]).add_fallback_format(first[1]);
+  builder.add_fallback_format(second[0]).add_fallback_format(second[1]);
   auto result = builder
-                    .set_desired_format({VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                    .add_fallback_format({VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                    .add_fallback_format({VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
                     .set_desired_present_mode(vsync ? VK_PRESENT_MODE_FIFO_KHR
                                                     : VK_PRESENT_MODE_IMMEDIATE_KHR)
                     .add_fallback_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)

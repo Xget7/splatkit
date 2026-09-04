@@ -62,6 +62,12 @@ class Engine {
   void setRenderScale(float scale);
   float renderScale() const { return renderScale_; }
 
+  // Blend splats in linear light instead of the encoded space the training used. Richer
+  // contrast at the cost of 40% of the frame on Adreno 640, and not what the reference
+  // rasterizer produces; off by default (ADR 0011). Render thread.
+  void setLinearBlending(bool linear);
+  bool linearBlending() const { return linearBlending_; }
+
   // Level of detail budget: the most splats drawn per frame, or 0 to draw every splat.
   // A world loaded with a budget gets a hierarchy built over it (about 1.5 times the
   // splats in GPU memory), and each frame draws the nodes that cover the scene at about
@@ -107,6 +113,7 @@ class Engine {
   bool createPipelines();
   bool surfaceExtentChanged() const;
   bool createRenderTarget();
+  VkFormat activeFormat() const;
   void destroySurface();
   bool uploadPendingWorld();
   void publishStats(int64_t frameTimeNanos, bool rendered);
@@ -119,6 +126,7 @@ class Engine {
   std::unique_ptr<Swapchain> swapchain_;
   std::unique_ptr<RenderTarget> target_;  // only when renderScale_ < 1
   float renderScale_ = 1.0f;
+  bool linearBlending_ = false;
   std::atomic<int> maxShDegree_{3};
   std::atomic<int> splatBudget_{0};
   std::unique_ptr<DebugTrianglePipeline> triangle_;
