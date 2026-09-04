@@ -101,5 +101,5 @@ Each item says what it touches and how to prove it works.
 
 - iOS, macOS or visionOS inside this engine.
   The shared core is written so that a Metal engine can sit next to this one, but that is a separate package.
-- React Native inside the engine.
-  The React Native package wraps `SplatSurfaceView` and lives in `packages/react-native-splat`.
+- Any host framework binding inside the engine.
+  A binding wraps `SplatSurfaceView` from outside and ships as its own package.

@@ -2,7 +2,7 @@
 
 Android engine for Gaussian splat worlds: Vulkan renderer, walk and fly camera, touch and gyroscope input, and a `SurfaceView` to put in a layout.
 Consumes `splat-core` for formats, sorting and navigation.
-No React Native dependency; `apps/android-dev` is a plain Android host that uses everything below.
+`apps/android-dev` is a plain Android host that uses everything below.
 
 Requirements: Android 10 (API 29) and a Vulkan 1.1 device.
 Only `arm64-v8a` is built.
@@ -22,7 +22,7 @@ To work against a checkout instead, include the module in `settings.gradle.kts`:
 
 ```kotlin
 include(":splatkit-android")
-project(":splatkit-android").projectDir = file("../react-native-splat/packages/splatkit-android")
+project(":splatkit-android").projectDir = file("../splatkit/packages/splatkit-android")
 ```
 
 and depend on it with `implementation(project(":splatkit-android"))`.

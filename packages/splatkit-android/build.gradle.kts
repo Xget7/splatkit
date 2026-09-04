@@ -45,7 +45,7 @@ mavenPublishing {
     pom {
         name.set("SplatKit Android")
         description.set("Walkable Gaussian splat worlds on Android, rendered with Vulkan.")
-        url.set("https://github.com/Xget7/react-native-splat")
+        url.set("https://github.com/Xget7/splatkit")
         licenses {
             license {
                 name.set("MIT")
@@ -61,9 +61,9 @@ mavenPublishing {
             }
         }
         scm {
-            url.set("https://github.com/Xget7/react-native-splat")
-            connection.set("scm:git:https://github.com/Xget7/react-native-splat.git")
-            developerConnection.set("scm:git:ssh://git@github.com/Xget7/react-native-splat.git")
+            url.set("https://github.com/Xget7/splatkit")
+            connection.set("scm:git:https://github.com/Xget7/splatkit.git")
+            developerConnection.set("scm:git:ssh://git@github.com/Xget7/splatkit.git")
         }
     }
 }

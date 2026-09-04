@@ -41,4 +41,4 @@ Debug builds load the Khronos validation layer; a pull request must leave it sil
 
 `packages/splat-core` has no graphics dependency and is shared by every engine.
 `packages/splatkit-android` owns everything Vulkan and Android.
-The engine does not know React Native exists.
+The engine does not know what is hosting it.
