@@ -72,6 +72,7 @@ Each item says what it touches and how to prove it works.
   Fragments are the cost on Adreno 640: half the pixels halve the GPU time.
   Ideas with a measurable claim: tighter quad bounds from the projected ellipse, opacity aware culling of splats that cannot change a pixel, a depth aware early out.
   A compute prepass was measured 4 ms slower here; do not resubmit it without a number from a device.
+  Also measured and rejected on the Mi 9 (house p50, base 44.9 ms): one triangle per splat instead of a quad 48.1 ms, a triangle only for splats under 1.5 px 48.9 ms, and the draw split into 256k instance chunks 181 ms.
 - **Mali validation** (help wanted, needs a Samsung or Pixel).
   Run the dev app, report validation messages, driver behaviour and frame times.
   A crash or a black screen with logs attached is a valuable report.
