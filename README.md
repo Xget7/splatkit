@@ -27,7 +27,7 @@ The engine does not know React Native exists.
 
 Experimental, pre alpha.
 The Android engine renders and walks World Labs worlds, SPZ versions 2 to 4.
-On a Xiaomi Mi 9 (Adreno 640) a 500k splat scene runs at 60 fps with render scale 0.7; see `docs/ROADMAP.md` for the measurements.
+On a Xiaomi Mi 9 (Adreno 640) a 500k splat kitchen runs at 60 fps with render scale 0.7 and a 2M splat house at 60 fps with render scale 0.5; see `docs/ROADMAP.md` for the measurements.
 Expect the API to change until 0.1.0.
 
 Contributions are welcome.
