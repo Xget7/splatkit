@@ -11,7 +11,7 @@ Only `arm64-v8a` is built.
 
 ```kotlin
 dependencies {
-    implementation("io.github.xget7:splatkit-android:0.1.0-alpha01")
+    implementation("io.github.xget7:splatkit-android:0.1.0-alpha02")
 }
 ```
 

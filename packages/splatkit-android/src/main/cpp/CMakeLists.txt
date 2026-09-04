@@ -58,6 +58,12 @@ target_compile_options(splatkit PRIVATE
 get_target_property(vma_include GPUOpen::VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(vkb_include vk-bootstrap::vk-bootstrap INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(splatkit SYSTEM PRIVATE ${vma_include} ${vkb_include})
+# Hide everything the JVM does not call. See splatkit.map.
+target_compile_options(splatkit PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
+target_link_options(splatkit PRIVATE
+  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/splatkit.map"
+  "-Wl,--exclude-libs,ALL"
+)
 target_link_libraries(splatkit PRIVATE
   splat_core
   splatkit_shaders
