@@ -163,6 +163,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetRender
   if (auto* engine = toEngine(handle)) engine->setRenderScale(scale);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetSplatBudget(JNIEnv*, jobject,
+                                                                                      jlong handle,
+                                                                                      jint budget) {
+  if (auto* engine = toEngine(handle)) engine->setSplatBudget(budget);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetMaxShDegree(JNIEnv*, jobject,
                                                                                       jlong handle,
                                                                                       jint degree) {

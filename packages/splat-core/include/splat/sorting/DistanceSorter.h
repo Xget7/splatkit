@@ -25,6 +25,10 @@ class DistanceSorter {
   // Fills `order` with every splat index, farthest first.
   void sort(Vec3 from, std::vector<uint32_t>& order);
 
+  // Reorders the given indices in place, farthest first. For a level of detail
+  // selection: only the chosen nodes are sorted.
+  void sortSubset(Vec3 from, std::vector<uint32_t>& subset);
+
   // Filters a sorted order down to the splats inside the frustum, keeping their relative
   // order, so `visible` is back to front too. Linear and parallel: far cheaper than a
   // sort, which is why turning costs a cull and only moving costs a sort. `visible` is

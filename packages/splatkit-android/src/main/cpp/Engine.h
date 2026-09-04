@@ -23,6 +23,7 @@
 #include "splat/core/Result.h"
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"
+#include "splat/lod/LodTree.h"
 #include "splat/sorting/AsyncSorter.h"
 
 namespace splatkit {
@@ -60,6 +61,12 @@ class Engine {
   // splat rendering, so this is the direct lever on frame time. Render thread.
   void setRenderScale(float scale);
   float renderScale() const { return renderScale_; }
+
+  // Level of detail budget: the most splats drawn per frame, or 0 to draw every splat.
+  // A world loaded with a budget gets a hierarchy built over it (about 1.5 times the
+  // splats in GPU memory), and each frame draws the nodes that cover the scene at about
+  // a pixel each, nearest in full detail. Applies to worlds loaded after it is set.
+  void setSplatBudget(int budget) { splatBudget_ = std::max(budget, 0); }
 
   // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
   // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
@@ -113,12 +120,15 @@ class Engine {
   std::unique_ptr<RenderTarget> target_;  // only when renderScale_ < 1
   float renderScale_ = 1.0f;
   std::atomic<int> maxShDegree_{3};
+  std::atomic<int> splatBudget_{0};
   std::unique_ptr<DebugTrianglePipeline> triangle_;
   std::unique_ptr<SplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // swapchain format the pipelines target
 
   std::mutex pendingMutex_;
   std::unique_ptr<splat::SplatCloud> pendingCloud_;  // decoded, waiting for upload
+  std::shared_ptr<const splat::LodTree> pendingTree_;  // instead of the cloud, with a budget
+  int loadedBudget_ = 0;  // the budget the current world was loaded with, 0 without a tree
   std::unique_ptr<splat::Collider> pendingCollider_;
   WalkCamera camera_;
   int64_t lastFrameNanos_ = 0;
@@ -136,6 +146,8 @@ class Engine {
   VkExtent2D lastDrawnExtent_{};
   double lastSortMillis_ = 0;
   double lastCullMillis_ = 0;
+  double lastSelectMillis_ = 0;
+  std::size_t lastSelected_ = 0;
 
   bool vsync_ = true;  // benchmarks turn it off so frame times are not vsync multiples
   bool benchmarkPending_ = false;

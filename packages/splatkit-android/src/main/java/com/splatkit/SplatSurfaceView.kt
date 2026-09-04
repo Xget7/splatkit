@@ -80,6 +80,19 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
+     * Most splats drawn per frame, or 0 to draw them all. With a budget, a world loaded
+     * afterwards gets a level of detail hierarchy (about 1.5 times the splats in GPU
+     * memory) and every frame draws the nodes that cover the scene at about a pixel
+     * each, nearest in full detail, so frame time stops depending on the scene's size.
+     * Applies to worlds loaded after it is set.
+     */
+    var splatBudget: Int = 0
+        set(value) {
+            field = value.coerceAtLeast(0)
+            renderThread.setSplatBudget(field)
+        }
+
+    /**
      * Highest spherical harmonics degree kept from the file, 0 to 3, applied to worlds
      * loaded after it is set. Spherical harmonics make colour depend on the view
      * direction (highlights, sheen); World Labs worlds carry none, files from the

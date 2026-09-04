@@ -116,6 +116,8 @@ internal class RenderThread {
 
     fun setMaxShDegree(degree: Int) = post { engine?.setMaxShDegree(degree) }
 
+    fun setSplatBudget(budget: Int) = post { engine?.setSplatBudget(budget) }
+
     /** Reads the latest stats into [out]; see [NativeEngine.stats] for the layout. */
     fun stats(out: FloatArray) {
         engine?.stats(out)

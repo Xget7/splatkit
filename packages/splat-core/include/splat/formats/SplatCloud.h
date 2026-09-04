@@ -23,7 +23,9 @@ struct SplatCloud {
   std::vector<float> covariances;
   // rgb per splat in [0, 1], sRGB encoded as the training data was.
   std::vector<float> colors;
-  // Opacity per splat in [0, 1], sigmoid already applied.
+  // Opacity per splat, sigmoid already applied: in [0, 1] as decoded. Level of detail
+  // nodes may exceed 1 (up to 1000) where they stand in for many overlapping splats;
+  // renderers draw min(1, alpha * falloff).
   std::vector<float> alphas;
   // Spherical harmonics degree, 0 to 3. World Labs exports degree 0.
   int shDegree = 0;

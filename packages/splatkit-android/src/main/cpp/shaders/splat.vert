@@ -28,7 +28,7 @@ struct Splat {
   uint cov0;         // halves: xx, xy
   uint cov1;         // halves: xz, yy
   uint cov2;         // halves: yz, zz
-  uint unused;
+  uint lodAlpha;     // float bits of an opacity above 1 (level of detail nodes), else 0
 };
 
 layout(std430, set = 0, binding = 1) readonly buffer Splats { Splat splats[]; };
@@ -39,6 +39,7 @@ layout(location = 0) out vec2 relativePosition;  // in units of sigma
 layout(location = 1) out vec4 color;
 
 const float kBoundsRadius = 3.0;  // draw out to 3 sigma; beyond that nothing is visible
+const float kLodBoundsRadius = 5.0;  // an opacity of 1000 stays solid out past 3 sigma
 const vec2 kCorners[4] = vec2[](vec2(-1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1));
 
 // Projects the 3D covariance to screen space: Sigma' = J W Sigma W^T J^T.
@@ -151,8 +152,11 @@ void main() {
   // where the fragment stage would discard anyway: exp(-r^2 / 2) * alpha = 1 / 255.
   // Faint splats, the majority, get a much smaller quad; opaque ones keep 3 sigma.
   vec4 rgba = unpackUnorm4x8(s.rgba8);
-  float alpha = rgba.a;
-  float radius = min(kBoundsRadius, sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
+  // A level of detail node stands in for many overlapping splats: its opacity exceeds
+  // one and its solid core reaches further out before the falloff takes it under 1/255.
+  float alpha = s.lodAlpha != 0u ? uintBitsToFloat(s.lodAlpha) : rgba.a;
+  float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius,
+                     sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
 
   vec2 corner = kCorners[gl_VertexIndex];
   vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;

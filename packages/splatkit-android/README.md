@@ -67,6 +67,7 @@ World Labs exports both files for every world.
 | `listener` | `Listener` with `onWorldReady`, `onWorldFailed`, `onColliderReady`, `onColliderFailed`, on the main thread. |
 | `isAvailable` | False when Vulkan could not start; the view stays blank and every call is a no-op. |
 | `renderScale` | Fraction of the surface resolution the splats are drawn at, then upscaled. 0.7 is hard to tell from 1.0 and much cheaper. |
+| `splatBudget` | Most splats drawn per frame through a level of detail tree, 0 (default) draws them all. For scenes far bigger than the view or for low quality modes; at full resolution on a 2M scene it saves nothing and softens the image. Applies to worlds loaded after it is set. |
 | `maxShDegree` | Highest spherical harmonics degree kept from the file, 0 to 3, for worlds loaded after it is set. Degree 3 costs 92 bytes per splat of GPU memory. World Labs worlds carry none. |
 | `setMotionEnabled(bool)` | The gyroscope drives the look direction. |
 | `setWalkVelocity(forward, right)` | Continuous walking in meters per second, for an on screen joystick. |

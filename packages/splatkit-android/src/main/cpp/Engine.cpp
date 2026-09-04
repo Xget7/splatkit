@@ -231,8 +231,19 @@ void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
   const auto reorderStart = Clock::now();
   splat::reorderSpatially(*cloud);
   LOGI("reordered spatially in %.0f ms", millisSince(reorderStart));
+  const int budget = splatBudget_.load();
+  std::shared_ptr<const splat::LodTree> tree;
+  if (budget > 0) {
+    const auto treeStart = Clock::now();
+    tree = std::make_shared<const splat::LodTree>(splat::buildLodTree(std::move(*cloud)));
+    cloud.reset();
+    LOGI("level of detail tree: %zu nodes over %zu splats, built in %.0f ms", tree->nodeCount(), tree->leafCount,
+         millisSince(treeStart));
+  }
   std::lock_guard<std::mutex> lock(pendingMutex_);
   pendingCloud_ = std::move(cloud);
+  pendingTree_ = std::move(tree);
+  loadedBudget_ = budget;
 }
 
 void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
@@ -251,20 +262,22 @@ void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
 
 bool Engine::uploadPendingWorld() {
   std::unique_ptr<splat::SplatCloud> cloud;
+  std::shared_ptr<const splat::LodTree> tree;
   std::unique_ptr<splat::Collider> collider;
   {
     std::lock_guard<std::mutex> lock(pendingMutex_);
     cloud = std::move(pendingCloud_);
+    tree = std::move(pendingTree_);
     collider = std::move(pendingCollider_);
   }
   if (collider) {
     camera_.setCollider(std::move(collider));
     emit(Event::colliderReady);
   }
-  if (!cloud || !splats_) return false;
+  if ((!cloud && !tree) || !splats_) return false;
 
   const auto start = Clock::now();
-  auto world = splats_->uploadWorld(*cloud, maxShDegree_.load());
+  auto world = splats_->uploadWorld(tree ? tree->nodes : *cloud, maxShDegree_.load());
   if (!world) {
     LOGE("world upload failed");
     emit(Event::worldFailed, "GPU upload failed");
@@ -274,8 +287,10 @@ bool Engine::uploadPendingWorld() {
   world_ = std::move(world);
   splats_->bindWorld(*world_);
   // The sorter keeps its own copy of the positions; nothing else needs the cloud now.
-  sorter_ = std::make_unique<splat::AsyncSorter>(cloud->positions);
+  // With a tree the sorter keeps the tree, whose attributes are already on the GPU.
+  sorter_ = tree ? std::make_unique<splat::AsyncSorter>(tree) : std::make_unique<splat::AsyncSorter>(cloud->positions);
   cloud.reset();
+  tree.reset();
   lastSortedFrom_.reset();
   drawCount_ = 0;  // the first frustum sort decides what is visible
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", world_->count, millisSince(start), world_->shDegree);
@@ -377,14 +392,21 @@ void Engine::render(int64_t frameTimeNanos) {
     const bool turned = splat::dot(forward, lastSortedForward_) < kRecullCosine;
     if (moved || turned) {
       const float margin = std::min(kMaxCullMarginRadians, kCullMarginRadians + turnRate_ * kCullStaleSeconds);
+      // A pixel at unit depth: what a node may cover on screen before it is refined.
+      splat::LodSettings lod;
+      lod.budget = static_cast<std::size_t>(loadedBudget_);
+      lod.pixelScaleLimit = 2.0f / (proj->at(1, 1) * static_cast<float>(extent.height));
+      lod.view.forward = forward;
       sorter_->requestVisible(splat::Frustum::make(position, forward, up, 1.0f / proj->at(0, 0),
-                                                   1.0f / proj->at(1, 1), margin));
+                                                   1.0f / proj->at(1, 1), margin), lod);
       lastSortedFrom_ = position;
       lastSortedForward_ = forward;
     }
     if (auto sorted = sorter_->take()) {
       lastSortMillis_ = sorted->sortMillis;
       lastCullMillis_ = sorted->cullMillis;
+      lastSelectMillis_ = sorted->selectMillis;
+      lastSelected_ = sorted->selected;
       pendingOrder_ = std::move(*sorted);
     }
     if (pendingOrder_ || benchmarkRunning_ || view->m != lastDrawnView_.m) redrawNeeded_ = true;
@@ -471,9 +493,9 @@ void Engine::publishStats(int64_t frameTimeNanos, bool rendered) {
       fpsWindowsSinceLog_ = 0;
       lastLoggedIdle_ = idle;
       const splat::Vec3 p = camera_.position();
-      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, cull %.1f ms, %u of %u splats, pos %.2f %.2f %.2f, %s%s", fps,
-           frameLoop_->lastGpuMillis(), lastSortMillis_, lastCullMillis_, drawCount_, world_ ? world_->count : 0u,
-           p.x, p.y, p.z,
+      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, cull %.1f ms, select %.1f ms, %u drawn of %zu selected of %u, pos %.2f %.2f %.2f, %s%s", fps,
+           frameLoop_->lastGpuMillis(), lastSortMillis_, lastCullMillis_, lastSelectMillis_, drawCount_, lastSelected_,
+           world_ ? world_->count : 0u, p.x, p.y, p.z,
            camera_.hasCollider() ? "walk" : "fly", camera_.motionEnabled() ? ", gyro" : "");
     }
   }

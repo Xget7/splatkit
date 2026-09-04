@@ -226,13 +226,14 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
   for (size_t i = 0; i < n; ++i) {
     GpuSplat& g = packed[i];
     std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
-    g.rgba8 = packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2],
-                        cloud.alphas[i]);
+    const float alpha = cloud.alphas[i];
+    g.rgba8 = packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2], alpha);
+    if (alpha > 1.0f) std::memcpy(&g.lodAlpha, &alpha, sizeof(g.lodAlpha));
     const float* c = &cloud.covariances[i * 6];  // xx, xy, xz, yy, yz, zz
     g.cov[0] = packHalf2(c[0], c[1]);
     g.cov[1] = packHalf2(c[2], c[3]);
     g.cov[2] = packHalf2(c[4], c[5]);
-    g.unused = 0;
+    if (alpha <= 1.0f) g.lodAlpha = 0;
   }
   // Identity order until the sorter runs.
   std::vector<uint32_t> order(n);

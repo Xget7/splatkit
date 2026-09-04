@@ -40,6 +40,15 @@ inline uint32_t distanceKey(const float* p, Vec3 from) {
 
 }  // namespace
 
+void DistanceSorter::sortSubset(Vec3 from, std::vector<uint32_t>& subset) {
+  const std::size_t n = std::min(subset.size(), count());
+  subset.resize(n);
+  parallelFor(n, [&](std::size_t begin, std::size_t end) {
+    for (std::size_t i = begin; i < end; ++i) keys_[i] = distanceKey(&positions_[subset[i] * 3], from);
+  });
+  radixSort(n, subset);
+}
+
 void DistanceSorter::parallelFor(std::size_t n, const std::function<void(std::size_t, std::size_t)>& body) {
   const std::size_t workers = std::min<std::size_t>(pool_.width(), std::max<std::size_t>(1, n / kMinPerWorker));
   const std::size_t slice = (n + workers - 1) / workers;
