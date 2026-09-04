@@ -232,8 +232,9 @@ void SplatPipeline::bindWorld(const GpuWorld& world) {
 }
 
 void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                                const uint32_t* order) const {
-  const VkDeviceSize bytes = world.count * sizeof(uint32_t);
+                                const uint32_t* order, uint32_t count) const {
+  const VkDeviceSize bytes = std::min(count, world.count) * sizeof(uint32_t);
+  if (bytes == 0) return;
   GpuBuffer& staging = *world.orderStaging[frameSlot];
   std::memcpy(staging.mapped(), order, static_cast<size_t>(bytes));
   staging.flush(0, bytes);
@@ -263,8 +264,9 @@ void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const G
                        0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
-void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
                          const splat::Mat4& view, const splat::Mat4& proj, VkExtent2D extent) {
+  if (count == 0) return;
   CameraUniform u{};
   u.view = view;
   u.proj = proj;
@@ -280,7 +282,7 @@ void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld
 
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0, nullptr);
-  vkCmdDraw(cmd, 4, world.count, 0, 0);
+  vkCmdDraw(cmd, 4, std::min(count, world.count), 0, 0);
 }
 
 }  // namespace splatkit

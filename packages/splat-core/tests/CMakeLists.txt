@@ -6,6 +6,7 @@ add_executable(splat_core_tests
   math/HalfTest.cpp
   sorting/DistanceSorterTest.cpp
   sorting/SpatialOrderTest.cpp
+  sorting/FrustumSortTest.cpp
 )
 target_link_libraries(splat_core_tests PRIVATE splat_core spz GTest::gtest_main)
 target_compile_definitions(splat_core_tests PRIVATE

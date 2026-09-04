@@ -21,7 +21,15 @@ AsyncSorter::~AsyncSorter() {
 void AsyncSorter::request(Vec3 from) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    pending_ = from;
+    pending_ = Request{from, std::nullopt};
+  }
+  wake_.notify_one();
+}
+
+void AsyncSorter::requestVisible(const Frustum& frustum) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pending_ = Request{frustum.origin, frustum};
   }
   wake_.notify_one();
 }
@@ -36,16 +44,20 @@ std::optional<AsyncSorter::Result> AsyncSorter::take() {
 void AsyncSorter::run() {
   std::vector<uint32_t> order;
   for (;;) {
-    Vec3 from;
+    Request request;
     {
       std::unique_lock<std::mutex> lock(mutex_);
       wake_.wait(lock, [this] { return stop_ || pending_.has_value(); });
       if (stop_) return;
-      from = *pending_;
+      request = *pending_;
       pending_.reset();
     }
     const auto start = std::chrono::steady_clock::now();
-    sorter_.sort(from, order);
+    if (request.frustum) {
+      sorter_.sortVisible(*request.frustum, order);
+    } else {
+      sorter_.sort(request.from, order);
+    }
     const double millis =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     std::lock_guard<std::mutex> lock(mutex_);

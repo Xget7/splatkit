@@ -69,11 +69,13 @@ class SplatPipeline {
   void bindWorld(const GpuWorld& world);
 
   // Records the copy of a new draw order into the world. Must be called outside a render
-  // pass, before `draw` in the same command buffer. `order` has `world.count` entries.
+  // pass, before `draw` in the same command buffer. `order` has `count` entries, at most
+  // `world.count`: the sorter leaves out what the frustum cannot see.
   void updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                   const uint32_t* order) const;
+                   const uint32_t* order, uint32_t count) const;
 
-  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+  // Draws the first `count` entries of the order buffer.
+  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
             const splat::Mat4& view, const splat::Mat4& proj, VkExtent2D extent);
 
  private:

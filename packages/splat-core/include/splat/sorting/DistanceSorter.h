@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "splat/math/Frustum.h"
 #include "splat/math/Mat4.h"
 
 namespace splat {
@@ -23,7 +24,14 @@ class DistanceSorter {
   // Fills `order` with every splat index, farthest first.
   void sort(Vec3 from, std::vector<uint32_t>& order);
 
+  // Like `sort`, but only splats inside the frustum enter `order`, which is resized to
+  // the count returned. The GPU then never sees what is behind or beside the camera.
+  std::size_t sortVisible(const Frustum& frustum, std::vector<uint32_t>& order);
+
  private:
+  // Sorts the first n entries of keys_ and order together, ascending by key.
+  void radixSort(std::size_t n, std::vector<uint32_t>& order);
+
   std::vector<float> positions_;
   std::vector<uint32_t> keys_;
   std::vector<uint32_t> keysScratch_;

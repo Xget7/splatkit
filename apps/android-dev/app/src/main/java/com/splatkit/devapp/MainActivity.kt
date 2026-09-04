@@ -77,12 +77,16 @@ class MainActivity : Activity() {
         val colliderPath = intent?.getStringExtra("collider")
         // File reads are IO; keep them off the UI thread.
         Thread {
-            if (worldPath == null) {
-                splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
-                splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
-            } else {
-                splatView.loadWorld(externalFile(worldPath).readBytes())
-                colliderPath?.let { splatView.loadCollider(externalFile(it).readBytes()) }
+            try {
+                if (worldPath == null) {
+                    splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
+                    splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
+                } else {
+                    splatView.loadWorld(externalFile(worldPath).readBytes())
+                    colliderPath?.let { splatView.loadCollider(externalFile(it).readBytes()) }
+                }
+            } catch (e: java.io.IOException) {
+                runOnUiThread { toast("Could not read the world: ${e.message}") }
             }
         }.start()
         // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7

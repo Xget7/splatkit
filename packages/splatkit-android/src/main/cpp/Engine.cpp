@@ -12,11 +12,17 @@
 #include "Log.h"
 #include "splat/formats/GlbDecoder.h"
 #include "splat/formats/SpzDecoder.h"
+#include "splat/math/Frustum.h"
 #include "splat/sorting/SpatialOrder.h"
 #include "splat/math/Mat4.h"
 
 namespace splatkit {
 namespace {
+
+// The sorter's frustum is this much wider than the view (on the tangent of the half
+// angles), and a new sort is requested once the view turned about 5 degrees.
+constexpr float kCullMargin = 1.5f;
+constexpr float kResortCosine = 0.9962f;
 
 using Clock = std::chrono::steady_clock;
 
@@ -263,6 +269,7 @@ bool Engine::uploadPendingWorld() {
   splats_->bindWorld(*world_);
   sorter_ = std::make_unique<splat::AsyncSorter>(cloud_->positions);
   lastSortedFrom_.reset();
+  drawCount_ = 0;  // the first frustum sort decides what is visible
   LOGI("uploaded %u splats in %.0f ms", world_->count, millisSince(start));
   emit(Event::worldReady, {}, world_->count);
   return true;
@@ -342,13 +349,22 @@ void Engine::render(int64_t frameTimeNanos) {
     const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
     proj = splat::Mat4::perspective(65.0f * static_cast<float>(M_PI) / 180.0f, aspect, 0.05f, 200.0f);
 
-    // Ask for a new order when the camera moved; draw with whatever order we have.
+    // The sorter also culls: only splats inside a widened frustum reach the GPU, which
+    // pays per splat it processes. A new order is asked for when the camera moved or
+    // turned past the threshold; the margin keeps the edges filled until it arrives.
+    // Frames in between draw with whatever order they have.
+    const splat::Mat4& v = *view;
+    const splat::Vec3 forward{-v.at(2, 0), -v.at(2, 1), -v.at(2, 2)};
+    const splat::Vec3 up{v.at(1, 0), v.at(1, 1), v.at(1, 2)};
     const bool moved = !lastSortedFrom_ ||
                        std::fabs(lastSortedFrom_->x - position.x) + std::fabs(lastSortedFrom_->y - position.y) +
                                std::fabs(lastSortedFrom_->z - position.z) > 0.005f;
-    if (moved) {
-      sorter_->request(position);
+    const bool turned = splat::dot(forward, lastSortedForward_) < kResortCosine;
+    if (moved || turned) {
+      sorter_->requestVisible(splat::Frustum::make(position, forward, up, 1.0f / proj->at(0, 0),
+                                                   1.0f / proj->at(1, 1), kCullMargin));
       lastSortedFrom_ = position;
+      lastSortedForward_ = forward;
     }
     if (auto sorted = sorter_->take()) {
       lastSortMillis_ = sorted->millis;
@@ -375,7 +391,8 @@ void Engine::render(int64_t frameTimeNanos) {
 
   // Outside the render pass: transfers are not allowed inside one.
   if (world_ && pendingOrder_) {
-    splats_->updateOrder(cmd, frameLoop_->currentSlot(), *world_, pendingOrder_->order.data());
+    drawCount_ = static_cast<uint32_t>(pendingOrder_->order.size());
+    splats_->updateOrder(cmd, frameLoop_->currentSlot(), *world_, pendingOrder_->order.data(), drawCount_);
     pendingOrder_.reset();
   }
 
@@ -397,7 +414,7 @@ void Engine::render(int64_t frameTimeNanos) {
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   if (world_) {
-    splats_->draw(cmd, frameLoop_->currentSlot(), *world_, *view, *proj, extent);
+    splats_->draw(cmd, frameLoop_->currentSlot(), *world_, drawCount_, *view, *proj, extent);
   } else {
     triangle_->draw(cmd);
   }
@@ -437,8 +454,8 @@ void Engine::publishStats(int64_t frameTimeNanos, bool rendered) {
       fpsWindowsSinceLog_ = 0;
       lastLoggedIdle_ = idle;
       const splat::Vec3 p = camera_.position();
-      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fps,
-           frameLoop_->lastGpuMillis(), lastSortMillis_, p.x, p.y, p.z,
+      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, %u of %u splats, pos %.2f %.2f %.2f, %s%s", fps,
+           frameLoop_->lastGpuMillis(), lastSortMillis_, drawCount_, world_ ? world_->count : 0u, p.x, p.y, p.z,
            camera_.hasCollider() ? "walk" : "fly", camera_.motionEnabled() ? ", gyro" : "");
     }
   }

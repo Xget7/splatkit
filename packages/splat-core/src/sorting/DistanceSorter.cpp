@@ -13,24 +13,50 @@ DistanceSorter::DistanceSorter(std::vector<float> positions) : positions_(std::m
   orderScratch_.resize(n);
 }
 
+namespace {
+
+// Key: bit pattern of the squared distance. Non negative floats compare like their bits,
+// so an integer sort on them is a float sort. Inverting the bits makes the largest
+// distance the smallest key, which turns an ascending sort into back to front.
+inline uint32_t distanceKey(const float* p, Vec3 from) {
+  const float dx = p[0] - from.x;
+  const float dy = p[1] - from.y;
+  const float dz = p[2] - from.z;
+  const float d2 = dx * dx + dy * dy + dz * dz;
+  uint32_t bits;
+  std::memcpy(&bits, &d2, sizeof(bits));
+  return ~bits;
+}
+
+}  // namespace
+
 void DistanceSorter::sort(Vec3 from, std::vector<uint32_t>& order) {
   const std::size_t n = count();
   order.resize(n);
-
-  // Key: bit pattern of the squared distance. Non negative floats compare like their bits,
-  // so an integer sort on them is a float sort. Inverting the bits makes the largest
-  // distance the smallest key, which turns an ascending sort into back to front.
   for (std::size_t i = 0; i < n; ++i) {
-    const float dx = positions_[i * 3] - from.x;
-    const float dy = positions_[i * 3 + 1] - from.y;
-    const float dz = positions_[i * 3 + 2] - from.z;
-    const float d2 = dx * dx + dy * dy + dz * dz;
-    uint32_t bits;
-    std::memcpy(&bits, &d2, sizeof(bits));
-    keys_[i] = ~bits;
+    keys_[i] = distanceKey(&positions_[i * 3], from);
     order[i] = static_cast<uint32_t>(i);
   }
+  radixSort(n, order);
+}
 
+std::size_t DistanceSorter::sortVisible(const Frustum& frustum, std::vector<uint32_t>& order) {
+  const std::size_t n = count();
+  order.resize(n);
+  std::size_t visible = 0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const float* p = &positions_[i * 3];
+    if (!frustum.contains({p[0], p[1], p[2]})) continue;
+    keys_[visible] = distanceKey(p, frustum.origin);
+    order[visible] = static_cast<uint32_t>(i);
+    ++visible;
+  }
+  order.resize(visible);
+  radixSort(visible, order);
+  return visible;
+}
+
+void DistanceSorter::radixSort(std::size_t n, std::vector<uint32_t>& order) {
   // LSD radix sort, 8 bits per pass, least significant digit first. Each pass is a
   // stable counting sort, so after four passes the full 32-bit key is ordered.
   uint32_t* keysIn = keys_.data();

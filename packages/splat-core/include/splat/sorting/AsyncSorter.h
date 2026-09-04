@@ -19,7 +19,7 @@ namespace splat {
 class AsyncSorter {
  public:
   struct Result {
-    std::vector<uint32_t> order;
+    std::vector<uint32_t> order;  // only the visible splats when a frustum was given
     double millis = 0;
   };
 
@@ -31,6 +31,8 @@ class AsyncSorter {
 
   // Schedules a sort from this position. Cheap; call every frame the camera moved.
   void request(Vec3 from);
+  // Schedules a sort of the splats inside the frustum only, from its origin.
+  void requestVisible(const Frustum& frustum);
 
   // The newest finished order not yet taken, if any. Moves it out.
   std::optional<Result> take();
@@ -43,7 +45,11 @@ class AsyncSorter {
   std::mutex mutex_;
   std::condition_variable wake_;
   bool stop_ = false;
-  std::optional<Vec3> pending_;
+  struct Request {
+    Vec3 from;
+    std::optional<Frustum> frustum;
+  };
+  std::optional<Request> pending_;
   std::optional<Result> finished_;
 };
 
