@@ -54,7 +54,8 @@ class WorldActivity : Activity() {
 }
 ```
 
-`loadWorld` decodes on the calling thread, so call it from a background thread; the upload to the GPU happens on the next frame and `onWorldReady` follows on the main thread.
+`loadWorld` returns immediately and decodes on the engine's loader thread; reading the bytes is what needs a background thread, as above.
+The upload to the GPU happens on the next frame and `onWorldReady` follows on the main thread.
 Without a collider the camera flies; with one it walks on the mesh and `onColliderReady` fires.
 World Labs exports both files for every world.
 
