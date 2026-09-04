@@ -4,6 +4,7 @@
     <application
         android:label="SplatKit Dev"
         android:allowBackup="false"
+        android:appCategory="game"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
         <activity
             android:name=".MainActivity"

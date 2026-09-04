@@ -5,6 +5,7 @@
 
 #include "splat/math/Frustum.h"
 #include "splat/math/Mat4.h"
+#include "splat/sorting/WorkerPool.h"
 
 namespace splat {
 
@@ -35,6 +36,10 @@ class DistanceSorter {
   // Sorts the first n entries of keys_ and order together, ascending by key.
   void radixSort(std::size_t n, std::vector<uint32_t>& order);
 
+  // Splits [0, n) into slices for the pool, one per worker, and runs `body(begin, end)`.
+  void parallelFor(std::size_t n, const std::function<void(std::size_t, std::size_t)>& body);
+
+  WorkerPool pool_;
   std::vector<float> positions_;
   std::vector<uint32_t> keys_;
   std::vector<uint32_t> keysScratch_;

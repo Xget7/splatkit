@@ -1,6 +1,8 @@
 #include "splat/sorting/DistanceSorter.h"
 
+#include <algorithm>
 #include <array>
+#include <mutex>
 #include <cstring>
 #include <thread>
 #include <utility>
@@ -8,7 +10,13 @@
 
 namespace splat {
 
-DistanceSorter::DistanceSorter(std::vector<float> positions) : positions_(std::move(positions)) {
+// Four threads cover the cull in 10 ms for 2M splats on a phone; more gain nothing on
+// memory bound passes. Small clouds stay on the caller.
+constexpr std::size_t kMaxWorkers = 4;
+constexpr std::size_t kMinPerWorker = 100000;
+
+DistanceSorter::DistanceSorter(std::vector<float> positions)
+    : pool_(kMaxWorkers - 1), positions_(std::move(positions)) {
   const std::size_t n = count();
   keys_.resize(n);
   keysScratch_.resize(n);
@@ -16,10 +24,6 @@ DistanceSorter::DistanceSorter(std::vector<float> positions) : positions_(std::m
 }
 
 namespace {
-
-// Worker threads for the cull pass; small clouds stay on one.
-constexpr std::size_t kMaxWorkers = 4;
-constexpr std::size_t kMinPerWorker = 100000;
 
 // Key: bit pattern of the squared distance. Non negative floats compare like their bits,
 // so an integer sort on them is a float sort. Inverting the bits makes the largest
@@ -36,13 +40,24 @@ inline uint32_t distanceKey(const float* p, Vec3 from) {
 
 }  // namespace
 
+void DistanceSorter::parallelFor(std::size_t n, const std::function<void(std::size_t, std::size_t)>& body) {
+  const std::size_t workers = std::min<std::size_t>(pool_.width(), std::max<std::size_t>(1, n / kMinPerWorker));
+  const std::size_t slice = (n + workers - 1) / workers;
+  pool_.run(workers, [&](std::size_t w) {
+    const std::size_t begin = w * slice;
+    body(begin, std::min(n, begin + slice));
+  });
+}
+
 void DistanceSorter::sort(Vec3 from, std::vector<uint32_t>& order) {
   const std::size_t n = count();
   order.resize(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    keys_[i] = distanceKey(&positions_[i * 3], from);
-    order[i] = static_cast<uint32_t>(i);
-  }
+  parallelFor(n, [&](std::size_t begin, std::size_t end) {
+    for (std::size_t i = begin; i < end; ++i) {
+      keys_[i] = distanceKey(&positions_[i * 3], from);
+      order[i] = static_cast<uint32_t>(i);
+    }
+  });
   radixSort(n, order);
 }
 
@@ -50,43 +65,32 @@ std::size_t DistanceSorter::cull(const std::vector<uint32_t>& sorted, const Frus
                                  std::vector<uint32_t>& visible) {
   const std::size_t n = std::min(sorted.size(), count());
   visible.resize(n);
-  const std::size_t workers = std::min<std::size_t>(kMaxWorkers, std::max<std::size_t>(1, n / kMinPerWorker));
 
   // Two passes, both streaming. Testing positions through the sorted order would be a
   // random gather of 12 bytes per splat, which is what memory latency punishes; instead
   // the test runs over the positions in index order and leaves one bit per splat, and
   // the second pass reads the bits through the order. The bits fit in cache.
-  visibleBits_.assign((count() + 63) / 64, 0);
-  {
-    const std::size_t words = visibleBits_.size();
-    const std::size_t slice = (words + workers - 1) / workers;
-    auto testSlice = [&](std::size_t w) {
-      const std::size_t begin = w * slice;
-      const std::size_t end = std::min(words, begin + slice);
-      for (std::size_t word = begin; word < end; ++word) {
-        uint64_t bits = 0;
-        const std::size_t first = word * 64;
-        const std::size_t last = std::min(count(), first + 64);
-        for (std::size_t i = first; i < last; ++i) {
-          const float* p = &positions_[i * 3];
-          if (frustum.contains({p[0], p[1], p[2]})) bits |= uint64_t{1} << (i - first);
-        }
-        visibleBits_[word] = bits;
+  const std::size_t words = (count() + 63) / 64;
+  visibleBits_.resize(words);
+  parallelFor(words, [&](std::size_t begin, std::size_t end) {
+    for (std::size_t word = begin; word < end; ++word) {
+      uint64_t bits = 0;
+      const std::size_t first = word * 64;
+      const std::size_t last = std::min(count(), first + 64);
+      for (std::size_t i = first; i < last; ++i) {
+        const float* p = &positions_[i * 3];
+        if (frustum.contains({p[0], p[1], p[2]})) bits |= uint64_t{1} << (i - first);
       }
-    };
-    std::vector<std::thread> threads;
-    for (std::size_t w = 1; w < workers; ++w) threads.emplace_back(testSlice, w);
-    testSlice(0);
-    for (auto& t : threads) t.join();
-  }
+      visibleBits_[word] = bits;
+    }
+  });
 
-  // Each worker compacts its slice of the sorted order into scratch; joining the slices
-  // in slice order keeps the sort order intact.
-  const std::size_t slice = (n + workers - 1) / workers;
-  std::vector<std::size_t> counts(workers, 0);
-  auto compactSlice = [&](std::size_t w) {
-    const std::size_t begin = w * slice;
-    const std::size_t end = std::min(n, begin + slice);
+  // Each slice of the sorted order compacts into scratch at its own offset; joining the
+  // slices in order keeps the sort order intact.
+  std::vector<std::size_t> starts;
+  std::vector<std::size_t> counts;
+  std::mutex slicesMutex;
+  parallelFor(n, [&](std::size_t begin, std::size_t end) {
     std::size_t out = begin;
     for (std::size_t i = begin; i < end; ++i) {
       const uint32_t index = sorted[i];
@@ -94,17 +98,19 @@ std::size_t DistanceSorter::cull(const std::vector<uint32_t>& sorted, const Frus
       orderScratch_[out] = index;
       out += in ? 1 : 0;  // branch free: the write lands anyway and is overwritten if not kept
     }
-    counts[w] = out - begin;
-  };
-  std::vector<std::thread> threads;
-  for (std::size_t w = 1; w < workers; ++w) threads.emplace_back(compactSlice, w);
-  compactSlice(0);
-  for (auto& t : threads) t.join();
+    std::lock_guard<std::mutex> lock(slicesMutex);
+    starts.push_back(begin);
+    counts.push_back(out - begin);
+  });
 
+  // Slices finish in any order; join them by their start.
+  std::vector<std::size_t> byStart(starts.size());
+  for (std::size_t i = 0; i < byStart.size(); ++i) byStart[i] = i;
+  std::sort(byStart.begin(), byStart.end(), [&](std::size_t a, std::size_t b) { return starts[a] < starts[b]; });
   std::size_t total = 0;
-  for (std::size_t w = 0; w < workers; ++w) {
-    std::memcpy(&visible[total], &orderScratch_[w * slice], counts[w] * sizeof(uint32_t));
-    total += counts[w];
+  for (std::size_t k : byStart) {
+    std::memcpy(&visible[total], &orderScratch_[starts[k]], counts[k] * sizeof(uint32_t));
+    total += counts[k];
   }
   visible.resize(total);
   return total;

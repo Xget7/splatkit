@@ -383,7 +383,7 @@ void Engine::render(int64_t frameTimeNanos) {
       lastSortedForward_ = forward;
     }
     if (auto sorted = sorter_->take()) {
-      if (sorted->sortMillis > 0.0) lastSortMillis_ = sorted->sortMillis;
+      lastSortMillis_ = sorted->sortMillis;
       lastCullMillis_ = sorted->cullMillis;
       pendingOrder_ = std::move(*sorted);
     }

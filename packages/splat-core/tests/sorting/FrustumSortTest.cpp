@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <random>
 #include <thread>
@@ -8,6 +9,7 @@
 #include "splat/math/Frustum.h"
 #include "splat/sorting/AsyncSorter.h"
 #include "splat/sorting/DistanceSorter.h"
+#include "splat/sorting/WorkerPool.h"
 
 using splat::Frustum;
 using splat::Vec3;
@@ -81,7 +83,6 @@ TEST(AsyncSorter, TurningReusesTheOrderAndOnlyCulls) {
   ASSERT_TRUE(turned.has_value());
   ASSERT_EQ(turned->order.size(), 1u);
   EXPECT_EQ(turned->order[0], 1u);
-  EXPECT_EQ(turned->sortMillis, 0.0);
 }
 
 // Large enough for the parallel cull path: every visible splat must be kept exactly once
@@ -116,4 +117,16 @@ TEST(DistanceSorter, CullMatchesTheSequentialAnswerOnLargeClouds) {
     const float db = b[0] * b[0] + b[1] * b[1] + b[2] * b[2];
     ASSERT_GE(da, db) << "not back to front at " << k;
   }
+}
+
+TEST(WorkerPool, RunsEveryIndexOnce) {
+  splat::WorkerPool pool(3);
+  std::vector<std::atomic<int>> hits(100);
+  for (auto& h : hits) h = 0;
+  pool.run(100, [&](std::size_t i) { ++hits[i]; });
+  for (auto& h : hits) EXPECT_EQ(h.load(), 1);
+  pool.run(0, [&](std::size_t) { FAIL(); });
+  pool.run(2, [&](std::size_t i) { ++hits[i]; });
+  EXPECT_EQ(hits[0].load(), 2);
+  EXPECT_EQ(hits[1].load(), 2);
 }

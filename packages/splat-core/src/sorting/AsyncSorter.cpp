@@ -62,6 +62,7 @@ void AsyncSorter::run() {
     if (moved) {
       sorter_.sort(request.from, fullOrder_);
       sortedFrom_ = request.from;
+      lastSortMillis_ = millisBetween(start, Clock::now());
     }
     const auto sorted = Clock::now();
     if (request.frustum) {
@@ -73,7 +74,7 @@ void AsyncSorter::run() {
     std::lock_guard<std::mutex> lock(mutex_);
     // An untaken result is stale now; its buffer becomes the next result's scratch.
     std::vector<uint32_t> recycled = finished_ ? std::move(finished_->order) : std::vector<uint32_t>();
-    finished_ = Result{std::move(order), moved ? millisBetween(start, sorted) : 0.0, millisBetween(sorted, culled)};
+    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled)};
     order = std::move(recycled);
   }
 }

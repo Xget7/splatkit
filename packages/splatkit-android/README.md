@@ -79,6 +79,9 @@ World Labs exports both files for every world.
 
 The engine draws only when the camera, the world or the surface changed, so a still scene costs no GPU time.
 
+Declare `android:appCategory="game"` in the host manifest: Android's power HAL keys its game performance mode on it, and Xiaomi's Game Turbo lists such apps.
+Thread priority and big core affinity for the engine threads were measured on the Mi 9 and changed nothing (see the roadmap), so the library does not set them.
+
 ## Logs
 
 Everything logs under the tag `SplatKit`.

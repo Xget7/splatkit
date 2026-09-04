@@ -40,6 +40,8 @@ After that the frame was bound per splat processed, not per pixel: render scale 
 Only the splats inside a widened frustum reach the GPU, so it sees 170k to 290k of the 2M splats during a turn: 32 ms at full resolution, 60 fps at render scale 0.5.
 The distance order does not depend on where the camera looks, so turning never sorts: the sorter thread keeps the full order (44 ms, only when the camera moves) and turning runs a cull of it (10 ms for 2M on four threads, two streaming passes through a visibility bitmap).
 The cull margin is 10 degrees plus the turn rate times 50 ms, so a flick of the phone finds its edges already drawn; the first version re-sorted the culled set with a fixed margin and showed empty edges on fast turns.
+Display priority (-8) and big core affinity for the render, sort and cull threads were measured on the house and changed nothing: GPU p50 31.9 against 31.8 ms, sort 41 to 46 ms either way, cull 10 ms either way, and the big cores did not clock higher (1.9 to 2.6 GHz in both modes, out of 2.8).
+The frame is bound by the GPU, so "performance modes" that touch CPU scheduling have nothing to give; the library does not expose one.
 Spherical harmonics cost nothing measurable on the raccoon sample (932k splats, degree 3, 92 bytes per splat extra): p50 12.5 ms with them, 12.4 without; decode 634 ms, reorder 216 ms, upload 501 ms in release.
 Decode 530 ms, spatial reorder 470 ms, upload 270 ms for 2M.
 Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.

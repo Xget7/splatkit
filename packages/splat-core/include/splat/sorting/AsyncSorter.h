@@ -22,7 +22,7 @@ class AsyncSorter {
  public:
   struct Result {
     std::vector<uint32_t> order;  // only the visible splats when a frustum was given
-    double sortMillis = 0;        // 0 when the previous order was reused
+    double sortMillis = 0;        // the most recent sort, which this order may have reused
     double cullMillis = 0;
   };
 
@@ -54,6 +54,7 @@ class AsyncSorter {
   };
   std::optional<Request> pending_;
   std::optional<Result> finished_;
+  double lastSortMillis_ = 0;  // worker thread only
   // Worker thread only.
   std::vector<uint32_t> fullOrder_;
   std::optional<Vec3> sortedFrom_;
