@@ -2,6 +2,7 @@ package com.splatkit.devapp
 
 import android.app.Activity
 import android.os.Bundle
+import java.io.File
 import android.view.Gravity
 import android.widget.Button
 import android.widget.FrameLayout
@@ -54,10 +55,20 @@ class MainActivity : Activity() {
         })
         setContentView(root)
 
-        // Asset reads are file IO; keep them off the UI thread.
+        // A world pushed to the app's external files dir loads instead of the bundled kitchen:
+        //   adb push house.spz /sdcard/Android/data/com.splatkit.devapp/files/
+        //   adb shell am start -n com.splatkit.devapp/.MainActivity --es world house.spz --es collider house.glb
+        val worldPath = intent?.getStringExtra("world")
+        val colliderPath = intent?.getStringExtra("collider")
+        // File reads are IO; keep them off the UI thread.
         Thread {
-            splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
-            splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
+            if (worldPath == null) {
+                splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
+                splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
+            } else {
+                splatView.loadWorld(externalFile(worldPath).readBytes())
+                colliderPath?.let { splatView.loadCollider(externalFile(it).readBytes()) }
+            }
         }.start()
         // adb shell am start -n com.splatkit.devapp/.MainActivity --ez benchmark true --ef scale 0.7
         intent?.getFloatExtra("scale", 1f)?.let { splatView.renderScale = it }
@@ -68,6 +79,10 @@ class MainActivity : Activity() {
         }
         refreshGyroLabel()
     }
+
+    /** Absolute paths are used as given; anything else is relative to the app's external files dir. */
+    private fun externalFile(path: String): File =
+        if (path.startsWith("/")) File(path) else File(getExternalFilesDir(null), path)
 
     override fun onResume() {
         super.onResume()

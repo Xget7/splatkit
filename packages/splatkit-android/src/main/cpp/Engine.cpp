@@ -96,6 +96,7 @@ bool Engine::createSurface() {
 }
 
 bool Engine::recreateSwapchain() {
+  redrawNeeded_ = true;
   ctx_->waitIdle();
   VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
   swapchain_.reset();
@@ -229,7 +230,7 @@ void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
   pendingCollider_ = std::move(collider);
 }
 
-void Engine::uploadPendingWorld() {
+bool Engine::uploadPendingWorld() {
   std::unique_ptr<splat::SplatCloud> cloud;
   std::unique_ptr<splat::Collider> collider;
   {
@@ -238,13 +239,13 @@ void Engine::uploadPendingWorld() {
     collider = std::move(pendingCollider_);
   }
   if (collider) camera_.setCollider(std::move(collider));
-  if (!cloud || !splats_) return;
+  if (!cloud || !splats_) return false;
 
   const auto start = Clock::now();
   auto world = splats_->uploadWorld(*cloud);
   if (!world) {
     LOGE("world upload failed");
-    return;
+    return false;
   }
   ctx_->waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
@@ -253,6 +254,7 @@ void Engine::uploadPendingWorld() {
   sorter_ = std::make_unique<splat::AsyncSorter>(cloud_->positions);
   lastSortedFrom_.reset();
   LOGI("uploaded %u splats in %.0f ms", world_->count, millisSince(start));
+  return true;
 }
 
 void Engine::startBenchmark(float seconds) {
@@ -308,18 +310,11 @@ void Engine::updateBenchmark(float dt) {
        g[g.size() / 2], g[(g.size() * 95) / 100], g.back(), gpuTemperatureCelsius());
 }
 
+// Every vsync steps the camera and the sorter, but the GPU only draws when something
+// visible changed: a still scene costs no GPU time and almost no battery.
 void Engine::render(int64_t frameTimeNanos) {
   if (!swapchain_) return;
-  uploadPendingWorld();
-
-  uint32_t imageIndex = 0;
-  VkCommandBuffer cmd = VK_NULL_HANDLE;
-  FrameLoop::Status status = frameLoop_->beginFrame(*swapchain_, imageIndex, cmd);
-  if (status == FrameLoop::Status::swapchainOutOfDate) {
-    recreateSwapchain();
-    return;
-  }
-  if (status != FrameLoop::Status::ok) return;
+  if (uploadPendingWorld()) redrawNeeded_ = true;
 
   std::optional<splat::Mat4> view;
   std::optional<splat::Mat4> proj;
@@ -344,11 +339,33 @@ void Engine::render(int64_t frameTimeNanos) {
       sorter_->request(position);
       lastSortedFrom_ = position;
     }
-    // Outside the render pass: transfers are not allowed inside one.
     if (auto sorted = sorter_->take()) {
       lastSortMillis_ = sorted->millis;
-      splats_->updateOrder(cmd, frameLoop_->currentSlot(), *world_, sorted->order.data());
+      pendingOrder_ = std::move(*sorted);
     }
+    if (pendingOrder_ || benchmarkRunning_ || view->m != lastDrawnView_.m) redrawNeeded_ = true;
+  }
+  if (extent.width != lastDrawnExtent_.width || extent.height != lastDrawnExtent_.height) {
+    redrawNeeded_ = true;
+  }
+  if (!redrawNeeded_) {
+    publishStats(frameTimeNanos, false);
+    return;
+  }
+
+  uint32_t imageIndex = 0;
+  VkCommandBuffer cmd = VK_NULL_HANDLE;
+  FrameLoop::Status status = frameLoop_->beginFrame(*swapchain_, imageIndex, cmd);
+  if (status == FrameLoop::Status::swapchainOutOfDate) {
+    recreateSwapchain();
+    return;
+  }
+  if (status != FrameLoop::Status::ok) return;
+
+  // Outside the render pass: transfers are not allowed inside one.
+  if (world_ && pendingOrder_) {
+    splats_->updateOrder(cmd, frameLoop_->currentSlot(), *world_, pendingOrder_->order.data());
+    pendingOrder_.reset();
   }
 
   VkClearValue clear{};
@@ -378,27 +395,36 @@ void Engine::render(int64_t frameTimeNanos) {
   if (target_) target_->blitTo(cmd, swapchain_->image(imageIndex), swapchain_->extent());
 
   status = frameLoop_->endFrame(*swapchain_, imageIndex);
+  redrawNeeded_ = false;
+  lastDrawnView_ = view.value_or(splat::Mat4::identity());
+  lastDrawnExtent_ = extent;
   if (status == FrameLoop::Status::swapchainOutOfDate ||
       (status == FrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
     recreateSwapchain();
   }
+  publishStats(frameTimeNanos, true);
+}
 
-  ++fpsWindowFrames_;
+void Engine::publishStats(int64_t frameTimeNanos, bool rendered) {
+  if (rendered) ++fpsWindowFrames_;
   if (fpsWindowStart_ == 0) fpsWindowStart_ = frameTimeNanos;
   const int64_t elapsed = frameTimeNanos - fpsWindowStart_;
   if (elapsed >= 500'000'000LL) {
     const float fps = static_cast<float>(fpsWindowFrames_ * 1e9 / static_cast<double>(elapsed));
     statFps_.store(fps, std::memory_order_relaxed);
-    statFrameMillis_.store(1000.0f / fps, std::memory_order_relaxed);
+    statFrameMillis_.store(fps > 0.0f ? 1000.0f / fps : 0.0f, std::memory_order_relaxed);
     statGpuMillis_.store(static_cast<float>(frameLoop_->lastGpuMillis()), std::memory_order_relaxed);
     statSortMillis_.store(static_cast<float>(lastSortMillis_), std::memory_order_relaxed);
     statSplats_.store(world_ ? world_->count : 0, std::memory_order_relaxed);
     statWalking_.store(camera_.hasCollider(), std::memory_order_relaxed);
     statMotion_.store(camera_.motionEnabled(), std::memory_order_relaxed);
+    // An idle scene logs once, not every two seconds.
+    const bool idle = fpsWindowFrames_ == 0;
     fpsWindowStart_ = frameTimeNanos;
     fpsWindowFrames_ = 0;
-    if (++fpsWindowsSinceLog_ >= 4) {
+    if (++fpsWindowsSinceLog_ >= 4 && !(idle && lastLoggedIdle_)) {
       fpsWindowsSinceLog_ = 0;
+      lastLoggedIdle_ = idle;
       const splat::Vec3 p = camera_.position();
       LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, pos %.2f %.2f %.2f, %s%s", fps,
            frameLoop_->lastGpuMillis(), lastSortMillis_, p.x, p.y, p.z,

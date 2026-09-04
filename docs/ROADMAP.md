@@ -9,18 +9,22 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
 - `splat-core`: SPZ v2 to v4 decoding into the internal RUB frame, GLB collider decoding, radix distance sort on a background thread, uniform grid raycasts, character controller.
   Unit and integration tests, CI with ThreadSanitizer and AddressSanitizer.
 - `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending, walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
-- `apps/android-dev`: loads a World Labs kitchen and its collider, shows GPU, frame time, sort time and splat count.
+- `apps/android-dev`: loads a World Labs kitchen and its collider, or any world pushed to its files dir, shows GPU, frame time, sort time and splat count.
+- `scripts/generate_world.py`: photos of a place to a walkable world through the World Labs API, downloading the SPZ and the collider.
+- The engine draws only when the camera, the sort order, the world or the surface changed; a still scene costs no GPU time.
 
 Measured on a Xiaomi Mi 9 (Adreno 640, Vulkan 1.1.128), release build, 500k splats at 1080x2261, reproducible benchmark (`--ez benchmark true`):
 
-| Render scale | GPU ms mean | GPU ms p50 |
-|---|---|---|
-| 1.0 | 27 to 32 | 25 to 29 |
-| 0.7 | 18.7 | 16.7 |
-| 0.5 | 15.0 | 13.7 |
+| Render scale | Splat record | GPU ms mean | GPU ms p50 |
+|---|---|---|---|
+| 1.0 | 48 bytes | 29 to 31 | 27 to 29 |
+| 1.0 | 32 bytes (current) | 25.2 | 23.0 |
+| 0.7 | 48 bytes | 18.7 | 16.7 |
+| 0.5 | 48 bytes | 15.0 | 13.7 |
 
-Decode 192 ms, upload 73 ms, sort 11.5 ms on a background thread.
-Vertex fetch is an 8 ms floor; vertex math costs nothing; blended fragments are the rest.
+Decode 192 ms, upload 50 ms, sort 11.5 ms on a background thread.
+Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.
+Vertex math costs nothing; blended fragments are the rest.
 A compute prepass measured 4 ms slower on this GPU and was removed.
 The GPU throttles above 60 C, so every number here was taken after cooling below 48 C.
 Mali has not been tested.
@@ -65,8 +69,9 @@ Each item says what it touches and how to prove it works.
 - **Chunked world upload off the render thread**.
   `Engine::uploadPendingWorld` packs, uploads and waits inside `render`, which freezes the frame and needs about three times the world size at the peak.
 - **Frustum cull margin derived from the projected extent**, so large splats near the edge do not pop.
-- **Half precision covariance and colour** in the GPU layout, halving 48 bytes per splat.
-  The 8 ms vertex fetch floor is the target; measure with the benchmark.
+- **Smaller splat record** (help wanted, needs a real device).
+  The record is 32 bytes with a spare word; SPZ stores positions with 24 bit fixed point, so 24 bytes is possible.
+  Proof: the same image, and GPU ms from the benchmark against the 32 byte record.
 - **Pipeline cache persisted to disk** to cut cold start time.
 - **Offscreen render test** that draws three known splats and checks pixels, and a long stress run alternating loads, rotations and surface losses.
 

@@ -15,17 +15,18 @@
 
 namespace splatkit {
 
-// Exactly the layout the vertex shader reads (std430, 48 bytes).
+// Exactly the layout the vertex shader reads (std430, 32 bytes).
+// Vertex fetch is the floor of the frame on Adreno 640 (8 ms for 500k splats at 48
+// bytes), so the record is as small as the source data allows: SPZ stores colour and
+// alpha as 8 bits, and the covariance keeps 11 bits of mantissa as half floats.
 struct GpuSplat {
   float position[3];
-  float alpha;
-  float covA[4];  // xx, xy, xz, yy
-  float covB[2];  // yz, zz
-  uint32_t rgba8; // a real uint: never routed through a float, whose NaN patterns some
-                  // mobile compilers canonicalise
+  uint32_t rgba8;    // colour and alpha, a real uint: never routed through a float, whose
+                     // NaN patterns some mobile compilers canonicalise
+  uint32_t cov[3];   // six halves: (xx, xy), (xz, yy), (yz, zz)
   uint32_t unused;
 };
-static_assert(sizeof(GpuSplat) == 48, "GpuSplat must match the shader struct");
+static_assert(sizeof(GpuSplat) == 32, "GpuSplat must match the shader struct");
 
 // std140 layout of the Camera uniform block.
 struct CameraUniform {

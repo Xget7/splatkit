@@ -53,10 +53,16 @@ class SplatHudView @JvmOverloads constructor(
         view.readStats(stats)
         val mode = if (stats.walking) "walk" else "fly"
         val input = if (stats.motion) "gyro" else "touch"
+        // The engine draws only when something changed, so a still scene reads as idle.
+        val frame = if (stats.fps > 0f) {
+            String.format(Locale.US, "%5.1f fps  %5.1f ms  gpu %5.1f ms", stats.fps, stats.frameMillis, stats.gpuMillis)
+        } else {
+            "idle, last gpu ${String.format(Locale.US, "%.1f", stats.gpuMillis)} ms"
+        }
         text = String.format(
             Locale.US,
-            "%s\n%5.1f fps  %5.1f ms  gpu %5.1f ms\nsort %5.1f ms\n%,d splats  %s, %s",
-            view.gpuDescription, stats.fps, stats.frameMillis, stats.gpuMillis, stats.sortMillis,
+            "%s\n%s\nsort %5.1f ms\n%,d splats  %s, %s",
+            view.gpuDescription, frame, stats.sortMillis,
             stats.splatCount, mode, input,
         )
     }

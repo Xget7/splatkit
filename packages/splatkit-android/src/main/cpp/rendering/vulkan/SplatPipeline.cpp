@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Log.h"
+#include "splat/math/Half.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
 
@@ -21,9 +22,13 @@ VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
   return module;
 }
 
-uint32_t packRgba8(float r, float g, float b) {
+uint32_t packRgba8(float r, float g, float b, float a) {
   auto q = [](float v) { return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
-  return q(r) | (q(g) << 8) | (q(b) << 16) | (255u << 24);
+  return q(r) | (q(g) << 8) | (q(b) << 16) | (q(a) << 24);
+}
+
+uint32_t packHalf2(float a, float b) {
+  return static_cast<uint32_t>(splat::toHalf(a)) | (static_cast<uint32_t>(splat::toHalf(b)) << 16);
 }
 
 }  // namespace
@@ -179,15 +184,12 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
   for (size_t i = 0; i < n; ++i) {
     GpuSplat& g = packed[i];
     std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
-    g.alpha = cloud.alphas[i];
-    const float* c = &cloud.covariances[i * 6];
-    g.covA[0] = c[0];  // xx
-    g.covA[1] = c[1];  // xy
-    g.covA[2] = c[2];  // xz
-    g.covA[3] = c[3];  // yy
-    g.covB[0] = c[4];
-    g.covB[1] = c[5];
-    g.rgba8 = packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2]);
+    g.rgba8 = packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2],
+                        cloud.alphas[i]);
+    const float* c = &cloud.covariances[i * 6];  // xx, xy, xz, yy, yz, zz
+    g.cov[0] = packHalf2(c[0], c[1]);
+    g.cov[1] = packHalf2(c[2], c[3]);
+    g.cov[2] = packHalf2(c[4], c[5]);
     g.unused = 0;
   }
   // Identity order until the sorter runs.

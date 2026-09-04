@@ -85,7 +85,8 @@ class Engine {
   bool surfaceExtentChanged() const;
   bool createRenderTarget();
   void destroySurface();
-  void uploadPendingWorld();
+  bool uploadPendingWorld();
+  void publishStats(int64_t frameTimeNanos, bool rendered);
   void updateBenchmark(float dt);
 
   std::unique_ptr<VulkanContext> ctx_;
@@ -108,6 +109,11 @@ class Engine {
   std::unique_ptr<GpuWorld> world_;
   std::unique_ptr<splat::AsyncSorter> sorter_;
   std::optional<splat::Vec3> lastSortedFrom_;
+  std::optional<splat::AsyncSorter::Result> pendingOrder_;  // sorted, waiting for a command buffer
+  bool redrawNeeded_ = true;
+  bool lastLoggedIdle_ = false;
+  splat::Mat4 lastDrawnView_ = splat::Mat4::identity();
+  VkExtent2D lastDrawnExtent_{};
   double lastSortMillis_ = 0;
 
   bool vsync_ = true;  // benchmarks turn it off so frame times are not vsync multiples

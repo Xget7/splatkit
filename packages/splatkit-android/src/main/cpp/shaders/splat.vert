@@ -15,10 +15,11 @@ layout(set = 0, binding = 0) uniform Camera {
 } cam;
 
 struct Splat {
-  vec4 positionAlpha;  // xyz, alpha
-  vec4 covA;           // xx, xy, xz, yy
-  vec2 covB;           // yz, zz
-  uint rgba8;          // packed colour
+  float px, py, pz;  // world position
+  uint rgba8;        // colour and alpha, 8 bits each
+  uint cov0;         // halves: xx, xy
+  uint cov1;         // halves: xz, yy
+  uint cov2;         // halves: yz, zz
   uint unused;
 };
 
@@ -74,7 +75,7 @@ void main() {
   uint index = order[gl_InstanceIndex];
   Splat s = splats[index];
 
-  vec4 viewPos4 = cam.view * vec4(s.positionAlpha.xyz, 1.0);
+  vec4 viewPos4 = cam.view * vec4(s.px, s.py, s.pz, 1.0);
   vec3 viewPos = viewPos4.xyz;
   // Behind the camera: emit a vertex outside clip space so the quad is discarded.
   if (viewPos.z >= 0.0) {
@@ -90,14 +91,18 @@ void main() {
     return;
   }
 
-  vec3 cov2D = projectCovariance(viewPos, s.covA, s.covB);
+  vec2 c0 = unpackHalf2x16(s.cov0);
+  vec2 c1 = unpackHalf2x16(s.cov1);
+  vec2 c2 = unpackHalf2x16(s.cov2);
+  vec3 cov2D = projectCovariance(viewPos, vec4(c0, c1), c2);
   vec2 axis1, axis2;
   ellipseAxes(cov2D, axis1, axis2);
 
   // Draw only out to where this splat's contribution drops below 1/255, which is
   // where the fragment stage would discard anyway: exp(-r^2 / 2) * alpha = 1 / 255.
   // Faint splats, the majority, get a much smaller quad; opaque ones keep 3 sigma.
-  float alpha = s.positionAlpha.w;
+  vec4 rgba = unpackUnorm4x8(s.rgba8);
+  float alpha = rgba.a;
   float radius = min(kBoundsRadius, sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
 
   vec2 corner = kCorners[gl_VertexIndex];
@@ -105,7 +110,6 @@ void main() {
   gl_Position = vec4(clip.xy + delta * clip.w, clip.z, clip.w);
   relativePosition = radius * corner;
 
-  vec4 rgba = unpackUnorm4x8(s.rgba8);
   vec3 rgb = rgba.rgb;
   if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(2.2));
   color = vec4(rgb, alpha);
