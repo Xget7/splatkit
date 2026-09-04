@@ -2,6 +2,7 @@ package com.splatkit
 
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
@@ -26,6 +27,13 @@ internal class RenderThread {
     /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
     val gpuDescription: String
 
+    /** False when Vulkan could not be brought up; every call is then a no-op. */
+    val isAvailable: Boolean
+
+    /** Delivered on the main thread. */
+    var listener: SplatSurfaceView.Listener? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     // Decoding runs here so frames keep flowing; the engine uploads on its next frame.
     private val loader = Executors.newSingleThreadExecutor { Thread(it, "SplatKitLoader") }
 
@@ -36,6 +44,18 @@ internal class RenderThread {
             engine = NativeEngine()
         }
         gpuDescription = engine?.gpuDescription() ?: ""
+        isAvailable = engine?.isValid == true
+        engine?.onEvent = { event, message, splatCount ->
+            mainHandler.post {
+                val l = listener ?: return@post
+                when (event) {
+                    NativeEngine.Event.WORLD_READY -> l.onWorldReady(splatCount)
+                    NativeEngine.Event.WORLD_FAILED -> l.onWorldFailed(message)
+                    NativeEngine.Event.COLLIDER_READY -> l.onColliderReady()
+                    NativeEngine.Event.COLLIDER_FAILED -> l.onColliderFailed(message)
+                }
+            }
+        }
     }
 
     private val frameCallback = object : Choreographer.FrameCallback {

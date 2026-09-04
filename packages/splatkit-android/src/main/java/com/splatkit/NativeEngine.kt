@@ -12,6 +12,18 @@ internal class NativeEngine {
 
     val isValid: Boolean get() = handle != 0L
 
+    /** Receives [Event]s on the thread that raised them: loader or render thread. */
+    var onEvent: ((Event, String, Int) -> Unit)? = null
+
+    enum class Event { WORLD_READY, WORLD_FAILED, COLLIDER_READY, COLLIDER_FAILED }
+
+    // Called from JNI; the name and signature are part of the native contract.
+    @Suppress("unused")
+    private fun onNativeEvent(kind: Int, message: String, splatCount: Int) {
+        val event = Event.values().getOrNull(kind) ?: return
+        onEvent?.invoke(event, message, splatCount)
+    }
+
     fun setSurface(surface: Surface?) = nativeSetSurface(handle, surface)
     fun surfaceResized(width: Int, height: Int) = nativeSurfaceResized(handle, width, height)
 

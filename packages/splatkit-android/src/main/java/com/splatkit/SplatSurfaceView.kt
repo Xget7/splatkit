@@ -44,6 +44,24 @@ class SplatSurfaceView @JvmOverloads constructor(
         holder.addCallback(this)
     }
 
+    /** Loading outcomes, delivered on the main thread. All methods have empty defaults. */
+    interface Listener {
+        /** The world is uploaded and drawing. */
+        fun onWorldReady(splatCount: Int) {}
+        /** The bytes were not a readable SPZ, or the GPU refused them; the previous world stays. */
+        fun onWorldFailed(message: String) {}
+        /** Walk mode is on. */
+        fun onColliderReady() {}
+        fun onColliderFailed(message: String) {}
+    }
+
+    var listener: Listener?
+        get() = renderThread.listener
+        set(value) { renderThread.listener = value }
+
+    /** False when Vulkan could not be brought up on this device; the view stays blank. */
+    val isAvailable: Boolean get() = renderThread.isAvailable
+
     /** Decodes and shows an SPZ world. Replaces the current one when ready. */
     fun loadWorld(spzBytes: ByteArray) = renderThread.loadWorld(spzBytes)
 

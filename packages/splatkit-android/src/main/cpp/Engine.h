@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -42,10 +43,16 @@ class Engine {
   // The window changed size while staying attached. Rebuilds the swapchain if needed.
   void onSurfaceResized(uint32_t width, uint32_t height);
 
-  // Decodes an SPZ file. Thread safe. Errors are logged and leave the current world.
+  // Decodes an SPZ file. Thread safe. Errors are reported and leave the current world.
   void loadWorld(const std::uint8_t* data, std::size_t size);
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
+
+  // What the host needs to know about loading. Ready events fire on the render thread
+  // once the data is in use; failures fire on whichever thread found them.
+  enum class Event { worldReady = 0, worldFailed = 1, colliderReady = 2, colliderFailed = 3 };
+  using EventSink = std::function<void(Event, const std::string& message, uint32_t splatCount)>;
+  void setEventSink(EventSink sink) { events_ = std::move(sink); }
 
   // Fraction of the surface resolution the splats are drawn at, (0, 1]. Below one the
   // frame is drawn offscreen and upscaled: the cost of blended fragments is what bounds
@@ -79,6 +86,10 @@ class Engine {
 
  private:
   Engine() = default;
+  void emit(Event event, const std::string& message = {}, uint32_t splatCount = 0) const {
+    if (events_) events_(event, message, splatCount);
+  }
+  EventSink events_;
   bool createSurface();
   bool recreateSwapchain();
   bool createPipelines();

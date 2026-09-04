@@ -209,6 +209,7 @@ void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
   auto decoded = splat::decodeSpz(data, size);
   if (!decoded) {
     LOGE("world decode failed: %s", decoded.error().message.c_str());
+    emit(Event::worldFailed, decoded.error().message);
     return;
   }
   auto cloud = std::make_unique<splat::SplatCloud>(std::move(decoded.value()));
@@ -226,6 +227,7 @@ void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
   auto decoded = splat::decodeGlb(data, size);
   if (!decoded) {
     LOGE("collider decode failed: %s", decoded.error().message.c_str());
+    emit(Event::colliderFailed, decoded.error().message);
     return;
   }
   auto collider = std::make_unique<splat::Collider>(decoded.value());
@@ -242,13 +244,17 @@ bool Engine::uploadPendingWorld() {
     cloud = std::move(pendingCloud_);
     collider = std::move(pendingCollider_);
   }
-  if (collider) camera_.setCollider(std::move(collider));
+  if (collider) {
+    camera_.setCollider(std::move(collider));
+    emit(Event::colliderReady);
+  }
   if (!cloud || !splats_) return false;
 
   const auto start = Clock::now();
   auto world = splats_->uploadWorld(*cloud);
   if (!world) {
     LOGE("world upload failed");
+    emit(Event::worldFailed, "GPU upload failed");
     return false;
   }
   ctx_->waitIdle();  // the previous world may still be in flight
@@ -258,6 +264,7 @@ bool Engine::uploadPendingWorld() {
   sorter_ = std::make_unique<splat::AsyncSorter>(cloud_->positions);
   lastSortedFrom_.reset();
   LOGI("uploaded %u splats in %.0f ms", world_->count, millisSince(start));
+  emit(Event::worldReady, {}, world_->count);
   return true;
 }
 

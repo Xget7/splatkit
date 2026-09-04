@@ -2,6 +2,9 @@
 
 #include <android/native_window_jni.h>
 
+#include <memory>
+#include <string>
+
 #include "Engine.h"
 #include "Log.h"
 
@@ -9,17 +12,63 @@ namespace {
 
 splatkit::Engine* toEngine(jlong handle) { return reinterpret_cast<splatkit::Engine*>(handle); }
 
+JavaVM* gVm = nullptr;
+
+// Delivers engine events to NativeEngine.onNativeEvent on whatever thread raised them.
+// Both threads that can raise one (the loader executor and the render HandlerThread)
+// are Java threads, so GetEnv succeeds; a native thread would be attached for the call.
+class EventBridge {
+ public:
+  EventBridge(JNIEnv* env, jobject engine) : engine_(env->NewGlobalRef(engine)) {
+    jclass cls = env->GetObjectClass(engine);
+    method_ = env->GetMethodID(cls, "onNativeEvent", "(ILjava/lang/String;I)V");
+    env->DeleteLocalRef(cls);
+  }
+  ~EventBridge() {
+    JNIEnv* env = nullptr;
+    if (gVm != nullptr && gVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
+      env->DeleteGlobalRef(engine_);
+    }
+  }
+  void operator()(splatkit::Engine::Event event, const std::string& message, uint32_t count) const {
+    if (gVm == nullptr || method_ == nullptr) return;
+    JNIEnv* env = nullptr;
+    bool attached = false;
+    if (gVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+      if (gVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+      attached = true;
+    }
+    jstring text = env->NewStringUTF(message.c_str());
+    env->CallVoidMethod(engine_, method_, static_cast<jint>(event), text, static_cast<jint>(count));
+    env->DeleteLocalRef(text);
+    if (attached) gVm->DetachCurrentThread();
+  }
+
+ private:
+  jobject engine_;
+  jmethodID method_ = nullptr;
+};
+
 }  // namespace
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_com_splatkit_NativeEngine_nativeCreate(JNIEnv*, jobject) {
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
+  gVm = vm;
+  return JNI_VERSION_1_6;
+}
+
+JNIEXPORT jlong JNICALL Java_com_splatkit_NativeEngine_nativeCreate(JNIEnv* env, jobject thiz) {
   auto result = splatkit::Engine::create();
   if (!result) {
     LOGE("engine creation failed: %s", result.error().message.c_str());
     return 0;
   }
-  return reinterpret_cast<jlong>(result.value().release());
+  splatkit::Engine* engine = result.value().release();
+  // The bridge lives in the sink and dies with the engine.
+  engine->setEventSink([bridge = std::make_shared<EventBridge>(env, thiz)](
+                           splatkit::Engine::Event e, const std::string& m, uint32_t c) { (*bridge)(e, m, c); });
+  return reinterpret_cast<jlong>(engine);
 }
 
 JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeDestroy(JNIEnv*, jobject, jlong handle) {

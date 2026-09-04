@@ -10,6 +10,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        consumerProguardFiles("consumer-rules.pro")
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
             cmake {

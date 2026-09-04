@@ -2,18 +2,22 @@ package com.splatkit.devapp
 
 import android.app.Activity
 import android.os.Bundle
-import java.io.File
+import android.util.Log
 import android.view.Gravity
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.Toast
 import com.splatkit.SplatSurfaceView
 import com.splatkit.ui.JoystickView
 import com.splatkit.ui.SplatHudView
+import java.io.File
 
 /**
  * Development screen: the splat view under a HUD, a walk joystick bottom left and a
  * gyroscope toggle bottom right. Dragging elsewhere turns the camera.
  */
+private const val TAG = "SplatKitDev"
+
 class MainActivity : Activity() {
     private lateinit var splatView: SplatSurfaceView
 
@@ -58,6 +62,17 @@ class MainActivity : Activity() {
         // A world pushed to the app's external files dir loads instead of the bundled kitchen:
         //   adb push house.spz /sdcard/Android/data/com.splatkit.devapp/files/
         //   adb shell am start -n com.splatkit.devapp/.MainActivity --es world house.spz --es collider house.glb
+        splatView.listener = object : SplatSurfaceView.Listener {
+            override fun onWorldReady(splatCount: Int) {
+                Log.i(TAG, "world ready: $splatCount splats")
+            }
+            override fun onWorldFailed(message: String) = toast("World failed: $message")
+            override fun onColliderReady() {
+                Log.i(TAG, "collider ready, walking")
+            }
+            override fun onColliderFailed(message: String) = toast("Collider failed: $message")
+        }
+        if (!splatView.isAvailable) toast("Vulkan is not available on this device")
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
         // File reads are IO; keep them off the UI thread.
@@ -78,6 +93,11 @@ class MainActivity : Activity() {
             splatView.setMotionEnabled(true)
         }
         refreshGyroLabel()
+    }
+
+    private fun toast(message: String) {
+        Log.e(TAG, message)
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     /** Absolute paths are used as given; anything else is relative to the app's external files dir. */

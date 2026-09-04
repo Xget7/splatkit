@@ -1,6 +1,7 @@
 #include "splat/sorting/SpatialOrder.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <numeric>
@@ -48,13 +49,40 @@ std::uint32_t mortonCode(const float* p, const Bounds& b) {
 void reorderSpatially(SplatCloud& cloud) {
   const std::size_t n = cloud.count();
   if (n < 2) return;
-  std::vector<std::uint64_t> keys(n);  // code in the high bits, index below: a stable order
-  for (std::size_t i = 0; i < n; ++i) {
-    keys[i] = (static_cast<std::uint64_t>(mortonCode(&cloud.positions[i * 3], cloud.bounds)) << 32) | i;
-  }
-  std::sort(keys.begin(), keys.end());
+  std::vector<std::uint32_t> keys(n);
   std::vector<std::uint32_t> order(n);
-  for (std::size_t i = 0; i < n; ++i) order[i] = static_cast<std::uint32_t>(keys[i] & 0xffffffffu);
+  for (std::size_t i = 0; i < n; ++i) {
+    keys[i] = mortonCode(&cloud.positions[i * 3], cloud.bounds);
+    order[i] = static_cast<std::uint32_t>(i);
+  }
+  // LSD radix sort on the 30 bit code, three passes of 10 bits. Each pass is a stable
+  // counting sort, so equal codes keep their decode order.
+  std::vector<std::uint32_t> keysScratch(n);
+  std::vector<std::uint32_t> orderScratch(n);
+  std::uint32_t* keysIn = keys.data();
+  std::uint32_t* keysOut = keysScratch.data();
+  std::uint32_t* orderIn = order.data();
+  std::uint32_t* orderOut = orderScratch.data();
+  for (int shift = 0; shift < 30; shift += 10) {
+    std::array<std::uint32_t, 1024> histogram{};
+    for (std::size_t i = 0; i < n; ++i) ++histogram[(keysIn[i] >> shift) & 0x3ffu];
+    std::uint32_t running = 0;
+    for (std::uint32_t& h : histogram) {
+      const std::uint32_t c = h;
+      h = running;
+      running += c;
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+      const std::uint32_t digit = (keysIn[i] >> shift) & 0x3ffu;
+      const std::uint32_t dst = histogram[digit]++;
+      keysOut[dst] = keysIn[i];
+      orderOut[dst] = orderIn[i];
+    }
+    std::swap(keysIn, keysOut);
+    std::swap(orderIn, orderOut);
+  }
+  // Three passes leave the result in the scratch buffer.
+  if (orderIn != order.data()) order.swap(orderScratch);
 
   permute(cloud.positions, 3, order);
   permute(cloud.covariances, 6, order);
