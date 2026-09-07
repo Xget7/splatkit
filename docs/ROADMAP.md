@@ -61,8 +61,7 @@ Owned by the maintainer unless stated otherwise.
 
 1. Device numbers: decode, upload, sort and frame time for 500k, 1M and 2M splats on Adreno 640, published in the README.
 2. Done: `SplatSurfaceView.Listener` reports world and collider outcomes with messages, and `isAvailable` says whether Vulkan started.
-3. Done: `io.github.xget7:splatkit-android` is on Maven Central (0.1.0-alpha02, 2026-09-04) with the arm64 native library inside; `./gradlew :splatkit:publishToMavenCentral` in `apps/android-dev` publishes, credentials and signing key from the environment as the library's `build.gradle.kts` documents.
-   The quality presets ([ADR 0012](adr/0012-quality-presets.md)) landed after that upload and ship with the next one.
+3. Done: `io.github.xget7:splatkit-android` is on Maven Central (0.1.0-alpha03, 2026-09-07) with the arm64 native library, the quality presets, `cameraPose` and the `File` loaders inside; pushing a `v*` tag runs `.github/workflows/release.yml`, which publishes and releases without a portal step.
    Done: the Android CI job that builds the AAR on every pull request.
 4. Library README with a ten line integration.
 5. Thermal step down: drop one preset at `THERMAL_STATUS_SEVERE` and come back when the phone cools, opt in, so a long walk does not end at 20 fps on a throttled GPU.
