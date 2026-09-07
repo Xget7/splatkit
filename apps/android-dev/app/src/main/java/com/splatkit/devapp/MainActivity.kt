@@ -1,6 +1,7 @@
 package com.splatkit.devapp
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -74,6 +75,21 @@ class MainActivity : Activity() {
             override fun onColliderFailed(message: String) = toast("Collider failed: $message")
         }
         if (!splatView.isAvailable) toast("Vulkan is not available on this device")
+        applyIntent(intent)
+        refreshGyroLabel()
+    }
+
+    private fun toast(message: String) {
+        Log.e(TAG, message)
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * Applies the launch extras: preset, overrides, world and collider files, benchmark.
+     * Also runs for an intent delivered to the running activity (singleTop), so a
+     * second `am start` switches worlds in place, as a host would.
+     */
+    private fun applyIntent(intent: Intent?) {
         // --es quality low|medium|high|ultra applies a preset; the extras below override it.
         val quality = intent?.getStringExtra("quality")?.let { RenderQuality.named(it) } ?: RenderQuality.HIGH
         splatView.applyQuality(quality)
@@ -109,12 +125,12 @@ class MainActivity : Activity() {
         } else {
             splatView.setMotionEnabled(true)
         }
-        refreshGyroLabel()
     }
 
-    private fun toast(message: String) {
-        Log.e(TAG, message)
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntent(intent)
     }
 
     /** Absolute paths are used as given; anything else is relative to the app's external files dir. */

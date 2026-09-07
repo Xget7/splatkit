@@ -308,12 +308,14 @@ bool Engine::uploadPendingWorld() {
   // The sorter keeps its own copy of the positions; nothing else needs the cloud now.
   // With a tree the sorter keeps the tree, whose attributes are already on the GPU.
   sorter_ = tree ? std::make_unique<splat::AsyncSorter>(tree) : std::make_unique<splat::AsyncSorter>(cloud->positions);
+  // Hosts count the file's splats; with a tree the GPU holds about 1.5 times as many nodes.
+  sourceCount_ = tree ? static_cast<uint32_t>(tree->leafCount) : world_->count;
   cloud.reset();
   tree.reset();
   lastSortedFrom_.reset();
   drawCount_ = 0;  // the first frustum sort decides what is visible
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", world_->count, millisSince(start), world_->shDegree);
-  emit(Event::worldReady, {}, world_->count);
+  emit(Event::worldReady, {}, sourceCount_);
   return true;
 }
 
@@ -502,7 +504,7 @@ void Engine::publishStats(int64_t frameTimeNanos, bool rendered) {
     statFrameMillis_.store(fps > 0.0f ? 1000.0f / fps : 0.0f, std::memory_order_relaxed);
     statGpuMillis_.store(static_cast<float>(frameLoop_->lastGpuMillis()), std::memory_order_relaxed);
     statSortMillis_.store(static_cast<float>(lastSortMillis_), std::memory_order_relaxed);
-    statSplats_.store(world_ ? world_->count : 0, std::memory_order_relaxed);
+    statSplats_.store(world_ ? sourceCount_ : 0, std::memory_order_relaxed);
     statWalking_.store(camera_.hasCollider(), std::memory_order_relaxed);
     statMotion_.store(camera_.motionEnabled(), std::memory_order_relaxed);
     // An idle scene logs once, not every two seconds.

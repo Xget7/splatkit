@@ -9,7 +9,7 @@ Walkable Gaussian splat worlds on Android, rendered with Vulkan.
 Load a World Labs Marble `.spz`, put a `SplatSurfaceView` in a layout, and walk through the scene.
 
 ```kotlin
-implementation("io.github.xget7:splatkit-android:0.1.0-alpha02")
+implementation("io.github.xget7:splatkit-android:0.1.0-alpha03")
 ```
 
 `packages/splatkit-android/README.md` has the full API and a working activity.

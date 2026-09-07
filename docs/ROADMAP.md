@@ -93,6 +93,7 @@ Each item says what it touches and how to prove it works.
 - **Swapchain pre-rotation**.
   The swapchain forces the identity transform, so the compositor rotates every frame on devices whose panel is not in the identity orientation.
   Proof: no `VK_SUBOPTIMAL_KHR` after a rotation and the same image.
+  Related, seen on the Mi 9: on a rotation the surface size arrives before the driver reports the new extent, so the swapchain and the render target are rebuilt twice (one frame at the old size, then the right one). Harmless, one extra idle wait; fold the fix into this item.
 - **Chunked world upload off the render thread**.
   `Engine::uploadPendingWorld` packs, uploads and waits inside `render`, which freezes the frame and needs about three times the world size at the peak.
 - **Frustum cull margin derived from the projected extent**, so large splats near the edge do not pop.

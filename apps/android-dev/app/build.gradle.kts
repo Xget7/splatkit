@@ -18,7 +18,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Hosts ship minified; the dev app does too so a missing keep rule for a
+            // native method or the JNI callback fails here, not in a host.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.getByName("debug")
         }
     }

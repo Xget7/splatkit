@@ -147,6 +147,7 @@ class Engine {
   std::unique_ptr<splat::SplatCloud> pendingCloud_;  // decoded, waiting for upload
   std::shared_ptr<const splat::LodTree> pendingTree_;  // instead of the cloud, with a budget
   int loadedBudget_ = 0;  // the budget the current world was loaded with, 0 without a tree
+  uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
   std::unique_ptr<splat::Collider> pendingCollider_;
   WalkCamera camera_;
   int64_t lastFrameNanos_ = 0;

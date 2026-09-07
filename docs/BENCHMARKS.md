@@ -36,6 +36,11 @@ The tree pays off when the scene is bigger than what the view needs at a pixel e
 | 2026-09-04 | ADR 0012 | house 2M | LOW without the budget: scale 0.5, SH 0 | 12.6 / 13.1 / 15.0 | | | | the budget buys 0.7 ms here; its point is scenes bigger than this |
 | 2026-09-04 | ADR 0012 | house 2M | preset ULTRA: scale 1.5 (1620x3391), SH 3, all splats, margin 20 | 39.4 / 39.1 / 50.0 | 43 | 10 | 419k of 2M | supersampled, 25 fps on the Mi 9, GPU 61 C at the end |
 
+| 2026-09-07 | abcd950 | house 2M | preset HIGH, R8 minified dev app, phone rebooted that day, 150 MB free | 21.9 / 21.6 / 27.9 | | | | |
+| 2026-09-07 | abcd950 | house 2M | preset HIGH, same build unminified, same session | 21.8 / 21.5 / 28.0 | | | | R8 changes nothing on the GPU; the phone is 2 ms slower than on the 4th |
+
+Reading: day to day the same build moves by about 2 ms on this phone, so a change under that needs an A/B in the same session, never a comparison against an older row.
+
 Reading: the presets sit on the measured curve, medium is the 60 fps point on this phone, and ultra costs the square of its scale as predicted (1.5 squared times 19.3 is 43).
 
 Earlier numbers, before this log existed, are in the roadmap tables.
