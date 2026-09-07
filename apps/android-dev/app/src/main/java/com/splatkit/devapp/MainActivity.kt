@@ -24,6 +24,16 @@ private const val TAG = "SplatKitDev"
 class MainActivity : Activity() {
     private lateinit var splatView: SplatSurfaceView
 
+    /** A --es pose to apply once the world (and its collider, if any) is up. */
+    private var pendingPose: CameraPose? = null
+
+    private fun applyPendingPose() {
+        pendingPose?.let {
+            splatView.cameraPose = it
+            Log.i(TAG, "camera pose set to $it")
+        }
+    }
+
     /** Meters per second at full joystick deflection. */
     private val walkSpeed = 1.5f
 
@@ -68,10 +78,12 @@ class MainActivity : Activity() {
         splatView.listener = object : SplatSurfaceView.Listener {
             override fun onWorldReady(splatCount: Int) {
                 Log.i(TAG, "world ready: $splatCount splats")
+                applyPendingPose()
             }
             override fun onWorldFailed(message: String) = toast("World failed: $message")
             override fun onColliderReady() {
                 Log.i(TAG, "collider ready, walking")
+                applyPendingPose()
             }
             override fun onColliderFailed(message: String) = toast("Collider failed: $message")
         }
@@ -125,16 +137,16 @@ class MainActivity : Activity() {
             }
         }.start()
         // --es pose "x,y,z,yaw,pitch" teleports (meters, radians) once the world is up.
-        intent?.getStringExtra("pose")?.split(",")?.map { it.trim().toFloat() }?.takeIf { it.size == 5 }?.let {
-            splatView.cameraPose = CameraPose(it[0], it[1], it[2], it[3], it[4])
-        }
+        pendingPose = intent?.getStringExtra("pose")?.split(",")?.map { it.trim().toFloat() }
+            ?.takeIf { it.size == 5 }?.let { CameraPose(it[0], it[1], it[2], it[3], it[4]) }
         // --ef walk 1.0 walks forward at that speed in m/s, for checking the collider from adb.
         if (intent?.hasExtra("walk") == true) splatView.setWalkVelocity(intent.getFloatExtra("walk", 0f), 0f)
         if (intent?.getBooleanExtra("benchmark", false) == true) {
             // --ef seconds 3 turns the full circle in 3 s: a fast turn, for the cull margin.
             splatView.startBenchmark(intent.getFloatExtra("seconds", 10f))
         } else {
-            splatView.setMotionEnabled(true)
+            // --ez gyro false keeps the gyroscope off, so a --es pose is held exactly.
+            splatView.setMotionEnabled(intent?.getBooleanExtra("gyro", true) != false)
         }
     }
 

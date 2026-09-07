@@ -592,9 +592,9 @@ void Engine::publishStats(int64_t frameTimeNanos, bool rendered) {
       fpsWindowsSinceLog_ = 0;
       lastLoggedIdle_ = idle;
       const splat::Vec3 p = camera_.position();
-      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, cull %.1f ms, select %.1f ms, %u drawn of %zu selected of %u, pos %.2f %.2f %.2f, %s%s", fps,
+      LOGI("%.1f fps, gpu %.1f ms, sort %.1f ms, cull %.1f ms, select %.1f ms, %u drawn of %zu selected of %u, pos %.2f %.2f %.2f, yaw %.2f pitch %.2f, %s%s", fps,
            frameLoop_->lastGpuMillis(), lastSortMillis_, lastCullMillis_, lastSelectMillis_, drawCount_, lastSelected_,
-           world_ ? world_->count : 0u, p.x, p.y, p.z,
+           world_ ? world_->count : 0u, p.x, p.y, p.z, camera_.yaw(), camera_.pitch(),
            camera_.hasCollider() ? "walk" : "fly", camera_.motionEnabled() ? ", gyro" : "");
     }
   }
