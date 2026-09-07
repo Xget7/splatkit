@@ -40,7 +40,7 @@ android {
 // signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.
 mavenPublishing {
     coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha03")
-    publishToMavenCentral()
+    publishToMavenCentral(automaticRelease = true)
     if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
     pom {
         name.set("SplatKit Android")
