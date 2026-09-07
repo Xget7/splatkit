@@ -90,5 +90,36 @@ TEST(CharacterController, SnapsTowardEyeHeight) {
   EXPECT_NEAR(player.position().y, 1.5f, 0.01f);
 }
 
+TEST(CharacterController, StartsLowerThanEyeHeightAndStillWalks) {
+  // A World Labs origin sits at the capture height, here 0.77 m over the floor, less
+  // than the 1.5 m eye height: the feet probe starts under the floor.
+  Collider c(room());
+  CharacterController p(c);
+  p.setPosition({0, 0.77f, 0});
+  ASSERT_TRUE(p.floorBelow(p.position()));
+  EXPECT_NEAR(*p.floorBelow(p.position()), 0, 1e-4f);
+  EXPECT_TRUE(p.move({1, 0, 0}));
+  EXPECT_NEAR(p.position().x, 1, 1e-4f);
+  for (int i = 0; i < 120; ++i) p.update(1.0f / 60.0f);
+  EXPECT_NEAR(p.position().y, 1.5f, 1e-2f);  // eased up to eye height over the floor
+}
+
+TEST(CharacterController, DoesNotMistakeATableForTheFloorWhenStandingNormally) {
+  TriangleMesh m = room();
+  // A table top 0.75 m high under the player.
+  const uint32_t base = static_cast<uint32_t>(m.vertexCount());
+  for (Vec3 v : {Vec3{-1, 0.75f, -1}, Vec3{1, 0.75f, -1}, Vec3{1, 0.75f, 1}, Vec3{-1, 0.75f, 1}}) {
+    m.positions.push_back(v.x);
+    m.positions.push_back(v.y);
+    m.positions.push_back(v.z);
+  }
+  for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+  Collider c(m);
+  CharacterController p(c);
+  p.setPosition({0, 1.5f, 0});
+  ASSERT_TRUE(p.floorBelow(p.position()));
+  EXPECT_NEAR(*p.floorBelow(p.position()), 0, 1e-4f);  // the floor, not the table
+}
+
 }  // namespace
 }  // namespace splat

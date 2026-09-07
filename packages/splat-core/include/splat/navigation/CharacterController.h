@@ -9,7 +9,8 @@ struct CharacterSettings {
   float eyeHeight = 1.5f;    // meters above the floor
   float bodyRadius = 0.35f;  // distance kept from walls
   float hipHeight = 0.7f;    // below the eye; where walls and furniture are probed
-  float floorProbeUp = 0.5f; // the floor ray starts this far above the feet
+  float floorProbeUp = 0.5f; // the floor ray starts this far above the feet; when
+                             // that is under the floor, the ray from the eye counts
   float floorProbeDown = 4.0f;
   float snapRate = 12.0f;    // per second; eye eases toward floor + eyeHeight
 };

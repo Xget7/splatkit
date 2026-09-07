@@ -91,8 +91,11 @@ TEST(LodTree, SelectionHonoursTheBudgetAndThePixelLimit) {
   selectLodNodes(t, {50, 0, -100000}, {}, 100, 0.01f, out);
   ASSERT_EQ(out.size(), 1u);
   EXPECT_EQ(out[0], 0u);
-  // Close to the first cluster and far from the second: the first refines, the second not.
-  selectLodNodes(t, {0.05f, 0, -0.5f}, {}, 100, 0.02f, out);
+  // Close to the first cluster and far from the second, looking at them: the first
+  // refines, the second not.
+  splat::LodView facing;
+  facing.forward = {0, 0, 1};
+  selectLodNodes(t, {0.05f, 0, -0.5f}, facing, 100, 0.02f, out);
   const bool firstLeaves = std::count_if(out.begin(), out.end(), [&](uint32_t n) { return t.layout[n].childCount == 0; }) >= 2;
   const bool secondCluster = std::count_if(out.begin(), out.end(), [&](uint32_t n) { return t.layout[n].childCount == 2 && n != 0; }) == 1;
   EXPECT_TRUE(firstLeaves);

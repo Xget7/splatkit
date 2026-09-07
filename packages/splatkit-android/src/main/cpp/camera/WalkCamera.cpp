@@ -33,15 +33,35 @@ void WalkCamera::look(float deltaYaw, float deltaPitch) {
   if (!motion_) pitch_ = std::clamp(pitch_ + deltaPitch, -kMaxPitch, kMaxPitch);
 }
 
+namespace {
+
+// The horizontal unit direction of `v`, or of `fallback` when `v` is vertical.
+splat::Vec3 heading(splat::Vec3 v, splat::Vec3 fallback) {
+  v.y = 0;
+  if (splat::length(v) < 1e-3f) {
+    v = fallback;
+    v.y = 0;
+  }
+  const float len = splat::length(v);
+  return len > 1e-6f ? v / len : splat::Vec3{0, 0, -1};
+}
+
+}  // namespace
+
 void WalkCamera::walk(float forward, float right) {
   const splat::Mat4 r = rotation();
   const splat::Vec3 fwd = r.transformDirection({0, 0, -1});
   const splat::Vec3 rgt = r.transformDirection({1, 0, 0});
-  const splat::Vec3 delta = fwd * forward + rgt * right;
   if (player_) {
-    player_->move(delta);  // flattens to the floor plane and collides
+    // On foot the speed is along the floor whatever the pitch: looking down must not
+    // slow the walk, and a phone held flat still walks where its top points. When the
+    // view is vertical the camera's up (or down) axis is where its top points.
+    const splat::Vec3 up = r.transformDirection({0, 1, 0});
+    const splat::Vec3 fwdFlat = heading(fwd, fwd.y < 0 ? up : up * -1.0f);
+    const splat::Vec3 rgtFlat = heading(rgt, {fwdFlat.z * -1.0f, 0, fwdFlat.x});
+    player_->move(fwdFlat * forward + rgtFlat * right);
   } else {
-    freePosition_ += delta;
+    freePosition_ += fwd * forward + rgt * right;
   }
 }
 

@@ -9,11 +9,18 @@ CharacterController::CharacterController(const Collider& collider, CharacterSett
     : collider_(collider), settings_(settings) {}
 
 std::optional<float> CharacterController::floorBelow(Vec3 at) const {
+  // From just above the feet, so that a table under the eye is not the floor.
   const Vec3 feet = at - Vec3{0, settings_.eyeHeight, 0};
   const Vec3 from = feet + Vec3{0, settings_.floorProbeUp, 0};
-  const auto hit = collider_.raycast(from, {0, -1, 0}, settings_.floorProbeUp + settings_.floorProbeDown);
-  if (!hit) return std::nullopt;
-  return hit->point.y;
+  if (const auto hit = collider_.raycast(from, {0, -1, 0}, settings_.floorProbeUp + settings_.floorProbeDown)) {
+    return hit->point.y;
+  }
+  // The eye may sit lower than eyeHeight above the floor (a world's origin is its
+  // capture point, often at a phone's height, or a teleport landed low), which puts
+  // that ray under the floor. Then whatever is under the eye is the floor, and the
+  // update eases the eye up to its height above it.
+  if (const auto hit = collider_.raycast(at, {0, -1, 0}, settings_.eyeHeight)) return hit->point.y;
+  return std::nullopt;
 }
 
 bool CharacterController::move(Vec3 delta) {

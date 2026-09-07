@@ -128,6 +128,8 @@ class MainActivity : Activity() {
         intent?.getStringExtra("pose")?.split(",")?.map { it.trim().toFloat() }?.takeIf { it.size == 5 }?.let {
             splatView.cameraPose = CameraPose(it[0], it[1], it[2], it[3], it[4])
         }
+        // --ef walk 1.0 walks forward at that speed in m/s, for checking the collider from adb.
+        if (intent?.hasExtra("walk") == true) splatView.setWalkVelocity(intent.getFloatExtra("walk", 0f), 0f)
         if (intent?.getBooleanExtra("benchmark", false) == true) {
             // --ef seconds 3 turns the full circle in 3 s: a fast turn, for the cull margin.
             splatView.startBenchmark(intent.getFloatExtra("seconds", 10f))
