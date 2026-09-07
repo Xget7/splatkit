@@ -118,6 +118,44 @@ extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadWorld
   env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadWorldFile(JNIEnv* env, jobject,
+                                                                                    jlong handle,
+                                                                                    jstring path) {
+  splatkit::Engine* engine = toEngine(handle);
+  if (engine == nullptr || path == nullptr) return;
+  const char* chars = env->GetStringUTFChars(path, nullptr);
+  engine->loadWorldFile(chars);
+  env->ReleaseStringUTFChars(path, chars);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadColliderFile(JNIEnv* env, jobject,
+                                                                                       jlong handle,
+                                                                                       jstring path) {
+  splatkit::Engine* engine = toEngine(handle);
+  if (engine == nullptr || path == nullptr) return;
+  const char* chars = env->GetStringUTFChars(path, nullptr);
+  engine->loadColliderFile(chars);
+  env->ReleaseStringUTFChars(path, chars);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetCameraPose(JNIEnv*, jobject,
+                                                                                    jlong handle, jfloat x,
+                                                                                    jfloat y, jfloat z,
+                                                                                    jfloat yaw, jfloat pitch) {
+  if (auto* engine = toEngine(handle)) engine->setCameraPose({x, y, z, yaw, pitch});
+}
+
+// Fills out[0..4]: x, y, z, yaw, pitch.
+extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeCameraPose(JNIEnv* env, jobject,
+                                                                                 jlong handle,
+                                                                                 jfloatArray out) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 5) return;
+  const splatkit::Engine::CameraPose p = engine->cameraPose();
+  const float values[5] = {p.x, p.y, p.z, p.yaw, p.pitch};
+  env->SetFloatArrayRegion(out, 0, 5, values);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadCollider(JNIEnv* env, jobject,
                                                                                    jlong handle,
                                                                                    jbyteArray bytes) {

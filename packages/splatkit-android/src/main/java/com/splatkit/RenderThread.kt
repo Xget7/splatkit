@@ -100,6 +100,25 @@ internal class RenderThread {
         loader.execute { engine?.loadCollider(glbBytes) }
     }
 
+    fun loadWorldFile(path: String) {
+        loader.execute { engine?.loadWorldFile(path) }
+    }
+
+    fun loadColliderFile(path: String) {
+        loader.execute { engine?.loadColliderFile(path) }
+    }
+
+    fun setCameraPose(pose: CameraPose) = post {
+        engine?.setCameraPose(pose.x, pose.y, pose.z, pose.yaw, pose.pitch)
+    }
+
+    /** The pose as of the last frame, or null before the engine exists. Any thread. */
+    fun cameraPose(out: FloatArray): Boolean {
+        val e = engine ?: return false
+        e.cameraPose(out)
+        return true
+    }
+
     fun look(deltaYaw: Float, deltaPitch: Float) = post { engine?.look(deltaYaw, deltaPitch) }
 
     fun walk(forward: Float, right: Float) = post { engine?.walk(forward, right) }

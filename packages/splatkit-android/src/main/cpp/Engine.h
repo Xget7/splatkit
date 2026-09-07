@@ -49,6 +49,18 @@ class Engine {
   void loadWorld(const std::uint8_t* data, std::size_t size);
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
+  // The same from a file, mapped rather than copied through the host's heap.
+  void loadWorldFile(const std::string& path);
+  void loadColliderFile(const std::string& path);
+
+  // Camera pose: position in the world's frame (meters) and yaw and pitch in radians,
+  // yaw about the up axis, pitch clamped to 85 degrees. Set on the render thread; read
+  // from any thread, refreshed every frame.
+  struct CameraPose {
+    float x = 0, y = 0, z = 0, yaw = 0, pitch = 0;
+  };
+  void setCameraPose(const CameraPose& pose);
+  CameraPose cameraPose() const;
 
   // What the host needs to know about loading. Ready events fire on the render thread
   // once the data is in use; failures fire on whichever thread found them.
@@ -187,6 +199,7 @@ class Engine {
   std::atomic<uint32_t> statSplats_{0};
   std::atomic<bool> statWalking_{false};
   std::atomic<bool> statMotion_{false};
+  std::atomic<float> statPose_[5]{};
 };
 
 }  // namespace splatkit

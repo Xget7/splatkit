@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import java.io.File
 import kotlin.math.abs
 
 /**
@@ -67,6 +68,29 @@ class SplatSurfaceView @JvmOverloads constructor(
 
     /** Decodes a collider GLB; enables walk mode when ready. */
     fun loadCollider(glbBytes: ByteArray) = renderThread.loadCollider(glbBytes)
+
+    /**
+     * Decodes and shows a world from a file the app can read. The file is mapped, not
+     * copied through the Java heap, so this is the way to load big worlds.
+     */
+    fun loadWorld(file: File) = renderThread.loadWorldFile(file.absolutePath)
+
+    /** Decodes a collider GLB from a file; enables walk mode when ready. */
+    fun loadCollider(file: File) = renderThread.loadColliderFile(file.absolutePath)
+
+    /**
+     * The camera's position and look direction. Reading gives the pose as of the last
+     * frame; setting teleports, and when walking the camera settles on the floor under
+     * the new point on the next frame. Any thread.
+     */
+    var cameraPose: CameraPose
+        get() {
+            val out = poseScratch
+            return if (renderThread.cameraPose(out)) CameraPose(out[0], out[1], out[2], out[3], out[4])
+            else CameraPose(0f, 0f, 0f)
+        }
+        set(value) = renderThread.setCameraPose(value)
+    private val poseScratch = FloatArray(5)
 
     /**
      * Applies a [RenderQuality] preset by setting [renderScale], [maxShDegree],

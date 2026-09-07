@@ -63,8 +63,9 @@ World Labs exports both files for every world.
 
 | Member | What it does |
 |---|---|
-| `loadWorld(bytes)` | Decodes a splat file (SPZ versions 2 to 4 today; the format is detected from the bytes) and replaces the current world when ready. |
-| `loadCollider(bytes)` | Decodes a GLB mesh and switches to walk mode. |
+| `loadWorld(bytes)`, `loadWorld(file)` | Decodes a splat file (SPZ versions 2 to 4 today; the format is detected from the bytes) and replaces the current world when ready. The `File` overload maps the file instead of copying it through the Java heap: use it for anything big. |
+| `loadCollider(bytes)`, `loadCollider(file)` | Decodes a GLB mesh and switches to walk mode. |
+| `cameraPose` | Position in meters plus yaw and pitch in radians, as of the last frame. Set it to teleport or to restore a saved viewpoint; when walking the camera settles on the floor under the new point. |
 | `listener` | `Listener` with `onWorldReady`, `onWorldFailed`, `onColliderReady`, `onColliderFailed`, on the main thread. |
 | `isAvailable` | False when Vulkan could not start; the view stays blank and every call is a no-op. |
 | `applyQuality(RenderQuality)` | Sets the five values below from a preset: `RenderQuality.LOW`, `MEDIUM`, `HIGH` (the default) or `ULTRA`, or a `copy` of one. Each preset's reason is on the class and its numbers are in `docs/BENCHMARKS.md`. |
@@ -88,6 +89,22 @@ Quality presets, measured on the Mi 9 with the 2M splat World Labs house at 1080
 | `MEDIUM` | 0.7 | 1 | all | 10 | 60 fps on the Mi 9: 0.7 is hard to tell from 1.0 at arm's length, degree 1 keeps the broad view dependent tint for a fifth of the harmonics memory. | 13.4 |
 | `HIGH` | 1.0 | 3 | all | 10 | The default: every pixel, every splat, every harmonic, what the reference rasterizer draws. | 19.3 |
 | `ULTRA` | 1.5 | 3 | all | 20 | Flagship GPUs and stills: supersampling settles the thin splats that shimmer at a pixel each, and a flick never shows an empty edge. | 39.1 |
+
+### Hosting it elsewhere
+
+`SplatSurfaceView` is a plain `SurfaceView`, so any host that can show an Android view can show it.
+Jetpack Compose:
+
+```kotlin
+AndroidView(
+    factory = { context -> SplatSurfaceView(context).also { view = it } },
+    modifier = Modifier.fillMaxSize(),
+)
+```
+
+and forward `resume`, `pause` and `release` from a `DisposableEffect` on the lifecycle.
+A React Native or Flutter view manager wraps it the same way: create the view, map props to the properties above, map commands to `loadWorld`, `cameraPose` and `setWalkVelocity`, and turn `Listener` calls into events.
+Everything on the view is safe to call from the main thread; loads run on the library's own loader thread and settings are posted to the render thread.
 
 `com.splatkit.ui` has `SplatHudView` (the stats overlay) and `JoystickView`, both optional.
 

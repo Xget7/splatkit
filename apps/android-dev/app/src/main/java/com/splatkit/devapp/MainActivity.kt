@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
+import com.splatkit.CameraPose
 import com.splatkit.RenderQuality
 import com.splatkit.SplatSurfaceView
 import com.splatkit.ui.JoystickView
@@ -111,14 +112,22 @@ class MainActivity : Activity() {
                 if (worldPath == null) {
                     splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
                     splatView.loadCollider(assets.open("kitchen_collider.glb").use { it.readBytes() })
-                } else {
+                } else if (intent.getBooleanExtra("bytes", false)) {
+                    // --ez bytes true goes through the ByteArray overloads instead of the files.
                     splatView.loadWorld(externalFile(worldPath).readBytes())
                     colliderPath?.let { splatView.loadCollider(externalFile(it).readBytes()) }
+                } else {
+                    splatView.loadWorld(externalFile(worldPath))
+                    colliderPath?.let { splatView.loadCollider(externalFile(it)) }
                 }
             } catch (e: java.io.IOException) {
                 runOnUiThread { toast("Could not read the world: ${e.message}") }
             }
         }.start()
+        // --es pose "x,y,z,yaw,pitch" teleports (meters, radians) once the world is up.
+        intent?.getStringExtra("pose")?.split(",")?.map { it.trim().toFloat() }?.takeIf { it.size == 5 }?.let {
+            splatView.cameraPose = CameraPose(it[0], it[1], it[2], it[3], it[4])
+        }
         if (intent?.getBooleanExtra("benchmark", false) == true) {
             // --ef seconds 3 turns the full circle in 3 s: a fast turn, for the cull margin.
             splatView.startBenchmark(intent.getFloatExtra("seconds", 10f))

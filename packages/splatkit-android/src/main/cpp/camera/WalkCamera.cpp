@@ -45,6 +45,14 @@ void WalkCamera::walk(float forward, float right) {
   }
 }
 
+void WalkCamera::setPosition(splat::Vec3 position) {
+  if (player_) {
+    player_->setPosition(position);
+  } else {
+    freePosition_ = position;
+  }
+}
+
 void WalkCamera::setOrientation(float yaw, float pitch) {
   yaw_ = yaw;
   pitch_ = std::clamp(pitch, -kMaxPitch, kMaxPitch);

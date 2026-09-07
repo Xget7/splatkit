@@ -27,6 +27,10 @@ class WalkCamera {
   void look(float deltaYaw, float deltaPitch);
   // Absolute orientation in radians, for reproducible captures and benchmarks.
   void setOrientation(float yaw, float pitch);
+  float yaw() const { return yaw_; }
+  float pitch() const { return pitch_; }
+  // Teleport. When walking, the next update snaps to the floor under the new point.
+  void setPosition(splat::Vec3 position);
   // Touch: meters along the view direction and to its right, flattened when walking.
   void walk(float forward, float right);
   // Joystick: meters per second, applied every update until changed. Zero stops.

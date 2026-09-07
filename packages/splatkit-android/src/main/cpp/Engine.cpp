@@ -1,5 +1,10 @@
 #include "Engine.h"
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <chrono>
 #include <fstream>
 #include <string>
@@ -265,6 +270,73 @@ void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
   loadedBudget_ = budget;
 }
 
+namespace {
+
+// Maps a whole file read only, hands it to `use`, unmaps. The mapping is the decoder's
+// input and nothing keeps it, so the pages leave with the call.
+template <typename Use>
+void withMappedFile(const std::string& path, const char* what, Use use,
+                    const std::function<void(const std::string&)>& fail) {
+  const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    fail(std::string("cannot open ") + what + " file: " + path);
+    return;
+  }
+  struct stat st{};
+  if (fstat(fd, &st) != 0 || st.st_size <= 0) {
+    close(fd);
+    fail(std::string("empty ") + what + " file: " + path);
+    return;
+  }
+  const auto size = static_cast<std::size_t>(st.st_size);
+  void* mapped = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+  close(fd);
+  if (mapped == MAP_FAILED) {
+    fail(std::string("cannot map ") + what + " file: " + path);
+    return;
+  }
+  madvise(mapped, size, MADV_SEQUENTIAL);
+  use(static_cast<const std::uint8_t*>(mapped), size);
+  munmap(mapped, size);
+}
+
+}  // namespace
+
+void Engine::loadWorldFile(const std::string& path) {
+  withMappedFile(
+      path, "world", [this](const std::uint8_t* data, std::size_t size) { loadWorld(data, size); },
+      [this](const std::string& message) {
+        LOGE("%s", message.c_str());
+        emit(Event::worldFailed, message);
+      });
+}
+
+void Engine::loadColliderFile(const std::string& path) {
+  withMappedFile(
+      path, "collider", [this](const std::uint8_t* data, std::size_t size) { loadCollider(data, size); },
+      [this](const std::string& message) {
+        LOGE("%s", message.c_str());
+        emit(Event::colliderFailed, message);
+      });
+}
+
+void Engine::setCameraPose(const CameraPose& pose) {
+  camera_.setPosition({pose.x, pose.y, pose.z});
+  camera_.setOrientation(pose.yaw, pose.pitch);
+  lastSortedFrom_.reset();  // a teleport needs a fresh sort, not a cull
+  redrawNeeded_ = true;
+}
+
+Engine::CameraPose Engine::cameraPose() const {
+  CameraPose pose;
+  pose.x = statPose_[0].load(std::memory_order_relaxed);
+  pose.y = statPose_[1].load(std::memory_order_relaxed);
+  pose.z = statPose_[2].load(std::memory_order_relaxed);
+  pose.yaw = statPose_[3].load(std::memory_order_relaxed);
+  pose.pitch = statPose_[4].load(std::memory_order_relaxed);
+  return pose;
+}
+
 void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
   const auto start = Clock::now();
   auto decoded = splat::decodeGlb(data, size);
@@ -407,6 +479,11 @@ void Engine::render(int64_t frameTimeNanos) {
       turnRate_ = std::max(instant, turnRate_ * 0.85f);
     }
     lastFrameForward_ = forward;
+    statPose_[0].store(position.x, std::memory_order_relaxed);
+    statPose_[1].store(position.y, std::memory_order_relaxed);
+    statPose_[2].store(position.z, std::memory_order_relaxed);
+    statPose_[3].store(camera_.yaw(), std::memory_order_relaxed);
+    statPose_[4].store(camera_.pitch(), std::memory_order_relaxed);
     const bool moved = !lastSortedFrom_ ||
                        std::fabs(lastSortedFrom_->x - position.x) + std::fabs(lastSortedFrom_->y - position.y) +
                                std::fabs(lastSortedFrom_->z - position.z) > 0.005f;

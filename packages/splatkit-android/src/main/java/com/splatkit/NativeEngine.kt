@@ -33,6 +33,16 @@ internal class NativeEngine {
 
     fun loadCollider(glbBytes: ByteArray) = nativeLoadCollider(handle, glbBytes)
 
+    fun loadWorldFile(path: String) = nativeLoadWorldFile(handle, path)
+
+    fun loadColliderFile(path: String) = nativeLoadColliderFile(handle, path)
+
+    fun setCameraPose(x: Float, y: Float, z: Float, yaw: Float, pitch: Float) =
+        nativeSetCameraPose(handle, x, y, z, yaw, pitch)
+
+    /** Fills [out] (at least 5) with x, y, z, yaw, pitch. Any thread. */
+    fun cameraPose(out: FloatArray) = nativeCameraPose(handle, out)
+
     fun look(deltaYaw: Float, deltaPitch: Float) = nativeLook(handle, deltaYaw, deltaPitch)
 
     fun walk(forward: Float, right: Float) = nativeWalk(handle, forward, right)
@@ -86,6 +96,10 @@ internal class NativeEngine {
     private external fun nativeSetSplatBudget(handle: Long, budget: Int)
     private external fun nativeSetLinearBlending(handle: Long, linear: Boolean)
     private external fun nativeSetCullMargin(handle: Long, degrees: Float)
+    private external fun nativeLoadWorldFile(handle: Long, path: String)
+    private external fun nativeLoadColliderFile(handle: Long, path: String)
+    private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
+    private external fun nativeCameraPose(handle: Long, out: FloatArray)
     private external fun nativeGpuDescription(handle: Long): String
     private external fun nativeStats(handle: Long, out: FloatArray)
 
