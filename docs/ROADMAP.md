@@ -72,6 +72,7 @@ Each item says what it touches and how to prove it works.
 
 - **PLY and .splat input** (help wanted).
   A `decodePly` and `decodeSplat` in `splat-core/formats` returning the same `SplatCloud`, with the RDF to RUB conversion the SPZ decoder does, wired into `detectSplatFormat`.
+  Until then `packages/splat-core/tools/ply2spz` converts a PLY offline.
   Proof: unit tests with hand built files, and the same scene loaded from PLY and SPZ sorting and rendering the same.
 - **SOG input** (help wanted).
   SOG (Spatially Ordered Gaussians, from PlayCanvas SuperSplat) stores a scene as a `meta.json` plus WebP images, about a tenth of the size of a PLY, and it is what the fastest Android viewers load.

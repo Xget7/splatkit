@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SPLAT_CORE_BUILD_TESTS "Build splat_core unit tests" ${PROJECT_IS_TOP_LEVEL})
+option(SPLAT_CORE_BUILD_TOOLS "Build the ply2spz converter" ${PROJECT_IS_TOP_LEVEL})
 # "thread" or "address" (address implies undefined). Off by default; CI runs both.
 set(SPLAT_CORE_SANITIZE "" CACHE STRING "Sanitizer for splat_core and its tests")
 
@@ -45,4 +46,8 @@ target_compile_options(splat_core PRIVATE
 if(SPLAT_CORE_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+if(SPLAT_CORE_BUILD_TOOLS)
+  add_subdirectory(tools)
 endif()

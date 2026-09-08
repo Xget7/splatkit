@@ -21,3 +21,15 @@ ctest --test-dir build --output-on-failure
 ```
 
 Set `SPLAT_FIXTURES_DIR` to a folder with World Labs example files to run the integration tests.
+
+## Converting a PLY
+
+The engine reads SPZ.
+A scene from SuperSplat, Polycam or the Mip-NeRF 360 set comes as a Gaussian splat PLY; `tools/ply2spz` (built with the tests) packs it:
+
+```
+build/tools/ply2spz bicycle.ply bicycle.spz --sh 1 --keep 2
+```
+
+`--sh N` keeps harmonics up to degree N (degree 3 costs 92 bytes per splat on the GPU) and `--keep N` keeps every Nth splat, for scenes too big for a phone.
+The coordinates are written as they are; the reference 3DGS frame is what the decoder assumes for a file without a frame tag, so the scene stands upright.
