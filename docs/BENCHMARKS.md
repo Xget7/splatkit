@@ -54,6 +54,10 @@ Apartment Pool (superspl.at, CC BY, paul/nesterdigital): 3.57M splats converted 
 | 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset HIGH | 36.0 / 32.5 / 56.1 | | | | half the splats, half the time |
 | 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset MEDIUM | 20.8 / 18.1 / 31.1 | | | | 55 fps, the demo setting for this scene |
 
+Mip-NeRF 360 Bicycle (superspl.at, CC BY, Seeget3D): 2.6M splats with harmonics degree 3, converted with `ply2spz` untouched, no collider, benchmark from (0, 0.7, 1.6) pitch -0.2 looking at the bike. The scene is an outdoor orbit: the bike side costs a third of the frame, the tree canopy behind the camera fills it.
+
+| 2026-09-08 | 11daaf7 | bicycle 2.6M | preset HIGH | 19.4 / 13.7 / 45.3 | 64 | 26 to 47 | 293k to 1.48M of 2.6M | 1637 / - / 1047 |
+
 ## Image quality against the reference renderer
 
 2026-09-08, pool 3.57M with spherical harmonics degree 3, Mi 9 at preset HIGH (1080x2261, 65 degree vertical field of view, no render target), pose (-0.3, 2.3, 4.0) yaw -0.75 pitch -0.15.
