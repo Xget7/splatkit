@@ -17,6 +17,44 @@ void putU32(std::vector<std::uint8_t>& out, uint32_t v) {
   out.insert(out.end(), p, p + 4);
 }
 
+std::vector<std::uint8_t> packGlb(std::string json, const std::vector<std::uint8_t>& bin) {
+  while (json.size() % 4 != 0) json += ' ';
+  std::vector<std::uint8_t> glb;
+  putU32(glb, 0x46546C67);
+  putU32(glb, 2);
+  putU32(glb, static_cast<uint32_t>(12 + 8 + json.size() + 8 + bin.size()));
+  putU32(glb, static_cast<uint32_t>(json.size()));
+  putU32(glb, 0x4E4F534A);
+  glb.insert(glb.end(), json.begin(), json.end());
+  putU32(glb, static_cast<uint32_t>(bin.size()));
+  putU32(glb, 0x004E4942);
+  glb.insert(glb.end(), bin.begin(), bin.end());
+  return glb;
+}
+
+// One triangle at y = 2 plus uint16 indices padded to 4 bytes.
+std::vector<std::uint8_t> triangleBin() {
+  std::vector<std::uint8_t> bin;
+  const float positions[9] = {0, 2, 0, 1, 2, 0, 0, 2, 1};
+  bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(positions),
+             reinterpret_cast<const std::uint8_t*>(positions) + sizeof(positions));
+  const uint16_t idx[4] = {0, 1, 2, 0};
+  bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx), reinterpret_cast<const std::uint8_t*>(idx) + 8);
+  return bin;
+}
+
+// The JSON of oneTriangleGlb with the node, with the position accessor's count as given.
+std::string withAccessorCount(const std::string& count) {
+  return std::string("{\"asset\":{\"version\":\"2.0\"},") +
+         "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"translation\":[0,0,1]}]," +
+         "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1}]}],"
+         "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC3\"},"
+         "{\"bufferView\":1,\"componentType\":5123,\"count\":3,\"type\":\"SCALAR\"}],"
+         "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":36},"
+         "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":6}],"
+         "\"buffers\":[{\"byteLength\":44}]}";
+}
+
 // A GLB with one triangle at y = 2 under a node translated by (0, 0, 1), in RDF.
 std::vector<std::uint8_t> oneTriangleGlb(bool withNode = true, bool uint16Indices = true) {
   std::vector<std::uint8_t> bin;
@@ -41,19 +79,38 @@ std::vector<std::uint8_t> oneTriangleGlb(bool withNode = true, bool uint16Indice
       "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":36},"
       "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":" + indexBytes + "}],"
       "\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) + "}]}";
-  while (json.size() % 4 != 0) json += ' ';
+  return packGlb(json, bin);
+}
 
-  std::vector<std::uint8_t> glb;
-  putU32(glb, 0x46546C67);
-  putU32(glb, 2);
-  putU32(glb, static_cast<uint32_t>(12 + 8 + json.size() + 8 + bin.size()));
-  putU32(glb, static_cast<uint32_t>(json.size()));
-  putU32(glb, 0x4E4F534A);
-  glb.insert(glb.end(), json.begin(), json.end());
-  putU32(glb, static_cast<uint32_t>(bin.size()));
-  putU32(glb, 0x004E4942);
-  glb.insert(glb.end(), bin.begin(), bin.end());
-  return glb;
+TEST(GlbDecoder, RejectsAnAccessorCountThatWouldOverflowTheBoundsCheck) {
+  // (count - 1) * stride wraps to about zero in 64 bits, so the old check passed and the
+  // decoder then walked quintillions of elements.
+  auto glb = packGlb(withAccessorCount("4611686018427387905"), triangleBin());
+  auto r = decodeGlb(glb.data(), glb.size());
+  ASSERT_FALSE(r.ok());
+  EXPECT_EQ(r.error().code, ErrorCode::corrupt);
+}
+
+TEST(GlbDecoder, RejectsAnAccessorWithoutAComponentTypeInsteadOfCrashing) {
+  std::string json = withAccessorCount("3");
+  const auto at = json.find("\"componentType\":5126,");
+  ASSERT_NE(at, std::string::npos);
+  json.erase(at, std::string("\"componentType\":5126,").size());
+  auto glb = packGlb(json, triangleBin());
+  auto r = decodeGlb(glb.data(), glb.size());
+  ASSERT_FALSE(r.ok());
+  EXPECT_EQ(r.error().code, ErrorCode::corrupt);
+}
+
+TEST(GlbDecoder, RejectsAShortTranslationInsteadOfReadingPastIt) {
+  std::string json = withAccessorCount("3");
+  const auto at = json.find("\"translation\":[0,0,1]");
+  ASSERT_NE(at, std::string::npos);
+  json.replace(at, std::string("\"translation\":[0,0,1]").size(), "\"translation\":[0]");
+  auto glb = packGlb(json, triangleBin());
+  auto r = decodeGlb(glb.data(), glb.size());
+  ASSERT_FALSE(r.ok());
+  EXPECT_EQ(r.error().code, ErrorCode::corrupt);
 }
 
 TEST(GlbDecoder, RejectsNonGlb) {

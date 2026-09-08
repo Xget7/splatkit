@@ -44,17 +44,26 @@ bool resolve(const json& doc, int accessorIndex, const std::uint8_t* bin, std::s
   const json& view = views[static_cast<std::size_t>(viewIndex)];
   if (view.value("buffer", 0) != 0) return false;  // only the embedded BIN chunk
 
-  out.componentType = a["componentType"].get<int>();
-  out.type = a["type"].get<std::string>();
-  out.count = a["count"].get<std::size_t>();
+  // `at` throws on a missing key or a wrong type where operator[] would read past the
+  // end; decodeGlb turns the exception into a corrupt result.
+  out.componentType = a.at("componentType").get<int>();
+  out.type = a.at("type").get<std::string>();
+  const auto count = a.at("count").get<std::int64_t>();
+  if (count < 0) return false;
+  out.count = static_cast<std::size_t>(count);
   const int components = out.type == "SCALAR" ? 1 : out.type == "VEC2" ? 2 : out.type == "VEC3" ? 3 : 4;
   const std::size_t componentSize = out.componentType == 5126 ? 4 : out.componentType == 5125 ? 4 : out.componentType == 5123 ? 2 : 1;
   const std::size_t elementSize = static_cast<std::size_t>(components) * componentSize;
   out.stride = view.value("byteStride", 0u);
   if (out.stride == 0) out.stride = elementSize;
+  // glTF bounds byteStride to 252; anything past that is a file trying to overflow the
+  // check below. Elements may not overlap either.
+  if (out.stride < elementSize || out.stride > 252) return false;
+  // The count alone must fit the chunk, so the 64 bit product below cannot wrap.
+  if (out.count > binSize / elementSize) return false;
 
-  const std::size_t offset = view.value("byteOffset", 0u) + a.value("byteOffset", 0u);
-  const std::size_t needed = out.count == 0 ? 0 : offset + (out.count - 1) * out.stride + elementSize;
+  const std::uint64_t offset = static_cast<std::uint64_t>(view.value("byteOffset", 0u)) + a.value("byteOffset", 0u);
+  const std::uint64_t needed = out.count == 0 ? 0 : offset + (out.count - 1) * out.stride + elementSize;
   if (needed > binSize) return false;
   out.data = bin + offset;
   return true;
@@ -63,32 +72,48 @@ bool resolve(const json& doc, int accessorIndex, const std::uint8_t* bin, std::s
 Mat4 nodeTransform(const json& node) {
   if (node.contains("matrix")) {
     Mat4 m;
-    for (std::size_t i = 0; i < 16; ++i) m.m[i] = node["matrix"][i].get<float>();
+    for (std::size_t i = 0; i < 16; ++i) m.m[i] = node.at("matrix").at(i).get<float>();
     return m;  // glTF matrices are column major, like ours
   }
   Mat4 t = Mat4::identity(), r = Mat4::identity(), s = Mat4::identity();
   if (node.contains("translation")) {
     const json& v = node["translation"];
-    t = Mat4::translation({v[0].get<float>(), v[1].get<float>(), v[2].get<float>()});
+    t = Mat4::translation({v.at(0).get<float>(), v.at(1).get<float>(), v.at(2).get<float>()});
   }
   if (node.contains("rotation")) {
     const json& q = node["rotation"];
-    const float x = q[0].get<float>(), y = q[1].get<float>(), z = q[2].get<float>(), w = q[3].get<float>();
+    const float x = q.at(0).get<float>(), y = q.at(1).get<float>(), z = q.at(2).get<float>(), w = q.at(3).get<float>();
     r.at(0, 0) = 1 - 2 * (y * y + z * z); r.at(0, 1) = 2 * (x * y - w * z);     r.at(0, 2) = 2 * (x * z + w * y);
     r.at(1, 0) = 2 * (x * y + w * z);     r.at(1, 1) = 1 - 2 * (x * x + z * z); r.at(1, 2) = 2 * (y * z - w * x);
     r.at(2, 0) = 2 * (x * z - w * y);     r.at(2, 1) = 2 * (y * z + w * x);     r.at(2, 2) = 1 - 2 * (x * x + y * y);
   }
   if (node.contains("scale")) {
     const json& v = node["scale"];
-    s.at(0, 0) = v[0].get<float>(); s.at(1, 1) = v[1].get<float>(); s.at(2, 2) = v[2].get<float>();
+    s.at(0, 0) = v.at(0).get<float>(); s.at(1, 1) = v.at(1).get<float>(); s.at(2, 2) = v.at(2).get<float>();
   }
   return t * r * s;
 }
 
+Result<TriangleMesh> decodeGlbOrThrow(const std::uint8_t* data, std::size_t size,
+                                      const GlbDecodeOptions& options);
+
 }  // namespace
 
+// The JSON accessors throw on a field that is missing or of the wrong type; a file from
+// the network can do both, and the core never lets an exception out.
 Result<TriangleMesh> decodeGlb(const std::uint8_t* data, std::size_t size,
                                const GlbDecodeOptions& options) {
+  try {
+    return decodeGlbOrThrow(data, size, options);
+  } catch (const json::exception& e) {
+    return Error{ErrorCode::corrupt, std::string("GLB JSON is malformed: ") + e.what()};
+  }
+}
+
+namespace {
+
+Result<TriangleMesh> decodeGlbOrThrow(const std::uint8_t* data, std::size_t size,
+                                      const GlbDecodeOptions& options) {
   if (size < 12 || readU32(data) != kGlbMagic) {
     return Error{ErrorCode::unsupportedFormat, "not a GLB file"};
   }
@@ -188,5 +213,7 @@ Result<TriangleMesh> decodeGlb(const std::uint8_t* data, std::size_t size,
   if (mesh.triangleCount() == 0) return Error{ErrorCode::corrupt, "GLB has no triangles"};
   return mesh;
 }
+
+}  // namespace
 
 }  // namespace splat

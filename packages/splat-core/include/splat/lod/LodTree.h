@@ -24,8 +24,7 @@ struct LodNode {
   float size;
   // Children are nodes [childStart, childStart + childCount); leaves have a count of 0.
   uint32_t childStart;
-  uint16_t childCount;
-  uint16_t pad;
+  uint32_t childCount;  // a dense cell can merge more than 65k members
 };
 static_assert(sizeof(LodNode) == 24, "LodNode is packed for the selection walk");
 

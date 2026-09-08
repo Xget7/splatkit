@@ -28,8 +28,18 @@ Collider::Collider(const TriangleMesh& mesh, float cellSize) : cellSize_(cellSiz
   if (n == 0) lo = hi = Vec3{};
   boundsMin_ = lo - Vec3{0.01f, 0.01f, 0.01f};
   boundsMax_ = hi + Vec3{0.01f, 0.01f, 0.01f};
-  for (int k = 0; k < 3; ++k) {
-    dims_[k] = std::max(1, static_cast<int>(std::ceil((boundsMax_[k] - boundsMin_[k]) / cellSize_)));
+  // A mesh with one far vertex would ask for billions of cells at the default size; the
+  // cell grows until the grid fits a fixed memory. Distant garbage costs raycast time,
+  // not memory, and a real collider never reaches the limit.
+  constexpr double kMaxCells = 1 << 22;  // 16 MB of cell starts
+  for (;;) {
+    double cells = 1.0;
+    for (int k = 0; k < 3; ++k) {
+      dims_[k] = std::max(1, static_cast<int>(std::ceil((boundsMax_[k] - boundsMin_[k]) / cellSize_)));
+      cells *= dims_[k];
+    }
+    if (cells <= kMaxCells) break;
+    cellSize_ *= 2.0f;
   }
   buildGrid();
 }

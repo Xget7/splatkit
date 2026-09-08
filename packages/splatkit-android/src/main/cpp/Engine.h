@@ -132,6 +132,7 @@ class Engine {
   bool createSurface();
   bool recreateSwapchain();
   bool createPipelines();
+  void keepSurfaceIf(bool rebuilt);
   bool surfaceExtentChanged() const;
   bool createRenderTarget();
   VkFormat activeFormat() const;
@@ -158,7 +159,8 @@ class Engine {
   std::mutex pendingMutex_;
   std::unique_ptr<splat::SplatCloud> pendingCloud_;  // decoded, waiting for upload
   std::shared_ptr<const splat::LodTree> pendingTree_;  // instead of the cloud, with a budget
-  int loadedBudget_ = 0;  // the budget the current world was loaded with, 0 without a tree
+  int pendingBudget_ = 0;  // under pendingMutex_, the budget the pending world was built with
+  int loadedBudget_ = 0;  // render thread only: the budget of the world on the GPU, 0 without a tree
   uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
   std::unique_ptr<splat::Collider> pendingCollider_;
   WalkCamera camera_;

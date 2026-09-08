@@ -3,9 +3,21 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <istream>
 #include <optional>
+#include <streambuf>
+#include <vector>
+
+#include <zlib.h>
 
 #include "load-spz.h"
+
+// spz exposes only loadSpz, which inflates without a ceiling; these two are what it
+// runs after the inflate and are plain functions of its namespace (pinned version).
+namespace spz {
+PackedGaussians deserializePackedGaussians(std::istream& in);
+GaussianCloud unpackGaussians(const PackedGaussians& packed, const UnpackOptions& o);
+}  // namespace spz
 
 // spz's unpack applies convertCoordinates(RUB, options.to) unconditionally in this build.
 // With extensions enabled it would instead read a per-file tag and convert for real, and
@@ -36,16 +48,13 @@ std::uint32_t readU32(const std::uint8_t* p) {
          (std::uint32_t(p[3]) << 24);
 }
 
-// Decompressed size the container declares, or nullopt when it does not say.
-// gzip stores it in the last four bytes (ISIZE, little endian, modulo 2^32). A payload
-// beyond 4 GB would wrap, but deflate cannot exceed a ratio of about 1032:1, so a wrapped
-// value still needs a compressed input larger than anything this library would accept.
-// NGSP declares the point count and SH degree, so the unpacked float size follows directly:
-// position, scale, rotation, alpha and colour are 14 floats, plus 3 floats per SH coefficient.
+// Decompressed size an NGSP container declares, or nullopt otherwise. NGSP declares the
+// point count and SH degree, so the unpacked float size follows directly: position,
+// scale, rotation, alpha and colour are 14 floats, plus 3 floats per SH coefficient.
+// Its streams inflate into buffers sized from that header, so the check is enough.
+// A gzip trailer also declares a size, but nothing ties it to what the stream inflates
+// to, so gzip is inflated here with a ceiling instead of trusted.
 std::optional<std::uint64_t> declaredDecodedSize(const std::uint8_t* data, std::size_t size) {
-  if (looksLikeGzip(data, size) && size >= 18) {
-    return readU32(data + size - 4);
-  }
   if (looksLikeNgsp(data, size) && size >= kNgspHeaderBytes) {
     const std::uint64_t points = readU32(data + 8);
     const std::uint32_t degree = std::min<std::uint32_t>(data[12], 3);
@@ -54,6 +63,45 @@ std::optional<std::uint64_t> declaredDecodedSize(const std::uint8_t* data, std::
   }
   return std::nullopt;
 }
+
+// Inflates a gzip stream, stopping as soon as the output would pass `ceiling`.
+// Returns nullopt for a broken stream or one past the ceiling.
+std::optional<std::vector<std::uint8_t>> inflateGzip(const std::uint8_t* data, std::size_t size,
+                                                     std::size_t ceiling) {
+  z_stream stream{};
+  if (inflateInit2(&stream, 16 | MAX_WBITS) != Z_OK) return std::nullopt;
+  stream.next_in = const_cast<Bytef*>(data);
+  stream.avail_in = static_cast<uInt>(size);
+  std::vector<std::uint8_t> out;
+  std::vector<std::uint8_t> chunk(1u << 20);
+  int status = Z_OK;
+  while (status != Z_STREAM_END) {
+    stream.next_out = chunk.data();
+    stream.avail_out = static_cast<uInt>(chunk.size());
+    status = inflate(&stream, Z_NO_FLUSH);
+    if (status != Z_OK && status != Z_STREAM_END) {
+      inflateEnd(&stream);
+      return std::nullopt;
+    }
+    const std::size_t produced = chunk.size() - stream.avail_out;
+    if (out.size() + produced > ceiling) {
+      inflateEnd(&stream);
+      return std::nullopt;
+    }
+    out.insert(out.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(produced));
+  }
+  inflateEnd(&stream);
+  return out;
+}
+
+// A read only istream over bytes already in memory, for spz's stream based deserializer.
+class MemoryBuffer : public std::streambuf {
+ public:
+  MemoryBuffer(const std::uint8_t* data, std::size_t size) {
+    char* begin = const_cast<char*>(reinterpret_cast<const char*>(data));
+    setg(begin, begin, begin + size);
+  }
+};
 
 spz::CoordinateSystem toSpz(CoordinateFrame frame) {
   switch (frame) {
@@ -114,7 +162,18 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
 
   spz::UnpackOptions unpack;
   unpack.to = toSpz(kInternalFrame);
-  spz::GaussianCloud cloud = spz::loadSpz(data, size, unpack);
+  spz::GaussianCloud cloud;
+  if (looksLikeGzip(data, size)) {
+    const auto packed = inflateGzip(data, size, options.maxDecodedBytes);
+    if (!packed) {
+      return Error{ErrorCode::corrupt, "SPZ gzip stream is broken or exceeds the decoded size ceiling"};
+    }
+    MemoryBuffer buffer(packed->data(), packed->size());
+    std::istream in(&buffer);
+    cloud = spz::unpackGaussians(spz::deserializePackedGaussians(in), unpack);
+  } else {
+    cloud = spz::loadSpz(data, size, unpack);
+  }
   if (cloud.numPoints <= 0) {
     return Error{ErrorCode::corrupt, "SPZ container could not be decoded"};
   }
@@ -144,6 +203,8 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
 
   bool finite = true;
   for (std::size_t i = 0; i < n; ++i) {
+    // The packed quaternion decode takes a square root the file can drive negative.
+    for (int k = 0; k < 4; ++k) finite = finite && std::isfinite(cloud.rotations[i * 4 + k]);
     float scale[3];
     for (int k = 0; k < 3; ++k) {
       scale[k] = std::exp(cloud.scales[i * 3 + k]);
@@ -159,7 +220,7 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
     out.alphas[i] = 1.0f / (1.0f + std::exp(-cloud.alphas[i]));
   }
   // A NaN position would sort to the front and a NaN covariance would draw garbage.
-  if (!finite) return Error{ErrorCode::corrupt, "SPZ contains non-finite positions or scales"};
+  if (!finite) return Error{ErrorCode::corrupt, "SPZ contains non-finite positions, scales or rotations"};
 
   return out;
 }

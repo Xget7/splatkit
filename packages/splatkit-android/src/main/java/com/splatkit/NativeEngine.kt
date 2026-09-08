@@ -41,7 +41,10 @@ internal class NativeEngine {
         nativeSetCameraPose(handle, x, y, z, yaw, pitch)
 
     /** Fills [out] (at least 5) with x, y, z, yaw, pitch. Any thread. */
-    fun cameraPose(out: FloatArray) = nativeCameraPose(handle, out)
+    /** Safe from any thread; the lock keeps it clear of [destroy]. */
+    fun cameraPose(out: FloatArray): Unit = synchronized(this) {
+        if (handle != 0L) nativeCameraPose(handle, out)
+    }
 
     fun look(deltaYaw: Float, deltaPitch: Float) = nativeLook(handle, deltaYaw, deltaPitch)
 
@@ -66,12 +69,18 @@ internal class NativeEngine {
     fun setCullMargin(degrees: Float) = nativeSetCullMargin(handle, degrees)
 
     /** Safe from any thread once created. */
-    fun gpuDescription(): String = nativeGpuDescription(handle)
+    fun gpuDescription(): String = synchronized(this) {
+        if (handle != 0L) nativeGpuDescription(handle) else ""
+    }
 
     /** Safe from any thread: the engine publishes these atomically. */
-    fun stats(out: FloatArray) = nativeStats(handle, out)
+    fun stats(out: FloatArray): Unit = synchronized(this) {
+        if (handle != 0L) nativeStats(handle, out)
+    }
 
-    fun destroy() {
+    // The any-thread readers above take the same lock, so none of them can run on a
+    // handle that is being freed. Everything else runs on the render thread, like this.
+    fun destroy(): Unit = synchronized(this) {
         if (handle != 0L) {
             nativeDestroy(handle)
             handle = 0L

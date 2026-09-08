@@ -35,6 +35,18 @@ TEST(Collider, RaycastHitsFloorStraightDown) {
   EXPECT_NEAR(hit->normal.y, 1, 1e-4f);  // faces the ray, which points down
 }
 
+// One vertex a thousand kilometres away used to ask for billions of grid cells.
+TEST(Collider, AFarVertexGrowsTheCellsInsteadOfTheGrid) {
+  TriangleMesh m = room();
+  const uint32_t base = static_cast<uint32_t>(m.vertexCount());
+  for (float v : {1e6f, 0.0f, 1e6f, 1e6f + 1, 0.0f, 1e6f, 1e6f, 0.0f, 1e6f + 1}) m.positions.push_back(v);
+  for (uint32_t i : {0u, 1u, 2u}) m.indices.push_back(base + i);
+  Collider c(m);
+  auto hit = c.raycast({0, 1.5f, 0}, {0, -1, 0}, 10.0f);
+  ASSERT_TRUE(hit.has_value());
+  EXPECT_NEAR(hit->distance, 1.5f, 1e-4f);
+}
+
 TEST(Collider, RaycastMissesOutsideMaxDistanceAndOutsideBounds) {
   Collider c(room());
   EXPECT_FALSE(c.raycast({1, 1.5f, 1}, {0, -1, 0}, 1.0f));

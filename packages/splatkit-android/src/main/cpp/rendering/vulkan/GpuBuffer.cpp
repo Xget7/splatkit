@@ -76,25 +76,24 @@ bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
   cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   cmdInfo.commandBufferCount = 1;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  vkAllocateCommandBuffers(device, &cmdInfo, &cmd);
-
+  VkFence fence = VK_NULL_HANDLE;
+  VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
   VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  vkBeginCommandBuffer(cmd, &begin);
   VkBufferCopy region{0, 0, size};
-  vkCmdCopyBuffer(cmd, staging->handle(), buffer_, 1, &region);
-  vkEndCommandBuffer(cmd);
-
-  VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-  VkFence fence = VK_NULL_HANDLE;
-  vkCreateFence(device, &fenceInfo, nullptr, &fence);
   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.commandBufferCount = 1;
   submit.pCommandBuffers = &cmd;
-  bool ok = vkQueueSubmit(ctx_.queue(), 1, &submit, fence) == VK_SUCCESS;
-  if (ok) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+  // Each step can fail under memory pressure, which is when a 2M splat upload runs.
+  const bool ok = vkAllocateCommandBuffers(device, &cmdInfo, &cmd) == VK_SUCCESS &&
+                  vkBeginCommandBuffer(cmd, &begin) == VK_SUCCESS &&
+                  (vkCmdCopyBuffer(cmd, staging->handle(), buffer_, 1, &region), true) &&
+                  vkEndCommandBuffer(cmd) == VK_SUCCESS &&
+                  vkCreateFence(device, &fenceInfo, nullptr, &fence) == VK_SUCCESS &&
+                  vkQueueSubmit(ctx_.queue(), 1, &submit, fence) == VK_SUCCESS &&
+                  vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS;
 
-  vkDestroyFence(device, fence, nullptr);
+  if (fence != VK_NULL_HANDLE) vkDestroyFence(device, fence, nullptr);
   vkDestroyCommandPool(device, pool, nullptr);
   return ok;
 }

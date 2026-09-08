@@ -120,6 +120,16 @@ TEST(LodTree, TheViewDirectionDecidesWhereTheBudgetGoes) {
   EXPECT_EQ(nodesBehind, 1);
 }
 
+// 70k splats in one spot merge into a single node; a 16 bit child count lost 4k of them.
+TEST(LodTree, ANodeKeepsMoreThan65kChildren) {
+  std::vector<Vec3> centres(70000, Vec3{0, 0, 0});
+  LodTree t = buildLodTree(cloudOf(centres, 0.05f));
+  ASSERT_EQ(t.leafCount, 70000u);
+  std::vector<uint32_t> leaves;
+  collectLeaves(t, 0, leaves);
+  EXPECT_EQ(leaves.size(), 70000u);
+}
+
 TEST(LodTree, LargeRandomCloudBuildsAConnectedTreeOfBoundedSize) {
   std::mt19937 rng(7);
   std::uniform_real_distribution<float> u(-10.0f, 10.0f);

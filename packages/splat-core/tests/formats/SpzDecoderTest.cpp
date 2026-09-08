@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <zlib.h>
+
 #include "load-spz.h"
 
 namespace splat {
@@ -45,6 +47,30 @@ TEST(SpzDecoder, RejectsBytesThatAreNotAContainer) {
   auto result = decodeSpz(junk, sizeof(junk));
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error().code, ErrorCode::unsupportedFormat);
+}
+
+// A gzip whose trailer claims a small size while the stream inflates far past the
+// ceiling: the trailer is written by whoever made the file and proves nothing.
+TEST(SpzDecoder, StopsInflatingAGzipAtTheCeilingWhateverTheTrailerSays) {
+  const std::vector<std::uint8_t> zeros(8u << 20, 0);
+  std::vector<std::uint8_t> gz(compressBound(static_cast<uLong>(zeros.size())) + 64);
+  z_stream stream{};
+  ASSERT_EQ(deflateInit2(&stream, Z_BEST_SPEED, Z_DEFLATED, 16 | MAX_WBITS, 8, Z_DEFAULT_STRATEGY), Z_OK);
+  stream.next_in = const_cast<Bytef*>(zeros.data());
+  stream.avail_in = static_cast<uInt>(zeros.size());
+  stream.next_out = gz.data();
+  stream.avail_out = static_cast<uInt>(gz.size());
+  ASSERT_EQ(deflate(&stream, Z_FINISH), Z_STREAM_END);
+  gz.resize(gz.size() - stream.avail_out);
+  deflateEnd(&stream);
+  // Forge ISIZE to 100 bytes.
+  gz[gz.size() - 4] = 100; gz[gz.size() - 3] = 0; gz[gz.size() - 2] = 0; gz[gz.size() - 1] = 0;
+
+  SpzDecodeOptions options;
+  options.maxDecodedBytes = 1u << 20;
+  auto result = decodeSpz(gz.data(), gz.size(), options);
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error().code, ErrorCode::corrupt);
 }
 
 TEST(SpzDecoder, RejectsAnNgspHeaderWithoutAPayload) {

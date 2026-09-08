@@ -36,7 +36,8 @@ add_library(splat_core STATIC
   src/lod/LodTree.cpp
 )
 target_include_directories(splat_core PUBLIC include)
-target_link_libraries(splat_core PRIVATE spz nlohmann_json::nlohmann_json PUBLIC Threads::Threads)
+find_package(ZLIB REQUIRED)  # the SPZ gzip container is inflated here, with a ceiling
+target_link_libraries(splat_core PRIVATE spz nlohmann_json::nlohmann_json ZLIB::ZLIB PUBLIC Threads::Threads)
 target_compile_options(splat_core PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic -Werror>
 )

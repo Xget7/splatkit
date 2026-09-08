@@ -203,7 +203,7 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
     const uint32_t old = order[head];
     const auto& kids = nodes.children[old];
     tree.layout[head].childStart = static_cast<uint32_t>(order.size());
-    tree.layout[head].childCount = static_cast<uint16_t>(kids.size());
+    tree.layout[head].childCount = static_cast<uint32_t>(kids.size());
     for (uint32_t kid : kids) order.push_back(kid);
   }
 
@@ -278,7 +278,7 @@ void selectLodNodes(const LodTree& tree, Vec3 origin, const LodView& view, std::
       continue;
     }
     const uint32_t node = bucket.back();
-    const uint16_t kids = layout[node].childCount;
+    const uint32_t kids = layout[node].childCount;
     if (kids == 0) {
       bucket.pop_back();
       out.push_back(node);

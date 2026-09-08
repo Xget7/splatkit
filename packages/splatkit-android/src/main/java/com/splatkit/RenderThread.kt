@@ -8,6 +8,7 @@ import android.view.Choreographer
 import android.view.Surface
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -21,7 +22,8 @@ internal class RenderThread {
     private val thread = HandlerThread("SplatKitRender").apply { start() }
     private val handler = Handler(thread.looper)
     private lateinit var choreographer: Choreographer
-    private var engine: NativeEngine? = null
+    // Written on the render thread, read by the any-thread getters (stats, camera pose).
+    @Volatile private var engine: NativeEngine? = null
     private var rendering = false
 
     /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
@@ -92,20 +94,23 @@ internal class RenderThread {
         choreographer.removeFrameCallback(frameCallback)
     }
 
-    fun loadWorld(spzBytes: ByteArray) {
-        loader.execute { engine?.loadWorld(spzBytes) }
-    }
+    fun loadWorld(spzBytes: ByteArray) = decode { it.loadWorld(spzBytes) }
 
-    fun loadCollider(glbBytes: ByteArray) {
-        loader.execute { engine?.loadCollider(glbBytes) }
-    }
+    fun loadCollider(glbBytes: ByteArray) = decode { it.loadCollider(glbBytes) }
 
-    fun loadWorldFile(path: String) {
-        loader.execute { engine?.loadWorldFile(path) }
-    }
+    fun loadWorldFile(path: String) = decode { it.loadWorldFile(path) }
 
-    fun loadColliderFile(path: String) {
-        loader.execute { engine?.loadColliderFile(path) }
+    fun loadColliderFile(path: String) = decode { it.loadColliderFile(path) }
+
+    // After release() the executor is shut down and would throw; a late load from a
+    // host's background thread is a no-op like every other call after release.
+    private fun decode(block: (NativeEngine) -> Unit) {
+        if (loader.isShutdown) return
+        try {
+            loader.execute { engine?.let(block) }
+        } catch (e: RejectedExecutionException) {
+            Log.w(TAG, "load after release ignored")
+        }
     }
 
     fun setCameraPose(pose: CameraPose) = post {
@@ -149,21 +154,26 @@ internal class RenderThread {
     /** Handler on the render thread, for listeners that should deliver there. */
     val renderHandler: Handler get() = handler
 
+    /**
+     * Stops rendering now and destroys the engine once any decode in flight has finished.
+     * A decode touches engine state, so the destruction is queued behind it on the loader
+     * instead of blocking the caller: a host calling this from onDestroy must not wait on
+     * a slow file, and the engine must not die under a running decoder.
+     */
     fun release() {
-        // A decode still running would touch engine state while it is destroyed, so this
-        // never proceeds until the loader has really stopped.
-        loader.shutdown()
-        while (!loader.awaitTermination(10, TimeUnit.SECONDS)) {
-            Log.w(TAG, "waiting for a world decode to finish before releasing the engine")
-        }
         runBlockingOnThread {
             rendering = false
             choreographer.removeFrameCallback(frameCallback)
-            engine?.destroy()
-            engine = null
         }
-        thread.quitSafely()
-        thread.join()
+        if (loader.isShutdown) return
+        loader.execute {
+            runBlockingOnThread {
+                engine?.destroy()
+                engine = null
+            }
+            thread.quitSafely()
+        }
+        loader.shutdown()
     }
 
     private fun post(block: () -> Unit) {

@@ -158,10 +158,18 @@ bool Engine::createRenderTarget() {
   return true;
 }
 
+// A rebuild that fails leaves no pipeline to draw with, so the surface is dropped and
+// the view stays blank until the host attaches a surface again; the failure is logged.
+void Engine::keepSurfaceIf(bool rebuilt) {
+  if (rebuilt) return;
+  LOGE("rendering stopped until the surface comes back");
+  destroySurface();
+}
+
 void Engine::setLinearBlending(bool linear) {
   if (linear == linearBlending_) return;
   linearBlending_ = linear;
-  if (swapchain_) recreateSwapchain();
+  if (swapchain_) keepSurfaceIf(recreateSwapchain());
 }
 
 void Engine::setCullMargin(float degrees) {
@@ -175,8 +183,11 @@ void Engine::setRenderScale(float scale) {
   renderScale_ = scale;
   if (!swapchain_) return;
   ctx_->waitIdle();
-  createRenderTarget();
-  if (pipelineFormat_ != activeFormat()) createPipelines();
+  if (!createRenderTarget()) {
+    keepSurfaceIf(false);
+    return;
+  }
+  if (pipelineFormat_ != activeFormat()) keepSurfaceIf(createPipelines());
 }
 
 bool Engine::createPipelines() {
@@ -208,7 +219,7 @@ void Engine::onSurfaceResized(uint32_t width, uint32_t height) {
   const VkExtent2D current = swapchain_->extent();
   if (current.width == width && current.height == height) return;
   LOGI("surface resized to %ux%u, swapchain was %ux%u", width, height, current.width, current.height);
-  recreateSwapchain();
+  keepSurfaceIf(recreateSwapchain());
 }
 
 // True when the surface no longer has the swapchain's size, which is how a rotation shows
@@ -267,7 +278,7 @@ void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
   std::lock_guard<std::mutex> lock(pendingMutex_);
   pendingCloud_ = std::move(cloud);
   pendingTree_ = std::move(tree);
-  loadedBudget_ = budget;
+  pendingBudget_ = budget;
 }
 
 namespace {
@@ -325,6 +336,14 @@ void Engine::setCameraPose(const CameraPose& pose) {
   camera_.setOrientation(pose.yaw, pose.pitch);
   lastSortedFrom_.reset();  // a teleport needs a fresh sort, not a cull
   redrawNeeded_ = true;
+  // Published now, not at the next frame: a host that sets and reads back before a
+  // world exists would otherwise see the previous pose.
+  const splat::Vec3 p = camera_.position();
+  statPose_[0].store(p.x, std::memory_order_relaxed);
+  statPose_[1].store(p.y, std::memory_order_relaxed);
+  statPose_[2].store(p.z, std::memory_order_relaxed);
+  statPose_[3].store(camera_.yaw(), std::memory_order_relaxed);
+  statPose_[4].store(camera_.pitch(), std::memory_order_relaxed);
 }
 
 Engine::CameraPose Engine::cameraPose() const {
@@ -355,11 +374,13 @@ bool Engine::uploadPendingWorld() {
   std::unique_ptr<splat::SplatCloud> cloud;
   std::shared_ptr<const splat::LodTree> tree;
   std::unique_ptr<splat::Collider> collider;
+  int budget = 0;
   {
     std::lock_guard<std::mutex> lock(pendingMutex_);
     cloud = std::move(pendingCloud_);
     tree = std::move(pendingTree_);
     collider = std::move(pendingCollider_);
+    budget = pendingBudget_;
   }
   if (collider) {
     camera_.setCollider(std::move(collider));
@@ -384,7 +405,9 @@ bool Engine::uploadPendingWorld() {
   sourceCount_ = tree ? static_cast<uint32_t>(tree->leafCount) : world_->count;
   cloud.reset();
   tree.reset();
+  loadedBudget_ = budget;  // the render thread owns it from here; the selection reads it
   lastSortedFrom_.reset();
+  pendingOrder_.reset();  // an order for the old world indexes past a smaller new one
   drawCount_ = 0;  // the first frustum sort decides what is visible
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", world_->count, millisSince(start), world_->shDegree);
   emit(Event::worldReady, {}, sourceCount_);
@@ -399,7 +422,7 @@ void Engine::startBenchmark(float seconds) {
   benchmarkGpuMillis_.clear();
   if (vsync_) {
     vsync_ = false;
-    if (swapchain_) recreateSwapchain();
+    if (swapchain_) keepSurfaceIf(recreateSwapchain());
   }
   LOGI("benchmark queued: %.0f s, waiting for a world", seconds);
 }
@@ -447,7 +470,7 @@ void Engine::updateBenchmark(float dt) {
 // Every vsync steps the camera and the sorter, but the GPU only draws when something
 // visible changed: a still scene costs no GPU time and almost no battery.
 void Engine::render(int64_t frameTimeNanos) {
-  if (!swapchain_) return;
+  if (!swapchain_ || !splats_ || !triangle_) return;
   if (uploadPendingWorld()) redrawNeeded_ = true;
 
   std::optional<splat::Mat4> view;
@@ -522,7 +545,7 @@ void Engine::render(int64_t frameTimeNanos) {
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   FrameLoop::Status status = frameLoop_->beginFrame(*swapchain_, imageIndex, cmd);
   if (status == FrameLoop::Status::swapchainOutOfDate) {
-    recreateSwapchain();
+    keepSurfaceIf(recreateSwapchain());
     return;
   }
   if (status != FrameLoop::Status::ok) return;
@@ -566,7 +589,7 @@ void Engine::render(int64_t frameTimeNanos) {
   lastDrawnExtent_ = extent;
   if (status == FrameLoop::Status::swapchainOutOfDate ||
       (status == FrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
-    recreateSwapchain();
+    keepSurfaceIf(recreateSwapchain());
   }
   publishStats(frameTimeNanos, true);
 }

@@ -12,7 +12,7 @@ add_executable(splat_core_tests
   lod/LodTreeTest.cpp
   lod/LodSorterTest.cpp
 )
-target_link_libraries(splat_core_tests PRIVATE splat_core spz GTest::gtest_main)
+target_link_libraries(splat_core_tests PRIVATE splat_core spz ZLIB::ZLIB GTest::gtest_main)
 target_compile_definitions(splat_core_tests PRIVATE
   SPLAT_FIXTURES_DIR="${SPLAT_FIXTURES_DIR}"
 )

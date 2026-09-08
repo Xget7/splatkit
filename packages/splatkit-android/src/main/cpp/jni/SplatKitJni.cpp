@@ -23,6 +23,13 @@ class EventBridge {
     jclass cls = env->GetObjectClass(engine);
     method_ = env->GetMethodID(cls, "onNativeEvent", "(ILjava/lang/String;I)V");
     env->DeleteLocalRef(cls);
+    // A signature drift between the .so and NativeEngine would otherwise surface as a
+    // pending exception thrown out of a later render call.
+    if (env->ExceptionCheck()) {
+      env->ExceptionClear();
+      method_ = nullptr;
+      LOGE("NativeEngine.onNativeEvent not found: events will not be delivered");
+    }
   }
   ~EventBridge() {
     JNIEnv* env = nullptr;
@@ -85,6 +92,9 @@ JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetSurface(JNIEnv* e
     return;
   }
   ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
+  if (surface != nullptr && window == nullptr) {
+    LOGE("the Surface has no native window; the view stays blank");
+  }
   engine->setWindow(window);
   // The engine holds its own reference; drop the one fromSurface gave us.
   if (window != nullptr) ANativeWindow_release(window);

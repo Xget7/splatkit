@@ -84,13 +84,13 @@ class SplatSurfaceView @JvmOverloads constructor(
      * the new point on the next frame. Any thread.
      */
     var cameraPose: CameraPose
-        get() {
+        get() = synchronized(poseScratch) {
             val out = poseScratch
-            return if (renderThread.cameraPose(out)) CameraPose(out[0], out[1], out[2], out[3], out[4])
+            if (renderThread.cameraPose(out)) CameraPose(out[0], out[1], out[2], out[3], out[4])
             else CameraPose(0f, 0f, 0f)
         }
         set(value) = renderThread.setCameraPose(value)
-    private val poseScratch = FloatArray(5)
+    private val poseScratch = FloatArray(5)  // locked: two threads may read the pose at once
 
     /**
      * Applies a [RenderQuality] preset by setting [renderScale], [maxShDegree],
@@ -188,7 +188,7 @@ class SplatSurfaceView @JvmOverloads constructor(
     val isMotionEnabled: Boolean get() = motionEnabled
 
     /** Latest engine stats. Cheap; safe on the UI thread. */
-    fun readStats(into: SplatStats = SplatStats()): SplatStats {
+    fun readStats(into: SplatStats = SplatStats()): SplatStats = synchronized(statsScratch) {
         renderThread.stats(statsScratch)
         into.fps = statsScratch[0]
         into.frameMillis = statsScratch[1]
@@ -197,9 +197,9 @@ class SplatSurfaceView @JvmOverloads constructor(
         into.walking = statsScratch[4] != 0f
         into.motion = statsScratch[5] != 0f
         into.gpuMillis = statsScratch[6]
-        return into
+        into
     }
-    private val statsScratch = FloatArray(7)
+    private val statsScratch = FloatArray(7)  // locked: a HUD and a game loop may both read
 
     /** Drives the camera with the phone's orientation. No-op when the sensor is missing. */
     fun setMotionEnabled(enabled: Boolean) {

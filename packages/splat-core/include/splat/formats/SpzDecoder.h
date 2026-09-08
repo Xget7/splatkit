@@ -12,9 +12,10 @@ namespace splat {
 struct SpzDecodeOptions {
   // Frame the file was written in. World Labs does not tag it, so the caller declares it.
   CoordinateFrame sourceFrame = kWorldLabsFrame;
-  // Largest decompressed payload accepted, read from the container before inflating.
-  // Guards against decompression bombs when files come from the network. The default
-  // fits 2M splats with SH degree 3 (about 128 MB) with room to spare.
+  // Largest decompressed payload accepted: gzip containers stop inflating at it, NGSP
+  // containers are refused from their header. Guards against decompression bombs when
+  // files come from the network. The default fits 2M splats with SH degree 3 (about
+  // 128 MB) with room to spare.
   std::size_t maxDecodedBytes = 256u * 1024u * 1024u;
 };
 
