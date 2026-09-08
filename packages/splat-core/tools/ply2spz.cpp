@@ -1,14 +1,17 @@
 // ply2spz: converts a Gaussian splat PLY (the 3DGS reference layout, what SuperSplat,
 // Polycam and the Mip-NeRF 360 scenes export) into an SPZ container the engine loads.
 //
-//   ply2spz in.ply out.spz [--sh N] [--keep N]
+//   ply2spz in.ply out.spz [--sh N] [--keep N] [--drop-over M]
 //
 // --sh N    keeps spherical harmonics up to degree N (0 to 3); the file's degree by default.
 //           Degree 3 costs 92 bytes per splat on the GPU, so drop it for scenes above 2M.
 // --keep N  keeps every Nth splat, for scenes too big for a phone.
+// --drop-over M  drops splats whose largest axis exceeds M meters. Scenes carry a few huge
+//           background splats that each cost a full screen of fragments on a phone.
 //
 // The PLY's coordinates are written as they are, and the reference 3DGS frame is what the
 // engine assumes for a file without a frame tag, so a scene converted here stands upright.
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,16 +23,18 @@
 namespace {
 
 int usage() {
-  std::fprintf(stderr, "usage: ply2spz in.ply out.spz [--sh N] [--keep N]\n");
+  std::fprintf(stderr, "usage: ply2spz in.ply out.spz [--sh N] [--keep N] [--drop-over M]\n");
   return 2;
 }
 
-// Keeps every `stride`th splat of `cloud`, in place.
-void thin(spz::GaussianCloud& cloud, int stride) {
+// Keeps the splats `keep(i)` accepts, in place.
+template <typename Keep>
+void filter(spz::GaussianCloud& cloud, Keep keep) {
   const int n = cloud.numPoints;
   const int shPerPoint = cloud.numPoints > 0 ? static_cast<int>(cloud.sh.size()) / n : 0;
   int kept = 0;
-  for (int i = 0; i < n; i += stride, ++kept) {
+  for (int i = 0; i < n; ++i) {
+    if (!keep(i)) continue;
     std::memmove(&cloud.positions[kept * 3], &cloud.positions[i * 3], 3 * sizeof(float));
     std::memmove(&cloud.scales[kept * 3], &cloud.scales[i * 3], 3 * sizeof(float));
     std::memmove(&cloud.rotations[kept * 4], &cloud.rotations[i * 4], 4 * sizeof(float));
@@ -38,6 +43,7 @@ void thin(spz::GaussianCloud& cloud, int stride) {
     if (shPerPoint > 0) {
       std::memmove(&cloud.sh[kept * shPerPoint], &cloud.sh[i * shPerPoint], shPerPoint * sizeof(float));
     }
+    ++kept;
   }
   cloud.numPoints = kept;
   cloud.positions.resize(kept * 3);
@@ -70,9 +76,11 @@ int main(int argc, char** argv) {
   const std::string out = argv[2];
   int sh = -1;
   int keep = 1;
+  float dropOver = 0.0f;
   for (int i = 3; i < argc; ++i) {
     if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc) sh = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--keep") == 0 && i + 1 < argc) keep = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--drop-over") == 0 && i + 1 < argc) dropOver = std::strtof(argv[++i], nullptr);
     else return usage();
   }
   if (sh > 3 || keep < 1) return usage();
@@ -83,7 +91,16 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::printf("%d splats, sh degree %d\n", cloud.numPoints, cloud.shDegree);
-  if (keep > 1) thin(cloud, keep);
+  if (keep > 1) filter(cloud, [keep](int i) { return i % keep == 0; });
+  if (dropOver > 0.0f) {
+    const float limit = std::log(dropOver);  // scales are stored as logs
+    const int before = cloud.numPoints;
+    filter(cloud, [&](int i) {
+      const float* s = &cloud.scales[i * 3];
+      return s[0] <= limit && s[1] <= limit && s[2] <= limit;
+    });
+    std::printf("dropped %d splats over %.1f m\n", before - cloud.numPoints, dropOver);
+  }
   if (sh >= 0) truncateSh(cloud, sh);
 
   std::vector<uint8_t> bytes;

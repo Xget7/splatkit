@@ -30,7 +30,7 @@ namespace {
 // cull lands is already drawn. The base (Engine::setCullMargin, 10 degrees by default)
 // covers splats whose centre is just outside the view but whose extent is not, plus a
 // slow turn; the rest scales with how fast the camera is turning, over the time a cull
-// result takes to reach the screen.
+// result takes to reach the screen, which is at least this and grows with the frame time.
 constexpr float kCullStaleSeconds = 0.05f;
 constexpr float kMaxCullMarginDegrees = 80.0f;
 constexpr float kDegreesToRadians = static_cast<float>(M_PI) / 180.0f;
@@ -512,8 +512,14 @@ void Engine::render(int64_t frameTimeNanos) {
                                std::fabs(lastSortedFrom_->z - position.z) > 0.005f;
     const bool turned = splat::dot(forward, lastSortedForward_) < kRecullCosine;
     if (moved || turned) {
+      // The margin must cover what the camera turns between this request and the frame
+      // that draws its result: the cull itself, a cull already running that it waits for,
+      // and the frames in flight. On a scene that runs at 15 fps that is far more than
+      // the floor of 50 ms, and a flick showed a black edge until this scaled with it.
+      const float staleSeconds = std::max(kCullStaleSeconds,
+                                          2.0f * dt + 2.0f * static_cast<float>(lastCullMillis_) * 0.001f);
       const float margin = std::min(kMaxCullMarginDegrees * kDegreesToRadians,
-                                    cullMarginDegrees_ * kDegreesToRadians + turnRate_ * kCullStaleSeconds);
+                                    cullMarginDegrees_ * kDegreesToRadians + turnRate_ * staleSeconds);
       // A pixel at unit depth: what a node may cover on screen before it is refined.
       splat::LodSettings lod;
       lod.budget = static_cast<std::size_t>(loadedBudget_);

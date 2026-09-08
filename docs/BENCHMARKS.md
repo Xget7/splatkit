@@ -44,3 +44,12 @@ Reading: day to day the same build moves by about 2 ms on this phone, so a chang
 Reading: the presets sit on the measured curve, medium is the 60 fps point on this phone, and ultra costs the square of its scale as predicted (1.5 squared times 19.3 is 43).
 
 Earlier numbers, before this log existed, are in the roadmap tables.
+
+Apartment Pool (superspl.at, CC BY, paul/nesterdigital): 3.57M splats converted with `ply2spz --sh 0`, no collider, benchmark from (-0.3, 2.3, 4.0) looking at the pool. The frame is all blended fragments here: it scales with the pixels and with the splat count alike.
+
+| 2026-09-08 | 9732897 | pool 3.57M | preset HIGH | 73.5 / 65.8 / 123.3 | 72 to 97 | 16 to 20 | 464k of 3.57M | 14 fps: this scene's splats are large on screen, 3.5 times the house's cost for 1.75 times its splats |
+| 2026-09-08 | 9732897 | pool 3.57M | preset MEDIUM | 41.4 / 36.6 / 63.3 | | | | scale 0.7 is 0.49 of the pixels and 0.56 of the time |
+| 2026-09-08 | 9732897 | pool 3.57M | preset LOW (budget 500k) | 20.2 / 19.2 / 32.5 | | | | |
+| 2026-09-08 | 9732897 | pool 3.57M | HIGH, the 342 splats over 5 m dropped (`--drop-over 5`) | 72.6 / 65.8 / 116.9 | | | | the huge background splats cost nothing measurable; not the fragment problem |
+| 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset HIGH | 36.0 / 32.5 / 56.1 | | | | half the splats, half the time |
+| 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset MEDIUM | 20.8 / 18.1 / 31.1 | | | | 55 fps, the demo setting for this scene |
