@@ -53,3 +53,23 @@ Apartment Pool (superspl.at, CC BY, paul/nesterdigital): 3.57M splats converted 
 | 2026-09-08 | 9732897 | pool 3.57M | HIGH, the 342 splats over 5 m dropped (`--drop-over 5`) | 72.6 / 65.8 / 116.9 | | | | the huge background splats cost nothing measurable; not the fragment problem |
 | 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset HIGH | 36.0 / 32.5 / 56.1 | | | | half the splats, half the time |
 | 2026-09-08 | 9732897 | pool 1.79M (`--keep 2`) | preset MEDIUM | 20.8 / 18.1 / 31.1 | | | | 55 fps, the demo setting for this scene |
+
+## Image quality against the reference renderer
+
+2026-09-08, pool 3.57M with spherical harmonics degree 3, Mi 9 at preset HIGH (1080x2261, 65 degree vertical field of view, no render target), pose (-0.3, 2.3, 4.0) yaw -0.75 pitch -0.15.
+The reference is the PlayCanvas engine (the renderer behind superspl.at) driven by a local page at the same pose, field of view and resolution, gamma sRGB, no tone mapping, no antialiasing.
+Sharpness is the variance of a 4-neighbour Laplacian over the same 1080x1200 crop; the mean horizontal gradient is in parentheses.
+
+| Render | Data | Sharpness |
+|---|---|---|
+| Reference | PLY | 71.9 (4.76) |
+| Reference | PLY with every covariance rounded to half floats, as the 32 byte record stores it | 71.7 |
+| Reference | the phone's SPZ, converted back to PLY | 69.3 |
+| Reference | the phone's SPZ, radial sort instead of view depth | same as view depth within 0.1 |
+| Mi 9 HIGH | the phone's SPZ | 53.0 (4.41) |
+| Mi 9 ULTRA (1.5x supersampled) | the phone's SPZ | 49.7 |
+| Mi 9 MEDIUM (0.7x) | the phone's SPZ | 31.6 |
+
+Reading: the half float covariance and the radial sort cost nothing, the SPZ quantisation costs 4 percent, and the phone is a further 7 percent softer at the edges than the reference with the same data; that residual is open (the quad reaches 3 sigma against the reference's 2.83, and the 65 degree field of view spans 2261 rows instead of 2340).
+The difference people see against the superspl.at page is elsewhere: that viewer is landscape with a wide field of view, while the phone in portrait shows 34 degrees across 1080 pixels, 1.4 times the magnification, so every splat is 1.4 times larger on screen.
+Sh degree 3 against degree 0 at the home pose changes the image by 3.5 of 255 on average.
