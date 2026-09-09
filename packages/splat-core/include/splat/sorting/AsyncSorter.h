@@ -8,8 +8,8 @@
 #include <thread>
 #include <vector>
 
-#include "splat/math/Mat4.h"
 #include "splat/lod/LodTree.h"
+#include "splat/math/Mat4.h"
 #include "splat/sorting/DistanceSorter.h"
 
 namespace splat {
@@ -36,8 +36,8 @@ class AsyncSorter {
     std::vector<uint32_t> order;  // only the visible splats when a frustum was given
     double sortMillis = 0;        // the most recent sort, which this order may have reused
     double cullMillis = 0;
-    double selectMillis = 0;      // the most recent level of detail selection
-    std::size_t selected = 0;     // nodes the selection chose, before the cull
+    double selectMillis = 0;   // the most recent level of detail selection
+    std::size_t selected = 0;  // nodes the selection chose, before the cull
   };
 
   explicit AsyncSorter(std::vector<float> positions);

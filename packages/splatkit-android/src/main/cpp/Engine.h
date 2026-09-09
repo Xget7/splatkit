@@ -2,37 +2,43 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include <android/native_window.h>
 #include <vulkan/vulkan.h>
 
 #include "camera/WalkCamera.h"
-#include "rendering/vulkan/DebugTrianglePipeline.h"
+#include "diagnostics/Benchmark.h"
+#include "diagnostics/StatsPublisher.h"
 #include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/RenderTarget.h"
-#include "rendering/vulkan/SplatPipeline.h"
-#include "rendering/vulkan/Swapchain.h"
+#include "rendering/vulkan/SurfaceRenderer.h"
 #include "rendering/vulkan/VulkanContext.h"
 #include "splat/core/Result.h"
-#include "splat/formats/SplatCloud.h"
+#include "splat/loading/WorldLoader.h"
 #include "splat/math/Mat4.h"
-#include "splat/lod/LodTree.h"
 #include "splat/sorting/AsyncSorter.h"
+#include "splat/sorting/VisibilityPlanner.h"
 
 namespace splatkit {
 
-// The native engine behind one SplatSurfaceView. Rendering and surface changes run on
-// the render thread. `loadWorld` may run on any thread: it decodes there and leaves the
-// result for the render thread to upload. Survives losing and regaining the surface.
+// The native engine behind one SplatSurfaceView. It owns the loader, the camera, the
+// sorter and the renderer and runs them once per vsync: a frame steps the camera, asks
+// the sorter for the visible set when the view changed enough, and draws only when
+// something visible changed, so a still scene costs no GPU time.
+//
+// Rendering, input and settings run on the render thread. Loading may run on any
+// thread: it decodes there and leaves the result for the render thread to upload.
+// Survives losing and regaining the surface.
 class Engine {
  public:
+  using Stats = splatkit::Stats;
+  using CameraPose = splatkit::CameraPose;
+
   static splat::Result<std::unique_ptr<Engine>> create();
   ~Engine();
 
@@ -45,7 +51,7 @@ class Engine {
   // The window changed size while staying attached. Rebuilds the swapchain if needed.
   void onSurfaceResized(uint32_t width, uint32_t height);
 
-  // Decodes an SPZ file. Thread safe. Errors are reported and leave the current world.
+  // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.
   void loadWorld(const std::uint8_t* data, std::size_t size);
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
@@ -53,14 +59,9 @@ class Engine {
   void loadWorldFile(const std::string& path);
   void loadColliderFile(const std::string& path);
 
-  // Camera pose: position in the world's frame (meters) and yaw and pitch in radians,
-  // yaw about the up axis, pitch clamped to 85 degrees. Set on the render thread; read
-  // from any thread, refreshed every frame.
-  struct CameraPose {
-    float x = 0, y = 0, z = 0, yaw = 0, pitch = 0;
-  };
+  // Set on the render thread; read from any thread, refreshed every frame.
   void setCameraPose(const CameraPose& pose);
-  CameraPose cameraPose() const;
+  CameraPose cameraPose() const { return stats_.pose(); }
 
   // What the host needs to know about loading. Ready events fire on the render thread
   // once the data is in use; failures fire on whichever thread found them.
@@ -73,31 +74,32 @@ class Engine {
   // (blended fragments bound splat rendering, so this is the direct lever on frame
   // time), above one it supersamples, which steadies thin splats that shimmer at a
   // pixel each. Render thread.
-  void setRenderScale(float scale);
-  float renderScale() const { return renderScale_; }
+  void setRenderScale(float scale) { renderer_->setRenderScale(scale); }
+  float renderScale() const { return renderer_->renderScale(); }
 
   // Base angular margin around the view, in degrees, that the cull keeps drawn so that
   // what turns into view before the next cull lands is already there; a fast turn adds
   // to it. Wider costs draws that are off screen, narrower risks an empty edge on a
   // flick. Render thread.
-  void setCullMargin(float degrees);
-  float cullMargin() const { return cullMarginDegrees_; }
+  void setCullMargin(float degrees) { planner_.setBaseMargin(degrees); }
+  float cullMargin() const { return planner_.baseMargin(); }
 
   // Blend splats in linear light instead of the encoded space the training used. Richer
   // contrast at the cost of 40% of the frame on Adreno 640, and not what the reference
   // rasterizer produces; off by default (ADR 0011). Render thread.
-  void setLinearBlending(bool linear);
-  bool linearBlending() const { return linearBlending_; }
+  void setLinearBlending(bool linear) { renderer_->setLinearBlending(linear); }
+  bool linearBlending() const { return renderer_->linearBlending(); }
 
   // Level of detail budget: the most splats drawn per frame, or 0 to draw every splat.
   // A world loaded with a budget gets a hierarchy built over it (about 1.5 times the
   // splats in GPU memory), and each frame draws the nodes that cover the scene at about
   // a pixel each, nearest in full detail. Applies to worlds loaded after it is set.
-  void setSplatBudget(int budget) { splatBudget_ = std::max(budget, 0); }
+  void setSplatBudget(int budget) { loader_.setBudget(budget); }
 
   // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
   // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
-  void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, 3); }
+  void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, kMaxShDegree); }
+
   // Spherical harmonics degree drawn, 0 to 3, capped by what the loaded world carries.
   // Takes effect on the next frame: a quality change never needs a reload. Render thread.
   void setShDegree(int degree);
@@ -110,16 +112,7 @@ class Engine {
   void setVelocity(float forward, float right) { camera_.setVelocity(forward, right); }
 
   // Readable from any thread. Refreshed twice a second by the render loop.
-  struct Stats {
-    float fps = 0;
-    float frameMillis = 0;  // wall time between vsyncs, averaged over the window
-    float gpuMillis = 0;    // GPU time of the last frame, from timestamp queries
-    float sortMillis = 0;   // last completed sort
-    uint32_t splatCount = 0;
-    bool walking = false;
-    bool motion = false;
-  };
-  Stats stats() const;
+  Stats stats() const { return stats_.stats(); }
 
   // Runs a reproducible capture: gyroscope off, a fixed pose, one full yaw turn over
   // `seconds`, then logs the frame time distribution. Waits for a world if none is up.
@@ -127,85 +120,58 @@ class Engine {
   const std::string& gpuDescription() const { return ctx_->deviceDescription(); }
 
  private:
+  static constexpr int kMaxShDegree = 3;
+
+  // The camera as the frame sees it: matrices for the draw, axes for the cull.
+  struct FrameCamera {
+    splat::Mat4 view;
+    splat::Mat4 proj;
+    splat::VisibilityPlanner::View axes;
+  };
+
   Engine() = default;
   void emit(Event event, const std::string& message = {}, uint32_t splatCount = 0) const {
     if (events_) events_(event, message, splatCount);
   }
-  EventSink events_;
-  bool createSurface();
-  bool recreateSwapchain();
-  bool createPipelines();
-  void keepSurfaceIf(bool rebuilt);
-  bool surfaceExtentChanged() const;
-  bool createRenderTarget();
-  VkFormat activeFormat() const;
-  void destroySurface();
-  bool uploadPendingWorld();
-  void publishStats(int64_t frameTimeNanos, bool rendered);
-  void updateBenchmark(float dt);
+  void reportWorld(const splat::Result<splat::WorldLoader::WorldReport>& report);
+  void reportCollider(const splat::Result<splat::WorldLoader::ColliderReport>& report);
+  bool applyPendingLoads();
+  float frameSeconds(int64_t frameTimeNanos);
+  void driveBenchmark(float dt, const GpuWorld& world);
+  FrameCamera frameCamera(VkExtent2D extent) const;
+  void publishPose();
+  void requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent);
+  void takeSortResult();
+  StatsPublisher::Sample sample() const;
 
+  EventSink events_;
   std::unique_ptr<VulkanContext> ctx_;
   std::unique_ptr<FrameLoop> frameLoop_;
-  ANativeWindow* window_ = nullptr;
-  VkSurfaceKHR surface_ = VK_NULL_HANDLE;
-  std::unique_ptr<Swapchain> swapchain_;
-  std::unique_ptr<RenderTarget> target_;  // only when renderScale_ != 1
-  float renderScale_ = 1.0f;
-  float cullMarginDegrees_ = 10.0f;
-  bool linearBlending_ = false;
-  std::atomic<int> maxShDegree_{3};
-  int shDegree_ = 3;
-  std::atomic<int> splatBudget_{0};
-  std::unique_ptr<DebugTrianglePipeline> triangle_;
-  std::unique_ptr<SplatPipeline> splats_;
-  VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // swapchain format the pipelines target
-
-  std::mutex pendingMutex_;
-  std::unique_ptr<splat::SplatCloud> pendingCloud_;  // decoded, waiting for upload
-  std::shared_ptr<const splat::LodTree> pendingTree_;  // instead of the cloud, with a budget
-  int pendingBudget_ = 0;  // under pendingMutex_, the budget the pending world was built with
-  int loadedBudget_ = 0;  // render thread only: the budget of the world on the GPU, 0 without a tree
-  uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
-  std::unique_ptr<splat::Collider> pendingCollider_;
+  std::unique_ptr<SurfaceRenderer> renderer_;  // after ctx_ and frameLoop_: dies first
+  splat::WorldLoader loader_;
   WalkCamera camera_;
-  int64_t lastFrameNanos_ = 0;
-  std::unique_ptr<GpuWorld> world_;
+  splat::VisibilityPlanner planner_;
+  Benchmark benchmark_;
+  StatsPublisher stats_;
+
+  std::atomic<int> maxShDegree_{kMaxShDegree};
+  int shDegree_ = kMaxShDegree;
+  // Render thread from here on.
   std::unique_ptr<splat::AsyncSorter> sorter_;
-  std::optional<splat::Vec3> lastSortedFrom_;
-  splat::Vec3 lastSortedForward_;
-  splat::Vec3 lastFrameForward_{0, 0, -1};
-  float turnRate_ = 0.0f;  // radians per second, decays after a turn
-  uint32_t drawCount_ = 0;  // entries of the order buffer to draw: the visible splats
-  std::optional<splat::AsyncSorter::Result> pendingOrder_;  // sorted, waiting for a command buffer
+  int loadedBudget_ = 0;      // the budget of the world on the GPU, 0 without a tree
+  uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
+  uint32_t drawCount_ = 0;    // entries of the order buffer to draw: the visible splats
+  std::optional<splat::AsyncSorter::Result> pendingOrder_;  // sorted, waiting for a frame
+  struct SortTimings {
+    double sortMillis = 0;
+    double cullMillis = 0;
+    double selectMillis = 0;
+    std::size_t selected = 0;
+  } lastSort_;
+  int64_t lastFrameNanos_ = 0;
   bool redrawNeeded_ = true;
-  bool lastLoggedIdle_ = false;
   splat::Mat4 lastDrawnView_ = splat::Mat4::identity();
-  VkExtent2D lastDrawnExtent_{};
-  double lastSortMillis_ = 0;
-  double lastCullMillis_ = 0;
-  double lastSelectMillis_ = 0;
-  std::size_t lastSelected_ = 0;
-
-  bool vsync_ = true;  // benchmarks turn it off so frame times are not vsync multiples
-  bool benchmarkPending_ = false;
-  bool benchmarkRunning_ = false;
-  float benchmarkSeconds_ = 0;
-  float benchmarkElapsed_ = 0;
-  std::vector<float> benchmarkFrameMillis_;
-  std::vector<float> benchmarkGpuMillis_;
-
-  int64_t fpsWindowStart_ = 0;
-  uint32_t fpsWindowFrames_ = 0;
-  uint32_t fpsWindowsSinceLog_ = 0;
-  // Written by the render thread, read by the UI thread through stats().
-  std::atomic<float> statFps_{0};
-  std::atomic<float> statFrameMillis_{0};
-  std::atomic<float> statGpuMillis_{0};
-  std::atomic<float> statSortMillis_{0};
-  std::atomic<uint32_t> statSplats_{0};
-  std::atomic<bool> statWalking_{false};
-  std::atomic<bool> statMotion_{false};
-  std::atomic<float> statPose_[5]{};
+  uint32_t lastDrawnGeneration_ = 0;
 };
 
 }  // namespace splatkit

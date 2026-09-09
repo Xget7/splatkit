@@ -8,7 +8,7 @@ WorkerPool::WorkerPool(std::size_t threads) {
 
 WorkerPool::~WorkerPool() {
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     stop_ = true;
   }
   wake_.notify_all();

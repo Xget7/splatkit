@@ -11,7 +11,6 @@
 using splat::AsyncSorter;
 using splat::Frustum;
 using splat::SplatCloud;
-using splat::Vec3;
 
 namespace {
 
@@ -75,6 +74,7 @@ TEST(AsyncSorter, WithATreeTheOrderHoldsTheSelectedNodesBackToFront) {
   ASSERT_TRUE(leaves.has_value());
   ASSERT_EQ(leaves->order.size(), 8u);
   for (std::size_t k = 1; k < leaves->order.size(); ++k) {
-    EXPECT_LE(tree->nodes.positions[leaves->order[k - 1] * 3 + 2], tree->nodes.positions[leaves->order[k] * 3 + 2]);
+    EXPECT_LE(tree->nodes.positions[leaves->order[k - 1] * 3 + 2],
+              tree->nodes.positions[leaves->order[k] * 3 + 2]);
   }
 }

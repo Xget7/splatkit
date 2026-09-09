@@ -15,7 +15,7 @@ TEST(Half, EncodesKnownValues) {
   EXPECT_EQ(toHalf(-2.0f), 0xc000u);
   EXPECT_EQ(toHalf(0.5f), 0x3800u);
   EXPECT_EQ(toHalf(65504.0f), 0x7bffu);
-  EXPECT_EQ(toHalf(6.103515625e-5f), 0x0400u);  // smallest normal
+  EXPECT_EQ(toHalf(6.103515625e-5f), 0x0400u);        // smallest normal
   EXPECT_EQ(toHalf(5.960464477539063e-8f), 0x0001u);  // smallest subnormal
 }
 
@@ -37,7 +37,7 @@ TEST(Half, SaturatesInsteadOfOverflowing) {
 
 TEST(Half, RoundTripsWithinHalfPrecision) {
   const float values[] = {3.14159f, 0.001f, 123.456f, 1e-6f, 2.5e-7f, 42.0f, -0.333f};
-  for (float v : values) {
+  for (const float v : values) {
     const float back = fromHalf(toHalf(v));
     const float ulp = std::fabs(v) < 6.1e-5f ? 6e-8f : std::fabs(v) / 1024.0f;
     EXPECT_NEAR(back, v, ulp) << v;

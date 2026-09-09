@@ -1,16 +1,34 @@
+// The JNI entry points of com.splatkit.engine.NativeEngine. Each one checks the handle
+// and forwards to the Engine; the layouts of the float arrays shared with Kotlin are
+// documented where they are filled.
+
 #include <jni.h>
 
 #include <android/native_window_jni.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 
 #include "Engine.h"
 #include "Log.h"
 
+// `SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, ...)` declares the exported symbol
+// the JVM binds to `NativeEngine.nativeLook`. The package is part of the name.
+#define SPLATKIT_JNI(returnType, name) \
+  extern "C" JNIEXPORT returnType JNICALL Java_com_splatkit_engine_NativeEngine_##name
+
 namespace {
 
-splatkit::Engine* toEngine(jlong handle) { return reinterpret_cast<splatkit::Engine*>(handle); }
+constexpr jsize kPoseFloats = 5;
+constexpr jsize kStatsFloats = 7;
+constexpr jsize kAttitudeFloats = 9;
+
+// The handle Kotlin holds is the engine's address; JNI has no other way to carry it.
+splatkit::Engine* toEngine(jlong handle) {
+  return reinterpret_cast<splatkit::Engine*>(handle);  // NOLINT(performance-no-int-to-ptr)
+}
 
 JavaVM* gVm = nullptr;
 
@@ -37,6 +55,10 @@ class EventBridge {
       env->DeleteGlobalRef(engine_);
     }
   }
+
+  EventBridge(const EventBridge&) = delete;
+  EventBridge& operator=(const EventBridge&) = delete;
+
   void operator()(splatkit::Engine::Event event, const std::string& message, uint32_t count) const {
     if (gVm == nullptr || method_ == nullptr) return;
     JNIEnv* env = nullptr;
@@ -56,16 +78,36 @@ class EventBridge {
   jmethodID method_ = nullptr;
 };
 
+// Hands the bytes of a Java array to `use` without copying them for longer than the call.
+template <typename Use>
+void withBytes(JNIEnv* env, jbyteArray bytes, Use use) {
+  if (bytes == nullptr) return;
+  const jsize size = env->GetArrayLength(bytes);
+  jbyte* data = env->GetByteArrayElements(bytes, nullptr);
+  if (data == nullptr) return;
+  use(reinterpret_cast<const std::uint8_t*>(data), static_cast<std::size_t>(size));
+  env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
+}
+
+template <typename Use>
+void withUtf8(JNIEnv* env, jstring text, Use use) {
+  if (text == nullptr) return;
+  const char* chars = env->GetStringUTFChars(text, nullptr);
+  if (chars == nullptr) return;
+  use(std::string(chars));
+  env->ReleaseStringUTFChars(text, chars);
+}
+
 }  // namespace
 
-extern "C" {
-
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   gVm = vm;
   return JNI_VERSION_1_6;
 }
 
-JNIEXPORT jlong JNICALL Java_com_splatkit_NativeEngine_nativeCreate(JNIEnv* env, jobject thiz) {
+// Lifetime.
+
+SPLATKIT_JNI(jlong, nativeCreate)(JNIEnv* env, jobject thiz) {
   auto result = splatkit::Engine::create();
   if (!result) {
     LOGE("engine creation failed: %s", result.error().message.c_str());
@@ -73,201 +115,164 @@ JNIEXPORT jlong JNICALL Java_com_splatkit_NativeEngine_nativeCreate(JNIEnv* env,
   }
   splatkit::Engine* engine = result.value().release();
   // The bridge lives in the sink and dies with the engine.
-  engine->setEventSink([bridge = std::make_shared<EventBridge>(env, thiz)](
-                           splatkit::Engine::Event e, const std::string& m, uint32_t c) { (*bridge)(e, m, c); });
+  engine->setEventSink(
+      [bridge = std::make_shared<EventBridge>(env, thiz)](
+          splatkit::Engine::Event e, const std::string& m, uint32_t c) { (*bridge)(e, m, c); });
   return reinterpret_cast<jlong>(engine);
 }
 
-JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeDestroy(JNIEnv*, jobject, jlong handle) {
+SPLATKIT_JNI(void, nativeDestroy)(JNIEnv*, jobject, jlong handle) {
   delete toEngine(handle);
 }
 
-JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetSurface(JNIEnv* env, jobject,
-                                                                       jlong handle,
-                                                                       jobject surface) {
-  splatkit::Engine* engine = toEngine(handle);
+SPLATKIT_JNI(jstring, nativeGpuDescription)(JNIEnv* env, jobject, jlong handle) {
+  auto* engine = toEngine(handle);
+  return env->NewStringUTF(engine != nullptr ? engine->gpuDescription().c_str() : "");
+}
+
+// Surface and frames.
+
+SPLATKIT_JNI(void, nativeSetSurface)(JNIEnv* env, jobject, jlong handle, jobject surface) {
+  auto* engine = toEngine(handle);
   if (engine == nullptr) return;
   if (surface == nullptr) {
     engine->setWindow(nullptr);
     return;
   }
   ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
-  if (surface != nullptr && window == nullptr) {
-    LOGE("the Surface has no native window; the view stays blank");
-  }
+  if (window == nullptr) LOGE("the Surface has no native window; the view stays blank");
   engine->setWindow(window);
   // The engine holds its own reference; drop the one fromSurface gave us.
   if (window != nullptr) ANativeWindow_release(window);
 }
 
-JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSurfaceResized(JNIEnv*, jobject,
-                                                                           jlong handle, jint width,
-                                                                           jint height) {
-  if (splatkit::Engine* engine = toEngine(handle)) {
+SPLATKIT_JNI(void, nativeSurfaceResized)(JNIEnv*, jobject, jlong handle, jint width, jint height) {
+  if (auto* engine = toEngine(handle)) {
     engine->onSurfaceResized(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
   }
 }
 
-JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeRender(JNIEnv*, jobject, jlong handle,
-                                                                   jlong frameTimeNanos) {
-  splatkit::Engine* engine = toEngine(handle);
-  if (engine != nullptr) engine->render(frameTimeNanos);
+SPLATKIT_JNI(void, nativeRender)(JNIEnv*, jobject, jlong handle, jlong frameTimeNanos) {
+  if (auto* engine = toEngine(handle)) engine->render(frameTimeNanos);
 }
 
-}  // extern "C"
+// Loading.
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadWorld(JNIEnv* env, jobject,
-                                                                                jlong handle,
-                                                                                jbyteArray bytes) {
-  splatkit::Engine* engine = toEngine(handle);
-  if (engine == nullptr || bytes == nullptr) return;
-  const jsize size = env->GetArrayLength(bytes);
-  jbyte* data = env->GetByteArrayElements(bytes, nullptr);
-  if (data == nullptr) return;
-  engine->loadWorld(reinterpret_cast<const std::uint8_t*>(data), static_cast<std::size_t>(size));
-  env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
+SPLATKIT_JNI(void, nativeLoadWorld)(JNIEnv* env, jobject, jlong handle, jbyteArray bytes) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return;
+  withBytes(env, bytes, [engine](const std::uint8_t* data, std::size_t size) {
+    engine->loadWorld(data, size);
+  });
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadWorldFile(JNIEnv* env, jobject,
-                                                                                    jlong handle,
-                                                                                    jstring path) {
-  splatkit::Engine* engine = toEngine(handle);
-  if (engine == nullptr || path == nullptr) return;
-  const char* chars = env->GetStringUTFChars(path, nullptr);
-  engine->loadWorldFile(chars);
-  env->ReleaseStringUTFChars(path, chars);
+SPLATKIT_JNI(void, nativeLoadCollider)(JNIEnv* env, jobject, jlong handle, jbyteArray bytes) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return;
+  withBytes(env, bytes, [engine](const std::uint8_t* data, std::size_t size) {
+    engine->loadCollider(data, size);
+  });
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadColliderFile(JNIEnv* env, jobject,
-                                                                                       jlong handle,
-                                                                                       jstring path) {
-  splatkit::Engine* engine = toEngine(handle);
-  if (engine == nullptr || path == nullptr) return;
-  const char* chars = env->GetStringUTFChars(path, nullptr);
-  engine->loadColliderFile(chars);
-  env->ReleaseStringUTFChars(path, chars);
+SPLATKIT_JNI(void, nativeLoadWorldFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return;
+  withUtf8(env, path, [engine](const std::string& p) { engine->loadWorldFile(p); });
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetCameraPose(JNIEnv*, jobject,
-                                                                                    jlong handle, jfloat x,
-                                                                                    jfloat y, jfloat z,
-                                                                                    jfloat yaw, jfloat pitch) {
+SPLATKIT_JNI(void, nativeLoadColliderFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return;
+  withUtf8(env, path, [engine](const std::string& p) { engine->loadColliderFile(p); });
+}
+
+// Camera and input.
+
+SPLATKIT_JNI(void, nativeSetCameraPose)
+(JNIEnv*, jobject, jlong handle, jfloat x, jfloat y, jfloat z, jfloat yaw, jfloat pitch) {
   if (auto* engine = toEngine(handle)) engine->setCameraPose({x, y, z, yaw, pitch});
 }
 
 // Fills out[0..4]: x, y, z, yaw, pitch.
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeCameraPose(JNIEnv* env, jobject,
-                                                                                 jlong handle,
-                                                                                 jfloatArray out) {
+SPLATKIT_JNI(void, nativeCameraPose)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
-  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 5) return;
-  const splatkit::Engine::CameraPose p = engine->cameraPose();
-  const float values[5] = {p.x, p.y, p.z, p.yaw, p.pitch};
-  env->SetFloatArrayRegion(out, 0, 5, values);
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kPoseFloats) return;
+  const splatkit::CameraPose p = engine->cameraPose();
+  const float values[kPoseFloats] = {p.x, p.y, p.z, p.yaw, p.pitch};
+  env->SetFloatArrayRegion(out, 0, kPoseFloats, values);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLoadCollider(JNIEnv* env, jobject,
-                                                                                   jlong handle,
-                                                                                   jbyteArray bytes) {
-  splatkit::Engine* engine = toEngine(handle);
-  if (engine == nullptr || bytes == nullptr) return;
-  const jsize size = env->GetArrayLength(bytes);
-  jbyte* data = env->GetByteArrayElements(bytes, nullptr);
-  if (data == nullptr) return;
-  engine->loadCollider(reinterpret_cast<const std::uint8_t*>(data), static_cast<std::size_t>(size));
-  env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
-}
-
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeLook(JNIEnv*, jobject, jlong handle,
-                                                                           jfloat deltaYaw, jfloat deltaPitch) {
+SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, jlong handle, jfloat deltaYaw, jfloat deltaPitch) {
   if (auto* engine = toEngine(handle)) engine->look(deltaYaw, deltaPitch);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeWalk(JNIEnv*, jobject, jlong handle,
-                                                                           jfloat forward, jfloat right) {
+SPLATKIT_JNI(void, nativeWalk)(JNIEnv*, jobject, jlong handle, jfloat forward, jfloat right) {
   if (auto* engine = toEngine(handle)) engine->walk(forward, right);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetAttitude(JNIEnv* env, jobject,
-                                                                                  jlong handle,
-                                                                                  jfloatArray rowMajor) {
-  auto* engine = toEngine(handle);
-  if (engine == nullptr || rowMajor == nullptr || env->GetArrayLength(rowMajor) < 9) return;
-  float m[9];
-  env->GetFloatArrayRegion(rowMajor, 0, 9, m);
-  engine->setAttitude(m);
-}
-
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetVelocity(JNIEnv*, jobject,
-                                                                                  jlong handle,
-                                                                                  jfloat forward,
-                                                                                  jfloat right) {
+SPLATKIT_JNI(void, nativeSetVelocity)
+(JNIEnv*, jobject, jlong handle, jfloat forward, jfloat right) {
   if (auto* engine = toEngine(handle)) engine->setVelocity(forward, right);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetRenderScale(JNIEnv*, jobject,
-                                                                                      jlong handle,
-                                                                                      jfloat scale) {
+// `rowMajor` is the 3x3 device to reference rotation as Android hands it out.
+SPLATKIT_JNI(void, nativeSetAttitude)(JNIEnv* env, jobject, jlong handle, jfloatArray rowMajor) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr || rowMajor == nullptr || env->GetArrayLength(rowMajor) < kAttitudeFloats) {
+    return;
+  }
+  float m[kAttitudeFloats];
+  env->GetFloatArrayRegion(rowMajor, 0, kAttitudeFloats, m);
+  engine->setAttitude(m);
+}
+
+SPLATKIT_JNI(void, nativeSetMotionEnabled)(JNIEnv*, jobject, jlong handle, jboolean enabled) {
+  if (auto* engine = toEngine(handle)) engine->setMotionEnabled(enabled == JNI_TRUE);
+}
+
+// Quality settings.
+
+SPLATKIT_JNI(void, nativeSetRenderScale)(JNIEnv*, jobject, jlong handle, jfloat scale) {
   if (auto* engine = toEngine(handle)) engine->setRenderScale(scale);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetCullMargin(JNIEnv*, jobject,
-                                                                                     jlong handle,
-                                                                                     jfloat degrees) {
+SPLATKIT_JNI(void, nativeSetCullMargin)(JNIEnv*, jobject, jlong handle, jfloat degrees) {
   if (auto* engine = toEngine(handle)) engine->setCullMargin(degrees);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetLinearBlending(JNIEnv*, jobject,
-                                                                                         jlong handle,
-                                                                                         jboolean linear) {
+SPLATKIT_JNI(void, nativeSetLinearBlending)(JNIEnv*, jobject, jlong handle, jboolean linear) {
   if (auto* engine = toEngine(handle)) engine->setLinearBlending(linear == JNI_TRUE);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetSplatBudget(JNIEnv*, jobject,
-                                                                                      jlong handle,
-                                                                                      jint budget) {
+SPLATKIT_JNI(void, nativeSetSplatBudget)(JNIEnv*, jobject, jlong handle, jint budget) {
   if (auto* engine = toEngine(handle)) engine->setSplatBudget(budget);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetMaxShDegree(JNIEnv*, jobject,
-                                                                                      jlong handle,
-                                                                                      jint degree) {
+SPLATKIT_JNI(void, nativeSetMaxShDegree)(JNIEnv*, jobject, jlong handle, jint degree) {
   if (auto* engine = toEngine(handle)) engine->setMaxShDegree(degree);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetShDegree(JNIEnv*, jobject,
-                                                                                      jlong handle,
-                                                                                      jint degree) {
+SPLATKIT_JNI(void, nativeSetShDegree)(JNIEnv*, jobject, jlong handle, jint degree) {
   if (auto* engine = toEngine(handle)) engine->setShDegree(degree);
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeStartBenchmark(JNIEnv*, jobject,
-                                                                                      jlong handle,
-                                                                                      jfloat seconds) {
+// Diagnostics.
+
+SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat seconds) {
   if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
 }
 
-extern "C" JNIEXPORT jstring JNICALL Java_com_splatkit_NativeEngine_nativeGpuDescription(JNIEnv* env,
-                                                                                        jobject,
-                                                                                        jlong handle) {
+// Fills out[0..6]: fps, frame ms, gpu ms, sort ms, splat count, walking (0/1), motion (0/1).
+SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
-  return env->NewStringUTF(engine ? engine->gpuDescription().c_str() : "");
-}
-
-// Fills out[0..6]: fps, frame ms, sort ms, splat count, walking (0/1), motion (0/1), gpu ms.
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeStats(JNIEnv* env, jobject,
-                                                                            jlong handle,
-                                                                            jfloatArray out) {
-  auto* engine = toEngine(handle);
-  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < 7) return;
-  const splatkit::Engine::Stats s = engine->stats();
-  const float values[7] = {s.fps, s.frameMillis, s.sortMillis, static_cast<float>(s.splatCount),
-                           s.walking ? 1.0f : 0.0f, s.motion ? 1.0f : 0.0f, s.gpuMillis};
-  env->SetFloatArrayRegion(out, 0, 7, values);
-}
-
-extern "C" JNIEXPORT void JNICALL Java_com_splatkit_NativeEngine_nativeSetMotionEnabled(JNIEnv*, jobject,
-                                                                                       jlong handle,
-                                                                                       jboolean enabled) {
-  if (auto* engine = toEngine(handle)) engine->setMotionEnabled(enabled == JNI_TRUE);
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;
+  const splatkit::Stats s = engine->stats();
+  const float values[kStatsFloats] = {s.fps,
+                                      s.frameMillis,
+                                      s.gpuMillis,
+                                      s.sortMillis,
+                                      static_cast<float>(s.splatCount),
+                                      s.walking ? 1.0f : 0.0f,
+                                      s.motion ? 1.0f : 0.0f};
+  env->SetFloatArrayRegion(out, 0, kStatsFloats, values);
 }

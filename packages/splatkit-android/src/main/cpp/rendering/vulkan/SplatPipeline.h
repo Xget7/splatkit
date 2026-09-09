@@ -22,10 +22,10 @@ namespace splatkit {
 // alpha as 8 bits, and the covariance keeps 11 bits of mantissa as half floats.
 struct GpuSplat {
   float position[3];
-  uint32_t rgba8;    // colour and alpha, a real uint: never routed through a float, whose
-                     // NaN patterns some mobile compilers canonicalise
-  uint32_t cov[3];   // six halves: (xx, xy), (xz, yy), (yz, zz)
-  uint32_t lodAlpha; // float bits of an opacity above 1 (level of detail nodes), else 0
+  uint32_t rgba8;     // colour and alpha, a real uint: never routed through a float, whose
+                      // NaN patterns some mobile compilers canonicalise
+  uint32_t cov[3];    // six halves: (xx, xy), (xz, yy), (yz, zz)
+  uint32_t lodAlpha;  // float bits of an opacity above 1 (level of detail nodes), else 0
 };
 static_assert(sizeof(GpuSplat) == 32, "GpuSplat must match the shader struct");
 
@@ -79,14 +79,14 @@ class SplatPipeline {
   // Records the copy of a new draw order into the world. Must be called outside a render
   // pass, before `draw` in the same command buffer. `order` has `count` entries, at most
   // `world.count`: the sorter leaves out what the frustum cannot see.
-  void updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                   const uint32_t* order, uint32_t count) const;
+  static void updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+                          const uint32_t* order, uint32_t count);
 
   // Draws the first `count` entries of the order buffer with the spherical harmonics
   // bands up to `shDegree`, which must not exceed what the world was uploaded with.
-  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count, int shDegree,
-            const splat::Mat4& view, const splat::Mat4& proj, const splat::Vec3& cameraPosition,
-            VkExtent2D extent);
+  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
+            int shDegree, const splat::Mat4& view, const splat::Mat4& proj,
+            const splat::Vec3& cameraPosition, VkExtent2D extent);
 
   static constexpr int kMaxShDegree = 3;
 

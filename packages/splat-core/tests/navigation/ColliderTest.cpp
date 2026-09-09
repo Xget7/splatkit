@@ -12,21 +12,21 @@ namespace {
 TriangleMesh room() {
   TriangleMesh m;
   auto quad = [&](Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
-    const uint32_t base = static_cast<uint32_t>(m.vertexCount());
-    for (Vec3 v : {a, b, c, d}) {
+    const auto base = static_cast<uint32_t>(m.vertexCount());
+    for (const Vec3 v : {a, b, c, d}) {
       m.positions.push_back(v.x);
       m.positions.push_back(v.y);
       m.positions.push_back(v.z);
     }
-    for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+    for (const uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
   };
-  quad({-5, 0, -5}, {5, 0, -5}, {5, 0, 5}, {-5, 0, 5});   // floor
-  quad({5, 0, -5}, {5, 3, -5}, {5, 3, 5}, {5, 0, 5});     // wall at x = 5
+  quad({-5, 0, -5}, {5, 0, -5}, {5, 0, 5}, {-5, 0, 5});  // floor
+  quad({5, 0, -5}, {5, 3, -5}, {5, 3, 5}, {5, 0, 5});    // wall at x = 5
   return m;
 }
 
 TEST(Collider, RaycastHitsFloorStraightDown) {
-  Collider c(room());
+  const Collider c(room());
   EXPECT_EQ(c.triangleCount(), 4u);
   auto hit = c.raycast({1, 1.5f, 1}, {0, -1, 0}, 4);
   ASSERT_TRUE(hit);
@@ -38,24 +38,25 @@ TEST(Collider, RaycastHitsFloorStraightDown) {
 // One vertex a thousand kilometres away used to ask for billions of grid cells.
 TEST(Collider, AFarVertexGrowsTheCellsInsteadOfTheGrid) {
   TriangleMesh m = room();
-  const uint32_t base = static_cast<uint32_t>(m.vertexCount());
-  for (float v : {1e6f, 0.0f, 1e6f, 1e6f + 1, 0.0f, 1e6f, 1e6f, 0.0f, 1e6f + 1}) m.positions.push_back(v);
-  for (uint32_t i : {0u, 1u, 2u}) m.indices.push_back(base + i);
-  Collider c(m);
+  const auto base = static_cast<uint32_t>(m.vertexCount());
+  for (const float v : {1e6f, 0.0f, 1e6f, 1e6f + 1, 0.0f, 1e6f, 1e6f, 0.0f, 1e6f + 1})
+    m.positions.push_back(v);
+  for (const uint32_t i : {0u, 1u, 2u}) m.indices.push_back(base + i);
+  const Collider c(m);
   auto hit = c.raycast({0, 1.5f, 0}, {0, -1, 0}, 10.0f);
   ASSERT_TRUE(hit.has_value());
   EXPECT_NEAR(hit->distance, 1.5f, 1e-4f);
 }
 
 TEST(Collider, RaycastMissesOutsideMaxDistanceAndOutsideBounds) {
-  Collider c(room());
+  const Collider c(room());
   EXPECT_FALSE(c.raycast({1, 1.5f, 1}, {0, -1, 0}, 1.0f));
   EXPECT_FALSE(c.raycast({20, 1, 20}, {0, -1, 0}, 4));
   EXPECT_FALSE(c.raycast({0, 1, 0}, {0, 1, 0}, 100));  // nothing above
 }
 
 TEST(Collider, RaycastFindsNearestAcrossCells) {
-  Collider c(room(), 0.5f);
+  const Collider c(room(), 0.5f);
   // Diagonal ray from the far corner towards the wall: it crosses many cells.
   auto hit = c.raycast({-4, 1, -4}, {1, 0, 0.3f}, 20);
   ASSERT_TRUE(hit);
@@ -64,7 +65,7 @@ TEST(Collider, RaycastFindsNearestAcrossCells) {
 }
 
 TEST(Collider, UnnormalisedDirectionGivesTheSameHit) {
-  Collider c(room());
+  const Collider c(room());
   auto a = c.raycast({1, 1.5f, 1}, {0, -1, 0}, 4);
   auto b = c.raycast({1, 1.5f, 1}, {0, -7, 0}, 4);
   ASSERT_TRUE(a && b);
@@ -72,7 +73,7 @@ TEST(Collider, UnnormalisedDirectionGivesTheSameHit) {
 }
 
 TEST(CharacterController, WallBlocksAndSlides) {
-  Collider c(room());
+  const Collider c(room());
   CharacterController player(c);
   player.setPosition({4.0f, 1.5f, 0});
   // Walking straight into the wall stops bodyRadius short of it.
@@ -86,7 +87,7 @@ TEST(CharacterController, WallBlocksAndSlides) {
 }
 
 TEST(CharacterController, RefusesToLeaveTheFloor) {
-  Collider c(room());
+  const Collider c(room());
   CharacterController player(c);
   player.setPosition({-4.5f, 1.5f, 0});
   EXPECT_FALSE(player.move({-2, 0, 0}));  // off the edge: no floor there
@@ -95,7 +96,7 @@ TEST(CharacterController, RefusesToLeaveTheFloor) {
 }
 
 TEST(CharacterController, SnapsTowardEyeHeight) {
-  Collider c(room());
+  const Collider c(room());
   CharacterController player(c);
   player.setPosition({0, 3.0f, 0});
   for (int i = 0; i < 60; ++i) player.update(1.0f / 60.0f);
@@ -105,7 +106,7 @@ TEST(CharacterController, SnapsTowardEyeHeight) {
 TEST(CharacterController, StartsLowerThanEyeHeightAndStillWalks) {
   // A World Labs origin sits at the capture height, here 0.77 m over the floor, less
   // than the 1.5 m eye height: the feet probe starts under the floor.
-  Collider c(room());
+  const Collider c(room());
   CharacterController p(c);
   p.setPosition({0, 0.77f, 0});
   ASSERT_TRUE(p.floorBelow(p.position()));
@@ -119,14 +120,15 @@ TEST(CharacterController, StartsLowerThanEyeHeightAndStillWalks) {
 TEST(CharacterController, DoesNotMistakeATableForTheFloorWhenStandingNormally) {
   TriangleMesh m = room();
   // A table top 0.75 m high under the player.
-  const uint32_t base = static_cast<uint32_t>(m.vertexCount());
-  for (Vec3 v : {Vec3{-1, 0.75f, -1}, Vec3{1, 0.75f, -1}, Vec3{1, 0.75f, 1}, Vec3{-1, 0.75f, 1}}) {
+  const auto base = static_cast<uint32_t>(m.vertexCount());
+  for (const Vec3 v :
+       {Vec3{-1, 0.75f, -1}, Vec3{1, 0.75f, -1}, Vec3{1, 0.75f, 1}, Vec3{-1, 0.75f, 1}}) {
     m.positions.push_back(v.x);
     m.positions.push_back(v.y);
     m.positions.push_back(v.z);
   }
-  for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
-  Collider c(m);
+  for (const uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+  const Collider c(m);
   CharacterController p(c);
   p.setPosition({0, 1.5f, 0});
   ASSERT_TRUE(p.floorBelow(p.position()));

@@ -122,6 +122,8 @@ bool VulkanContext::supportsPresent(VkSurfaceKHR surface) const {
   return supported == VK_TRUE;
 }
 
-void VulkanContext::waitIdle() const { vkDeviceWaitIdle(device()); }
+void VulkanContext::waitIdle() const {
+  vkDeviceWaitIdle(device());
+}
 
 }  // namespace splatkit

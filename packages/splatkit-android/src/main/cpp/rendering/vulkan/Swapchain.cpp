@@ -6,17 +6,18 @@ namespace splatkit {
 
 splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext& ctx,
                                                             VkSurfaceKHR surface,
-                                                            VkSwapchainKHR previous,
-                                                            bool vsync, bool linearBlending) {
+                                                            VkSwapchainKHR previous, bool vsync,
+                                                            bool linearBlending) {
   std::unique_ptr<Swapchain> sc(new Swapchain(ctx));
 
   // UNORM by default: splats blend in the encoded space, which is what the reference
   // rasterizer does and what training optimised for, and an sRGB attachment costs 40%
   // of the frame on Adreno 640 (ADR 0011). Linear blending asks for sRGB first.
-  vkb::SwapchainBuilder builder(ctx.physicalDevice(), ctx.device(), surface,
-                                ctx.queueFamily(), ctx.queueFamily());
-  const VkSurfaceFormatKHR unorm[] = {{VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
-                                      {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
+  vkb::SwapchainBuilder builder(ctx.physicalDevice(), ctx.device(), surface, ctx.queueFamily(),
+                                ctx.queueFamily());
+  const VkSurfaceFormatKHR unorm[] = {
+      {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+      {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
   const VkSurfaceFormatKHR srgb[] = {{VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
                                      {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}};
   const VkSurfaceFormatKHR* first = linearBlending ? srgb : unorm;
@@ -33,8 +34,7 @@ splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext&
                     .set_pre_transform_flags(VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
                     .build();
   if (!result) {
-    return splat::Error{splat::ErrorCode::gpuUnavailable,
-                        "swapchain: " + result.error().message()};
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "swapchain: " + result.error().message()};
   }
   sc->swapchain_ = result.value();
 
@@ -84,7 +84,7 @@ splat::Result<splat::Ok> Swapchain::createRenderPass() {
   color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   color.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-  VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+  const VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
   VkSubpassDescription subpass{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;

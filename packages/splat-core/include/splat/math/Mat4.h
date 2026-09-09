@@ -32,8 +32,12 @@ struct Mat4 {
 
   // Rotation of `radians` about a unit axis (Rodrigues).
   static Mat4 rotation(float radians, Vec3 axis) {
-    const float c = std::cos(radians), s = std::sin(radians), t = 1 - c;
-    const float x = axis.x, y = axis.y, z = axis.z;
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    const float t = 1 - c;
+    const float x = axis.x;
+    const float y = axis.y;
+    const float z = axis.z;
     Mat4 r = identity();
     r.at(0, 0) = t * x * x + c;
     r.at(0, 1) = t * x * y - s * z;
@@ -73,7 +77,9 @@ struct Mat4 {
     Mat4 r = identity();
     for (int row = 0; row < 3; ++row)
       for (int col = 0; col < 3; ++col) r.at(row, col) = at(col, row);
-    const float tx = at(0, 3), ty = at(1, 3), tz = at(2, 3);
+    const float tx = at(0, 3);
+    const float ty = at(1, 3);
+    const float tz = at(2, 3);
     r.at(0, 3) = -(r.at(0, 0) * tx + r.at(0, 1) * ty + r.at(0, 2) * tz);
     r.at(1, 3) = -(r.at(1, 0) * tx + r.at(1, 1) * ty + r.at(1, 2) * tz);
     r.at(2, 3) = -(r.at(2, 0) * tx + r.at(2, 1) * ty + r.at(2, 2) * tz);
@@ -108,7 +114,8 @@ struct Mat4 {
   std::array<float, 4> operator*(const std::array<float, 4>& v) const {
     std::array<float, 4> r{};
     for (int row = 0; row < 4; ++row)
-      for (int k = 0; k < 4; ++k) r[static_cast<size_t>(row)] += at(row, k) * v[static_cast<size_t>(k)];
+      for (int k = 0; k < 4; ++k)
+        r[static_cast<size_t>(row)] += at(row, k) * v[static_cast<size_t>(k)];
     return r;
   }
 };

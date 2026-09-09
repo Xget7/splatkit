@@ -16,7 +16,7 @@ AsyncSorter::AsyncSorter(std::shared_ptr<const LodTree> tree)
 
 AsyncSorter::~AsyncSorter() {
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     stop_ = true;
   }
   wake_.notify_all();
@@ -25,7 +25,7 @@ AsyncSorter::~AsyncSorter() {
 
 void AsyncSorter::request(Vec3 from) {
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     pending_ = Request{from, std::nullopt, LodSettings{}};
   }
   wake_.notify_one();
@@ -33,14 +33,14 @@ void AsyncSorter::request(Vec3 from) {
 
 void AsyncSorter::requestVisible(const Frustum& frustum, LodSettings lod) {
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     pending_ = Request{frustum.origin, frustum, lod};
   }
   wake_.notify_one();
 }
 
 std::optional<AsyncSorter::Result> AsyncSorter::take() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  const std::lock_guard<std::mutex> lock(mutex_);
   std::optional<Result> out = std::move(finished_);
   finished_.reset();
   return out;
@@ -67,11 +67,12 @@ void AsyncSorter::run() {
                             request.lod.pixelScaleLimit != sortedLod_.pixelScaleLimit;
     const bool moved = !sortedFrom_ || sortedFrom_->x != request.from.x ||
                        sortedFrom_->y != request.from.y || sortedFrom_->z != request.from.z;
-    const bool turned = useLod && dot(normalize(request.lod.view.forward), sortedForward_) < request.lod.reselectCosine;
+    const bool turned = useLod && dot(normalize(request.lod.view.forward), sortedForward_) <
+                                      request.lod.reselectCosine;
     if (moved || lodChanged || turned) {
       if (useLod) {
-        selectLodNodes(*tree_, request.from, request.lod.view, request.lod.budget, request.lod.pixelScaleLimit,
-                       fullOrder_);
+        selectLodNodes(*tree_, request.from, request.lod.view, request.lod.budget,
+                       request.lod.pixelScaleLimit, fullOrder_);
         sortedForward_ = normalize(request.lod.view.forward);
         lastSelectMillis_ = millisBetween(start, Clock::now());
         lastSelected_ = fullOrder_.size();
@@ -94,10 +95,12 @@ void AsyncSorter::run() {
       order = fullOrder_;
     }
     const auto culled = Clock::now();
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     // An untaken result is stale now; its buffer becomes the next result's scratch.
-    std::vector<uint32_t> recycled = finished_ ? std::move(finished_->order) : std::vector<uint32_t>();
-    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled), lastSelectMillis_, lastSelected_};
+    std::vector<uint32_t> recycled =
+        finished_ ? std::move(finished_->order) : std::vector<uint32_t>();
+    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled),
+                       lastSelectMillis_, lastSelected_};
     order = std::move(recycled);
   }
 }

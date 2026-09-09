@@ -6,8 +6,13 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import com.splatkit.engine.NativeEngine
+import com.splatkit.engine.RenderThread
+import com.splatkit.input.MotionInput
+import com.splatkit.input.TouchInput
 import java.io.File
-import kotlin.math.abs
+
+private const val TAG = "SplatKit"
 
 /**
  * A SurfaceView that renders with SplatKit.
@@ -19,8 +24,6 @@ import kotlin.math.abs
  * Gestures: one finger drags the view (yaw, and pitch when the gyroscope is off);
  * two fingers walk (up is forward, sideways strafes); a double tap toggles the gyroscope.
  */
-private const val TAG = "SplatKit"
-
 class SplatSurfaceView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -28,21 +31,35 @@ class SplatSurfaceView @JvmOverloads constructor(
 
     private val renderThread = RenderThread()
     private val motion = MotionInput(context, renderThread.renderHandler) { renderThread.setAttitude(it) }
+    private val touch = TouchInput(object : TouchInput.Listener {
+        override fun onLook(deltaYaw: Float, deltaPitch: Float) = renderThread.look(deltaYaw, deltaPitch)
+        override fun onWalk(forward: Float, right: Float) = renderThread.walk(forward, right)
+        override fun onDoubleTap() = setMotionEnabled(!motionEnabled)
+    })
     private var motionEnabled = false
     private var resumed = false
 
-    private var lastX = 0f
-    private var lastY = 0f
-    private var lastPointerCount = 0
-    private var lastTapTime = 0L
-
     /** Radians per pixel dragged. */
-    var lookSensitivity = 0.004f
+    var lookSensitivity: Float
+        get() = touch.lookSensitivity
+        set(value) { touch.lookSensitivity = value }
+
     /** Meters per pixel dragged with two fingers. */
-    var walkSensitivity = 0.01f
+    var walkSensitivity: Float
+        get() = touch.walkSensitivity
+        set(value) { touch.walkSensitivity = value }
 
     init {
         holder.addCallback(this)
+        renderThread.onEvent = { event, message, splatCount ->
+            val l = listener
+            if (l != null) when (event) {
+                NativeEngine.Event.WORLD_READY -> l.onWorldReady(splatCount)
+                NativeEngine.Event.WORLD_FAILED -> l.onWorldFailed(message)
+                NativeEngine.Event.COLLIDER_READY -> l.onColliderReady()
+                NativeEngine.Event.COLLIDER_FAILED -> l.onColliderFailed(message)
+            }
+        }
     }
 
     /** Loading outcomes, delivered on the main thread. All methods have empty defaults. */
@@ -56,9 +73,7 @@ class SplatSurfaceView @JvmOverloads constructor(
         fun onColliderFailed(message: String) {}
     }
 
-    var listener: Listener?
-        get() = renderThread.listener
-        set(value) { renderThread.listener = value }
+    var listener: Listener? = null
 
     /** False when Vulkan could not be brought up on this device; the view stays blank. */
     val isAvailable: Boolean get() = renderThread.isAvailable
@@ -84,13 +99,8 @@ class SplatSurfaceView @JvmOverloads constructor(
      * the new point on the next frame. Any thread.
      */
     var cameraPose: CameraPose
-        get() = synchronized(poseScratch) {
-            val out = poseScratch
-            if (renderThread.cameraPose(out)) CameraPose(out[0], out[1], out[2], out[3], out[4])
-            else CameraPose(0f, 0f, 0f)
-        }
+        get() = renderThread.cameraPose() ?: CameraPose(0f, 0f, 0f)
         set(value) = renderThread.setCameraPose(value)
-    private val poseScratch = FloatArray(5)  // locked: two threads may read the pose at once
 
     /**
      * Applies a [RenderQuality] preset by setting [renderScale], [shDegree],
@@ -200,18 +210,7 @@ class SplatSurfaceView @JvmOverloads constructor(
     val isMotionEnabled: Boolean get() = motionEnabled
 
     /** Latest engine stats. Cheap; safe on the UI thread. */
-    fun readStats(into: SplatStats = SplatStats()): SplatStats = synchronized(statsScratch) {
-        renderThread.stats(statsScratch)
-        into.fps = statsScratch[0]
-        into.frameMillis = statsScratch[1]
-        into.sortMillis = statsScratch[2]
-        into.splatCount = statsScratch[3].toInt()
-        into.walking = statsScratch[4] != 0f
-        into.motion = statsScratch[5] != 0f
-        into.gpuMillis = statsScratch[6]
-        into
-    }
-    private val statsScratch = FloatArray(7)  // locked: a HUD and a game loop may both read
+    fun readStats(into: SplatStats = SplatStats()): SplatStats = renderThread.readStats(into)
 
     /** Drives the camera with the phone's orientation. No-op when the sensor is missing. */
     fun setMotionEnabled(enabled: Boolean) {
@@ -258,29 +257,5 @@ class SplatSurfaceView @JvmOverloads constructor(
         renderThread.surfaceDestroyed()
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        val count = event.pointerCount
-        val x = (0 until count).sumOf { event.getX(it).toDouble() }.toFloat() / count
-        val y = (0 until count).sumOf { event.getY(it).toDouble() }.toFloat() / count
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                val now = event.eventTime
-                if (now - lastTapTime < 300) setMotionEnabled(!motionEnabled)
-                lastTapTime = now
-            }
-            MotionEvent.ACTION_MOVE -> if (count == lastPointerCount) {
-                val dx = x - lastX
-                val dy = y - lastY
-                if (count == 1) {
-                    renderThread.look(-dx * lookSensitivity, -dy * lookSensitivity)
-                } else if (abs(dx) + abs(dy) > 0f) {
-                    renderThread.walk(-dy * walkSensitivity, dx * walkSensitivity)
-                }
-            }
-        }
-        lastX = x
-        lastY = y
-        lastPointerCount = if (event.actionMasked == MotionEvent.ACTION_UP) 0 else count
-        return true
-    }
+    override fun onTouchEvent(event: MotionEvent): Boolean = touch.onTouchEvent(event)
 }

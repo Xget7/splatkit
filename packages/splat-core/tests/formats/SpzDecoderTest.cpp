@@ -16,7 +16,9 @@
 namespace splat {
 namespace {
 
-float logit(float p) { return std::log(p / (1 - p)); }
+float logit(float p) {
+  return std::log(p / (1 - p));
+}
 
 // One splat with a known pose, written through the reference encoder.
 // Frame is RDF, like World Labs, so the decoder must flip Y and Z.
@@ -55,7 +57,8 @@ TEST(SpzDecoder, StopsInflatingAGzipAtTheCeilingWhateverTheTrailerSays) {
   const std::vector<std::uint8_t> zeros(8u << 20, 0);
   std::vector<std::uint8_t> gz(compressBound(static_cast<uLong>(zeros.size())) + 64);
   z_stream stream{};
-  ASSERT_EQ(deflateInit2(&stream, Z_BEST_SPEED, Z_DEFLATED, 16 | MAX_WBITS, 8, Z_DEFAULT_STRATEGY), Z_OK);
+  ASSERT_EQ(deflateInit2(&stream, Z_BEST_SPEED, Z_DEFLATED, 16 | MAX_WBITS, 8, Z_DEFAULT_STRATEGY),
+            Z_OK);
   stream.next_in = const_cast<Bytef*>(zeros.data());
   stream.avail_in = static_cast<uInt>(zeros.size());
   stream.next_out = gz.data();
@@ -64,7 +67,10 @@ TEST(SpzDecoder, StopsInflatingAGzipAtTheCeilingWhateverTheTrailerSays) {
   gz.resize(gz.size() - stream.avail_out);
   deflateEnd(&stream);
   // Forge ISIZE to 100 bytes.
-  gz[gz.size() - 4] = 100; gz[gz.size() - 3] = 0; gz[gz.size() - 2] = 0; gz[gz.size() - 1] = 0;
+  gz[gz.size() - 4] = 100;
+  gz[gz.size() - 3] = 0;
+  gz[gz.size() - 2] = 0;
+  gz[gz.size() - 1] = 0;
 
   SpzDecodeOptions options;
   options.maxDecodedBytes = 1u << 20;
@@ -124,11 +130,11 @@ TEST(SpzDecoder, DecodesAndConvertsWorldLabsFrameToInternal) {
   // the identity decodes with components of about 0.004, which leaks into the off diagonal.
   const float tol = 0.05f;
   const float offDiagonal = 0.002f;
-  EXPECT_NEAR(cloud.covariances[0], 0.25f, tol * 0.25f);       // xx
-  EXPECT_NEAR(cloud.covariances[1], 0.0f, offDiagonal);        // xy
-  EXPECT_NEAR(cloud.covariances[2], 0.0f, offDiagonal);        // xz
-  EXPECT_NEAR(cloud.covariances[3], 0.0625f, tol * 0.0625f);   // yy
-  EXPECT_NEAR(cloud.covariances[4], 0.0f, offDiagonal);        // yz
+  EXPECT_NEAR(cloud.covariances[0], 0.25f, tol * 0.25f);          // xx
+  EXPECT_NEAR(cloud.covariances[1], 0.0f, offDiagonal);           // xy
+  EXPECT_NEAR(cloud.covariances[2], 0.0f, offDiagonal);           // xz
+  EXPECT_NEAR(cloud.covariances[3], 0.0625f, tol * 0.0625f);      // yy
+  EXPECT_NEAR(cloud.covariances[4], 0.0f, offDiagonal);           // yz
   EXPECT_NEAR(cloud.covariances[5], 0.015625f, tol * 0.015625f);  // zz
 
   EXPECT_NEAR(cloud.alphas[0], 0.75f, 1.0f / 255.0f);
@@ -168,7 +174,8 @@ TEST(SpzDecoder, RotatedSplatProducesOffDiagonalCovariance) {
   cloud.positions = {0, 0, 0};
   cloud.scales = {std::log(1.0f), std::log(0.1f), std::log(0.1f)};
   // 45 degrees about Z in RDF, xyzw.
-  const float s = std::sin(M_PI / 8), c = std::cos(M_PI / 8);
+  const float s = std::sin(M_PI / 8);
+  const float c = std::cos(M_PI / 8);
   cloud.rotations = {0, 0, s, c};
   cloud.alphas = {0};
   cloud.colors = {0, 0, 0};

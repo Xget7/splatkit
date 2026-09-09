@@ -44,8 +44,11 @@ add_library(splatkit SHARED
   rendering/vulkan/DebugTrianglePipeline.cpp
   rendering/vulkan/GpuBuffer.cpp
   rendering/vulkan/SplatPipeline.cpp
+  rendering/vulkan/SurfaceRenderer.cpp
   rendering/vulkan/Vma.cpp
   camera/WalkCamera.cpp
+  diagnostics/Benchmark.cpp
+  diagnostics/StatsPublisher.cpp
   Engine.cpp
   jni/SplatKitJni.cpp
 )

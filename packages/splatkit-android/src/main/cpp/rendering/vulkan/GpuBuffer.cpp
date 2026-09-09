@@ -8,8 +8,8 @@ namespace splatkit {
 namespace {
 
 bool create(const VulkanContext& ctx, VkDeviceSize size, VkBufferUsageFlags usage,
-            VmaAllocationCreateFlags flags, bool map, VkBuffer& buffer,
-            VmaAllocation& allocation, void*& mapped) {
+            VmaAllocationCreateFlags flags, bool map, VkBuffer& buffer, VmaAllocation& allocation,
+            void*& mapped) {
   VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
   info.size = size;
   info.usage = usage;
@@ -20,7 +20,8 @@ bool create(const VulkanContext& ctx, VkDeviceSize size, VkBufferUsageFlags usag
   alloc.flags = flags | (map ? VMA_ALLOCATION_CREATE_MAPPED_BIT : 0);
 
   VmaAllocationInfo result{};
-  if (vmaCreateBuffer(ctx.allocator(), &info, &alloc, &buffer, &allocation, &result) != VK_SUCCESS) {
+  if (vmaCreateBuffer(ctx.allocator(), &info, &alloc, &buffer, &allocation, &result) !=
+      VK_SUCCESS) {
     LOGE("vmaCreateBuffer failed for %llu bytes", static_cast<unsigned long long>(size));
     return false;
   }
@@ -34,8 +35,8 @@ std::unique_ptr<GpuBuffer> GpuBuffer::deviceLocal(const VulkanContext& ctx, VkDe
                                                   VkBufferUsageFlags usage) {
   std::unique_ptr<GpuBuffer> b(new GpuBuffer(ctx));
   b->size_ = size;
-  create(ctx, size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 0, false, b->buffer_,
-         b->allocation_, b->mapped_);
+  create(ctx, size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 0, false, b->buffer_, b->allocation_,
+         b->mapped_);
   return b->buffer_ != VK_NULL_HANDLE ? std::move(b) : nullptr;
 }
 
@@ -43,8 +44,7 @@ std::unique_ptr<GpuBuffer> GpuBuffer::hostVisible(const VulkanContext& ctx, VkDe
                                                   VkBufferUsageFlags usage) {
   std::unique_ptr<GpuBuffer> b(new GpuBuffer(ctx));
   b->size_ = size;
-  create(ctx, size, usage,
-         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, true, b->buffer_,
+  create(ctx, size, usage, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, true, b->buffer_,
          b->allocation_, b->mapped_);
   return b->buffer_ != VK_NULL_HANDLE ? std::move(b) : nullptr;
 }
@@ -77,10 +77,10 @@ bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
   cmdInfo.commandBufferCount = 1;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VkFence fence = VK_NULL_HANDLE;
-  VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+  const VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
   VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  VkBufferCopy region{0, 0, size};
+  const VkBufferCopy region{0, 0, size};
   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.commandBufferCount = 1;
   submit.pCommandBuffers = &cmd;

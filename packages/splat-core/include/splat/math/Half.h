@@ -1,5 +1,7 @@
 #pragma once
 
+#include <math.h>
+
 #include <cstdint>
 #include <cstring>
 
@@ -8,7 +10,7 @@ namespace splat {
 // IEEE 754 binary16 with round to nearest even. Values beyond the half range saturate to
 // the largest finite half instead of becoming infinity, and NaN stays NaN.
 inline std::uint16_t toHalf(float value) {
-  std::uint32_t bits;
+  std::uint32_t bits = 0;
   std::memcpy(&bits, &value, sizeof(bits));
   const std::uint32_t sign = (bits >> 16) & 0x8000u;
   const std::uint32_t biased = (bits >> 23) & 0xffu;
@@ -21,7 +23,7 @@ inline std::uint16_t toHalf(float value) {
   if (exponent <= 0) {
     if (exponent < -10) return static_cast<std::uint16_t>(sign);
     mantissa |= 0x800000u;
-    const std::uint32_t shift = static_cast<std::uint32_t>(14 - exponent);
+    const auto shift = static_cast<std::uint32_t>(14 - exponent);
     const std::uint32_t half = mantissa >> shift;
     const std::uint32_t remainder = mantissa & ((1u << shift) - 1u);
     const std::uint32_t midpoint = 1u << (shift - 1);
@@ -39,7 +41,7 @@ inline float fromHalf(std::uint16_t half) {
   const std::uint32_t sign = (static_cast<std::uint32_t>(half) & 0x8000u) << 16;
   std::uint32_t exponent = (half >> 10) & 0x1fu;
   std::uint32_t mantissa = half & 0x3ffu;
-  std::uint32_t bits;
+  std::uint32_t bits = 0;
   if (exponent == 0) {
     if (mantissa == 0) {
       bits = sign;
@@ -57,7 +59,7 @@ inline float fromHalf(std::uint16_t half) {
   } else {
     bits = sign | ((exponent + 127 - 15) << 23) | (mantissa << 13);
   }
-  float value;
+  float value = NAN;
   std::memcpy(&value, &bits, sizeof(value));
   return value;
 }

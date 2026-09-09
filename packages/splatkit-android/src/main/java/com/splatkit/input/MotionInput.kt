@@ -1,4 +1,4 @@
-package com.splatkit
+package com.splatkit.input
 
 import android.content.Context
 import android.hardware.Sensor

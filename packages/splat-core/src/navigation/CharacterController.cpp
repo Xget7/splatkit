@@ -12,7 +12,8 @@ std::optional<float> CharacterController::floorBelow(Vec3 at) const {
   // From just above the feet, so that a table under the eye is not the floor.
   const Vec3 feet = at - Vec3{0, settings_.eyeHeight, 0};
   const Vec3 from = feet + Vec3{0, settings_.floorProbeUp, 0};
-  if (const auto hit = collider_.raycast(from, {0, -1, 0}, settings_.floorProbeUp + settings_.floorProbeDown)) {
+  if (const auto hit =
+          collider_.raycast(from, {0, -1, 0}, settings_.floorProbeUp + settings_.floorProbeDown)) {
     return hit->point.y;
   }
   // The eye may sit lower than eyeHeight above the floor (a world's origin is its

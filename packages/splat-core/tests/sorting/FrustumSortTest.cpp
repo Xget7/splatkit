@@ -29,8 +29,8 @@ TEST(Frustum, ContainsPointsInFrontInsideTheFieldOfView) {
   EXPECT_TRUE(f.contains({0.9f, 0.9f, -1}));
   EXPECT_FALSE(f.contains({1.1f, 0, -1}));
   EXPECT_FALSE(f.contains({0, -1.1f, -1}));
-  EXPECT_FALSE(f.contains({0, 0, 1}));   // behind
-  EXPECT_FALSE(f.contains({0, 0, 0}));   // at the eye
+  EXPECT_FALSE(f.contains({0, 0, 1}));  // behind
+  EXPECT_FALSE(f.contains({0, 0, 0}));  // at the eye
 }
 
 TEST(Frustum, MarginWidensTheVolumeByAnAngle) {
@@ -96,7 +96,7 @@ TEST(DistanceSorter, CullMatchesTheSequentialAnswerOnLargeClouds) {
   const Frustum f = lookingForward(0.1f);
 
   std::vector<uint32_t> expected;
-  std::vector<float> expectedDistances;
+  const std::vector<float> expectedDistances;
   for (std::size_t i = 0; i < n; ++i) {
     const Vec3 p{positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]};
     if (f.contains(p)) expected.push_back(static_cast<uint32_t>(i));

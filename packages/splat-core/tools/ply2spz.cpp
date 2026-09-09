@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <string>
 #include <vector>
 
@@ -41,7 +42,8 @@ void filter(spz::GaussianCloud& cloud, Keep keep) {
     std::memmove(&cloud.colors[kept * 3], &cloud.colors[i * 3], 3 * sizeof(float));
     cloud.alphas[kept] = cloud.alphas[i];
     if (shPerPoint > 0) {
-      std::memmove(&cloud.sh[kept * shPerPoint], &cloud.sh[i * shPerPoint], shPerPoint * sizeof(float));
+      std::memmove(&cloud.sh[kept * shPerPoint], &cloud.sh[i * shPerPoint],
+                   shPerPoint * sizeof(float));
     }
     ++kept;
   }
@@ -70,7 +72,8 @@ void truncateSh(spz::GaussianCloud& cloud, int degree) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+// The conversion; main only turns an exception (a bad allocation on a huge file) into an exit code.
+int run(int argc, char** argv) {
   if (argc < 3) return usage();
   const std::string in = argv[1];
   const std::string out = argv[2];
@@ -78,10 +81,14 @@ int main(int argc, char** argv) {
   int keep = 1;
   float dropOver = 0.0f;
   for (int i = 3; i < argc; ++i) {
-    if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc) sh = std::atoi(argv[++i]);
-    else if (std::strcmp(argv[i], "--keep") == 0 && i + 1 < argc) keep = std::atoi(argv[++i]);
-    else if (std::strcmp(argv[i], "--drop-over") == 0 && i + 1 < argc) dropOver = std::strtof(argv[++i], nullptr);
-    else return usage();
+    if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc)
+      sh = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--keep") == 0 && i + 1 < argc)
+      keep = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--drop-over") == 0 && i + 1 < argc)
+      dropOver = std::strtof(argv[++i], nullptr);
+    else
+      return usage();
   }
   if (sh > 3 || keep < 1) return usage();
 
@@ -116,7 +123,16 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::fclose(f);
-  std::printf("wrote %s: %d splats, sh degree %d, %.1f MB\n", out.c_str(), cloud.numPoints, cloud.shDegree,
-              bytes.size() / 1048576.0);
+  std::printf("wrote %s: %d splats, sh degree %d, %.1f MB\n", out.c_str(), cloud.numPoints,
+              cloud.shDegree, bytes.size() / 1048576.0);
   return 0;
+}
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "ply2spz failed: %s\n", e.what());
+    return 1;
+  }
 }

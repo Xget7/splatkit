@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <istream>
+#include <limits>
 #include <optional>
 #include <streambuf>
 #include <vector>
@@ -44,8 +44,8 @@ bool looksLikeNgsp(const std::uint8_t* data, std::size_t size) {
 }
 
 std::uint32_t readU32(const std::uint8_t* p) {
-  return std::uint32_t(p[0]) | (std::uint32_t(p[1]) << 8) | (std::uint32_t(p[2]) << 16) |
-         (std::uint32_t(p[3]) << 24);
+  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
+         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
 }
 
 // Decompressed size an NGSP container declares, or nullopt otherwise. NGSP declares the
@@ -133,9 +133,15 @@ std::array<float, 6> covariance(const float* quaternion, const float* scale) {
   const float r22 = 1 - 2 * (x * x + y * y);
 
   // M = R * S, so Sigma = M * M^T.
-  const float m00 = r00 * scale[0], m01 = r01 * scale[1], m02 = r02 * scale[2];
-  const float m10 = r10 * scale[0], m11 = r11 * scale[1], m12 = r12 * scale[2];
-  const float m20 = r20 * scale[0], m21 = r21 * scale[1], m22 = r22 * scale[2];
+  const float m00 = r00 * scale[0];
+  const float m01 = r01 * scale[1];
+  const float m02 = r02 * scale[2];
+  const float m10 = r10 * scale[0];
+  const float m11 = r11 * scale[1];
+  const float m12 = r12 * scale[2];
+  const float m20 = r20 * scale[0];
+  const float m21 = r21 * scale[1];
+  const float m22 = r22 * scale[2];
 
   return {
       m00 * m00 + m01 * m01 + m02 * m02,  // xx
@@ -166,7 +172,8 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
   if (looksLikeGzip(data, size)) {
     const auto packed = inflateGzip(data, size, options.maxDecodedBytes);
     if (!packed) {
-      return Error{ErrorCode::corrupt, "SPZ gzip stream is broken or exceeds the decoded size ceiling"};
+      return Error{ErrorCode::corrupt,
+                   "SPZ gzip stream is broken or exceeds the decoded size ceiling"};
     }
     MemoryBuffer buffer(packed->data(), packed->size());
     std::istream in(&buffer);
@@ -197,9 +204,9 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
   out.shDegree = cloud.shDegree;
   out.sh = std::move(cloud.sh);
 
-  constexpr float inf = std::numeric_limits<float>::infinity();
-  out.bounds.min = {inf, inf, inf};
-  out.bounds.max = {-inf, -inf, -inf};
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+  out.bounds.min = {kInf, kInf, kInf};
+  out.bounds.max = {-kInf, -kInf, -kInf};
 
   bool finite = true;
   for (std::size_t i = 0; i < n; ++i) {
@@ -220,7 +227,8 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
     out.alphas[i] = 1.0f / (1.0f + std::exp(-cloud.alphas[i]));
   }
   // A NaN position would sort to the front and a NaN covariance would draw garbage.
-  if (!finite) return Error{ErrorCode::corrupt, "SPZ contains non-finite positions, scales or rotations"};
+  if (!finite)
+    return Error{ErrorCode::corrupt, "SPZ contains non-finite positions, scales or rotations"};
 
   return out;
 }

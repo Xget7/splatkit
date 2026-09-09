@@ -102,7 +102,9 @@ void WalkCamera::update(float dtSeconds) {
   if (player_) player_->update(dtSeconds);
 }
 
-splat::Vec3 WalkCamera::position() const { return player_ ? player_->position() : freePosition_; }
+splat::Vec3 WalkCamera::position() const {
+  return player_ ? player_->position() : freePosition_;
+}
 
 splat::Mat4 WalkCamera::rotation() const {
   const splat::Mat4 yaw = splat::Mat4::rotation(yaw_, {0, 1, 0});

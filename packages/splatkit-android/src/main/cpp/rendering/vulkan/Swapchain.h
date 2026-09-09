@@ -21,8 +21,8 @@ class Swapchain {
   // frame times reflect GPU cost instead of vsync multiples; benchmarks use it.
   static splat::Result<std::unique_ptr<Swapchain>> create(const VulkanContext& ctx,
                                                           VkSurfaceKHR surface,
-                                                          VkSwapchainKHR previous,
-                                                          bool vsync, bool linearBlending);
+                                                          VkSwapchainKHR previous, bool vsync,
+                                                          bool linearBlending);
   ~Swapchain();
 
   Swapchain(const Swapchain&) = delete;

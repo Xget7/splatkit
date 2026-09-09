@@ -53,7 +53,7 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options = {});
 // at every edge until the next selection lands.
 struct LodView {
   Vec3 forward{0, 0, -1};
-  float fullCosine = 0.77f;   // about 40 degrees off axis
+  float fullCosine = 0.77f;  // about 40 degrees off axis
   float behindWeight = 0.02f;
 };
 

@@ -36,13 +36,15 @@ void collectLeaves(const LodTree& t, uint32_t node, std::vector<uint32_t>& leave
     leaves.push_back(node);
     return;
   }
-  for (uint32_t k = t.layout[node].childStart; k < t.layout[node].childStart + t.layout[node].childCount; ++k) collectLeaves(t, k, leaves);
+  for (uint32_t k = t.layout[node].childStart;
+       k < t.layout[node].childStart + t.layout[node].childCount; ++k)
+    collectLeaves(t, k, leaves);
 }
 
 }  // namespace
 
 TEST(LodTree, EmptyCloudGivesAnEmptyTree) {
-  LodTree t = buildLodTree(SplatCloud{});
+  const LodTree t = buildLodTree(SplatCloud{});
   EXPECT_EQ(t.nodeCount(), 0u);
   std::vector<uint32_t> out;
   selectLodNodes(t, {0, 0, 0}, {}, 10, 0.001f, out);
@@ -86,7 +88,7 @@ TEST(LodTree, SelectionHonoursTheBudgetAndThePixelLimit) {
   EXPECT_EQ(out[0], 0u);  // only the root fits
   selectLodNodes(t, {50, 0, -10}, {}, 100, 0.0f, out);
   EXPECT_EQ(out.size(), 4u);  // unlimited detail: all leaves
-  for (uint32_t n : out) EXPECT_EQ(t.layout[n].childCount, 0u);
+  for (const uint32_t n : out) EXPECT_EQ(t.layout[n].childCount, 0u);
   // From far away everything is under a pixel: the root alone.
   selectLodNodes(t, {50, 0, -100000}, {}, 100, 0.01f, out);
   ASSERT_EQ(out.size(), 1u);
@@ -96,8 +98,12 @@ TEST(LodTree, SelectionHonoursTheBudgetAndThePixelLimit) {
   splat::LodView facing;
   facing.forward = {0, 0, 1};
   selectLodNodes(t, {0.05f, 0, -0.5f}, facing, 100, 0.02f, out);
-  const bool firstLeaves = std::count_if(out.begin(), out.end(), [&](uint32_t n) { return t.layout[n].childCount == 0; }) >= 2;
-  const bool secondCluster = std::count_if(out.begin(), out.end(), [&](uint32_t n) { return t.layout[n].childCount == 2 && n != 0; }) == 1;
+  const bool firstLeaves = std::count_if(out.begin(), out.end(), [&](uint32_t n) {
+                             return t.layout[n].childCount == 0;
+                           }) >= 2;
+  const bool secondCluster = std::count_if(out.begin(), out.end(), [&](uint32_t n) {
+                               return t.layout[n].childCount == 2 && n != 0;
+                             }) == 1;
   EXPECT_TRUE(firstLeaves);
   EXPECT_TRUE(secondCluster);
 }
@@ -105,16 +111,21 @@ TEST(LodTree, SelectionHonoursTheBudgetAndThePixelLimit) {
 TEST(LodTree, TheViewDirectionDecidesWhereTheBudgetGoes) {
   // Two identical clusters, one ahead and one behind. With a budget for one of them,
   // the one ahead refines to leaves and the one behind stays a single node.
-  LodTree t = buildLodTree(cloudOf({{0, 0, -10}, {0.1f, 0, -10}, {0, 0, 10}, {0.1f, 0, 10}}, 0.05f));
+  LodTree t =
+      buildLodTree(cloudOf({{0, 0, -10}, {0.1f, 0, -10}, {0, 0, 10}, {0.1f, 0, 10}}, 0.05f));
   std::vector<uint32_t> out;
   splat::LodView ahead;
   ahead.forward = {0, 0, -1};
   selectLodNodes(t, {0.05f, 0, 0}, ahead, 3, 0.0f, out);
   ASSERT_EQ(out.size(), 3u);
-  int leavesAhead = 0, nodesBehind = 0;
-  for (uint32_t n : out) {
+  int leavesAhead = 0;
+  int nodesBehind = 0;
+  for (const uint32_t n : out) {
     const bool leaf = t.layout[n].childCount == 0;
-    if (t.nodes.positions[n * 3 + 2] < 0) leavesAhead += leaf; else nodesBehind += !leaf;
+    if (t.nodes.positions[n * 3 + 2] < 0)
+      leavesAhead += leaf;
+    else
+      nodesBehind += !leaf;
   }
   EXPECT_EQ(leavesAhead, 2);
   EXPECT_EQ(nodesBehind, 1);
@@ -122,8 +133,8 @@ TEST(LodTree, TheViewDirectionDecidesWhereTheBudgetGoes) {
 
 // 70k splats in one spot merge into a single node; a 16 bit child count lost 4k of them.
 TEST(LodTree, ANodeKeepsMoreThan65kChildren) {
-  std::vector<Vec3> centres(70000, Vec3{0, 0, 0});
-  LodTree t = buildLodTree(cloudOf(centres, 0.05f));
+  const std::vector<Vec3> centres(70000, Vec3{0, 0, 0});
+  const LodTree t = buildLodTree(cloudOf(centres, 0.05f));
   ASSERT_EQ(t.leafCount, 70000u);
   std::vector<uint32_t> leaves;
   collectLeaves(t, 0, leaves);

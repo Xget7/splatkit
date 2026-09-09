@@ -39,16 +39,20 @@ std::vector<std::uint8_t> triangleBin() {
   bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(positions),
              reinterpret_cast<const std::uint8_t*>(positions) + sizeof(positions));
   const uint16_t idx[4] = {0, 1, 2, 0};
-  bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx), reinterpret_cast<const std::uint8_t*>(idx) + 8);
+  bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx),
+             reinterpret_cast<const std::uint8_t*>(idx) + 8);
   return bin;
 }
 
 // The JSON of oneTriangleGlb with the node, with the position accessor's count as given.
 std::string withAccessorCount(const std::string& count) {
   return std::string("{\"asset\":{\"version\":\"2.0\"},") +
-         "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"translation\":[0,0,1]}]," +
+         "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"translation\":[0,0,1]}]"
+         "," +
          "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1}]}],"
-         "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" + count + ",\"type\":\"VEC3\"},"
+         "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" +
+         count +
+         ",\"type\":\"VEC3\"},"
          "{\"bufferView\":1,\"componentType\":5123,\"count\":3,\"type\":\"SCALAR\"}],"
          "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":36},"
          "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":6}],"
@@ -63,22 +67,31 @@ std::vector<std::uint8_t> oneTriangleGlb(bool withNode = true, bool uint16Indice
              reinterpret_cast<const std::uint8_t*>(positions) + sizeof(positions));
   if (uint16Indices) {
     const uint16_t idx[4] = {0, 1, 2, 0};  // padded to 4 bytes
-    bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx), reinterpret_cast<const std::uint8_t*>(idx) + 8);
+    bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx),
+               reinterpret_cast<const std::uint8_t*>(idx) + 8);
   } else {
     const uint32_t idx[3] = {0, 1, 2};
-    bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx), reinterpret_cast<const std::uint8_t*>(idx) + 12);
+    bin.insert(bin.end(), reinterpret_cast<const std::uint8_t*>(idx),
+               reinterpret_cast<const std::uint8_t*>(idx) + 12);
   }
   const std::string indexType = uint16Indices ? "5123" : "5125";
   const std::string indexBytes = uint16Indices ? "6" : "12";
-  std::string json =
+  const std::string json =
       std::string("{\"asset\":{\"version\":\"2.0\"},") +
-      (withNode ? "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"translation\":[0,0,1]}]," : "") +
+      (withNode ? "\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"translation\":"
+                  "[0,0,1]}],"
+                : "") +
       "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1}]}],"
       "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"},"
-      "{\"bufferView\":1,\"componentType\":" + indexType + ",\"count\":3,\"type\":\"SCALAR\"}],"
+      "{\"bufferView\":1,\"componentType\":" +
+      indexType +
+      ",\"count\":3,\"type\":\"SCALAR\"}],"
       "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":36},"
-      "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":" + indexBytes + "}],"
-      "\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) + "}]}";
+      "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":" +
+      indexBytes +
+      "}],"
+      "\"buffers\":[{\"byteLength\":" +
+      std::to_string(bin.size()) + "}]}";
   return packGlb(json, bin);
 }
 
@@ -150,19 +163,22 @@ TEST(GlbDecoder, RejectsTruncatedBin) {
   EXPECT_EQ(r.error().code, ErrorCode::corrupt);
 }
 
-// Opt-in: the real World Labs collider. Set SPLAT_FIXTURES_DIR to a folder holding house_collider.glb.
+// Opt-in: the real World Labs collider. Set SPLAT_FIXTURES_DIR to a folder holding
+// house_collider.glb.
 TEST(GlbDecoder, DecodesWorldLabsCollider) {
   const char* dir = std::getenv("SPLAT_FIXTURES_DIR");
   if (dir == nullptr) GTEST_SKIP() << "SPLAT_FIXTURES_DIR not set";
   std::ifstream file(std::string(dir) + "/house_collider.glb", std::ios::binary);
   if (!file.is_open()) GTEST_SKIP() << "house_collider.glb not present";
-  std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                                  std::istreambuf_iterator<char>());
   auto r = decodeGlb(bytes.data(), bytes.size());
   ASSERT_TRUE(r.ok()) << r.error().message;
   EXPECT_GT(r.value().triangleCount(), 100000u);
   // Floor below the origin once Y points up.
   float minY = 1e9f;
-  for (std::size_t i = 1; i < r.value().positions.size(); i += 3) minY = std::min(minY, r.value().positions[i]);
+  for (std::size_t i = 1; i < r.value().positions.size(); i += 3)
+    minY = std::min(minY, r.value().positions[i]);
   EXPECT_LT(minY, 0.0f);
 }
 

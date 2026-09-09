@@ -35,6 +35,10 @@ add_library(splat_core STATIC
   src/sorting/WorkerPool.cpp
   src/math/SymmetricEigen.cpp
   src/lod/LodTree.cpp
+  src/io/MappedFile.cpp
+  src/loading/WorldLoader.cpp
+  src/sorting/VisibilityPlanner.cpp
+  src/diagnostics/TimingSummary.cpp
 )
 target_include_directories(splat_core PUBLIC include)
 find_package(ZLIB REQUIRED)  # the SPZ gzip container is inflated here, with a ceiling

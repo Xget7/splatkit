@@ -39,7 +39,7 @@ splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::cre
   stages[1].pName = "main";
 
   // No vertex buffers: positions come from gl_VertexIndex.
-  VkPipelineVertexInputStateCreateInfo vertexInput{
+  const VkPipelineVertexInputStateCreateInfo vertexInput{
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
   VkPipelineInputAssemblyStateCreateInfo assembly{
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
@@ -68,11 +68,12 @@ splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::cre
   VkPipelineColorBlendAttachmentState blendAttachment{};
   blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-  VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+  VkPipelineColorBlendStateCreateInfo blend{
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
   blend.attachmentCount = 1;
   blend.pAttachments = &blendAttachment;
 
-  VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  const VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &p->layout_) != VK_SUCCESS) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "pipeline layout"};
   }
@@ -91,7 +92,8 @@ splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::cre
   info.renderPass = renderPass;
   info.subpass = 0;
 
-  VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &p->pipeline_);
+  const VkResult result =
+      vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &p->pipeline_);
   vkDestroyShaderModule(device, vert, nullptr);
   vkDestroyShaderModule(device, frag, nullptr);
   if (result != VK_SUCCESS) {

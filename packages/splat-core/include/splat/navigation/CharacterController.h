@@ -6,13 +6,13 @@
 namespace splat {
 
 struct CharacterSettings {
-  float eyeHeight = 1.5f;    // meters above the floor
-  float bodyRadius = 0.35f;  // distance kept from walls
-  float hipHeight = 0.7f;    // below the eye; where walls and furniture are probed
-  float floorProbeUp = 0.5f; // the floor ray starts this far above the feet; when
-                             // that is under the floor, the ray from the eye counts
+  float eyeHeight = 1.5f;     // meters above the floor
+  float bodyRadius = 0.35f;   // distance kept from walls
+  float hipHeight = 0.7f;     // below the eye; where walls and furniture are probed
+  float floorProbeUp = 0.5f;  // the floor ray starts this far above the feet; when
+                              // that is under the floor, the ray from the eye counts
   float floorProbeDown = 4.0f;
-  float snapRate = 12.0f;    // per second; eye eases toward floor + eyeHeight
+  float snapRate = 12.0f;  // per second; eye eases toward floor + eyeHeight
 };
 
 // A walking eye: moves on the XZ plane, slides along walls, snaps to the floor and
@@ -20,7 +20,7 @@ struct CharacterSettings {
 // boundary of the world. Pure state and math; the camera reads `position()`.
 class CharacterController {
  public:
-  CharacterController(const Collider& collider, CharacterSettings settings = {});
+  explicit CharacterController(const Collider& collider, CharacterSettings settings = {});
 
   Vec3 position() const { return position_; }
   void setPosition(Vec3 p) { position_ = p; }

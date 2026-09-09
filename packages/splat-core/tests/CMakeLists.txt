@@ -11,6 +11,10 @@ add_executable(splat_core_tests
   sorting/FrustumSortTest.cpp
   lod/LodTreeTest.cpp
   lod/LodSorterTest.cpp
+  io/MappedFileTest.cpp
+  loading/WorldLoaderTest.cpp
+  sorting/VisibilityPlannerTest.cpp
+  diagnostics/TimingSummaryTest.cpp
 )
 target_link_libraries(splat_core_tests PRIVATE splat_core spz ZLIB::ZLIB GTest::gtest_main)
 target_compile_definitions(splat_core_tests PRIVATE

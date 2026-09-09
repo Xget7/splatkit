@@ -17,13 +17,14 @@ TEST(Mat4, TranslationMovesPoints) {
 TEST(Mat4, RotationAboutYTurnsForwardToLeft) {
   // Looking down -Z and yawing 90 degrees to the left (counter clockwise seen from above)
   // must turn -Z into -X.
-  auto v = Mat4::rotation(static_cast<float>(M_PI / 2), {0, 1, 0}) * std::array<float, 4>{0, 0, -1, 0};
+  auto v =
+      Mat4::rotation(static_cast<float>(M_PI / 2), {0, 1, 0}) * std::array<float, 4>{0, 0, -1, 0};
   EXPECT_NEAR(v[0], -1, 1e-6);
   EXPECT_NEAR(v[2], 0, 1e-6);
 }
 
 TEST(Mat4, PerspectiveMapsNearToZeroAndFarToOne) {
-  Mat4 p = Mat4::perspective(1.0f, 1.5f, 0.1f, 100.0f);
+  const Mat4 p = Mat4::perspective(1.0f, 1.5f, 0.1f, 100.0f);
   auto n = p * std::array<float, 4>{0, 0, -0.1f, 1};
   auto f = p * std::array<float, 4>{0, 0, -100.0f, 1};
   EXPECT_NEAR(n[2] / n[3], 0, 1e-6);
@@ -31,7 +32,7 @@ TEST(Mat4, PerspectiveMapsNearToZeroAndFarToOne) {
 }
 
 TEST(Mat4, RigidInverseUndoesRotationAndTranslation) {
-  Mat4 t = Mat4::translation({3, -1, 2}) * Mat4::rotation(0.7f, {0, 1, 0});
+  const Mat4 t = Mat4::translation({3, -1, 2}) * Mat4::rotation(0.7f, {0, 1, 0});
   Mat4 id = t * t.rigidInverse();
   for (int r = 0; r < 4; ++r)
     for (int c = 0; c < 4; ++c) EXPECT_NEAR(id.at(r, c), r == c ? 1 : 0, 1e-5);

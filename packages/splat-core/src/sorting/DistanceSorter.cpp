@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <array>
-#include <mutex>
 #include <cstring>
+#include <mutex>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -33,7 +33,7 @@ inline uint32_t distanceKey(const float* p, Vec3 from) {
   const float dy = p[1] - from.y;
   const float dz = p[2] - from.z;
   const float d2 = dx * dx + dy * dy + dz * dz;
-  uint32_t bits;
+  uint32_t bits = 0;
   std::memcpy(&bits, &d2, sizeof(bits));
   return ~bits;
 }
@@ -44,13 +44,16 @@ void DistanceSorter::sortSubset(Vec3 from, std::vector<uint32_t>& subset) {
   const std::size_t n = std::min(subset.size(), count());
   subset.resize(n);
   parallelFor(n, [&](std::size_t begin, std::size_t end) {
-    for (std::size_t i = begin; i < end; ++i) keys_[i] = distanceKey(&positions_[subset[i] * 3], from);
+    for (std::size_t i = begin; i < end; ++i)
+      keys_[i] = distanceKey(&positions_[subset[i] * 3], from);
   });
   radixSort(n, subset);
 }
 
-void DistanceSorter::parallelFor(std::size_t n, const std::function<void(std::size_t, std::size_t)>& body) {
-  const std::size_t workers = std::min<std::size_t>(pool_.width(), std::max<std::size_t>(1, n / kMinPerWorker));
+void DistanceSorter::parallelFor(std::size_t n,
+                                 const std::function<void(std::size_t, std::size_t)>& body) {
+  const std::size_t workers =
+      std::min<std::size_t>(pool_.width(), std::max<std::size_t>(1, n / kMinPerWorker));
   const std::size_t slice = (n + workers - 1) / workers;
   pool_.run(workers, [&](std::size_t w) {
     const std::size_t begin = w * slice;
@@ -107,7 +110,7 @@ std::size_t DistanceSorter::cull(const std::vector<uint32_t>& sorted, const Frus
       orderScratch_[out] = index;
       out += in ? 1 : 0;  // branch free: the write lands anyway and is overwritten if not kept
     }
-    std::lock_guard<std::mutex> lock(slicesMutex);
+    const std::lock_guard<std::mutex> lock(slicesMutex);
     starts.push_back(begin);
     counts.push_back(out - begin);
   });
@@ -115,9 +118,10 @@ std::size_t DistanceSorter::cull(const std::vector<uint32_t>& sorted, const Frus
   // Slices finish in any order; join them by their start.
   std::vector<std::size_t> byStart(starts.size());
   for (std::size_t i = 0; i < byStart.size(); ++i) byStart[i] = i;
-  std::sort(byStart.begin(), byStart.end(), [&](std::size_t a, std::size_t b) { return starts[a] < starts[b]; });
+  std::sort(byStart.begin(), byStart.end(),
+            [&](std::size_t a, std::size_t b) { return starts[a] < starts[b]; });
   std::size_t total = 0;
-  for (std::size_t k : byStart) {
+  for (const std::size_t k : byStart) {
     std::memcpy(&visible[total], &orderScratch_[starts[k]], counts[k] * sizeof(uint32_t));
     total += counts[k];
   }

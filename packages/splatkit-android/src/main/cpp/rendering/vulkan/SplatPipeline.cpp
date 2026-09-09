@@ -6,9 +6,9 @@
 #include <vector>
 
 #include "Log.h"
-#include "splat/math/Half.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
+#include "splat/math/Half.h"
 
 namespace splatkit {
 namespace {
@@ -23,7 +23,9 @@ VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
 }
 
 uint32_t packRgba8(float r, float g, float b, float a) {
-  auto q = [](float v) { return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+  auto q = [](float v) {
+    return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+  };
   return q(r) | (q(g) << 8) | (q(b) << 16) | (q(a) << 24);
 }
 
@@ -70,7 +72,8 @@ bool SplatPipeline::createDescriptors() {
   VkDescriptorSetLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
   layoutInfo.bindingCount = 4;
   layoutInfo.pBindings = bindings;
-  if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &setLayout_) != VK_SUCCESS) return false;
+  if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &setLayout_) != VK_SUCCESS)
+    return false;
 
   VkDescriptorPoolSize sizes[2]{};
   sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, FrameLoop::kFramesInFlight};
@@ -90,9 +93,10 @@ bool SplatPipeline::createDescriptors() {
   if (vkAllocateDescriptorSets(device, &allocInfo, sets_.data()) != VK_SUCCESS) return false;
 
   for (uint32_t i = 0; i < FrameLoop::kFramesInFlight; ++i) {
-    uniforms_[i] = GpuBuffer::hostVisible(ctx_, sizeof(CameraUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    uniforms_[i] =
+        GpuBuffer::hostVisible(ctx_, sizeof(CameraUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     if (!uniforms_[i]) return false;
-    VkDescriptorBufferInfo info{uniforms_[i]->handle(), 0, sizeof(CameraUniform)};
+    const VkDescriptorBufferInfo info{uniforms_[i]->handle(), 0, sizeof(CameraUniform)};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.dstSet = sets_[i];
     write.dstBinding = 0;
@@ -112,8 +116,8 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
 
   // constant_id 0 of the vertex shader is the SH degree; each pipeline gets its own.
   uint32_t shDegree = 0;
-  VkSpecializationMapEntry entry{0, 0, sizeof(uint32_t)};
-  VkSpecializationInfo specialization{1, &entry, sizeof(shDegree), &shDegree};
+  const VkSpecializationMapEntry entry{0, 0, sizeof(uint32_t)};
+  const VkSpecializationInfo specialization{1, &entry, sizeof(shDegree), &shDegree};
 
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -127,8 +131,10 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   stages[1].pName = "main";
 
   // No vertex buffers: everything is fetched from storage buffers by instance index.
-  VkPipelineVertexInputStateCreateInfo vertexInput{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-  VkPipelineInputAssemblyStateCreateInfo assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+  const VkPipelineVertexInputStateCreateInfo vertexInput{
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+  VkPipelineInputAssemblyStateCreateInfo assembly{
+      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
   assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
   VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
@@ -139,13 +145,15 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   dynamic.dynamicStateCount = 2;
   dynamic.pDynamicStates = dynamics;
 
-  VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+  VkPipelineRasterizationStateCreateInfo raster{
+      VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
   raster.polygonMode = VK_POLYGON_MODE_FILL;
   raster.cullMode = VK_CULL_MODE_NONE;
   raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
   raster.lineWidth = 1.0f;
 
-  VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+  VkPipelineMultisampleStateCreateInfo multisample{
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
   multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
   // "Over" compositing, back to front: out = src.a * src + (1 - src.a) * dst.
@@ -159,7 +167,8 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   blendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
   blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-  VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+  VkPipelineColorBlendStateCreateInfo blend{
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
   blend.attachmentCount = 1;
   blend.pAttachments = &blendAttachment;
 
@@ -200,7 +209,7 @@ namespace {
 std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
   const size_t n = cloud.count();
   const size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
-  const size_t coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
+  const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
   const size_t halves = coefficients * 3;
   const size_t stride = (halves + 1) / 2;
   std::vector<uint32_t> packed(n * stride, 0);
@@ -220,14 +229,18 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
                                                      int maxShDegree) const {
   const size_t n = cloud.count();
   const int shDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
-  const bool shComplete = cloud.sh.size() >= n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
-  std::vector<uint32_t> sh = (shDegree > 0 && shComplete) ? packSh(cloud, shDegree) : std::vector<uint32_t>{0};
+  const bool shComplete =
+      cloud.sh.size() >=
+      n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
+  std::vector<uint32_t> sh =
+      (shDegree > 0 && shComplete) ? packSh(cloud, shDegree) : std::vector<uint32_t>{0};
   std::vector<GpuSplat> packed(n);
   for (size_t i = 0; i < n; ++i) {
     GpuSplat& g = packed[i];
     std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
     const float alpha = cloud.alphas[i];
-    g.rgba8 = packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2], alpha);
+    g.rgba8 =
+        packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2], alpha);
     if (alpha > 1.0f) std::memcpy(&g.lodAlpha, &alpha, sizeof(g.lodAlpha));
     const float* c = &cloud.covariances[i * 6];  // xx, xy, xz, yy, yz, zz
     g.cov[0] = packHalf2(c[0], c[1]);
@@ -246,7 +259,8 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
                                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   world->order = GpuBuffer::deviceLocal(ctx_, order.size() * sizeof(uint32_t),
                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = GpuBuffer::deviceLocal(ctx_, sh.size() * sizeof(uint32_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = GpuBuffer::deviceLocal(ctx_, sh.size() * sizeof(uint32_t),
+                                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   if (!world->splats || !world->order || !world->sh) return nullptr;
   for (auto& staging : world->orderStaging) {
     staging = GpuBuffer::hostVisible(ctx_, order.size() * sizeof(uint32_t),
@@ -261,9 +275,9 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
 
 void SplatPipeline::bindWorld(const GpuWorld& world) {
   for (uint32_t i = 0; i < FrameLoop::kFramesInFlight; ++i) {
-    VkDescriptorBufferInfo splats{world.splats->handle(), 0, VK_WHOLE_SIZE};
-    VkDescriptorBufferInfo order{world.order->handle(), 0, VK_WHOLE_SIZE};
-    VkDescriptorBufferInfo sh{world.sh->handle(), 0, VK_WHOLE_SIZE};
+    const VkDescriptorBufferInfo splats{world.splats->handle(), 0, VK_WHOLE_SIZE};
+    const VkDescriptorBufferInfo order{world.order->handle(), 0, VK_WHOLE_SIZE};
+    const VkDescriptorBufferInfo sh{world.sh->handle(), 0, VK_WHOLE_SIZE};
     VkWriteDescriptorSet writes[3]{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet = sets_[i];
@@ -282,10 +296,10 @@ void SplatPipeline::bindWorld(const GpuWorld& world) {
 }
 
 void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                                const uint32_t* order, uint32_t count) const {
+                                const uint32_t* order, uint32_t count) {
   const VkDeviceSize bytes = std::min(count, world.count) * sizeof(uint32_t);
   if (bytes == 0) return;
-  GpuBuffer& staging = *world.orderStaging[frameSlot];
+  const GpuBuffer& staging = *world.orderStaging[frameSlot];
   std::memcpy(staging.mapped(), order, static_cast<size_t>(bytes));
   staging.flush(0, bytes);
 
@@ -303,7 +317,7 @@ void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const G
   vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                        0, nullptr, 1, &beforeCopy, 0, nullptr);
 
-  VkBufferCopy region{0, 0, bytes};
+  const VkBufferCopy region{0, 0, bytes};
   vkCmdCopyBuffer(cmd, staging.handle(), world.order->handle(), 1, &region);
 
   // And this frame's vertex shader must see the copy complete (read after write).
@@ -314,9 +328,10 @@ void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const G
                        0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
-void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
-                         int shDegree, const splat::Mat4& view, const splat::Mat4& proj,
-                         const splat::Vec3& cameraPosition, VkExtent2D extent) {
+void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+                         uint32_t count, int shDegree, const splat::Mat4& view,
+                         const splat::Mat4& proj, const splat::Vec3& cameraPosition,
+                         VkExtent2D extent) {
   if (count == 0) return;
   CameraUniform u{};
   u.cameraPosition[0] = cameraPosition.x;
@@ -336,7 +351,8 @@ void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld
 
   const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, kMaxShDegree);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines_[static_cast<size_t>(degree)]);
-  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0, nullptr);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0,
+                          nullptr);
   vkCmdDraw(cmd, 4, std::min(count, world.count), 0, 0);
 }
 

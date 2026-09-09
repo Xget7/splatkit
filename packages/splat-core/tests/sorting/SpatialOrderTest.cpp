@@ -54,7 +54,8 @@ TEST(SpatialOrder, KeepsEverySplatWithItsAttributes) {
     EXPECT_FALSE(seen[from]);
     seen[from] = true;
     for (int k = 0; k < 3; ++k) EXPECT_EQ(c.positions[i * 3 + k], before.positions[from * 3 + k]);
-    for (int k = 0; k < 6; ++k) EXPECT_EQ(c.covariances[i * 6 + k], before.covariances[from * 6 + k]);
+    for (int k = 0; k < 6; ++k)
+      EXPECT_EQ(c.covariances[i * 6 + k], before.covariances[from * 6 + k]);
     for (int k = 0; k < 3; ++k) EXPECT_EQ(c.colors[i * 3 + k], before.colors[from * 3 + k]);
   }
 }

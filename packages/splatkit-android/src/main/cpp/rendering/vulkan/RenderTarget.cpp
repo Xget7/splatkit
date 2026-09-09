@@ -48,7 +48,7 @@ splat::Result<std::unique_ptr<RenderTarget>> RenderTarget::create(const VulkanCo
   color.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   color.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+  const VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
   VkSubpassDescription subpass{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
@@ -111,7 +111,8 @@ void RenderTarget::blitTo(VkCommandBuffer cmd, VkImage swapchainImage,
 
   VkImageBlit region{};
   region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-  region.srcOffsets[1] = {static_cast<int32_t>(extent_.width), static_cast<int32_t>(extent_.height), 1};
+  region.srcOffsets[1] = {static_cast<int32_t>(extent_.width), static_cast<int32_t>(extent_.height),
+                          1};
   region.dstSubresource = region.srcSubresource;
   region.dstOffsets[1] = {static_cast<int32_t>(swapchainExtent.width),
                           static_cast<int32_t>(swapchainExtent.height), 1};
@@ -123,8 +124,8 @@ void RenderTarget::blitTo(VkCommandBuffer cmd, VkImage swapchainImage,
   toPresent.dstAccessMask = 0;
   toPresent.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   toPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                       0, 0, nullptr, 0, nullptr, 1, &toPresent);
+  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                       0, nullptr, 0, nullptr, 1, &toPresent);
 }
 
 }  // namespace splatkit

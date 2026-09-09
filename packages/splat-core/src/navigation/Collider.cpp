@@ -14,8 +14,9 @@ Collider::Collider(const TriangleMesh& mesh, float cellSize) : cellSize_(cellSiz
   auto vertex = [&](uint32_t i) {
     return Vec3{mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]};
   };
-  constexpr float inf = std::numeric_limits<float>::infinity();
-  Vec3 lo{inf, inf, inf}, hi{-inf, -inf, -inf};
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+  Vec3 lo{kInf, kInf, kInf};
+  Vec3 hi{-kInf, -kInf, -kInf};
   for (std::size_t t = 0; t < n; ++t) {
     tri0_.push_back(vertex(mesh.indices[t * 3]));
     tri1_.push_back(vertex(mesh.indices[t * 3 + 1]));
@@ -35,7 +36,8 @@ Collider::Collider(const TriangleMesh& mesh, float cellSize) : cellSize_(cellSiz
   for (;;) {
     double cells = 1.0;
     for (int k = 0; k < 3; ++k) {
-      dims_[k] = std::max(1, static_cast<int>(std::ceil((boundsMax_[k] - boundsMin_[k]) / cellSize_)));
+      dims_[k] =
+          std::max(1, static_cast<int>(std::ceil((boundsMax_[k] - boundsMin_[k]) / cellSize_)));
       cells *= dims_[k];
     }
     if (cells <= kMaxCells) break;
@@ -55,7 +57,8 @@ Collider::Cell Collider::cellOf(Vec3 p) const {
 }
 
 std::size_t Collider::cellIndex(int x, int y, int z) const {
-  return (static_cast<std::size_t>(z) * static_cast<std::size_t>(dims_[1]) + static_cast<std::size_t>(y)) *
+  return (static_cast<std::size_t>(z) * static_cast<std::size_t>(dims_[1]) +
+          static_cast<std::size_t>(y)) *
              static_cast<std::size_t>(dims_[0]) +
          static_cast<std::size_t>(x);
 }
@@ -71,7 +74,8 @@ void Collider::buildGrid() {
       for (int y = lo.y; y <= hi.y; ++y)
         for (int x = lo.x; x <= hi.x; ++x) fn(cellIndex(x, y, z));
   };
-  for (std::size_t t = 0; t < tri0_.size(); ++t) forEachCell(t, [&](std::size_t c) { ++cellStart_[c + 1]; });
+  for (std::size_t t = 0; t < tri0_.size(); ++t)
+    forEachCell(t, [&](std::size_t c) { ++cellStart_[c + 1]; });
   for (std::size_t c = 1; c <= cellCount; ++c) cellStart_[c] += cellStart_[c - 1];
   cellTris_.assign(cellStart_[cellCount], 0);
   std::vector<uint32_t> cursor = cellStart_;
@@ -86,14 +90,16 @@ std::optional<RayHit> Collider::raycast(Vec3 origin, Vec3 direction, float maxDi
   if (length(dir) == 0) return std::nullopt;
 
   // Clip the ray to the grid bounds (slab test) so traversal starts inside.
-  float tMin = 0, tMax = maxDistance;
+  float tMin = 0;
+  float tMax = maxDistance;
   for (int k = 0; k < 3; ++k) {
     if (dir[k] == 0) {
       if (origin[k] < boundsMin_[k] || origin[k] > boundsMax_[k]) return std::nullopt;
       continue;
     }
     const float inv = 1 / dir[k];
-    float t0 = (boundsMin_[k] - origin[k]) * inv, t1 = (boundsMax_[k] - origin[k]) * inv;
+    float t0 = (boundsMin_[k] - origin[k]) * inv;
+    float t1 = (boundsMax_[k] - origin[k]) * inv;
     if (t0 > t1) std::swap(t0, t1);
     tMin = std::max(tMin, t0);
     tMax = std::min(tMax, t1);
@@ -104,15 +110,17 @@ std::optional<RayHit> Collider::raycast(Vec3 origin, Vec3 direction, float maxDi
   Cell cell = cellOf(start);
   int* cellAxis[3] = {&cell.x, &cell.y, &cell.z};
   int step[3];
-  float tNext[3], tDelta[3];
-  constexpr float inf = std::numeric_limits<float>::infinity();
+  float tNext[3];
+  float tDelta[3];
+  constexpr float kInf = std::numeric_limits<float>::infinity();
   for (int k = 0; k < 3; ++k) {
     step[k] = dir[k] >= 0 ? 1 : -1;
     if (dir[k] == 0) {
-      tNext[k] = tDelta[k] = inf;
+      tNext[k] = tDelta[k] = kInf;
       continue;
     }
-    const float boundary = boundsMin_[k] + static_cast<float>(*cellAxis[k] + (step[k] > 0 ? 1 : 0)) * cellSize_;
+    const float boundary =
+        boundsMin_[k] + static_cast<float>(*cellAxis[k] + (step[k] > 0 ? 1 : 0)) * cellSize_;
     tNext[k] = tMin + (boundary - start[k]) / dir[k];
     tDelta[k] = cellSize_ / std::fabs(dir[k]);
   }
@@ -130,7 +138,8 @@ std::optional<RayHit> Collider::raycast(Vec3 origin, Vec3 direction, float maxDi
       }
     }
     // Advance along the axis whose cell boundary is closest.
-    const int axis = tNext[0] < tNext[1] ? (tNext[0] < tNext[2] ? 0 : 2) : (tNext[1] < tNext[2] ? 1 : 2);
+    const int axis =
+        tNext[0] < tNext[1] ? (tNext[0] < tNext[2] ? 0 : 2) : (tNext[1] < tNext[2] ? 1 : 2);
     if (best && best->distance <= tNext[axis]) return best;  // nothing closer can appear later
     if (tNext[axis] > tMax) return best;
     *cellAxis[axis] += step[axis];
@@ -141,7 +150,8 @@ std::optional<RayHit> Collider::raycast(Vec3 origin, Vec3 direction, float maxDi
 
 // Moller-Trumbore ray/triangle intersection.
 std::optional<float> Collider::intersect(Vec3 o, Vec3 d, Vec3 v0, Vec3 v1, Vec3 v2) {
-  const Vec3 e1 = v1 - v0, e2 = v2 - v0;
+  const Vec3 e1 = v1 - v0;
+  const Vec3 e2 = v2 - v0;
   const Vec3 p = cross(d, e2);
   const float det = dot(e1, p);
   if (std::fabs(det) < 1e-8f) return std::nullopt;

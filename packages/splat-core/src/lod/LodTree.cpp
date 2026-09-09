@@ -16,9 +16,10 @@ namespace {
 // weight of a splat when merging: what it contributes to the image is its area times
 // its opacity.
 float ellipsoidArea(const std::array<float, 3>& s) {
-  constexpr float p = 1.6075f;
-  const float sum = std::pow(s[0] * s[1], p) + std::pow(s[0] * s[2], p) + std::pow(s[1] * s[2], p);
-  return 4.0f * static_cast<float>(M_PI) * std::pow(sum / 3.0f, 1.0f / p);
+  constexpr float kP = 1.6075f;
+  const float sum =
+      std::pow(s[0] * s[1], kP) + std::pow(s[0] * s[2], kP) + std::pow(s[1] * s[2], kP);
+  return 4.0f * static_cast<float>(M_PI) * std::pow(sum / 3.0f, 1.0f / kP);
 }
 
 // How far, in standard deviations, a splat of this opacity stays visible relative to
@@ -30,7 +31,8 @@ float lodOpacityReach(float alpha) {
 
 std::array<float, 3> semiAxes(const float* cov) {
   const auto e = symmetricEigenvalues({cov[0], cov[1], cov[2], cov[3], cov[4], cov[5]});
-  return {std::sqrt(std::max(e[0], 0.0f)), std::sqrt(std::max(e[1], 0.0f)), std::sqrt(std::max(e[2], 0.0f))};
+  return {std::sqrt(std::max(e[0], 0.0f)), std::sqrt(std::max(e[1], 0.0f)),
+          std::sqrt(std::max(e[2], 0.0f))};
 }
 
 // Attribute arrays that grow as merged nodes are appended.
@@ -120,7 +122,8 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   nodes.shStride = leaves == 0 ? 0 : nodes.sh.size() / leaves;
   nodes.size.resize(leaves);
   nodes.children.resize(leaves);
-  for (std::size_t i = 0; i < leaves; ++i) nodes.size[i] = 2.0f * semiAxes(&nodes.covariances[i * 6])[0];
+  for (std::size_t i = 0; i < leaves; ++i)
+    nodes.size[i] = 2.0f * semiAxes(&nodes.covariances[i * 6])[0];
 
   LodTree tree;
   tree.leafCount = leaves;
@@ -132,14 +135,15 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   float extent = 0.0f;
   for (int c = 0; c < 3; ++c) extent = std::max(extent, cloud.bounds.max[c] - cloud.bounds.min[c]);
   float minSize = nodes.size[0];
-  for (float s : nodes.size) minSize = std::min(minSize, s);
+  for (const float s : nodes.size) minSize = std::min(minSize, s);
   const float logBase = std::log(options.base);
   const float finest = std::max(std::max(minSize, 1e-6f), extent / static_cast<float>(1 << 20));
   int level = static_cast<int>(std::ceil(std::log(finest) / logBase));
 
   std::vector<uint32_t> bySize(leaves);
   std::iota(bySize.begin(), bySize.end(), 0u);
-  std::sort(bySize.begin(), bySize.end(), [&](uint32_t a, uint32_t b) { return nodes.size[a] < nodes.size[b]; });
+  std::sort(bySize.begin(), bySize.end(),
+            [&](uint32_t a, uint32_t b) { return nodes.size[a] < nodes.size[b]; });
 
   std::size_t frontier = 0;
   std::vector<uint32_t> active;
@@ -148,22 +152,26 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   const float* origin = cloud.bounds.min.data();
   for (;;) {
     const float step = std::pow(options.base, static_cast<float>(level));
-    while (frontier < leaves && nodes.size[bySize[frontier]] <= step) active.push_back(bySize[frontier++]);
+    while (frontier < leaves && nodes.size[bySize[frontier]] <= step)
+      active.push_back(bySize[frontier++]);
 
     cells.clear();
     cells.reserve(active.size());
-    uint64_t low[3] = {~0ull, ~0ull, ~0ull}, high[3] = {0, 0, 0};
-    for (uint32_t node : active) {
+    uint64_t low[3] = {~0ull, ~0ull, ~0ull};
+    uint64_t high[3] = {0, 0, 0};
+    for (const uint32_t node : active) {
       uint64_t key = 0;
       for (int c = 0; c < 3; ++c) {
-        const auto g = static_cast<uint64_t>(std::max(0.0f, std::floor((nodes.positions[node * 3 + c] - origin[c]) / step)));
+        const auto g = static_cast<uint64_t>(
+            std::max(0.0f, std::floor((nodes.positions[node * 3 + c] - origin[c]) / step)));
         low[c] = std::min(low[c], g);
         high[c] = std::max(high[c], g);
         key = (key << 21) | (g & 0x1FFFFF);
       }
       cells.push_back({makeRoot ? 0 : key, node});
     }
-    std::sort(cells.begin(), cells.end(), [](const Cell& a, const Cell& b) { return a.key < b.key; });
+    std::sort(cells.begin(), cells.end(),
+              [](const Cell& a, const Cell& b) { return a.key < b.key; });
 
     std::vector<uint32_t> next;
     std::vector<uint32_t> members;
@@ -204,7 +212,7 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
     const auto& kids = nodes.children[old];
     tree.layout[head].childStart = static_cast<uint32_t>(order.size());
     tree.layout[head].childCount = static_cast<uint32_t>(kids.size());
-    for (uint32_t kid : kids) order.push_back(kid);
+    for (const uint32_t kid : kids) order.push_back(kid);
   }
 
   SplatCloud& out = tree.nodes;
@@ -223,7 +231,8 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
     std::copy_n(&nodes.covariances[old * 6], 6, &out.covariances[i * 6]);
     std::copy_n(&nodes.colors[old * 3], 3, &out.colors[i * 3]);
     out.alphas[i] = nodes.alphas[old];
-    if (nodes.shStride) std::copy_n(&nodes.sh[old * nodes.shStride], nodes.shStride, &out.sh[i * nodes.shStride]);
+    if (nodes.shStride)
+      std::copy_n(&nodes.sh[old * nodes.shStride], nodes.shStride, &out.sh[i * nodes.shStride]);
   }
   return tree;
 }
@@ -237,7 +246,9 @@ void selectLodNodes(const LodTree& tree, Vec3 origin, const LodView& view, std::
   const float fullCosine = std::clamp(view.fullCosine, 0.0f, 1.0f);
   auto pixelScale = [&](uint32_t node) {
     const float* p = layout[node].position;
-    const float dx = p[0] - origin.x, dy = p[1] - origin.y, dz = p[2] - origin.z;
+    const float dx = p[0] - origin.x;
+    const float dy = p[1] - origin.y;
+    const float dz = p[2] - origin.z;
     const float distance = std::max(std::sqrt(dx * dx + dy * dy + dz * dz), 1e-6f);
     const float cosine = (dx * forward.x + dy * forward.y + dz * forward.z) / distance;
     float weight = view.behindWeight;
@@ -270,8 +281,7 @@ void selectLodNodes(const LodTree& tree, Vec3 origin, const LodView& view, std::
   buckets[bucketOf(rootScale)].push_back(0);
   std::size_t chosen = 1;
   int current = 0;
-  bool budgetHit = false;
-  while (current < kBuckets && !budgetHit) {
+  while (current < kBuckets) {
     auto& bucket = buckets[current];
     if (bucket.empty()) {
       ++current;
@@ -284,10 +294,7 @@ void selectLodNodes(const LodTree& tree, Vec3 origin, const LodView& view, std::
       out.push_back(node);
       continue;
     }
-    if (chosen - 1 + kids > budget) {
-      budgetHit = true;
-      break;
-    }
+    if (chosen - 1 + kids > budget) break;
     bucket.pop_back();
     chosen += kids - 1;
     for (uint32_t k = layout[node].childStart; k < layout[node].childStart + kids; ++k) {

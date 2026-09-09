@@ -4,8 +4,8 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <chrono>
+#include <cstdio>
 #include <random>
 #include <thread>
 
@@ -21,7 +21,9 @@ std::vector<float> randomPositions(std::size_t n, unsigned seed) {
 }
 
 float distance2(const std::vector<float>& p, uint32_t i, Vec3 from) {
-  const float dx = p[i * 3] - from.x, dy = p[i * 3 + 1] - from.y, dz = p[i * 3 + 2] - from.z;
+  const float dx = p[i * 3] - from.x;
+  const float dy = p[i * 3 + 1] - from.y;
+  const float dz = p[i * 3 + 2] - from.z;
   return dx * dx + dy * dy + dz * dz;
 }
 
@@ -109,8 +111,8 @@ namespace {
 // Stress: the largest World Labs tier, checked for correctness and timed. The time is
 // reported, not asserted, because CI machines vary; the on-device number is what counts.
 TEST(DistanceSorter, TwoMillionSplatsSortCorrectly) {
-  constexpr std::size_t n = 2'000'000;
-  auto positions = randomPositions(n, 11);
+  constexpr std::size_t kN = 2'000'000;
+  auto positions = randomPositions(kN, 11);
   DistanceSorter sorter(positions);
   std::vector<uint32_t> order;
   const Vec3 from{0.5f, 1.5f, -0.5f};
@@ -122,13 +124,14 @@ TEST(DistanceSorter, TwoMillionSplatsSortCorrectly) {
   RecordProperty("sort_ms_2m", millis);
   std::printf("[ sort     ] 2M splats in %.1f ms\n", millis);
 
-  ASSERT_EQ(order.size(), n);
-  for (std::size_t i = 1; i < n; ++i) {
-    ASSERT_GE(distance2(positions, order[i - 1], from), distance2(positions, order[i], from)) << "at " << i;
+  ASSERT_EQ(order.size(), kN);
+  for (std::size_t i = 1; i < kN; ++i) {
+    ASSERT_GE(distance2(positions, order[i - 1], from), distance2(positions, order[i], from))
+        << "at " << i;
   }
-  std::vector<uint8_t> seen(n, 0);
-  for (uint32_t index : order) {
-    ASSERT_LT(index, n);
+  std::vector<uint8_t> seen(kN, 0);
+  for (const uint32_t index : order) {
+    ASSERT_LT(index, kN);
     ASSERT_EQ(seen[index], 0) << "duplicate " << index;
     seen[index] = 1;
   }

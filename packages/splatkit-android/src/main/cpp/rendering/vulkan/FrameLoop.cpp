@@ -1,6 +1,5 @@
 #include "rendering/vulkan/FrameLoop.h"
 
-
 #include "Log.h"
 
 namespace splatkit {
@@ -41,7 +40,7 @@ FrameLoop::FrameLoop(const VulkanContext& ctx) : ctx_(ctx) {
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     if (vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS) return;
 
-    VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    const VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     if (vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable) != VK_SUCCESS) return;
   }
   valid_ = true;
@@ -51,7 +50,7 @@ FrameLoop::~FrameLoop() {
   VkDevice device = ctx_.device();
   vkDeviceWaitIdle(device);
   destroyRenderFinished();
-  for (Frame& frame : frames_) {
+  for (const Frame& frame : frames_) {
     if (frame.timestamps) vkDestroyQueryPool(device, frame.timestamps, nullptr);
     if (frame.imageAvailable) vkDestroySemaphore(device, frame.imageAvailable, nullptr);
     if (frame.inFlight) vkDestroyFence(device, frame.inFlight, nullptr);
@@ -67,7 +66,7 @@ void FrameLoop::destroyRenderFinished() {
 bool FrameLoop::onSwapchainCreated(const Swapchain& swapchain) {
   destroyRenderFinished();
   renderFinished_.resize(swapchain.imageCount(), VK_NULL_HANDLE);
-  VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  const VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
   for (VkSemaphore& s : renderFinished_) {
     if (vkCreateSemaphore(ctx_.device(), &semInfo, nullptr, &s) != VK_SUCCESS) return false;
   }
@@ -89,8 +88,8 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
   }
 
   // 2. Ask the swapchain for an image. The semaphore fires when it is really free.
-  VkResult acquired = vkAcquireNextImageKHR(device, swapchain.handle(), kTimeoutNanos,
-                                            frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
+  const VkResult acquired = vkAcquireNextImageKHR(
+      device, swapchain.handle(), kTimeoutNanos, frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
   if (acquired == VK_ERROR_OUT_OF_DATE_KHR) return Status::swapchainOutOfDate;
   if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR) {
     LOGE("vkAcquireNextImageKHR failed: %d", acquired);
@@ -125,14 +124,14 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
 }
 
 FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t imageIndex) {
-  Frame& frame = frames_[current_];
+  const Frame& frame = frames_[current_];
   if (frame.timestamps) {
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame.timestamps, 1);
   }
   if (vkEndCommandBuffer(frame.cmd) != VK_SUCCESS) return Status::error;
 
   // 4. Submit: wait for the image before writing color, signal when the render is done.
-  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.waitSemaphoreCount = 1;
   submit.pWaitSemaphores = &frame.imageAvailable;
@@ -154,7 +153,7 @@ FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t image
   present.swapchainCount = 1;
   present.pSwapchains = &handle;
   present.pImageIndices = &imageIndex;
-  VkResult presented = vkQueuePresentKHR(ctx_.queue(), &present);
+  const VkResult presented = vkQueuePresentKHR(ctx_.queue(), &present);
 
   current_ = (current_ + 1) % kFramesInFlight;
 

@@ -1,0 +1,17 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  cpp:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.1.12297006 cmake;3.22.1"
+      - name: clang-format and clang-tidy
+        run: scripts/lint-cpp.sh
