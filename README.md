@@ -5,7 +5,7 @@
 [![splat-core](https://github.com/Xget7/android-splatkit/actions/workflows/core.yml/badge.svg)](https://github.com/Xget7/android-splatkit/actions/workflows/core.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An open source Gaussian splatting engine for Android, built directly on Vulkan.
+Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.
 SplatKit loads a 3D Gaussian splat scene, such as a World Labs Marble world, and lets the user walk through it with touch, an on screen joystick or the phone's gyroscope.
 It ships as a single Android view that you drop into any layout, Compose tree or cross platform view manager.
 

@@ -44,7 +44,7 @@ mavenPublishing {
     if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
     pom {
         name.set("SplatKit Android")
-        description.set("Walkable Gaussian splat worlds on Android, rendered with Vulkan.")
+        description.set("Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.")
         url.set("https://github.com/Xget7/android-splatkit")
         licenses {
             license {
