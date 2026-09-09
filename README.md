@@ -6,6 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.
+
+<img src="docs/media/pool-mi9.gif" width="240" alt="Walking through a 1.79M splat pool scene on a Xiaomi Mi 9 at the MEDIUM preset">
+
+*1.79M splats, MEDIUM preset, Xiaomi Mi 9; recorded with `screenrecord`, which takes GPU time from the frame.*
+
 SplatKit loads a 3D Gaussian splat scene, such as a World Labs Marble world, and lets the user walk through it with touch, an on screen joystick or the phone's gyroscope.
 It ships as a single Android view that you drop into any layout, Compose tree or cross platform view manager.
 
