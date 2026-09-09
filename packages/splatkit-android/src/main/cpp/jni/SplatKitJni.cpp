@@ -1,5 +1,5 @@
-// The JNI entry points of com.splatkit.engine.NativeEngine. Each one checks the handle
-// and forwards to the Engine; the layouts of the float arrays shared with Kotlin are
+// The JNI entry points of com.splatkit.engine.SplatEngine. Each one checks the handle
+// and forwards to the SplatEngine; the layouts of the float arrays shared with Kotlin are
 // documented where they are filled.
 
 #include <jni.h>
@@ -11,13 +11,13 @@
 #include <memory>
 #include <string>
 
-#include "Engine.h"
 #include "Log.h"
+#include "engine/SplatEngine.h"
 
 // `SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, ...)` declares the exported symbol
-// the JVM binds to `NativeEngine.nativeLook`. The package is part of the name.
+// the JVM binds to `SplatEngine.nativeLook`. The package is part of the name.
 #define SPLATKIT_JNI(returnType, name) \
-  extern "C" JNIEXPORT returnType JNICALL Java_com_splatkit_engine_NativeEngine_##name
+  extern "C" JNIEXPORT returnType JNICALL Java_com_splatkit_engine_SplatEngine_##name
 
 namespace {
 
@@ -26,13 +26,13 @@ constexpr jsize kStatsFloats = 7;
 constexpr jsize kAttitudeFloats = 9;
 
 // The handle Kotlin holds is the engine's address; JNI has no other way to carry it.
-splatkit::Engine* toEngine(jlong handle) {
-  return reinterpret_cast<splatkit::Engine*>(handle);  // NOLINT(performance-no-int-to-ptr)
+splatkit::SplatEngine* toEngine(jlong handle) {
+  return reinterpret_cast<splatkit::SplatEngine*>(handle);  // NOLINT(performance-no-int-to-ptr)
 }
 
 JavaVM* gVm = nullptr;
 
-// Delivers engine events to NativeEngine.onNativeEvent on whatever thread raised them.
+// Delivers engine events to SplatEngine.onNativeEvent on whatever thread raised them.
 // Both threads that can raise one (the loader executor and the render HandlerThread)
 // are Java threads, so GetEnv succeeds; a native thread would be attached for the call.
 class EventBridge {
@@ -41,12 +41,12 @@ class EventBridge {
     jclass cls = env->GetObjectClass(engine);
     method_ = env->GetMethodID(cls, "onNativeEvent", "(ILjava/lang/String;I)V");
     env->DeleteLocalRef(cls);
-    // A signature drift between the .so and NativeEngine would otherwise surface as a
+    // A signature drift between the .so and SplatEngine would otherwise surface as a
     // pending exception thrown out of a later render call.
     if (env->ExceptionCheck()) {
       env->ExceptionClear();
       method_ = nullptr;
-      LOGE("NativeEngine.onNativeEvent not found: events will not be delivered");
+      LOGE("SplatEngine.onNativeEvent not found: events will not be delivered");
     }
   }
   ~EventBridge() {
@@ -59,7 +59,8 @@ class EventBridge {
   EventBridge(const EventBridge&) = delete;
   EventBridge& operator=(const EventBridge&) = delete;
 
-  void operator()(splatkit::Engine::Event event, const std::string& message, uint32_t count) const {
+  void operator()(splatkit::SplatEngine::Event event, const std::string& message,
+                  uint32_t count) const {
     if (gVm == nullptr || method_ == nullptr) return;
     JNIEnv* env = nullptr;
     bool attached = false;
@@ -108,16 +109,17 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 // Lifetime.
 
 SPLATKIT_JNI(jlong, nativeCreate)(JNIEnv* env, jobject thiz) {
-  auto result = splatkit::Engine::create();
+  auto result = splatkit::SplatEngine::create();
   if (!result) {
     LOGE("engine creation failed: %s", result.error().message.c_str());
     return 0;
   }
-  splatkit::Engine* engine = result.value().release();
+  splatkit::SplatEngine* engine = result.value().release();
   // The bridge lives in the sink and dies with the engine.
-  engine->setEventSink(
-      [bridge = std::make_shared<EventBridge>(env, thiz)](
-          splatkit::Engine::Event e, const std::string& m, uint32_t c) { (*bridge)(e, m, c); });
+  engine->setEventSink([bridge = std::make_shared<EventBridge>(env, thiz)](
+                           splatkit::SplatEngine::Event e, const std::string& m, uint32_t c) {
+    (*bridge)(e, m, c);
+  });
   return reinterpret_cast<jlong>(engine);
 }
 

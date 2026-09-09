@@ -124,9 +124,12 @@ MIUI hides application logs until `adb shell setprop persist.log.tag.SplatKit V`
 | Domain | Where | Responsibility |
 |---|---|---|
 | Rendering | C++ `src/main/cpp/rendering` | Vulkan context, swapchain, frame loop, offscreen target, splat pipeline |
-| Engine | C++ `src/main/cpp/Engine.*` | Owns the world, the camera and the sorter; the render loop |
+| Engine | C++ `src/main/cpp/engine/SplatEngine.*` | Owns the renderer, the world, the camera and the sorter; runs the frame |
+| Diagnostics | C++ `src/main/cpp/diagnostics` | `Benchmark`, `StatsPublisher` |
 | Camera | C++ `src/main/cpp/camera` | Walk and fly camera over the `splat-core` character controller |
-| JNI | C++ `src/main/cpp/jni` | The boundary; events cross it through `NativeEngine.onNativeEvent` |
-| View | Kotlin `SplatSurfaceView`, `RenderThread`, `MotionInput` | Surface lifecycle, Choreographer driven render thread, sensors |
+| JNI | C++ `src/main/cpp/jni` | The boundary; events cross it through `SplatEngine.onNativeEvent` |
+| View | Kotlin `com.splatkit.SplatSurfaceView` | The public API: surface lifecycle, settings, loaders, listener |
+| Engine boundary | Kotlin `com.splatkit.engine`: `SplatEngine`, `RenderThread` | The JNI wrapper and the Choreographer driven render thread |
+| Input | Kotlin `com.splatkit.input`: `TouchInput`, `MotionInput` | Touch, joystick and gyroscope |
 
 Shaders in `src/main/cpp/shaders` compile to SPIR-V headers at build time.

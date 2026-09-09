@@ -29,7 +29,7 @@ internal class RenderThread {
     private val loader = Executors.newSingleThreadExecutor { Thread(it, "SplatKitLoader") }
     private lateinit var choreographer: Choreographer
     // Written on the render thread, read by the any-thread getters (stats, camera pose).
-    @Volatile private var engine: NativeEngine? = null
+    @Volatile private var engine: SplatEngine? = null
     private var rendering = false
 
     /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
@@ -39,7 +39,7 @@ internal class RenderThread {
     val isAvailable: Boolean
 
     /** Loading outcomes, delivered on the main thread. */
-    var onEvent: ((NativeEngine.Event, String, Int) -> Unit)? = null
+    var onEvent: ((SplatEngine.Event, String, Int) -> Unit)? = null
 
     /** Handler on the render thread, for listeners that should deliver there. */
     val renderHandler: Handler get() = handler
@@ -48,7 +48,7 @@ internal class RenderThread {
         // Everything that must live on the render thread is created there.
         runBlockingOnThread {
             choreographer = Choreographer.getInstance()
-            engine = NativeEngine()
+            engine = SplatEngine()
         }
         gpuDescription = engine?.gpuDescription() ?: ""
         isAvailable = engine?.isValid == true
@@ -147,7 +147,7 @@ internal class RenderThread {
 
     // After release() the executor is shut down and would throw; a late load from a
     // host's background thread is a no-op like every other call after release.
-    private fun decode(block: (NativeEngine) -> Unit) {
+    private fun decode(block: (SplatEngine) -> Unit) {
         if (loader.isShutdown) return
         try {
             loader.execute { engine?.let(block) }

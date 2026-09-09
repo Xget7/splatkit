@@ -6,7 +6,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import com.splatkit.engine.NativeEngine
+import com.splatkit.engine.SplatEngine
 import com.splatkit.engine.RenderThread
 import com.splatkit.input.MotionInput
 import com.splatkit.input.TouchInput
@@ -54,10 +54,10 @@ class SplatSurfaceView @JvmOverloads constructor(
         renderThread.onEvent = { event, message, splatCount ->
             val l = listener
             if (l != null) when (event) {
-                NativeEngine.Event.WORLD_READY -> l.onWorldReady(splatCount)
-                NativeEngine.Event.WORLD_FAILED -> l.onWorldFailed(message)
-                NativeEngine.Event.COLLIDER_READY -> l.onColliderReady()
-                NativeEngine.Event.COLLIDER_FAILED -> l.onColliderFailed(message)
+                SplatEngine.Event.WORLD_READY -> l.onWorldReady(splatCount)
+                SplatEngine.Event.WORLD_FAILED -> l.onWorldFailed(message)
+                SplatEngine.Event.COLLIDER_READY -> l.onColliderReady()
+                SplatEngine.Event.COLLIDER_FAILED -> l.onColliderFailed(message)
             }
         }
     }

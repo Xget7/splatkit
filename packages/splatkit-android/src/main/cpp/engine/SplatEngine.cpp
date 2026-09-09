@@ -1,4 +1,4 @@
-#include "Engine.h"
+#include "engine/SplatEngine.h"
 
 #include <chrono>
 #include <cmath>
@@ -24,8 +24,8 @@ double millisSince(Clock::time_point start) {
 
 }  // namespace
 
-splat::Result<std::unique_ptr<Engine>> Engine::create() {
-  std::unique_ptr<Engine> engine(new Engine());
+splat::Result<std::unique_ptr<SplatEngine>> SplatEngine::create() {
+  std::unique_ptr<SplatEngine> engine(new SplatEngine());
   auto ctx = VulkanContext::create();
   if (!ctx) return ctx.error();
   engine->ctx_ = std::move(ctx.value());
@@ -33,25 +33,25 @@ splat::Result<std::unique_ptr<Engine>> Engine::create() {
   if (!engine->frameLoop_->valid()) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "frame loop"};
   }
-  engine->renderer_ = std::make_unique<SurfaceRenderer>(*engine->ctx_, *engine->frameLoop_);
+  engine->renderer_ = std::make_unique<VulkanSplatRenderer>(*engine->ctx_, *engine->frameLoop_);
   return engine;
 }
 
-Engine::~Engine() {
+SplatEngine::~SplatEngine() {
   renderer_.reset();
   sorter_.reset();
   if (ctx_) ctx_->waitIdle();
 }
 
-void Engine::setWindow(ANativeWindow* window) {
+void SplatEngine::setWindow(ANativeWindow* window) {
   renderer_->setWindow(window);
 }
 
-void Engine::onSurfaceResized(uint32_t width, uint32_t height) {
+void SplatEngine::onSurfaceResized(uint32_t width, uint32_t height) {
   renderer_->onSurfaceResized(width, height);
 }
 
-void Engine::setShDegree(int degree) {
+void SplatEngine::setShDegree(int degree) {
   degree = std::clamp(degree, 0, kMaxShDegree);
   if (degree == shDegree_) return;
   shDegree_ = degree;
@@ -60,23 +60,23 @@ void Engine::setShDegree(int degree) {
 
 // Loading: decode on the calling thread, report, and leave the result for the frame.
 
-void Engine::loadWorld(const std::uint8_t* data, std::size_t size) {
+void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size) {
   reportWorld(loader_.loadWorld(data, size));
 }
 
-void Engine::loadWorldFile(const std::string& path) {
+void SplatEngine::loadWorldFile(const std::string& path) {
   reportWorld(loader_.loadWorldFile(path));
 }
 
-void Engine::loadCollider(const std::uint8_t* data, std::size_t size) {
+void SplatEngine::loadCollider(const std::uint8_t* data, std::size_t size) {
   reportCollider(loader_.loadCollider(data, size));
 }
 
-void Engine::loadColliderFile(const std::string& path) {
+void SplatEngine::loadColliderFile(const std::string& path) {
   reportCollider(loader_.loadColliderFile(path));
 }
 
-void Engine::reportWorld(const splat::Result<splat::WorldLoader::WorldReport>& report) {
+void SplatEngine::reportWorld(const splat::Result<splat::SplatWorldLoader::WorldReport>& report) {
   if (!report) {
     LOGE("world load failed: %s", report.error().message.c_str());
     emit(Event::worldFailed, report.error().message);
@@ -91,7 +91,8 @@ void Engine::reportWorld(const splat::Result<splat::WorldLoader::WorldReport>& r
   }
 }
 
-void Engine::reportCollider(const splat::Result<splat::WorldLoader::ColliderReport>& report) {
+void SplatEngine::reportCollider(
+    const splat::Result<splat::SplatWorldLoader::ColliderReport>& report) {
   if (!report) {
     LOGE("collider load failed: %s", report.error().message.c_str());
     emit(Event::colliderFailed, report.error().message);
@@ -102,7 +103,7 @@ void Engine::reportCollider(const splat::Result<splat::WorldLoader::ColliderRepo
 }
 
 // Uploads what the loader left. True when a new world is drawn from now on.
-bool Engine::applyPendingLoads() {
+bool SplatEngine::applyPendingLoads() {
   if (auto collider = loader_.takeCollider()) {
     camera_.setCollider(std::move(collider));
     emit(Event::colliderReady);
@@ -132,7 +133,7 @@ bool Engine::applyPendingLoads() {
 
 // Camera.
 
-void Engine::setCameraPose(const CameraPose& pose) {
+void SplatEngine::setCameraPose(const CameraPose& pose) {
   camera_.setPosition({pose.x, pose.y, pose.z});
   camera_.setOrientation(pose.yaw, pose.pitch);
   planner_.invalidate();  // a teleport needs a fresh sort, not a cull
@@ -142,11 +143,11 @@ void Engine::setCameraPose(const CameraPose& pose) {
   publishPose();
 }
 
-void Engine::publishPose() {
+void SplatEngine::publishPose() {
   stats_.publishPose(camera_.position(), camera_.yaw(), camera_.pitch());
 }
 
-Engine::FrameCamera Engine::frameCamera(VkExtent2D extent) const {
+SplatEngine::FrameCamera SplatEngine::frameCamera(VkExtent2D extent) const {
   FrameCamera c;
   c.view = camera_.viewMatrix();
   const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -162,7 +163,7 @@ Engine::FrameCamera Engine::frameCamera(VkExtent2D extent) const {
 // Visibility: only the splats inside a widened frustum reach the GPU, which pays per
 // splat it processes. The planner says when the view changed enough to ask again.
 
-void Engine::requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent) {
+void SplatEngine::requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent) {
   auto frustum = planner_.update(camera.axes, dt, lastSort_.cullMillis);
   if (!frustum) return;
   splat::LodSettings lod;
@@ -173,7 +174,7 @@ void Engine::requestVisible(const FrameCamera& camera, float dt, VkExtent2D exte
   sorter_->requestVisible(*frustum, lod);
 }
 
-void Engine::takeSortResult() {
+void SplatEngine::takeSortResult() {
   auto sorted = sorter_->take();
   if (!sorted) return;
   lastSort_.sortMillis = sorted->sortMillis;
@@ -185,12 +186,12 @@ void Engine::takeSortResult() {
 
 // Benchmark and stats.
 
-void Engine::startBenchmark(float seconds) {
+void SplatEngine::startBenchmark(float seconds) {
   benchmark_.start(seconds);
   renderer_->setVsync(false);  // so frame times are not vsync multiples
 }
 
-void Engine::driveBenchmark(float dt, const GpuWorld& world) {
+void SplatEngine::driveBenchmark(float dt, const GpuWorld& world) {
   if (benchmark_.pending()) {
     camera_.setMotionEnabled(false);
     camera_.setOrientation(0.0f, 0.0f);
@@ -200,7 +201,7 @@ void Engine::driveBenchmark(float dt, const GpuWorld& world) {
   if (benchmark_.running()) camera_.look(benchmark_.step(dt, frameLoop_->lastGpuMillis()), 0.0f);
 }
 
-StatsPublisher::Sample Engine::sample() const {
+StatsPublisher::Sample SplatEngine::sample() const {
   StatsPublisher::Sample s;
   s.gpuMillis = frameLoop_->lastGpuMillis();
   s.sortMillis = lastSort_.sortMillis;
@@ -218,7 +219,7 @@ StatsPublisher::Sample Engine::sample() const {
 
 // The frame.
 
-float Engine::frameSeconds(int64_t frameTimeNanos) {
+float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
   const float dt =
       lastFrameNanos_ == 0 ? 0.0f : static_cast<float>(frameTimeNanos - lastFrameNanos_) * 1e-9f;
   lastFrameNanos_ = frameTimeNanos;
@@ -227,7 +228,7 @@ float Engine::frameSeconds(int64_t frameTimeNanos) {
 
 // Every vsync steps the camera and the sorter, but the GPU only draws when something
 // visible changed: a still scene costs no GPU time and almost no battery.
-void Engine::render(int64_t frameTimeNanos) {
+void SplatEngine::render(int64_t frameTimeNanos) {
   if (!renderer_->ready()) return;
   if (applyPendingLoads()) redrawNeeded_ = true;
 
@@ -254,7 +255,7 @@ void Engine::render(int64_t frameTimeNanos) {
     return;
   }
 
-  SurfaceRenderer::Frame frame;
+  VulkanSplatRenderer::Frame frame;
   if (camera) {
     if (pendingOrder_) {
       drawCount_ = static_cast<uint32_t>(pendingOrder_->order.size());

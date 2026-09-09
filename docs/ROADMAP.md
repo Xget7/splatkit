@@ -10,7 +10,7 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
   Unit and integration tests, CI with ThreadSanitizer and AddressSanitizer.
 - `splat-core/lod`: a level of detail hierarchy after Spark 2.0's tiny-lod and a budgeted selection, opt in through `splatBudget` ([ADR 0010](adr/0010-level-of-detail-tree.md)); measured to give nothing on the house at full resolution, kept for scenes bigger than the view and for low quality modes.
 - `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending and view dependent colour from spherical harmonics (one pipeline per degree, `shDegree` switches it per frame, `maxShDegree` caps the memory), walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
-  One `Engine` over deep modules ([ADR 0013](adr/0013-engine-modules.md)): `SurfaceRenderer`, `Benchmark` and `StatsPublisher` on the Android side, `WorldLoader`, `MappedFile` and `VisibilityPlanner` in `splat-core` with unit tests; `clang-format` and `clang-tidy` run on every pull request.
+  One `SplatEngine` over deep modules ([ADR 0013](adr/0013-engine-modules.md)): `VulkanSplatRenderer`, `Benchmark` and `StatsPublisher` on the Android side, `SplatWorldLoader`, `MappedFile` and `VisibilityPlanner` in `splat-core` with unit tests; `clang-format` and `clang-tidy` run on every pull request.
 - `apps/android-dev`: loads a World Labs kitchen and its collider, or any world pushed to its files dir, shows GPU, frame time, sort time and splat count.
 - `scripts/generate_world.py`: photos of a place to a walkable world through the World Labs API, downloading the SPZ and the collider.
 - The engine draws only when the camera, the sort order, the world or the surface changed; a still scene costs no GPU time.
@@ -97,7 +97,7 @@ Each item says what it touches and how to prove it works.
   Proof: no `VK_SUBOPTIMAL_KHR` after a rotation and the same image.
   Related, seen on the Mi 9: on a rotation the surface size arrives before the driver reports the new extent, so the swapchain and the render target are rebuilt twice (one frame at the old size, then the right one). Harmless, one extra idle wait; fold the fix into this item.
 - **Chunked world upload off the render thread**.
-  `SurfaceRenderer::uploadWorld` packs, uploads and waits inside the frame, which freezes it and needs about three times the world size at the peak.
+  `VulkanSplatRenderer::uploadWorld` packs, uploads and waits inside the frame, which freezes it and needs about three times the world size at the peak.
 - **Frustum cull margin derived from the projected extent**, so large splats near the edge do not pop.
 - **Faster spatial reorder** (help wanted).
   `reorderSpatially` is a radix sort plus five array permutations: 470 ms for 2M splats on the Mi 9's loader thread against 66 ms on an M4 Pro, so the permutation, not the sort, is what the phone pays.

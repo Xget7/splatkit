@@ -12,7 +12,7 @@ import com.splatkit.SplatStats
  * Threads: every call runs on the render thread, except the loaders, which decode on
  * the calling thread, and the readers marked "any thread", which lock against [destroy].
  */
-internal class NativeEngine {
+internal class SplatEngine {
     private var handle: Long = nativeCreate()
     private val poseScratch = FloatArray(POSE_FLOATS)
     private val statsScratch = FloatArray(STATS_FLOATS)

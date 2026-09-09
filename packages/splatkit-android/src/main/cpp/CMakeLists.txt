@@ -44,12 +44,12 @@ add_library(splatkit SHARED
   rendering/vulkan/DebugTrianglePipeline.cpp
   rendering/vulkan/GpuBuffer.cpp
   rendering/vulkan/SplatPipeline.cpp
-  rendering/vulkan/SurfaceRenderer.cpp
+  rendering/vulkan/VulkanSplatRenderer.cpp
   rendering/vulkan/Vma.cpp
   camera/WalkCamera.cpp
   diagnostics/Benchmark.cpp
   diagnostics/StatsPublisher.cpp
-  Engine.cpp
+  engine/SplatEngine.cpp
   jni/SplatKitJni.cpp
 )
 target_include_directories(splatkit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

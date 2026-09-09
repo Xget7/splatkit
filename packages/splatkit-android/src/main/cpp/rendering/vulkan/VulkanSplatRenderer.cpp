@@ -1,4 +1,4 @@
-#include "rendering/vulkan/SurfaceRenderer.h"
+#include "rendering/vulkan/VulkanSplatRenderer.h"
 
 #include <algorithm>
 
@@ -15,16 +15,16 @@ bool isSrgb(VkFormat format) {
 
 }  // namespace
 
-SurfaceRenderer::SurfaceRenderer(VulkanContext& ctx, FrameLoop& frameLoop)
+VulkanSplatRenderer::VulkanSplatRenderer(VulkanContext& ctx, FrameLoop& frameLoop)
     : ctx_(ctx), frameLoop_(frameLoop) {}
 
-SurfaceRenderer::~SurfaceRenderer() {
+VulkanSplatRenderer::~VulkanSplatRenderer() {
   setWindow(nullptr);
   ctx_.waitIdle();
   world_.reset();
 }
 
-void SurfaceRenderer::setWindow(ANativeWindow* window) {
+void VulkanSplatRenderer::setWindow(ANativeWindow* window) {
   if (window == window_) return;
   destroySurface();
   if (window_ != nullptr) {
@@ -41,7 +41,7 @@ void SurfaceRenderer::setWindow(ANativeWindow* window) {
   }
 }
 
-void SurfaceRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
+void VulkanSplatRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
   if (!swapchain_) return;
   const VkExtent2D current = swapchain_->extent();
   if (current.width == width && current.height == height) return;
@@ -50,7 +50,7 @@ void SurfaceRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
   keepSurfaceIf(recreateSwapchain());
 }
 
-void SurfaceRenderer::setRenderScale(float scale) {
+void VulkanSplatRenderer::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
@@ -63,24 +63,24 @@ void SurfaceRenderer::setRenderScale(float scale) {
   if (pipelineFormat_ != activeFormat()) keepSurfaceIf(createPipelines());
 }
 
-void SurfaceRenderer::setLinearBlending(bool linear) {
+void VulkanSplatRenderer::setLinearBlending(bool linear) {
   if (linear == linearBlending_) return;
   linearBlending_ = linear;
   if (swapchain_) keepSurfaceIf(recreateSwapchain());
 }
 
-void SurfaceRenderer::setVsync(bool vsync) {
+void VulkanSplatRenderer::setVsync(bool vsync) {
   if (vsync == vsync_) return;
   vsync_ = vsync;
   if (swapchain_) keepSurfaceIf(recreateSwapchain());
 }
 
-VkExtent2D SurfaceRenderer::drawExtent() const {
+VkExtent2D VulkanSplatRenderer::drawExtent() const {
   if (target_) return target_->extent();
   return swapchain_ ? swapchain_->extent() : VkExtent2D{0, 0};
 }
 
-bool SurfaceRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
+bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   if (!splats_) return false;
   auto world = splats_->uploadWorld(cloud, maxShDegree);
   if (!world) return false;
@@ -90,7 +90,7 @@ bool SurfaceRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegre
   return true;
 }
 
-bool SurfaceRenderer::draw(const Frame& frame) {
+bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!ready()) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
@@ -148,7 +148,7 @@ bool SurfaceRenderer::draw(const Frame& frame) {
   return true;
 }
 
-bool SurfaceRenderer::createSurface() {
+bool VulkanSplatRenderer::createSurface() {
   VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
   info.window = window_;
   if (vkCreateAndroidSurfaceKHR(ctx_.instance(), &info, nullptr, &surface_) != VK_SUCCESS) {
@@ -162,7 +162,7 @@ bool SurfaceRenderer::createSurface() {
   return true;
 }
 
-bool SurfaceRenderer::recreateSwapchain() {
+bool VulkanSplatRenderer::recreateSwapchain() {
   ++generation_;
   ctx_.waitIdle();
   const VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
@@ -186,7 +186,7 @@ bool SurfaceRenderer::recreateSwapchain() {
   return createPipelines();
 }
 
-bool SurfaceRenderer::createRenderTarget() {
+bool VulkanSplatRenderer::createRenderTarget() {
   ++generation_;
   target_.reset();
   if (renderScale_ == 1.0f) return true;
@@ -202,7 +202,7 @@ bool SurfaceRenderer::createRenderTarget() {
   return true;
 }
 
-bool SurfaceRenderer::createPipelines() {
+bool VulkanSplatRenderer::createPipelines() {
   triangle_.reset();
   splats_.reset();
   pipelineFormat_ = activeFormat();
@@ -228,7 +228,7 @@ bool SurfaceRenderer::createPipelines() {
 
 // A rebuild that fails leaves no pipeline to draw with, so the surface is dropped and
 // the view stays blank until the host attaches a surface again; the failure is logged.
-void SurfaceRenderer::keepSurfaceIf(bool rebuilt) {
+void VulkanSplatRenderer::keepSurfaceIf(bool rebuilt) {
   if (rebuilt) return;
   LOGE("rendering stopped until the surface comes back");
   destroySurface();
@@ -237,7 +237,7 @@ void SurfaceRenderer::keepSurfaceIf(bool rebuilt) {
 // True when the surface no longer has the swapchain's size, which is how a rotation shows
 // up when the driver only answers SUBOPTIMAL. A bare SUBOPTIMAL with the same size is the
 // identity pre-transform being second best, and is not worth a rebuild.
-bool SurfaceRenderer::surfaceExtentChanged() const {
+bool VulkanSplatRenderer::surfaceExtentChanged() const {
   VkSurfaceCapabilitiesKHR caps{};
   if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx_.physicalDevice(), surface_, &caps) !=
       VK_SUCCESS) {
@@ -253,15 +253,15 @@ bool SurfaceRenderer::surfaceExtentChanged() const {
   return changed;
 }
 
-VkFormat SurfaceRenderer::activeFormat() const {
+VkFormat VulkanSplatRenderer::activeFormat() const {
   return target_ ? target_->format() : swapchain_->format();
 }
 
-VkRenderPass SurfaceRenderer::activeRenderPass() const {
+VkRenderPass VulkanSplatRenderer::activeRenderPass() const {
   return target_ ? target_->renderPass() : swapchain_->renderPass();
 }
 
-void SurfaceRenderer::destroySurface() {
+void VulkanSplatRenderer::destroySurface() {
   ctx_.waitIdle();
   triangle_.reset();
   splats_.reset();

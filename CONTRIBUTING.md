@@ -52,6 +52,14 @@ The script configures both packages for the Android target and lints tests and t
 
 `packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, navigation, file mapping, the world loader and the visibility policy, each with tests.
 `packages/splatkit-android` owns everything Vulkan and Android.
-Its C++ is one `Engine` that owns a `SurfaceRenderer` (surface, swapchain, pipelines, the world on the GPU), the camera, the sorter, a `Benchmark` and a `StatsPublisher`; `jni/` is the boundary to Kotlin and knows nothing else.
+Its C++ is one `SplatEngine` (`cpp/engine`) that owns a `VulkanSplatRenderer` (surface, swapchain, pipelines, the world on the GPU), the camera, the sorter, a `Benchmark` and a `StatsPublisher`; `jni/` is the boundary to Kotlin and knows nothing else.
 Its Kotlin has three layers: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope.
 The engine does not know what is hosting it; [ADR 0013](docs/adr/0013-engine-modules.md) records the split.
+
+## Names
+
+The root object of each layer carries the domain in its name, so a reader who sees it anywhere knows what project it belongs to: `SplatEngine` in C++ and Kotlin, `VulkanSplatRenderer`, `SplatWorldLoader`, `SplatSurfaceView`, `SplatPipeline`.
+The same thing has the same name on both sides of a boundary: the Kotlin `SplatEngine` wraps the C++ `SplatEngine`, and the JNI symbols are derived from that one name.
+Objects below the root are named for their one job and live in the directory of that job, `rendering/vulkan`, `diagnostics`, `camera`, `jni`, `loading`, `sorting`; nothing sits loose at the root of `cpp/`.
+A name that only says what something is, `Engine`, `Renderer`, `Loader`, is not enough; a name that repeats the directory, `VulkanVulkanContext`, is too much.
+[ADR 0014](docs/adr/0014-names-carry-the-domain.md) records the rule.

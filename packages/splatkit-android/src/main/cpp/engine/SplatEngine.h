@@ -16,10 +16,10 @@
 #include "diagnostics/Benchmark.h"
 #include "diagnostics/StatsPublisher.h"
 #include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/SurfaceRenderer.h"
 #include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/VulkanSplatRenderer.h"
 #include "splat/core/Result.h"
-#include "splat/loading/WorldLoader.h"
+#include "splat/loading/SplatWorldLoader.h"
 #include "splat/math/Mat4.h"
 #include "splat/sorting/AsyncSorter.h"
 #include "splat/sorting/VisibilityPlanner.h"
@@ -34,16 +34,16 @@ namespace splatkit {
 // Rendering, input and settings run on the render thread. Loading may run on any
 // thread: it decodes there and leaves the result for the render thread to upload.
 // Survives losing and regaining the surface.
-class Engine {
+class SplatEngine {
  public:
   using Stats = splatkit::Stats;
   using CameraPose = splatkit::CameraPose;
 
-  static splat::Result<std::unique_ptr<Engine>> create();
-  ~Engine();
+  static splat::Result<std::unique_ptr<SplatEngine>> create();
+  ~SplatEngine();
 
-  Engine(const Engine&) = delete;
-  Engine& operator=(const Engine&) = delete;
+  SplatEngine(const SplatEngine&) = delete;
+  SplatEngine& operator=(const SplatEngine&) = delete;
 
   // A new window (takes a reference) or nullptr when the surface is going away.
   void setWindow(ANativeWindow* window);
@@ -129,12 +129,12 @@ class Engine {
     splat::VisibilityPlanner::View axes;
   };
 
-  Engine() = default;
+  SplatEngine() = default;
   void emit(Event event, const std::string& message = {}, uint32_t splatCount = 0) const {
     if (events_) events_(event, message, splatCount);
   }
-  void reportWorld(const splat::Result<splat::WorldLoader::WorldReport>& report);
-  void reportCollider(const splat::Result<splat::WorldLoader::ColliderReport>& report);
+  void reportWorld(const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
+  void reportCollider(const splat::Result<splat::SplatWorldLoader::ColliderReport>& report);
   bool applyPendingLoads();
   float frameSeconds(int64_t frameTimeNanos);
   void driveBenchmark(float dt, const GpuWorld& world);
@@ -147,8 +147,8 @@ class Engine {
   EventSink events_;
   std::unique_ptr<VulkanContext> ctx_;
   std::unique_ptr<FrameLoop> frameLoop_;
-  std::unique_ptr<SurfaceRenderer> renderer_;  // after ctx_ and frameLoop_: dies first
-  splat::WorldLoader loader_;
+  std::unique_ptr<VulkanSplatRenderer> renderer_;  // after ctx_ and frameLoop_: dies first
+  splat::SplatWorldLoader loader_;
   WalkCamera camera_;
   splat::VisibilityPlanner planner_;
   Benchmark benchmark_;

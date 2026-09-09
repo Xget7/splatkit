@@ -1,4 +1,4 @@
-#include "splat/loading/WorldLoader.h"
+#include "splat/loading/SplatWorldLoader.h"
 
 #include <algorithm>
 #include <chrono>
@@ -20,12 +20,12 @@ double millisSince(Clock::time_point start) {
 
 }  // namespace
 
-void WorldLoader::setBudget(int budget) {
+void SplatWorldLoader::setBudget(int budget) {
   budget_.store(std::max(budget, 0));
 }
 
-Result<WorldLoader::WorldReport> WorldLoader::loadWorld(const std::uint8_t* data,
-                                                        std::size_t size) {
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,
+                                                                  std::size_t size) {
   WorldReport report;
   auto start = Clock::now();
   auto decoded = decodeSplatFile(data, size);
@@ -57,14 +57,14 @@ Result<WorldLoader::WorldReport> WorldLoader::loadWorld(const std::uint8_t* data
   return report;
 }
 
-Result<WorldLoader::WorldReport> WorldLoader::loadWorldFile(const std::string& path) {
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(const std::string& path) {
   auto file = MappedFile::open(path);
   if (!file) return file.error();
   return loadWorld(file.value().data(), file.value().size());
 }
 
-Result<WorldLoader::ColliderReport> WorldLoader::loadCollider(const std::uint8_t* data,
-                                                              std::size_t size) {
+Result<SplatWorldLoader::ColliderReport> SplatWorldLoader::loadCollider(const std::uint8_t* data,
+                                                                        std::size_t size) {
   const auto start = Clock::now();
   auto decoded = decodeGlb(data, size);
   if (!decoded) return decoded.error();
@@ -78,18 +78,19 @@ Result<WorldLoader::ColliderReport> WorldLoader::loadCollider(const std::uint8_t
   return report;
 }
 
-Result<WorldLoader::ColliderReport> WorldLoader::loadColliderFile(const std::string& path) {
+Result<SplatWorldLoader::ColliderReport> SplatWorldLoader::loadColliderFile(
+    const std::string& path) {
   auto file = MappedFile::open(path);
   if (!file) return file.error();
   return loadCollider(file.value().data(), file.value().size());
 }
 
-std::unique_ptr<WorldLoader::World> WorldLoader::takeWorld() {
+std::unique_ptr<SplatWorldLoader::World> SplatWorldLoader::takeWorld() {
   const std::lock_guard<std::mutex> lock(mutex_);
   return std::move(pendingWorld_);
 }
 
-std::unique_ptr<Collider> WorldLoader::takeCollider() {
+std::unique_ptr<Collider> SplatWorldLoader::takeCollider() {
   const std::lock_guard<std::mutex> lock(mutex_);
   return std::move(pendingCollider_);
 }

@@ -1,4 +1,4 @@
-#include "splat/loading/WorldLoader.h"
+#include "splat/loading/SplatWorldLoader.h"
 
 #include <cstdio>
 #include <fstream>
@@ -30,14 +30,14 @@ std::vector<std::uint8_t> encodeSpz(int points) {
   return bytes;
 }
 
-TEST(WorldLoader, NothingIsWaitingAtFirst) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, NothingIsWaitingAtFirst) {
+  SplatWorldLoader loader;
   EXPECT_EQ(loader.takeWorld(), nullptr);
   EXPECT_EQ(loader.takeCollider(), nullptr);
 }
 
-TEST(WorldLoader, WithoutABudgetTheCloudWaitsForTheRenderer) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, WithoutABudgetTheCloudWaitsForTheRenderer) {
+  SplatWorldLoader loader;
   const auto bytes = encodeSpz(50);
   auto report = loader.loadWorld(bytes.data(), bytes.size());
   ASSERT_TRUE(report.ok()) << report.error().message;
@@ -54,8 +54,8 @@ TEST(WorldLoader, WithoutABudgetTheCloudWaitsForTheRenderer) {
   EXPECT_EQ(loader.takeWorld(), nullptr);  // taken once
 }
 
-TEST(WorldLoader, WithABudgetTheTreeReplacesTheCloud) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, WithABudgetTheTreeReplacesTheCloud) {
+  SplatWorldLoader loader;
   loader.setBudget(20);
   const auto bytes = encodeSpz(50);
   auto report = loader.loadWorld(bytes.data(), bytes.size());
@@ -72,8 +72,8 @@ TEST(WorldLoader, WithABudgetTheTreeReplacesTheCloud) {
   EXPECT_EQ(&world->splats(), &world->tree->nodes);
 }
 
-TEST(WorldLoader, BudgetAppliesToWorldsLoadedAfterIt) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, BudgetAppliesToWorldsLoadedAfterIt) {
+  SplatWorldLoader loader;
   loader.setBudget(-5);
   EXPECT_EQ(loader.budget(), 0);
   const auto bytes = encodeSpz(10);
@@ -84,8 +84,8 @@ TEST(WorldLoader, BudgetAppliesToWorldsLoadedAfterIt) {
   EXPECT_EQ(world->budget, 0);
 }
 
-TEST(WorldLoader, BadBytesFailAndLeaveTheWaitingWorld) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, BadBytesFailAndLeaveTheWaitingWorld) {
+  SplatWorldLoader loader;
   const auto bytes = encodeSpz(10);
   ASSERT_TRUE(loader.loadWorld(bytes.data(), bytes.size()).ok());
   const std::uint8_t junk[] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -95,8 +95,8 @@ TEST(WorldLoader, BadBytesFailAndLeaveTheWaitingWorld) {
   EXPECT_NE(loader.takeWorld(), nullptr);
 }
 
-TEST(WorldLoader, ANewerLoadReplacesTheWaitingOne) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, ANewerLoadReplacesTheWaitingOne) {
+  SplatWorldLoader loader;
   const auto ten = encodeSpz(10);
   const auto twenty = encodeSpz(20);
   ASSERT_TRUE(loader.loadWorld(ten.data(), ten.size()).ok());
@@ -107,7 +107,7 @@ TEST(WorldLoader, ANewerLoadReplacesTheWaitingOne) {
   EXPECT_EQ(loader.takeWorld(), nullptr);
 }
 
-TEST(WorldLoader, LoadsAWorldFromAFile) {
+TEST(SplatWorldLoader, LoadsAWorldFromAFile) {
   const auto bytes = encodeSpz(30);
   const std::string path = testing::TempDir() + "/world-loader-test.spz";
   {
@@ -115,7 +115,7 @@ TEST(WorldLoader, LoadsAWorldFromAFile) {
     out.write(reinterpret_cast<const char*>(bytes.data()),
               static_cast<std::streamsize>(bytes.size()));
   }
-  WorldLoader loader;
+  SplatWorldLoader loader;
   auto report = loader.loadWorldFile(path);
   std::remove(path.c_str());
   ASSERT_TRUE(report.ok()) << report.error().message;
@@ -128,8 +128,8 @@ TEST(WorldLoader, LoadsAWorldFromAFile) {
   EXPECT_EQ(loader.takeWorld(), nullptr);
 }
 
-TEST(WorldLoader, ColliderBytesThatAreNotGlbFail) {
-  WorldLoader loader;
+TEST(SplatWorldLoader, ColliderBytesThatAreNotGlbFail) {
+  SplatWorldLoader loader;
   const std::uint8_t junk[] = {'n', 'o', 't', ' ', 'g', 'l', 'b', '!', 0, 0, 0, 0};
   auto failed = loader.loadCollider(junk, sizeof(junk));
   ASSERT_FALSE(failed.ok());

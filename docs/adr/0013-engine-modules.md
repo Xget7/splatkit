@@ -15,19 +15,19 @@ The engine keeps its interface and becomes the orchestrator of modules that each
 Into `splat-core`, with unit tests, because they need no GPU:
 
 - `MappedFile`: a file mapped read only, released with the object.
-- `WorldLoader`: decode, spatial reorder and the level of detail tree on the calling thread; a mailbox the render thread takes from; a `Result` back instead of a callback, so the core stays free of logging.
+- `SplatWorldLoader`: decode, spatial reorder and the level of detail tree on the calling thread; a mailbox the render thread takes from; a `Result` back instead of a callback, so the core stays free of logging.
 - `VisibilityPlanner`: sort on move, cull on turn ([ADR 0009](0009-sort-on-move-cull-on-turn.md)) and the margin that grows with the turn rate and the cull time, as a value that answers "request this frustum now, or nothing".
 - `summarizeTimings`: mean, p50, p95 and max of a set of frame times.
 
 Into `splatkit-android`:
 
-- `SurfaceRenderer`: everything between an `ANativeWindow` and a presented frame, including the world bound to the pipelines and every rebuild a resize, rotation or setting change needs. A generation counter tells the engine when a drawn frame is gone.
+- `VulkanSplatRenderer`: everything between an `ANativeWindow` and a presented frame, including the world bound to the pipelines and every rebuild a resize, rotation or setting change needs. A generation counter tells the engine when a drawn frame is gone.
 - `Benchmark`: the capture, returning the yaw to turn each frame; it does not know the camera.
 - `StatsPublisher`: the half second window, the atomics other threads read, and the log line.
-- `Engine`: owns the above plus the camera and the sorter, and runs the frame in about 270 lines.
+- `SplatEngine`: owns the above plus the camera and the sorter, and runs the frame in about 270 lines.
 
 Kotlin gets layers: `com.splatkit` is the public API, `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope.
-`NativeEngine` decodes the stats and pose arrays itself, so the layout is one C++ file and one Kotlin file.
+`SplatEngine` decodes the stats and pose arrays itself, so the layout is one C++ file and one Kotlin file.
 The JNI symbols carry the package, so the C++ entry points and the ProGuard rule moved with the class.
 
 `clang-format` and `clang-tidy` from the pinned NDK lint every C++ file, tests and tools included, on every pull request; `scripts/lint-cpp.sh` is the one command.

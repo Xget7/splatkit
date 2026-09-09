@@ -23,13 +23,13 @@ namespace splatkit {
 // the world bound to them. Survives losing and regaining the window, and the world stays
 // through it. A rebuild that fails drops the surface and logs; the view stays blank
 // until the host attaches a surface again. Render thread only.
-class SurfaceRenderer {
+class VulkanSplatRenderer {
  public:
-  SurfaceRenderer(VulkanContext& ctx, FrameLoop& frameLoop);
-  ~SurfaceRenderer();
+  VulkanSplatRenderer(VulkanContext& ctx, FrameLoop& frameLoop);
+  ~VulkanSplatRenderer();
 
-  SurfaceRenderer(const SurfaceRenderer&) = delete;
-  SurfaceRenderer& operator=(const SurfaceRenderer&) = delete;
+  VulkanSplatRenderer(const VulkanSplatRenderer&) = delete;
+  VulkanSplatRenderer& operator=(const VulkanSplatRenderer&) = delete;
 
   // A new window (takes a reference) or nullptr when the surface is going away.
   void setWindow(ANativeWindow* window);

@@ -12,7 +12,7 @@ add_executable(splat_core_tests
   lod/LodTreeTest.cpp
   lod/LodSorterTest.cpp
   io/MappedFileTest.cpp
-  loading/WorldLoaderTest.cpp
+  loading/SplatWorldLoaderTest.cpp
   sorting/VisibilityPlannerTest.cpp
   diagnostics/TimingSummaryTest.cpp
 )

@@ -36,7 +36,7 @@ add_library(splat_core STATIC
   src/math/SymmetricEigen.cpp
   src/lod/LodTree.cpp
   src/io/MappedFile.cpp
-  src/loading/WorldLoader.cpp
+  src/loading/SplatWorldLoader.cpp
   src/sorting/VisibilityPlanner.cpp
   src/diagnostics/TimingSummary.cpp
 )

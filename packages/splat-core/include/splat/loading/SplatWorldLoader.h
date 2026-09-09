@@ -19,7 +19,7 @@ namespace splat {
 // one still waiting. A world is decoded, reordered spatially (ADR 0006) and, when a
 // budget is set, turned into a level of detail tree (ADR 0010). Loads may run
 // concurrently; the last one to finish is the one taken.
-class WorldLoader {
+class SplatWorldLoader {
  public:
   // A world ready for upload: the cloud, or with a budget the tree, whose nodes carry
   // the attributes and whose leaves are the file's splats.
