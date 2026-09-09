@@ -15,6 +15,7 @@ Four presets are published, each with a stated reason and a benchmark row: `LOW`
 A preset is a starting point, never a mode: every setting stays a property on the view, a `copy` of a preset changes one value, and applying a preset then setting a property is the supported way to customise.
 Render scale opens above one for `ULTRA`: the offscreen target is bigger than the surface and the existing linear blit downscales it, which supersamples the thin splats that shimmer at a pixel each.
 The cull margin becomes a setting so that `ULTRA` can trade off screen draws for a margin no flick can outrun.
+The harmonics degree in a preset is what is drawn, decided per frame from the harmonics the world carries, so a preset change never needs a reload; the memory cap on what is uploaded (`maxShDegree`) stays a separate setting the presets do not touch.
 The engine does not pick a preset from the device on its own: a wrong guess is worse than a documented default, and the host knows its frame budget.
 
 ## Consequences

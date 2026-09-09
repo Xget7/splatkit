@@ -139,6 +139,7 @@ internal class RenderThread {
     fun setRenderScale(scale: Float) = post { engine?.setRenderScale(scale) }
 
     fun setMaxShDegree(degree: Int) = post { engine?.setMaxShDegree(degree) }
+    fun setShDegree(degree: Int) = post { engine?.setShDegree(degree) }
 
     fun setSplatBudget(budget: Int) = post { engine?.setSplatBudget(budget) }
 

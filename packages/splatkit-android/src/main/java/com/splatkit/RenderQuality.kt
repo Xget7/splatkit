@@ -12,7 +12,7 @@ package com.splatkit
  *   house; the budget itself buys under a millisecond there and pays on bigger scenes).
  * - [MEDIUM] holds 60 fps on the Mi 9 with the house (13.4 ms). 0.7 of the resolution
  *   is hard to tell from 1.0 at arm's length, and degree 1 harmonics keep the broad
- *   view dependent tint for a fifth of the harmonics memory.
+ *   view dependent tint for a fifth of the harmonics work per vertex.
  * - [HIGH] is the default: the full resolution, every splat, every harmonic, exactly
  *   what the reference rasterizer draws. 19.3 ms on the Mi 9 with the house.
  * - [ULTRA] supersamples at 1.5 times the resolution and keeps a wider margin around
@@ -22,8 +22,8 @@ package com.splatkit
 data class RenderQuality(
     /** See [SplatSurfaceView.renderScale]. */
     val renderScale: Float,
-    /** See [SplatSurfaceView.maxShDegree]. */
-    val maxShDegree: Int,
+    /** See [SplatSurfaceView.shDegree]. */
+    val shDegree: Int,
     /** See [SplatSurfaceView.splatBudget]; 0 draws every splat. */
     val splatBudget: Int,
     /** See [SplatSurfaceView.linearBlending]. */
@@ -32,10 +32,10 @@ data class RenderQuality(
     val cullMarginDegrees: Float = 10f,
 ) {
     companion object {
-        val LOW = RenderQuality(renderScale = 0.5f, maxShDegree = 0, splatBudget = 500_000)
-        val MEDIUM = RenderQuality(renderScale = 0.7f, maxShDegree = 1, splatBudget = 0)
-        val HIGH = RenderQuality(renderScale = 1f, maxShDegree = 3, splatBudget = 0)
-        val ULTRA = RenderQuality(renderScale = 1.5f, maxShDegree = 3, splatBudget = 0, cullMarginDegrees = 20f)
+        val LOW = RenderQuality(renderScale = 0.5f, shDegree = 0, splatBudget = 500_000)
+        val MEDIUM = RenderQuality(renderScale = 0.7f, shDegree = 1, splatBudget = 0)
+        val HIGH = RenderQuality(renderScale = 1f, shDegree = 3, splatBudget = 0)
+        val ULTRA = RenderQuality(renderScale = 1.5f, shDegree = 3, splatBudget = 0, cullMarginDegrees = 20f)
 
         /** The preset named by [name], case insensitive, or null. */
         fun named(name: String): RenderQuality? = when (name.lowercase()) {

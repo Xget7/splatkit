@@ -61,6 +61,7 @@ internal class NativeEngine {
     fun setRenderScale(scale: Float) = nativeSetRenderScale(handle, scale)
 
     fun setMaxShDegree(degree: Int) = nativeSetMaxShDegree(handle, degree)
+    fun setShDegree(degree: Int) = nativeSetShDegree(handle, degree)
 
     fun setSplatBudget(budget: Int) = nativeSetSplatBudget(handle, budget)
 
@@ -102,6 +103,7 @@ internal class NativeEngine {
     private external fun nativeStartBenchmark(handle: Long, seconds: Float)
     private external fun nativeSetRenderScale(handle: Long, scale: Float)
     private external fun nativeSetMaxShDegree(handle: Long, degree: Int)
+    private external fun nativeSetShDegree(handle: Long, degree: Int)
     private external fun nativeSetSplatBudget(handle: Long, budget: Int)
     private external fun nativeSetLinearBlending(handle: Long, linear: Boolean)
     private external fun nativeSetCullMargin(handle: Long, degrees: Float)

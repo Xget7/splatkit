@@ -93,14 +93,14 @@ class SplatSurfaceView @JvmOverloads constructor(
     private val poseScratch = FloatArray(5)  // locked: two threads may read the pose at once
 
     /**
-     * Applies a [RenderQuality] preset by setting [renderScale], [maxShDegree],
+     * Applies a [RenderQuality] preset by setting [renderScale], [shDegree],
      * [splatBudget], [linearBlending] and [cullMarginDegrees] from it. Set any of them
-     * afterwards to depart from the preset. [maxShDegree] and [splatBudget] reach worlds
-     * loaded after the call, so apply a preset before [loadWorld] when it changes them.
+     * afterwards to depart from the preset. Everything but [splatBudget] takes effect on
+     * the next frame; the budget reaches worlds loaded after the call.
      */
     fun applyQuality(quality: RenderQuality) {
         renderScale = quality.renderScale
-        maxShDegree = quality.maxShDegree
+        shDegree = quality.shDegree
         splatBudget = quality.splatBudget
         linearBlending = quality.linearBlending
         cullMarginDegrees = quality.cullMarginDegrees
@@ -157,10 +157,22 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
-     * Highest spherical harmonics degree kept from the file, 0 to 3, applied to worlds
-     * loaded after it is set. Spherical harmonics make colour depend on the view
-     * direction (highlights, sheen); World Labs worlds carry none, files from the
-     * reference 3DGS pipeline carry degree 3, which costs 92 bytes per splat of GPU memory.
+     * Spherical harmonics degree drawn, 0 to 3, capped by what the loaded world carries.
+     * Takes effect on the next frame. Spherical harmonics make colour depend on the view
+     * direction (highlights, sheen, the glint on water and leaves); 0 draws the base
+     * colour only, which is what World Labs worlds carry anyway.
+     */
+    var shDegree: Int = 3
+        set(value) {
+            field = value.coerceIn(0, 3)
+            renderThread.setShDegree(field)
+        }
+
+    /**
+     * Highest spherical harmonics degree kept in GPU memory from the file, 0 to 3,
+     * applied to worlds loaded after it is set. A memory cap, not a quality setting:
+     * degree 3 costs 92 bytes per splat, so a host on a small phone can lower it before
+     * [loadWorld] and [shDegree] then cannot go above it for that world.
      */
     var maxShDegree: Int = 3
         set(value) {

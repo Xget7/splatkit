@@ -315,7 +315,7 @@ void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const G
 }
 
 void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
-                         const splat::Mat4& view, const splat::Mat4& proj,
+                         int shDegree, const splat::Mat4& view, const splat::Mat4& proj,
                          const splat::Vec3& cameraPosition, VkExtent2D extent) {
   if (count == 0) return;
   CameraUniform u{};
@@ -334,7 +334,7 @@ void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld
   std::memcpy(uniforms_[frameSlot]->mapped(), &u, sizeof(u));
   uniforms_[frameSlot]->flush(0, sizeof(u));
 
-  const int degree = std::clamp(world.shDegree, 0, kMaxShDegree);
+  const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, kMaxShDegree);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines_[static_cast<size_t>(degree)]);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0, nullptr);
   vkCmdDraw(cmd, 4, std::min(count, world.count), 0, 0);

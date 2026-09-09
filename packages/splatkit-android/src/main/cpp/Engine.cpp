@@ -414,6 +414,13 @@ bool Engine::uploadPendingWorld() {
   return true;
 }
 
+void Engine::setShDegree(int degree) {
+  degree = std::clamp(degree, 0, SplatPipeline::kMaxShDegree);
+  if (degree == shDegree_) return;
+  shDegree_ = degree;
+  redrawNeeded_ = true;
+}
+
 void Engine::startBenchmark(float seconds) {
   benchmarkSeconds_ = seconds;
   benchmarkPending_ = true;
@@ -581,7 +588,8 @@ void Engine::render(int64_t frameTimeNanos) {
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   if (world_) {
-    splats_->draw(cmd, frameLoop_->currentSlot(), *world_, drawCount_, *view, *proj, camera_.position(), extent);
+    splats_->draw(cmd, frameLoop_->currentSlot(), *world_, drawCount_, std::min(shDegree_, world_->shDegree), *view, *proj,
+                  camera_.position(), extent);
   } else {
     triangle_->draw(cmd);
   }

@@ -98,6 +98,9 @@ class Engine {
   // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
   // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
   void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, 3); }
+  // Spherical harmonics degree drawn, 0 to 3, capped by what the loaded world carries.
+  // Takes effect on the next frame: a quality change never needs a reload. Render thread.
+  void setShDegree(int degree);
 
   // Input, on the render thread.
   void look(float deltaYaw, float deltaPitch) { camera_.look(deltaYaw, deltaPitch); }
@@ -151,6 +154,7 @@ class Engine {
   float cullMarginDegrees_ = 10.0f;
   bool linearBlending_ = false;
   std::atomic<int> maxShDegree_{3};
+  int shDegree_ = 3;
   std::atomic<int> splatBudget_{0};
   std::unique_ptr<DebugTrianglePipeline> triangle_;
   std::unique_ptr<SplatPipeline> splats_;

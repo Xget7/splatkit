@@ -26,6 +26,8 @@ class MainActivity : Activity() {
 
     /** A --es pose to apply once the world (and its collider, if any) is up. */
     private var pendingPose: CameraPose? = null
+    /** World and collider extras of the last load, so a repeated intent changes settings without reloading. */
+    private var loadedWorld: String? = null
 
     private fun applyPendingPose() {
         pendingPose?.let {
@@ -110,6 +112,8 @@ class MainActivity : Activity() {
         if (intent?.hasExtra("scale") == true) splatView.renderScale = intent.getFloatExtra("scale", 1f)
         // --ei sh 0 drops spherical harmonics for an A/B against the same file.
         if (intent?.hasExtra("sh") == true) splatView.maxShDegree = intent.getIntExtra("sh", 3)
+        // --ei shdraw 0 draws that harmonics degree from the data already uploaded, next frame.
+        if (intent?.hasExtra("shdraw") == true) splatView.shDegree = intent.getIntExtra("shdraw", 3)
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
         if (intent?.hasExtra("budget") == true) splatView.splatBudget = intent.getIntExtra("budget", 0)
         // --ez linear true blends in linear light, the old default, 40% slower.
@@ -118,8 +122,12 @@ class MainActivity : Activity() {
         if (intent?.hasExtra("margin") == true) splatView.cullMarginDegrees = intent.getFloatExtra("margin", 10f)
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
+        val worldKey = "$worldPath|$colliderPath|${intent?.getBooleanExtra("bytes", false)}"
+        // The same world in a second intent keeps what is loaded: the settings above switch in place.
+        val reload = worldKey != loadedWorld
+        loadedWorld = worldKey
         // File reads are IO; keep them off the UI thread.
-        Thread {
+        if (reload) Thread {
             try {
                 if (worldPath == null) {
                     splatView.loadWorld(assets.open("kitchen_500k.spz").use { it.readBytes() })
@@ -139,6 +147,7 @@ class MainActivity : Activity() {
         // --es pose "x,y,z,yaw,pitch" teleports (meters, radians) once the world is up.
         pendingPose = intent?.getStringExtra("pose")?.split(",")?.map { it.trim().toFloat() }
             ?.takeIf { it.size == 5 }?.let { CameraPose(it[0], it[1], it[2], it[3], it[4]) }
+        if (!reload) applyPendingPose()
         // --ef walk 1.0 walks forward at that speed in m/s, for checking the collider from adb.
         if (intent?.hasExtra("walk") == true) splatView.setWalkVelocity(intent.getFloatExtra("walk", 0f), 0f)
         if (intent?.getBooleanExtra("benchmark", false) == true) {

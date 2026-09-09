@@ -73,7 +73,8 @@ World Labs exports both files for every world.
 | `cullMarginDegrees` | Angular margin around the view kept drawn so a turn never meets an empty edge; 10 by default, widened further by the engine during a fast turn. |
 | `linearBlending` | Blend in linear light instead of the encoded space the training used. Richer contrast the training never saw, 40% of the frame on Adreno 640. Off by default. |
 | `splatBudget` | Most splats drawn per frame through a level of detail tree, 0 (default) draws them all. For scenes far bigger than the view or for low quality modes; at full resolution on a 2M scene it saves nothing and softens the image. Applies to worlds loaded after it is set. |
-| `maxShDegree` | Highest spherical harmonics degree kept from the file, 0 to 3, for worlds loaded after it is set. Degree 3 costs 92 bytes per splat of GPU memory. World Labs worlds carry none. |
+| `shDegree` | Spherical harmonics degree drawn, 0 to 3, capped by what the world carries; takes effect on the next frame. The harmonics are the view dependent colour: the glint on water and leaves. Free to draw on Adreno 640. |
+| `maxShDegree` | Highest degree kept in GPU memory from the file, for worlds loaded after it is set. A memory cap, 92 bytes per splat at degree 3, not a quality setting; `shDegree` cannot exceed it for that world. World Labs worlds carry none. |
 | `setMotionEnabled(bool)` | The gyroscope drives the look direction. |
 | `setWalkVelocity(forward, right)` | Continuous walking in meters per second, for an on screen joystick. |
 | `lookSensitivity`, `walkSensitivity` | Gesture tuning: one finger looks, two fingers walk, double tap toggles the gyroscope. |
@@ -86,7 +87,7 @@ Quality presets, measured on the Mi 9 with the 2M splat World Labs house at 1080
 | Preset | Render scale | Harmonics | Budget | Cull margin | Why | House GPU ms p50 |
 |---|---|---|---|---|---|---|
 | `LOW` | 0.5 | 0 | 500k | 10 | Phones that cannot hold 30 fps at medium, or battery: half the pixels, base colour only, and a level of detail budget so a scene of any size costs about the same. | 12.4 |
-| `MEDIUM` | 0.7 | 1 | all | 10 | 60 fps on the Mi 9: 0.7 is hard to tell from 1.0 at arm's length, degree 1 keeps the broad view dependent tint for a fifth of the harmonics memory. | 13.4 |
+| `MEDIUM` | 0.7 | 1 | all | 10 | 60 fps on the Mi 9: 0.7 is hard to tell from 1.0 at arm's length, degree 1 keeps the broad view dependent tint for a fifth of the harmonics work. | 13.4 |
 | `HIGH` | 1.0 | 3 | all | 10 | The default: every pixel, every splat, every harmonic, what the reference rasterizer draws. | 19.3 |
 | `ULTRA` | 1.5 | 3 | all | 20 | Flagship GPUs and stills: supersampling settles the thin splats that shimmer at a pixel each, and a flick never shows an empty edge. | 39.1 |
 

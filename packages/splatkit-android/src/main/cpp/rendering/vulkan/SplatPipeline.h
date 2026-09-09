@@ -82,8 +82,9 @@ class SplatPipeline {
   void updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
                    const uint32_t* order, uint32_t count) const;
 
-  // Draws the first `count` entries of the order buffer.
-  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count,
+  // Draws the first `count` entries of the order buffer with the spherical harmonics
+  // bands up to `shDegree`, which must not exceed what the world was uploaded with.
+  void draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, uint32_t count, int shDegree,
             const splat::Mat4& view, const splat::Mat4& proj, const splat::Vec3& cameraPosition,
             VkExtent2D extent);
 
