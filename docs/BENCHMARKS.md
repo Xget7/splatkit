@@ -58,6 +58,24 @@ Mip-NeRF 360 Bicycle (superspl.at, CC BY, Seeget3D): 2.6M splats with harmonics 
 
 | 2026-09-08 | 11daaf7 | bicycle 2.6M | preset HIGH | 19.4 / 13.7 / 45.3 | 64 | 26 to 47 | 293k to 1.48M of 2.6M | 1637 / - / 1047 |
 
+Harmonics degree drawn, 2026-09-09, same bicycle file and pose, portrait 1080x2261 and landscape 2265x1080 (the landscape run sees the canopy across the whole width, hence the load).
+The degree is chosen per frame from the data already uploaded, so the in place rows switch it on the running world with no reload; the fresh rows load the world with that degree, and each run started with the GPU below 40 C.
+
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 3, fresh load | 18.9 / 13.7 / 45.2 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 0, fresh load | 17.2 / 13.8 / 39.0 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 3, fresh load again | 18.8 / 13.0 / 47.8 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 0 in place | 19.1 / 14.0 / 49.0 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 3 in place | 20.8 / 13.7 / 67.1 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, portrait | HIGH, degree 0 in place again | 19.0 / 14.4 / 51.6 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, landscape | HIGH, degree 3, fresh load | 40.9 / 16.5 / 212.9 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, landscape | HIGH, degree 0, fresh load | 28.5 / 14.6 / 122.0 | | | | |
+| 2026-09-09 | 35b9400 plus the per frame degree | bicycle 2.6M, landscape | HIGH, degree 3, fresh load again | 41.1 / 16.5 / 212.3 | | | | |
+| 2026-09-09 | 35b9400 unchanged | bicycle 2.6M, landscape | HIGH, degree 3 | 41.3 / 16.5 / 212.0 | | | | |
+| 2026-09-09 | 35b9400 unchanged | bicycle 2.6M, landscape | HIGH, `--ei sh 0` | 28.8 / 14.7 / 122.6 | | | | |
+
+Reading: degree 3 costs 9 percent of GPU time over degree 0 in portrait and 30 percent in landscape, where the frame is vertex bound on the canopy, and choosing the degree per frame costs nothing against the build that fixed it at load (41.1 against 41.3 in landscape).
+Switching the degree on the running world was checked by capture: degree 3 set in place matches a fresh degree 3 load within 0.1 of 255 on average, degree 0 differs from it by 1.4 and degree 1 by 1.6, with no world decode in the log.
+
 ## Image quality against the reference renderer
 
 2026-09-08, pool 3.57M with spherical harmonics degree 3, Mi 9 at preset HIGH (1080x2261, 65 degree vertical field of view, no render target), pose (-0.3, 2.3, 4.0) yaw -0.75 pitch -0.15.
