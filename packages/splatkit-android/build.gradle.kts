@@ -45,7 +45,7 @@ mavenPublishing {
     pom {
         name.set("SplatKit Android")
         description.set("Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.")
-        url.set("https://github.com/Xget7/android-splatkit")
+        url.set("https://github.com/Xget7/splatkit-android")
         licenses {
             license {
                 name.set("MIT")
@@ -61,9 +61,9 @@ mavenPublishing {
             }
         }
         scm {
-            url.set("https://github.com/Xget7/android-splatkit")
-            connection.set("scm:git:https://github.com/Xget7/android-splatkit.git")
-            developerConnection.set("scm:git:ssh://git@github.com/Xget7/android-splatkit.git")
+            url.set("https://github.com/Xget7/splatkit-android")
+            connection.set("scm:git:https://github.com/Xget7/splatkit-android.git")
+            developerConnection.set("scm:git:ssh://git@github.com/Xget7/splatkit-android.git")
         }
     }
 }

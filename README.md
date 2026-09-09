@@ -1,8 +1,8 @@
 # SplatKit
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.xget7/splatkit-android?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.xget7/splatkit-android)
-[![splatkit-android](https://github.com/Xget7/android-splatkit/actions/workflows/android.yml/badge.svg)](https://github.com/Xget7/android-splatkit/actions/workflows/android.yml)
-[![splat-core](https://github.com/Xget7/android-splatkit/actions/workflows/core.yml/badge.svg)](https://github.com/Xget7/android-splatkit/actions/workflows/core.yml)
+[![splatkit-android](https://github.com/Xget7/splatkit-android/actions/workflows/android.yml/badge.svg)](https://github.com/Xget7/splatkit-android/actions/workflows/android.yml)
+[![splat-core](https://github.com/Xget7/splatkit-android/actions/workflows/core.yml/badge.svg)](https://github.com/Xget7/splatkit-android/actions/workflows/core.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.
