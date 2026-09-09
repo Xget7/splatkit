@@ -10,6 +10,7 @@ Items marked "help wanted" have a defined scope and no owner; open an issue befo
   Unit and integration tests, CI with ThreadSanitizer and AddressSanitizer.
 - `splat-core/lod`: a level of detail hierarchy after Spark 2.0's tiny-lod and a budgeted selection, opt in through `splatBudget` ([ADR 0010](adr/0010-level-of-detail-tree.md)); measured to give nothing on the house at full resolution, kept for scenes bigger than the view and for low quality modes.
 - `splatkit-android`: Vulkan 1.1 renderer (swapchain, two frames in flight, validation layers in debug builds), instanced splat pipeline with back to front blending and view dependent colour from spherical harmonics (one pipeline per degree, `shDegree` switches it per frame, `maxShDegree` caps the memory), walk and fly camera, touch, joystick and gyroscope input, `SplatSurfaceView`, `SplatHudView`.
+  One `Engine` over deep modules ([ADR 0013](adr/0013-engine-modules.md)): `SurfaceRenderer`, `Benchmark` and `StatsPublisher` on the Android side, `WorldLoader`, `MappedFile` and `VisibilityPlanner` in `splat-core` with unit tests; `clang-format` and `clang-tidy` run on every pull request.
 - `apps/android-dev`: loads a World Labs kitchen and its collider, or any world pushed to its files dir, shows GPU, frame time, sort time and splat count.
 - `scripts/generate_world.py`: photos of a place to a walkable world through the World Labs API, downloading the SPZ and the collider.
 - The engine draws only when the camera, the sort order, the world or the surface changed; a still scene costs no GPU time.
@@ -48,6 +49,7 @@ The cull margin is 10 degrees plus the turn rate times the time a cull takes to 
 Display priority (-8) and big core affinity for the render, sort and cull threads were measured on the house and changed nothing: GPU p50 31.9 against 31.8 ms, sort 41 to 46 ms either way, cull 10 ms either way, and the big cores did not clock higher (1.9 to 2.6 GHz in both modes, out of 2.8).
 The frame is bound by the GPU, so "performance modes" that touch CPU scheduling have nothing to give; the library does not expose one.
 Spherical harmonics cost nothing measurable on the raccoon sample (932k splats, degree 3, 92 bytes per splat extra): p50 12.5 ms with them, 12.4 without; decode 634 ms, reorder 216 ms, upload 501 ms in release.
+On the 2.6M bicycle they cost 9 percent of GPU time in portrait and 30 percent in landscape, where the frame is vertex bound on the tree canopy; the degree drawn is chosen per frame, so a preset change never reloads the world.
 Decode 530 ms, spatial reorder 470 ms, upload 270 ms for 2M.
 Vertex fetch was an 8 ms floor at 48 bytes per splat; the 32 byte record (half float covariance, 8 bit colour and alpha, both lossless against SPZ) took 4 to 6 ms off every frame.
 Vertex math costs nothing; blended fragments are the rest.
@@ -61,7 +63,7 @@ Owned by the maintainer unless stated otherwise.
 
 1. Device numbers: decode, upload, sort and frame time for 500k, 1M and 2M splats on Adreno 640, published in the README.
 2. Done: `SplatSurfaceView.Listener` reports world and collider outcomes with messages, and `isAvailable` says whether Vulkan started.
-3. Done: `io.github.xget7:splatkit-android` is on Maven Central (0.1.0-alpha03, 2026-09-07) with the arm64 native library, the quality presets, `cameraPose` and the `File` loaders inside; pushing a `v*` tag runs `.github/workflows/release.yml`, which publishes and releases without a portal step.
+3. Done: `io.github.xget7:splatkit-android` is on Maven Central (0.1.0-alpha04, 2026-09-09, with the per frame harmonics degree, the cull margin that scales with the frame time and the engine modules; alpha03 on 2026-09-07) with the arm64 native library, the quality presets, `cameraPose` and the `File` loaders inside; pushing a `v*` tag runs `.github/workflows/release.yml`, which publishes and releases without a portal step.
    Done: the Android CI job that builds the AAR on every pull request.
 4. Library README with a ten line integration.
 5. Thermal step down: drop one preset at `THERMAL_STATUS_SEVERE` and come back when the phone cools, opt in, so a long walk does not end at 20 fps on a throttled GPU.
