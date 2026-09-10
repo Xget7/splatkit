@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SPLAT_CORE_BUILD_TESTS "Build splat_core unit tests" ${PROJECT_IS_TOP_LEVEL})
-option(SPLAT_CORE_BUILD_TOOLS "Build the ply2spz converter" ${PROJECT_IS_TOP_LEVEL})
+option(SPLAT_CORE_BUILD_TOOLS "Build the ply2spz and splat-tile tools" ${PROJECT_IS_TOP_LEVEL})
 # "thread" or "address" (address implies undefined). Off by default; CI runs both.
 set(SPLAT_CORE_SANITIZE "" CACHE STRING "Sanitizer for splat_core and its tests")
 
@@ -39,6 +39,8 @@ add_library(splat_core STATIC
   src/loading/SplatWorldLoader.cpp
   src/sorting/VisibilityPlanner.cpp
   src/diagnostics/TimingSummary.cpp
+  src/tiles/Tileset.cpp
+  src/tiles/TileBuilder.cpp
 )
 target_include_directories(splat_core PUBLIC include)
 find_package(ZLIB REQUIRED)  # the SPZ gzip container is inflated here, with a ceiling

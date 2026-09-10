@@ -15,6 +15,8 @@ add_executable(splat_core_tests
   loading/SplatWorldLoaderTest.cpp
   sorting/VisibilityPlannerTest.cpp
   diagnostics/TimingSummaryTest.cpp
+  tiles/TilesetTest.cpp
+  tiles/TileBuilderTest.cpp
 )
 target_link_libraries(splat_core_tests PRIVATE splat_core spz ZLIB::ZLIB GTest::gtest_main)
 target_compile_definitions(splat_core_tests PRIVATE
