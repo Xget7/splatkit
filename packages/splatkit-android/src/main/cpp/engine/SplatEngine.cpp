@@ -6,6 +6,7 @@
 
 #include "Log.h"
 #include "splat/math/Frustum.h"
+#include "splat/tiles/TileStreamer.h"
 
 namespace splatkit {
 namespace {
@@ -15,6 +16,8 @@ constexpr float kNearPlane = 0.05f;
 constexpr float kFarPlane = 200.0f;
 // A frame longer than this (a stall, a resume) steps the camera as if it were this long.
 constexpr float kMaxFrameSeconds = 0.1f;
+// How many pixels the splats a tile hides may cover before the tiles below are wanted.
+constexpr float kTilePixels = 1.0f;
 
 using Clock = std::chrono::steady_clock;
 
@@ -40,6 +43,7 @@ splat::Result<std::unique_ptr<SplatEngine>> SplatEngine::create() {
 SplatEngine::~SplatEngine() {
   renderer_.reset();
   sorter_.reset();
+  streamer_.reset();
   if (ctx_) ctx_->waitIdle();
 }
 
@@ -68,6 +72,10 @@ void SplatEngine::loadWorldFile(const std::string& path) {
   reportWorld(loader_.loadWorldFile(path));
 }
 
+void SplatEngine::loadTiledWorldFile(const std::string& path) {
+  reportWorld(loader_.loadTiledWorldFile(path));
+}
+
 void SplatEngine::loadCollider(const std::uint8_t* data, std::size_t size) {
   reportCollider(loader_.loadCollider(data, size));
 }
@@ -89,6 +97,7 @@ void SplatEngine::reportWorld(const splat::Result<splat::SplatWorldLoader::World
     LOGI("level of detail tree: %zu nodes over %zu splats, built in %.0f ms", r.nodeCount,
          r.splatCount, r.treeMillis);
   }
+  if (r.tileCount > 0) LOGI("tiled world: %zu tiles", r.tileCount);
 }
 
 void SplatEngine::reportCollider(
@@ -112,14 +121,31 @@ bool SplatEngine::applyPendingLoads() {
   if (!world) return false;
 
   const auto start = Clock::now();
-  if (!renderer_->uploadWorld(world->splats(), maxShDegree_.load())) {
-    LOGE("world upload failed");
-    emit(Event::worldFailed, "GPU upload failed");
-    return false;
+  if (world->tiles) {
+    const splat::Tileset& set = *world->tiles->tileset;
+    const uint32_t residency = residency_.load();
+    if (!renderer_->createSlab(residency, std::min(set.shDegree, maxShDegree_.load()))) {
+      LOGE("slab of %u splats failed", residency);
+      emit(Event::worldFailed, "GPU upload failed");
+      return false;
+    }
+    splat::StreamOptions options;
+    options.residency = residency;
+    options.loaderThreads = 2;
+    sorter_.reset();
+    streamer_ = std::make_unique<splat::TileStreamer>(std::move(*world->tiles), options);
+  } else {
+    if (!renderer_->uploadWorld(world->splats(), maxShDegree_.load())) {
+      LOGE("world upload failed");
+      emit(Event::worldFailed, "GPU upload failed");
+      return false;
+    }
+    // The sorter keeps the positions, or the tree, whose attributes are already on the GPU.
+    streamer_.reset();
+    sorter_ = world->tree
+                  ? std::make_unique<splat::AsyncSorter>(world->tree)
+                  : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
   }
-  // The sorter keeps the positions, or the tree, whose attributes are already on the GPU.
-  sorter_ = world->tree ? std::make_unique<splat::AsyncSorter>(world->tree)
-                        : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
   planner_.invalidate();
@@ -165,23 +191,62 @@ SplatEngine::FrameCamera SplatEngine::frameCamera(VkExtent2D extent) const {
 
 void SplatEngine::requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent) {
   auto frustum = planner_.update(camera.axes, dt, lastSort_.cullMillis);
+  // A pixel at unit depth: what a node or a tile may cover on screen before it is refined.
+  const float pixelScale = 2.0f / (camera.proj.at(1, 1) * static_cast<float>(extent.height));
+  if (streamer_) {
+    streamTiles(camera, pixelScale, frustum);
+    return;
+  }
   if (!frustum) return;
   splat::LodSettings lod;
   lod.budget = static_cast<std::size_t>(loadedBudget_);
-  // A pixel at unit depth: what a node may cover on screen before it is refined.
-  lod.pixelScaleLimit = 2.0f / (camera.proj.at(1, 1) * static_cast<float>(extent.height));
+  lod.pixelScaleLimit = pixelScale;
   lod.view.forward = camera.axes.forward;
   sorter_->requestVisible(*frustum, lod);
 }
 
+// Streaming runs every frame: the scheduler plans for the view, tiles that arrived are
+// uploaded into their slab ranges, and a new order is asked for when the view changed
+// enough or the set of tiles drawn did.
+void SplatEngine::streamTiles(const FrameCamera& camera, float pixelScale,
+                              const std::optional<splat::Frustum>& requested) {
+  splat::TileView view;
+  view.frustum = requested ? *requested
+                           : splat::Frustum::make(camera.axes.position, camera.axes.forward,
+                                                  camera.axes.up, camera.axes.tanHalfX,
+                                                  camera.axes.tanHalfY, planner_.marginRadians());
+  view.pixelScaleLimit = pixelScale * kTilePixels;
+  const splat::TileStreamer::Step step = streamer_->update(view);
+  for (const auto& arrival : step.arrived) {
+    if (renderer_->uploadTile(arrival.offset, *arrival.cloud)) {
+      streamer_->commit(arrival.tile);
+    } else {
+      LOGE("tile %u upload failed", arrival.tile);
+      streamer_->fail(arrival.tile);
+    }
+  }
+  for (const uint32_t tile : step.failed) LOGE("tile %u could not be read", tile);
+  if (requested || step.drawChanged) streamer_->requestVisible(view.frustum);
+}
+
 void SplatEngine::takeSortResult() {
+  if (streamer_) {
+    auto sorted = streamer_->take();
+    if (!sorted) return;
+    lastSort_.sortMillis = sorted->sortMillis;
+    lastSort_.cullMillis = sorted->cullMillis;
+    lastSort_.selectMillis = 0;
+    lastSort_.selected = sorted->sorted;
+    pendingOrder_ = std::move(sorted->order);
+    return;
+  }
   auto sorted = sorter_->take();
   if (!sorted) return;
   lastSort_.sortMillis = sorted->sortMillis;
   lastSort_.cullMillis = sorted->cullMillis;
   lastSort_.selectMillis = sorted->selectMillis;
   lastSort_.selected = sorted->selected;
-  pendingOrder_ = std::move(*sorted);
+  pendingOrder_ = std::move(sorted->order);
 }
 
 // Benchmark and stats.
@@ -211,7 +276,7 @@ StatsPublisher::Sample SplatEngine::sample() const {
   s.drawn = drawCount_;
   const GpuWorld* world = renderer_->world();
   s.sourceSplats = world ? sourceCount_ : 0;
-  s.gpuSplats = world ? world->count : 0;
+  s.gpuSplats = world ? (streamer_ ? streamer_->held() : world->count) : 0;
   s.walking = camera_.hasCollider();
   s.motion = camera_.motionEnabled();
   return s;
@@ -258,8 +323,8 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   VulkanSplatRenderer::Frame frame;
   if (camera) {
     if (pendingOrder_) {
-      drawCount_ = static_cast<uint32_t>(pendingOrder_->order.size());
-      frame.order = pendingOrder_->order.data();
+      drawCount_ = static_cast<uint32_t>(pendingOrder_->size());
+      frame.order = pendingOrder_->data();
       frame.orderCount = drawCount_;
     }
     frame.drawCount = drawCount_;

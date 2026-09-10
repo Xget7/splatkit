@@ -203,15 +203,21 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
 
 namespace {
 
-// Bands 1 to `degree` of every splat as halves, channel fastest, two per uint. The source
-// keeps its own degree's coefficients per splat; a lower target degree keeps the leading
-// ones, which is exactly the lower degree expansion.
+// Uints per splat of the harmonics buffer at a degree: the halves of bands 1 to
+// `degree`, channel fastest, two per uint, each splat starting on a uint.
+size_t shStride(int degree) {
+  const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
+  return (coefficients * 3 + 1) / 2;
+}
+
+// Bands 1 to `degree` of every splat, `shStride(degree)` uints each. The source cloud
+// must carry at least that degree.
 std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
   const size_t n = cloud.count();
   const size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
   const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
   const size_t halves = coefficients * 3;
-  const size_t stride = (halves + 1) / 2;
+  const size_t stride = shStride(degree);
   std::vector<uint32_t> packed(n * stride, 0);
   for (size_t i = 0; i < n; ++i) {
     const float* src = &cloud.sh[i * sourceCoefficients * 3];
@@ -223,17 +229,15 @@ std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
   return packed;
 }
 
-}  // namespace
-
-std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cloud,
-                                                     int maxShDegree) const {
+bool carriesSh(const splat::SplatCloud& cloud, int degree) {
   const size_t n = cloud.count();
-  const int shDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
-  const bool shComplete =
-      cloud.sh.size() >=
-      n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
-  std::vector<uint32_t> sh =
-      (shDegree > 0 && shComplete) ? packSh(cloud, shDegree) : std::vector<uint32_t>{0};
+  return degree > 0 && cloud.shDegree >= degree &&
+         cloud.sh.size() >=
+             n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
+}
+
+std::vector<GpuSplat> packSplats(const splat::SplatCloud& cloud) {
+  const size_t n = cloud.count();
   std::vector<GpuSplat> packed(n);
   for (size_t i = 0; i < n; ++i) {
     GpuSplat& g = packed[i];
@@ -248,6 +252,18 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
     g.cov[2] = packHalf2(c[4], c[5]);
     if (alpha <= 1.0f) g.lodAlpha = 0;
   }
+  return packed;
+}
+
+}  // namespace
+
+std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cloud,
+                                                     int maxShDegree) const {
+  const size_t n = cloud.count();
+  const int shDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
+  std::vector<uint32_t> sh =
+      carriesSh(cloud, shDegree) ? packSh(cloud, shDegree) : std::vector<uint32_t>{0};
+  std::vector<GpuSplat> packed = packSplats(cloud);
   // Identity order until the sorter runs.
   std::vector<uint32_t> order(n);
   for (uint32_t i = 0; i < n; ++i) order[i] = i;
@@ -271,6 +287,47 @@ std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cl
   if (!world->order->upload(order.data(), order.size() * sizeof(uint32_t))) return nullptr;
   if (!world->sh->upload(sh.data(), sh.size() * sizeof(uint32_t))) return nullptr;
   return world;
+}
+
+std::unique_ptr<GpuWorld> SplatPipeline::createSlab(uint32_t capacity, int shDegree) const {
+  if (capacity == 0) return nullptr;
+  auto world = std::make_unique<GpuWorld>();
+  world->count = capacity;
+  world->shDegree = std::clamp(shDegree, 0, kMaxShDegree);
+  const VkDeviceSize shBytes =
+      world->shDegree > 0 ? VkDeviceSize{capacity} * shStride(world->shDegree) * sizeof(uint32_t)
+                          : sizeof(uint32_t);
+  world->splats = GpuBuffer::deviceLocal(ctx_, VkDeviceSize{capacity} * sizeof(GpuSplat),
+                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->order = GpuBuffer::deviceLocal(ctx_, VkDeviceSize{capacity} * sizeof(uint32_t),
+                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = GpuBuffer::deviceLocal(ctx_, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  if (!world->splats || !world->order || !world->sh) return nullptr;
+  for (auto& staging : world->orderStaging) {
+    staging = GpuBuffer::hostVisible(ctx_, VkDeviceSize{capacity} * sizeof(uint32_t),
+                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    if (!staging) return nullptr;
+  }
+  return world;
+}
+
+bool SplatPipeline::uploadTile(const GpuWorld& slab, uint32_t offset,
+                               const splat::SplatCloud& cloud) {
+  const size_t n = cloud.count();
+  if (n == 0) return true;
+  if (offset > slab.count || n > slab.count - offset) return false;
+  const std::vector<GpuSplat> packed = packSplats(cloud);
+  if (!slab.splats->upload(VkDeviceSize{offset} * sizeof(GpuSplat), packed.data(),
+                           packed.size() * sizeof(GpuSplat))) {
+    return false;
+  }
+  if (slab.shDegree == 0) return true;
+  const size_t stride = shStride(slab.shDegree);
+  const std::vector<uint32_t> sh = carriesSh(cloud, slab.shDegree)
+                                       ? packSh(cloud, slab.shDegree)
+                                       : std::vector<uint32_t>(n * stride, 0);
+  return slab.sh->upload(VkDeviceSize{offset} * stride * sizeof(uint32_t), sh.data(),
+                         sh.size() * sizeof(uint32_t));
 }
 
 void SplatPipeline::bindWorld(const GpuWorld& world) {

@@ -182,6 +182,12 @@ SPLATKIT_JNI(void, nativeLoadWorldFile)(JNIEnv* env, jobject, jlong handle, jstr
   withUtf8(env, path, [engine](const std::string& p) { engine->loadWorldFile(p); });
 }
 
+SPLATKIT_JNI(void, nativeLoadTiledWorldFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return;
+  withUtf8(env, path, [engine](const std::string& p) { engine->loadTiledWorldFile(p); });
+}
+
 SPLATKIT_JNI(void, nativeLoadColliderFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
@@ -248,6 +254,10 @@ SPLATKIT_JNI(void, nativeSetLinearBlending)(JNIEnv*, jobject, jlong handle, jboo
 
 SPLATKIT_JNI(void, nativeSetSplatBudget)(JNIEnv*, jobject, jlong handle, jint budget) {
   if (auto* engine = toEngine(handle)) engine->setSplatBudget(budget);
+}
+
+SPLATKIT_JNI(void, nativeSetResidencyBudget)(JNIEnv*, jobject, jlong handle, jint splats) {
+  if (auto* engine = toEngine(handle)) engine->setResidencyBudget(splats);
 }
 
 SPLATKIT_JNI(void, nativeSetMaxShDegree)(JNIEnv*, jobject, jlong handle, jint degree) {

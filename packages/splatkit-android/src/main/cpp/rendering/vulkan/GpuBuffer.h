@@ -34,8 +34,10 @@ class GpuBuffer {
   void flush(VkDeviceSize offset, VkDeviceSize size) const;
 
   // Blocking upload through a staging buffer and a one-shot command buffer.
-  // Fine for a world load; not for per-frame data.
-  bool upload(const void* data, VkDeviceSize size);
+  // Fine for a world load or a tile; not for per-frame data.
+  bool upload(const void* data, VkDeviceSize size) { return upload(0, data, size); }
+  // The same into [offset, offset + size) of the buffer, for a tile landing in a slab.
+  bool upload(VkDeviceSize offset, const void* data, VkDeviceSize size);
 
  private:
   explicit GpuBuffer(const VulkanContext& ctx) : ctx_(ctx) {}

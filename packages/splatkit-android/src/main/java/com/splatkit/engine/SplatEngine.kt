@@ -44,6 +44,7 @@ internal class SplatEngine {
     fun loadWorld(spzBytes: ByteArray) = nativeLoadWorld(handle, spzBytes)
     fun loadCollider(glbBytes: ByteArray) = nativeLoadCollider(handle, glbBytes)
     fun loadWorldFile(path: String) = nativeLoadWorldFile(handle, path)
+    fun loadTiledWorldFile(path: String) = nativeLoadTiledWorldFile(handle, path)
     fun loadColliderFile(path: String) = nativeLoadColliderFile(handle, path)
 
     // Camera and input.
@@ -70,6 +71,7 @@ internal class SplatEngine {
     fun setCullMargin(degrees: Float) = nativeSetCullMargin(handle, degrees)
     fun setLinearBlending(linear: Boolean) = nativeSetLinearBlending(handle, linear)
     fun setSplatBudget(budget: Int) = nativeSetSplatBudget(handle, budget)
+    fun setResidencyBudget(splats: Int) = nativeSetResidencyBudget(handle, splats)
     fun setMaxShDegree(degree: Int) = nativeSetMaxShDegree(handle, degree)
     fun setShDegree(degree: Int) = nativeSetShDegree(handle, degree)
 
@@ -114,6 +116,7 @@ internal class SplatEngine {
     private external fun nativeLoadWorld(handle: Long, spzBytes: ByteArray)
     private external fun nativeLoadCollider(handle: Long, glbBytes: ByteArray)
     private external fun nativeLoadWorldFile(handle: Long, path: String)
+    private external fun nativeLoadTiledWorldFile(handle: Long, path: String)
     private external fun nativeLoadColliderFile(handle: Long, path: String)
     private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
     /** Fills [out] (at least [POSE_FLOATS]) with x, y, z, yaw, pitch. */
@@ -127,6 +130,7 @@ internal class SplatEngine {
     private external fun nativeSetCullMargin(handle: Long, degrees: Float)
     private external fun nativeSetLinearBlending(handle: Long, linear: Boolean)
     private external fun nativeSetSplatBudget(handle: Long, budget: Int)
+    private external fun nativeSetResidencyBudget(handle: Long, splats: Int)
     private external fun nativeSetMaxShDegree(handle: Long, degree: Int)
     private external fun nativeSetShDegree(handle: Long, degree: Int)
     private external fun nativeStartBenchmark(handle: Long, seconds: Float)

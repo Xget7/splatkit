@@ -23,6 +23,7 @@
 #include "splat/math/Mat4.h"
 #include "splat/sorting/AsyncSorter.h"
 #include "splat/sorting/VisibilityPlanner.h"
+#include "splat/tiles/TileStreamer.h"
 
 namespace splatkit {
 
@@ -58,6 +59,9 @@ class SplatEngine {
   // The same from a file, mapped rather than copied through the host's heap.
   void loadWorldFile(const std::string& path);
   void loadColliderFile(const std::string& path);
+  // A tiled world from its index file; tiles stream in as the camera needs them. Thread
+  // safe. Errors are reported and leave the current world.
+  void loadTiledWorldFile(const std::string& path);
 
   // Set on the render thread; read from any thread, refreshed every frame.
   void setCameraPose(const CameraPose& pose);
@@ -96,6 +100,13 @@ class SplatEngine {
   // a pixel each, nearest in full detail. Applies to worlds loaded after it is set.
   void setSplatBudget(int budget) { loader_.setBudget(budget); }
 
+  // Residency budget of a tiled world: the most splats held on the GPU at once, which is
+  // what streaming fills nearest first and evicts against. Applies to tiled worlds
+  // loaded after it is set. Any thread.
+  void setResidencyBudget(int splats) {
+    residency_.store(static_cast<uint32_t>(std::clamp(splats, kMinResidency, kMaxResidency)));
+  }
+
   // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
   // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
   void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, kMaxShDegree); }
@@ -121,6 +132,8 @@ class SplatEngine {
 
  private:
   static constexpr int kMaxShDegree = 3;
+  static constexpr int kMinResidency = 100000;
+  static constexpr int kMaxResidency = 8000000;
 
   // The camera as the frame sees it: matrices for the draw, axes for the cull.
   struct FrameCamera {
@@ -141,6 +154,8 @@ class SplatEngine {
   FrameCamera frameCamera(VkExtent2D extent) const;
   void publishPose();
   void requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent);
+  void streamTiles(const FrameCamera& camera, float pixelScale,
+                   const std::optional<splat::Frustum>& requested);
   void takeSortResult();
   StatsPublisher::Sample sample() const;
 
@@ -155,13 +170,16 @@ class SplatEngine {
   StatsPublisher stats_;
 
   std::atomic<int> maxShDegree_{kMaxShDegree};
+  std::atomic<uint32_t> residency_{2000000};
   int shDegree_ = kMaxShDegree;
-  // Render thread from here on.
+  // Render thread from here on. One of the two is up with a world: the sorter for a
+  // single file world, the streamer for a tiled one.
   std::unique_ptr<splat::AsyncSorter> sorter_;
+  std::unique_ptr<splat::TileStreamer> streamer_;
   int loadedBudget_ = 0;      // the budget of the world on the GPU, 0 without a tree
   uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
   uint32_t drawCount_ = 0;    // entries of the order buffer to draw: the visible splats
-  std::optional<splat::AsyncSorter::Result> pendingOrder_;  // sorted, waiting for a frame
+  std::optional<std::vector<uint32_t>> pendingOrder_;  // sorted, waiting for a frame
   struct SortTimings {
     double sortMillis = 0;
     double cullMillis = 0;

@@ -90,6 +90,21 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   return true;
 }
 
+bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
+  if (!splats_) return false;
+  auto world = splats_->createSlab(capacity, shDegree);
+  if (!world) return false;
+  ctx_.waitIdle();  // the previous world may still be in flight
+  world_ = std::move(world);
+  splats_->bindWorld(*world_);
+  return true;
+}
+
+bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) {
+  if (!splats_ || !world_) return false;
+  return splats_->uploadTile(*world_, offset, cloud);
+}
+
 bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!ready()) return false;
   uint32_t imageIndex = 0;

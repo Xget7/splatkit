@@ -63,6 +63,28 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(const std:
   return loadWorld(file.value().data(), file.value().size());
 }
 
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadTiledWorldFile(
+    const std::string& path) {
+  const auto start = Clock::now();
+  auto opened = openTiledWorld(path);
+  if (!opened) return opened.error();
+  auto world = std::make_unique<World>();
+  world->tiles = std::make_unique<TiledWorld>(std::move(opened.value()));
+  const Tileset& set = *world->tiles->tileset;
+  world->sourceCount = set.splatCount;
+
+  WorldReport report;
+  report.splatCount = set.splatCount;
+  report.shDegree = set.shDegree;
+  report.bounds = set.tiles[set.root].bounds;
+  report.tileCount = set.tiles.size();
+  report.decodeMillis = millisSince(start);
+
+  const std::lock_guard<std::mutex> lock(mutex_);
+  pendingWorld_ = std::move(world);
+  return report;
+}
+
 Result<SplatWorldLoader::ColliderReport> SplatWorldLoader::loadCollider(const std::uint8_t* data,
                                                                         std::size_t size) {
   const auto start = Clock::now();

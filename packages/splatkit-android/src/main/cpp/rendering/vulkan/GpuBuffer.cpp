@@ -57,8 +57,9 @@ void GpuBuffer::flush(VkDeviceSize offset, VkDeviceSize size) const {
   vmaFlushAllocation(ctx_.allocator(), allocation_, offset, size);
 }
 
-bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
-  if (size > size_) return false;
+bool GpuBuffer::upload(VkDeviceSize offset, const void* data, VkDeviceSize size) {
+  if (size == 0) return true;
+  if (offset > size_ || size > size_ - offset) return false;
   auto staging = hostVisible(ctx_, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   if (!staging) return false;
   std::memcpy(staging->mapped(), data, static_cast<size_t>(size));
@@ -80,7 +81,7 @@ bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
   const VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
   VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  const VkBufferCopy region{0, 0, size};
+  const VkBufferCopy region{0, offset, size};
   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.commandBufferCount = 1;
   submit.pCommandBuffers = &cmd;

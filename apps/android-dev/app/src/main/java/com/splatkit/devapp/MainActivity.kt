@@ -116,6 +116,8 @@ class MainActivity : Activity() {
         if (intent?.hasExtra("shdraw") == true) splatView.shDegree = intent.getIntExtra("shdraw", 3)
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
         if (intent?.hasExtra("budget") == true) splatView.splatBudget = intent.getIntExtra("budget", 0)
+        // --ei residency N holds at most N splats of a tiled world on the GPU.
+        if (intent?.hasExtra("residency") == true) splatView.residencyBudget = intent.getIntExtra("residency", 2_000_000)
         // --ez linear true blends in linear light, the old default, 40% slower.
         if (intent?.hasExtra("linear") == true) splatView.linearBlending = intent.getBooleanExtra("linear", false)
         // --ef margin 20 widens the angular margin the cull keeps drawn around the view.
@@ -136,6 +138,10 @@ class MainActivity : Activity() {
                     // --ez bytes true goes through the ByteArray overloads instead of the files.
                     splatView.loadWorld(externalFile(worldPath).readBytes())
                     colliderPath?.let { splatView.loadCollider(externalFile(it).readBytes()) }
+                } else if (worldPath.endsWith(".json")) {
+                    // --es world winter/tileset.json streams a tiled world made by splat-tile.
+                    splatView.loadTiledWorld(externalFile(worldPath))
+                    colliderPath?.let { splatView.loadCollider(externalFile(it)) }
                 } else {
                     splatView.loadWorld(externalFile(worldPath))
                     colliderPath?.let { splatView.loadCollider(externalFile(it)) }

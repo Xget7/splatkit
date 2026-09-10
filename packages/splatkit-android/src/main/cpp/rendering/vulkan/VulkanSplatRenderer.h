@@ -56,6 +56,12 @@ class VulkanSplatRenderer {
   // Uploads a world and draws it from now on, once the GPU is done with the previous one.
   // Needs `ready()`. Fails, keeping the previous world, when the upload does.
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree);
+  // Replaces the world with an empty slab of `capacity` records for a tiled world, drawn
+  // from now on; tiles land in it through `uploadTile`. Needs `ready()`.
+  bool createSlab(uint32_t capacity, int shDegree);
+  // Uploads a tile into records [offset, offset + count) of the slab (blocking). A frame
+  // in flight that still names those records may draw a mix of old and new for one frame.
+  bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud);
   const GpuWorld* world() const { return world_.get(); }
 
   struct Frame {
