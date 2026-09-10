@@ -37,6 +37,10 @@ enum class TileState : std::uint8_t {
 // Loads are placed in the slab up front, so what is asked for always has a home; the
 // least recently drawn tiles make room. The root is always wanted, so a turn towards
 // something not loaded still finds the coarsest cover.
+// A scene that fits the budget whole is fetched whole: once the cover is asked for, every
+// other tile follows at the lowest priority, so a turn finds its fine tiles resident
+// instead of a coarse stand-in for a moment. A scene bigger than the budget is not, since
+// tiles fetched for a turn would be evicted for the cover and back again.
 // A tile stays put while any draw order names its range (see `plan`); without that a
 // tile landing in a range the order on the GPU still reads would draw in its place.
 // Not thread safe: the render thread owns it.
@@ -99,6 +103,7 @@ class TileScheduler {
   SlabAllocator slab_;
   std::vector<TileState> states_;
   std::vector<std::uint32_t> offsets_;
+  bool fetchAll_;                        // every tile fits the slab at once
   std::vector<std::uint64_t> lastUsed_;  // the plan that last drew or wanted the tile
   std::uint64_t frame_ = 0;
 };

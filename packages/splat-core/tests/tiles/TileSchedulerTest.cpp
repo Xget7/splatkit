@@ -60,30 +60,33 @@ TEST(TileScheduler, AsksForTheRootFirstAndDrawsItUntilTheChildrenAreThere) {
   auto plan = scheduler.plan(inside);
   EXPECT_TRUE(plan.draw.empty());
   // The root first, as the fallback, then the four octants in front of the camera; the
-  // four behind it are not wanted.
-  ASSERT_EQ(plan.load.size(), 5u);
+  // four behind it come last, since the scene fits whole.
+  ASSERT_EQ(plan.load.size(), 9u);
   EXPECT_EQ(plan.load[0].tile, set->root);
-  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3, set->root}));
+  std::vector<std::uint32_t> first(5);
+  for (std::size_t i = 0; i < 5; ++i) first[i] = plan.load[i].tile;
+  std::sort(first.begin(), first.end());
+  EXPECT_EQ(first, (std::vector<std::uint32_t>{0, 1, 2, 3, set->root}));
   EXPECT_EQ(scheduler.state(set->root), TileState::loading);
 
   scheduler.markResident(set->root);
   plan = scheduler.plan(inside);
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
-  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3}));
-  EXPECT_EQ(scheduler.held(), 500u);
+  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3, 4, 5, 6, 7}));
+  EXPECT_EQ(scheduler.held(), 900u);
 
   // Two landed: they are drawn, and the root under them where the other two go.
   for (int i = 0; i < 2; ++i) scheduler.markResident(static_cast<std::uint32_t>(i));
   plan = scheduler.plan(inside);
   std::sort(plan.draw.begin(), plan.draw.end());
   EXPECT_EQ(plan.draw, (std::vector<std::uint32_t>{0, 1, set->root}));
-  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{2, 3}));
+  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{2, 3, 4, 5, 6, 7}));
 
   for (int i = 2; i < 4; ++i) scheduler.markResident(static_cast<std::uint32_t>(i));
   plan = scheduler.plan(inside);
   std::sort(plan.draw.begin(), plan.draw.end());
   EXPECT_EQ(plan.draw, (std::vector<std::uint32_t>{0, 1, 2, 3}));
-  EXPECT_TRUE(plan.load.empty());
+  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{4, 5, 6, 7}));
 }
 
 TEST(TileScheduler, FarAwayTheRootIsFineEnough) {
@@ -93,7 +96,9 @@ TEST(TileScheduler, FarAwayTheRootIsFineEnough) {
   scheduler.markResident(set->root);
   auto plan = scheduler.plan(from({0, 0, 1000}, {0, 0, -1}, 1.0f, 0.01f));
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
-  EXPECT_TRUE(plan.load.empty());
+  // Nothing finer is needed; the octants come only because the scene fits whole.
+  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3, 4, 5, 6, 7}));
+  for (const auto& l : plan.load) EXPECT_EQ(l.priority, 0.0f);
 }
 
 TEST(TileScheduler, OnlyWhatTheCameraSeesIsWanted) {
@@ -104,10 +109,28 @@ TEST(TileScheduler, OnlyWhatTheCameraSeesIsWanted) {
   scheduler.plan(narrow);
   scheduler.markResident(set->root);
   auto plan = scheduler.plan(narrow);
-  EXPECT_EQ(tilesOf(plan.load), std::vector<std::uint32_t>{7});
+  // The octant in view is wanted first; the scene fits whole, so the seven others follow
+  // at the lowest priority and a turn finds them there.
+  ASSERT_EQ(plan.load.size(), 8u);
+  EXPECT_EQ(plan.load[0].tile, 7u);
+  for (std::size_t i = 1; i < 8; ++i) EXPECT_EQ(plan.load[i].priority, 0.0f);
   scheduler.markResident(7);
   plan = scheduler.plan(narrow);
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{7});
+}
+
+TEST(TileScheduler, ASceneBiggerThanTheBudgetIsFetchedOnlyWhereSeen) {
+  auto set = octants();
+  TileScheduler scheduler(set, 850);  // 50 short of the whole scene
+  const TileView narrow = from({5, 5, 5}, {1, 0, 0}, 0.27f, 0.001f);
+  scheduler.plan(narrow);
+  scheduler.markResident(set->root);
+  auto plan = scheduler.plan(narrow);
+  EXPECT_EQ(tilesOf(plan.load), std::vector<std::uint32_t>{7});
+  scheduler.markResident(7);
+  plan = scheduler.plan(narrow);
+  EXPECT_TRUE(plan.load.empty());
+  EXPECT_EQ(scheduler.held(), 200u);
 }
 
 TEST(TileScheduler, MakesRoomByDroppingWhatWasNotDrawnLately) {
@@ -153,9 +176,9 @@ TEST(TileScheduler, AFailedTileIsNeverAskedForAgain) {
   scheduler.plan(narrow);
   scheduler.markFailed(7);
   auto plan = scheduler.plan(narrow);
-  EXPECT_TRUE(plan.load.empty());
+  for (const auto& l : plan.load) EXPECT_NE(l.tile, 7u);
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
-  EXPECT_EQ(scheduler.held(), 100u);
+  EXPECT_EQ(scheduler.held(), 800u);  // the root and the seven octants that can be read
 }
 
 TEST(TileScheduler, ATurnOntoAMissingChildKeepsTheSiblingsOnScreen) {
@@ -184,11 +207,13 @@ TEST(TileScheduler, AnAbandonedLoadFreesItsRange) {
   scheduler.plan(narrow);
   scheduler.markResident(set->root);
   scheduler.plan(narrow);
-  EXPECT_EQ(scheduler.held(), 200u);
+  EXPECT_EQ(scheduler.held(), 900u);  // the root, 7 and the rest of the scene on their way
   scheduler.markAbsent(7);
-  EXPECT_EQ(scheduler.held(), 100u);
+  EXPECT_EQ(scheduler.held(), 800u);
   auto plan = scheduler.plan(narrow);
-  EXPECT_EQ(tilesOf(plan.load), std::vector<std::uint32_t>{7});
+  ASSERT_FALSE(plan.load.empty());
+  EXPECT_EQ(plan.load[0].tile, 7u);
+  EXPECT_EQ(scheduler.held(), 900u);
 }
 
 TEST(TileScheduler, APinnedTileIsNotEvictedWhileNotDrawn) {

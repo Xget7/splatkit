@@ -37,7 +37,7 @@ Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the lay
 | `renderScale` | Fraction of the view's resolution the splats are drawn at, 0.1 to 2 |
 | `cullMarginDegrees` | Angular margin kept drawn around the view |
 | `linearBlending` | Blend in linear light instead of the encoded colour space |
-| `splatBudget`, `residencyBudget` | Most splats drawn per frame, most splats resident on the GPU |
+| `splatBudget`, `residencyBudget` | Most splats drawn per frame, most splats resident on the GPU; a tiled scene that fits the residency whole is fetched whole, so turning never meets a coarse stand-in |
 | `shDegree`, `maxShDegree` | Harmonics drawn, harmonics kept from the file |
 | `setWalkVelocity(forward:right:)` | Continuous walking in meters per second |
 | `setMotionEnabled(_:)`, `isMotionEnabled` | Gyroscope driven camera |

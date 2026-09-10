@@ -13,7 +13,11 @@ TileScheduler::TileScheduler(std::shared_ptr<const Tileset> tileset, std::uint32
       slab_(residency),
       states_(tileset_->tiles.size(), TileState::absent),
       offsets_(tileset_->tiles.size(), 0),
-      lastUsed_(tileset_->tiles.size(), 0) {}
+      lastUsed_(tileset_->tiles.size(), 0) {
+  std::uint64_t total = 0;
+  for (const Tile& tile : tileset_->tiles) total += tile.count;
+  fetchAll_ = total <= residency;
+}
 
 bool TileScheduler::visible(std::uint32_t index, const TileView& view) const {
   const Tile& tile = tileset_->tiles[index];
@@ -185,7 +189,7 @@ TileScheduler::Plan TileScheduler::plan(const TileView& view,
             [&](std::uint32_t a, std::uint32_t b) { return lastUsed_[a] > lastUsed_[b]; });
   // Loads placed for tiles no longer wanted are abandoned so the room goes to the cover.
   for (std::uint32_t i = 0; i < states_.size(); ++i) {
-    if (states_[i] == TileState::loading && lastUsed_[i] != frame_) {
+    if (states_[i] == TileState::loading && lastUsed_[i] != frame_ && !fetchAll_) {
       plan.drop.push_back({i, offsets_[i], tileset_->tiles[i].count});
       release(i, TileState::absent);
     }
@@ -195,6 +199,16 @@ TileScheduler::Plan TileScheduler::plan(const TileView& view,
     if (states_[w.tile] == TileState::absent && !place(w.tile, plan, evictable)) continue;
     if (states_[w.tile] != TileState::loading) continue;
     plan.load.push_back({w.tile, offsets_[w.tile], w.priority});
+  }
+
+  // The rest of a scene that fits whole, last and at the lowest priority. Nothing is ever
+  // evicted in this case, so a tile fetched for a turn stays for it.
+  if (fetchAll_) {
+    for (std::uint32_t tile = 0; tile < states_.size(); ++tile) {
+      if (lastUsed_[tile] == frame_ || states_[tile] == TileState::failed) continue;
+      if (states_[tile] == TileState::absent && !place(tile, plan, evictable)) continue;
+      if (states_[tile] == TileState::loading) plan.load.push_back({tile, offsets_[tile], 0.0f});
+    }
   }
   return plan;
 }
