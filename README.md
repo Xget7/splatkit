@@ -177,7 +177,9 @@ The repository is a monorepo with three packages and one app:
 packages/splat-core/          C++17 core: formats, sorting, math, navigation, tiles. No graphics, no platform code.
 packages/splatkit-engine/     C++17 engine shared by the platforms: the frame, the camera, the diagnostics, the renderer interface.
 packages/splatkit-android/    Android library: Vulkan renderer, input, SplatSurfaceView.
-apps/android-dev/             Development and benchmark app.
+packages/splatkit-ios/        iOS library: Metal renderer, input, SplatMetalView.
+apps/android-dev/             Android development and benchmark app.
+apps/ios-dev/                 iOS development and benchmark app.
 docs/adr/                     Architecture decision records, one file per decision.
 docs/BENCHMARKS.md            Every measurement, with device, commit and settings.
 docs/ROADMAP.md               What works, what is next, what is open, what is deferred and why.
@@ -191,6 +193,7 @@ The same core can sit under a Metal or WebGPU engine without touching the format
 It reaches the GPU through one `SplatRenderer` interface that each platform implements.
 
 **splatkit-android** owns the Vulkan context, swapchain and frame loop behind that interface.
+**splatkit-ios** owns the Metal device, the CAMetalLayer and the display link behind the same interface; see its [README](packages/splatkit-ios/README.md).
 A Choreographer driven render thread and a JNI boundary connect it to the Kotlin view.
 
 Every non obvious choice is written down in [docs/adr](docs/adr), from why the project is Android first and Vulkan direct to why blending happens in the encoded space and why the CPU sort is the baseline.

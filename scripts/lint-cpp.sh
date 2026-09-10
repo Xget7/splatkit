@@ -35,12 +35,16 @@ clang_tidy="$bin/clang-tidy"
 core="$root/packages/splat-core"
 engine="$root/packages/splatkit-engine"
 android="$root/packages/splatkit-android/src/main/cpp"
+ios="$root/packages/splatkit-ios/Sources/SplatKitCore"
 build="$root/build/lint"
 
+# The iOS sources are Objective-C++: clang-format handles them, the NDK's clang-tidy
+# cannot parse them against an Apple SDK, so they are formatted here and built, with
+# warnings as errors, by scripts/build-ios.sh.
 sources() {
   find "$core/include" "$core/src" "$core/tests" "$core/tools" \
-    "$engine/include" "$engine/src" "$engine/tests" "$android" \
-    -type f \( -name '*.cpp' -o -name '*.h' \) | sort
+    "$engine/include" "$engine/src" "$engine/tests" "$android" "$ios" \
+    -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) | sort
 }
 
 echo "clang-format"
