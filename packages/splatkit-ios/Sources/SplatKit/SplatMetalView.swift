@@ -174,7 +174,7 @@ public final class SplatMetalView: UIView {
     /// 32 bytes each plus the harmonics. Applies to tiled worlds loaded after it is set.
     public var residencyBudget = 2_000_000 {
         didSet {
-            residencyBudget = min(max(residencyBudget, 100_000), 8_000_000)
+            residencyBudget = min(max(residencyBudget, 100_000), 32_000_000)
             renderThread.setResidencyBudget(residencyBudget)
         }
     }

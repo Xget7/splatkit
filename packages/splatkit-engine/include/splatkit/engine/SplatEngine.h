@@ -131,7 +131,7 @@ class SplatEngine {
  private:
   static constexpr int kMaxShDegree = 3;
   static constexpr int kMinResidency = 100000;
-  static constexpr int kMaxResidency = 8000000;
+  static constexpr int kMaxResidency = 32000000;
 
   // The camera as the frame sees it: matrices for the draw, axes for the cull.
   struct FrameCamera {
