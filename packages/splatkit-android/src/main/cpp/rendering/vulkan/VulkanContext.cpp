@@ -1,6 +1,6 @@
 #include "rendering/vulkan/VulkanContext.h"
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 

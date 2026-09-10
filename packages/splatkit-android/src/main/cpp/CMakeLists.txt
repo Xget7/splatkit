@@ -25,8 +25,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vk-bootstrap VulkanMemoryAllocator)
 
-set(SPLAT_CORE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../splat-core splat-core)
+set(SPLATKIT_ENGINE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../splatkit-engine splatkit-engine)
 
 include(cmake/shaders.cmake)
 splatkit_compile_shaders(splatkit_shaders
@@ -46,10 +46,7 @@ add_library(splatkit SHARED
   rendering/vulkan/SplatPipeline.cpp
   rendering/vulkan/VulkanSplatRenderer.cpp
   rendering/vulkan/Vma.cpp
-  camera/WalkCamera.cpp
-  diagnostics/Benchmark.cpp
-  diagnostics/StatsPublisher.cpp
-  engine/SplatEngine.cpp
+  engine/AndroidEngine.cpp
   jni/SplatKitJni.cpp
 )
 target_include_directories(splatkit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -68,7 +65,7 @@ target_link_options(splatkit PRIVATE
   "-Wl,--exclude-libs,ALL"
 )
 target_link_libraries(splatkit PRIVATE
-  splat_core
+  splatkit_engine
   splatkit_shaders
   vk-bootstrap::vk-bootstrap
   GPUOpen::VulkanMemoryAllocator

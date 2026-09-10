@@ -33,11 +33,13 @@ clang_format="$bin/clang-format"
 clang_tidy="$bin/clang-tidy"
 
 core="$root/packages/splat-core"
+engine="$root/packages/splatkit-engine"
 android="$root/packages/splatkit-android/src/main/cpp"
 build="$root/build/lint"
 
 sources() {
-  find "$core/include" "$core/src" "$core/tests" "$core/tools" "$android" \
+  find "$core/include" "$core/src" "$core/tests" "$core/tools" \
+    "$engine/include" "$engine/src" "$engine/tests" "$android" \
     -type f \( -name '*.cpp' -o -name '*.h' \) | sort
 }
 
@@ -59,6 +61,10 @@ echo "configure splat-core"
 cmake -S "$core" -B "$build/core" "${toolchain[@]}" \
   -DSPLAT_CORE_BUILD_TESTS=ON -DSPLAT_CORE_BUILD_TOOLS=ON > /dev/null
 
+echo "configure splatkit-engine"
+cmake -S "$engine" -B "$build/engine" "${toolchain[@]}" \
+  -DSPLATKIT_ENGINE_BUILD_TESTS=ON > /dev/null
+
 echo "configure splatkit-android"
 cmake -S "$android" -B "$build/android" "${toolchain[@]}" > /dev/null
 # The splat pipeline includes the generated shader headers.
@@ -75,6 +81,8 @@ tidy() {  # <compile database dir> <sources...>
 
 echo "clang-tidy splat-core"
 tidy "$build/core" $(find "$core/src" "$core/tests" "$core/tools" -name '*.cpp' | sort)
+echo "clang-tidy splatkit-engine"
+tidy "$build/engine" $(find "$engine/src" "$engine/tests" -name '*.cpp' | sort)
 echo "clang-tidy splatkit-android"
 tidy "$build/android" $(find "$android" -name '*.cpp' | sort)
 # clang-tidy's fixes do not keep the formatting.

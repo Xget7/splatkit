@@ -4,7 +4,7 @@
 
 #include <vulkan/vulkan_android.h>
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {
@@ -75,9 +75,19 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
   if (swapchain_) keepSurfaceIf(recreateSwapchain());
 }
 
-VkExtent2D VulkanSplatRenderer::drawExtent() const {
-  if (target_) return target_->extent();
-  return swapchain_ ? swapchain_->extent() : VkExtent2D{0, 0};
+Extent VulkanSplatRenderer::drawExtent() const {
+  VkExtent2D extent{0, 0};
+  if (target_) {
+    extent = target_->extent();
+  } else if (swapchain_) {
+    extent = swapchain_->extent();
+  }
+  return {extent.width, extent.height};
+}
+
+std::optional<GpuWorldInfo> VulkanSplatRenderer::world() const {
+  if (!world_) return std::nullopt;
+  return GpuWorldInfo{world_->count, world_->shDegree};
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
@@ -116,7 +126,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   }
   if (status != FrameLoop::Status::ok) return false;
 
-  const VkExtent2D extent = drawExtent();
+  const Extent size = drawExtent();
+  const VkExtent2D extent{size.width, size.height};
   const uint32_t slot = frameLoop_.currentSlot();
   // Outside the render pass: transfers are not allowed inside one.
   if (world_ && frame.order != nullptr) {

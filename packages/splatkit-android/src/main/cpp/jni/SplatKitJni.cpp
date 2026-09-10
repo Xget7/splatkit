@@ -11,8 +11,8 @@
 #include <memory>
 #include <string>
 
-#include "Log.h"
-#include "engine/SplatEngine.h"
+#include "engine/AndroidEngine.h"
+#include "splatkit/Log.h"
 
 // `SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, ...)` declares the exported symbol
 // the JVM binds to `SplatEngine.nativeLook`. The package is part of the name.
@@ -25,9 +25,14 @@ constexpr jsize kPoseFloats = 5;
 constexpr jsize kStatsFloats = 7;
 constexpr jsize kAttitudeFloats = 9;
 
-// The handle Kotlin holds is the engine's address; JNI has no other way to carry it.
+// The handle Kotlin holds is the host's address; JNI has no other way to carry it.
+splatkit::AndroidEngine* toHost(jlong handle) {
+  return reinterpret_cast<splatkit::AndroidEngine*>(handle);  // NOLINT(performance-no-int-to-ptr)
+}
+
 splatkit::SplatEngine* toEngine(jlong handle) {
-  return reinterpret_cast<splatkit::SplatEngine*>(handle);  // NOLINT(performance-no-int-to-ptr)
+  auto* host = toHost(handle);
+  return host != nullptr ? &host->engine() : nullptr;
 }
 
 JavaVM* gVm = nullptr;
@@ -109,22 +114,21 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 // Lifetime.
 
 SPLATKIT_JNI(jlong, nativeCreate)(JNIEnv* env, jobject thiz) {
-  auto result = splatkit::SplatEngine::create();
+  auto result = splatkit::AndroidEngine::create();
   if (!result) {
     LOGE("engine creation failed: %s", result.error().message.c_str());
     return 0;
   }
-  splatkit::SplatEngine* engine = result.value().release();
+  splatkit::AndroidEngine* host = result.value().release();
   // The bridge lives in the sink and dies with the engine.
-  engine->setEventSink([bridge = std::make_shared<EventBridge>(env, thiz)](
-                           splatkit::SplatEngine::Event e, const std::string& m, uint32_t c) {
-    (*bridge)(e, m, c);
-  });
-  return reinterpret_cast<jlong>(engine);
+  host->engine().setEventSink([bridge = std::make_shared<EventBridge>(env, thiz)](
+                                  splatkit::SplatEngine::Event e, const std::string& m,
+                                  uint32_t c) { (*bridge)(e, m, c); });
+  return reinterpret_cast<jlong>(host);
 }
 
 SPLATKIT_JNI(void, nativeDestroy)(JNIEnv*, jobject, jlong handle) {
-  delete toEngine(handle);
+  delete toHost(handle);
 }
 
 SPLATKIT_JNI(jstring, nativeGpuDescription)(JNIEnv* env, jobject, jlong handle) {
@@ -135,22 +139,22 @@ SPLATKIT_JNI(jstring, nativeGpuDescription)(JNIEnv* env, jobject, jlong handle) 
 // Surface and frames.
 
 SPLATKIT_JNI(void, nativeSetSurface)(JNIEnv* env, jobject, jlong handle, jobject surface) {
-  auto* engine = toEngine(handle);
-  if (engine == nullptr) return;
+  auto* host = toHost(handle);
+  if (host == nullptr) return;
   if (surface == nullptr) {
-    engine->setWindow(nullptr);
+    host->setWindow(nullptr);
     return;
   }
   ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
   if (window == nullptr) LOGE("the Surface has no native window; the view stays blank");
-  engine->setWindow(window);
+  host->setWindow(window);
   // The engine holds its own reference; drop the one fromSurface gave us.
   if (window != nullptr) ANativeWindow_release(window);
 }
 
 SPLATKIT_JNI(void, nativeSurfaceResized)(JNIEnv*, jobject, jlong handle, jint width, jint height) {
-  if (auto* engine = toEngine(handle)) {
-    engine->onSurfaceResized(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+  if (auto* host = toHost(handle)) {
+    host->onSurfaceResized(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
   }
 }
 

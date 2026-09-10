@@ -1,12 +1,12 @@
-#include "diagnostics/Benchmark.h"
+#include "splatkit/diagnostics/Benchmark.h"
 
 #include <cmath>
 #include <fstream>
 #include <string>
 #include <utility>
 
-#include "Log.h"
 #include "splat/diagnostics/TimingSummary.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {

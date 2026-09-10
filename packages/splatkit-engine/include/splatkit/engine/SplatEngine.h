@@ -9,48 +9,42 @@
 #include <optional>
 #include <string>
 
-#include <android/native_window.h>
-#include <vulkan/vulkan.h>
-
-#include "camera/WalkCamera.h"
-#include "diagnostics/Benchmark.h"
-#include "diagnostics/StatsPublisher.h"
-#include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/VulkanContext.h"
-#include "rendering/vulkan/VulkanSplatRenderer.h"
 #include "splat/core/Result.h"
 #include "splat/loading/SplatWorldLoader.h"
 #include "splat/math/Mat4.h"
 #include "splat/sorting/AsyncSorter.h"
 #include "splat/sorting/VisibilityPlanner.h"
 #include "splat/tiles/TileStreamer.h"
+#include "splatkit/camera/WalkCamera.h"
+#include "splatkit/diagnostics/Benchmark.h"
+#include "splatkit/diagnostics/StatsPublisher.h"
+#include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
 
-// The native engine behind one SplatSurfaceView. It owns the loader, the camera, the
-// sorter and the renderer and runs them once per vsync: a frame steps the camera, asks
+// The native engine behind one view. It owns the loader, the camera, the sorter and
+// the platform's renderer and runs them once per vsync: a frame steps the camera, asks
 // the sorter for the visible set when the view changed enough, and draws only when
 // something visible changed, so a still scene costs no GPU time.
 //
 // Rendering, input and settings run on the render thread. Loading may run on any
 // thread: it decodes there and leaves the result for the render thread to upload.
-// Survives losing and regaining the surface.
+// The surface belongs to the renderer: the engine survives losing and regaining it.
 class SplatEngine {
  public:
   using Stats = splatkit::Stats;
   using CameraPose = splatkit::CameraPose;
 
-  static splat::Result<std::unique_ptr<SplatEngine>> create();
+  explicit SplatEngine(std::unique_ptr<SplatRenderer> renderer);
   ~SplatEngine();
 
   SplatEngine(const SplatEngine&) = delete;
   SplatEngine& operator=(const SplatEngine&) = delete;
 
-  // A new window (takes a reference) or nullptr when the surface is going away.
-  void setWindow(ANativeWindow* window);
+  // The platform's renderer, for the calls only its view makes: attaching a surface.
+  SplatRenderer& renderer() { return *renderer_; }
+
   void render(int64_t frameTimeNanos);
-  // The window changed size while staying attached. Rebuilds the swapchain if needed.
-  void onSurfaceResized(uint32_t width, uint32_t height);
 
   // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.
   void loadWorld(const std::uint8_t* data, std::size_t size);
@@ -128,7 +122,7 @@ class SplatEngine {
   // Runs a reproducible capture: gyroscope off, a fixed pose, one full yaw turn over
   // `seconds`, then logs the frame time distribution. Waits for a world if none is up.
   void startBenchmark(float seconds);
-  const std::string& gpuDescription() const { return ctx_->deviceDescription(); }
+  const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
   static constexpr int kMaxShDegree = 3;
@@ -142,7 +136,6 @@ class SplatEngine {
     splat::VisibilityPlanner::View axes;
   };
 
-  SplatEngine() = default;
   void emit(Event event, const std::string& message = {}, uint32_t splatCount = 0) const {
     if (events_) events_(event, message, splatCount);
   }
@@ -150,19 +143,17 @@ class SplatEngine {
   void reportCollider(const splat::Result<splat::SplatWorldLoader::ColliderReport>& report);
   bool applyPendingLoads();
   float frameSeconds(int64_t frameTimeNanos);
-  void driveBenchmark(float dt, const GpuWorld& world);
-  FrameCamera frameCamera(VkExtent2D extent) const;
+  void driveBenchmark(float dt, const GpuWorldInfo& world);
+  FrameCamera frameCamera(Extent extent) const;
   void publishPose();
-  void requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent);
+  void requestVisible(const FrameCamera& camera, float dt, Extent extent);
   void streamTiles(const FrameCamera& camera, float pixelScale,
                    const std::optional<splat::Frustum>& requested);
   void takeSortResult();
   StatsPublisher::Sample sample() const;
 
   EventSink events_;
-  std::unique_ptr<VulkanContext> ctx_;
-  std::unique_ptr<FrameLoop> frameLoop_;
-  std::unique_ptr<VulkanSplatRenderer> renderer_;  // after ctx_ and frameLoop_: dies first
+  std::unique_ptr<SplatRenderer> renderer_;
   splat::SplatWorldLoader loader_;
   WalkCamera camera_;
   splat::VisibilityPlanner planner_;

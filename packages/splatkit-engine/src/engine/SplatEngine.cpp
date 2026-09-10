@@ -1,12 +1,12 @@
-#include "engine/SplatEngine.h"
+#include "splatkit/engine/SplatEngine.h"
 
 #include <chrono>
 #include <cmath>
 #include <utility>
 
-#include "Log.h"
 #include "splat/math/Frustum.h"
 #include "splat/tiles/TileStreamer.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {
@@ -27,32 +27,15 @@ double millisSince(Clock::time_point start) {
 
 }  // namespace
 
-splat::Result<std::unique_ptr<SplatEngine>> SplatEngine::create() {
-  std::unique_ptr<SplatEngine> engine(new SplatEngine());
-  auto ctx = VulkanContext::create();
-  if (!ctx) return ctx.error();
-  engine->ctx_ = std::move(ctx.value());
-  engine->frameLoop_ = std::make_unique<FrameLoop>(*engine->ctx_);
-  if (!engine->frameLoop_->valid()) {
-    return splat::Error{splat::ErrorCode::gpuUnavailable, "frame loop"};
-  }
-  engine->renderer_ = std::make_unique<VulkanSplatRenderer>(*engine->ctx_, *engine->frameLoop_);
-  return engine;
-}
+SplatEngine::SplatEngine(std::unique_ptr<SplatRenderer> renderer)
+    : renderer_(std::move(renderer)) {}
 
+// The renderer goes first: it waits for the GPU, which may still read an order the
+// sorter or the streamer own.
 SplatEngine::~SplatEngine() {
   renderer_.reset();
   sorter_.reset();
   streamer_.reset();
-  if (ctx_) ctx_->waitIdle();
-}
-
-void SplatEngine::setWindow(ANativeWindow* window) {
-  renderer_->setWindow(window);
-}
-
-void SplatEngine::onSurfaceResized(uint32_t width, uint32_t height) {
-  renderer_->onSurfaceResized(width, height);
 }
 
 void SplatEngine::setShDegree(int degree) {
@@ -151,7 +134,7 @@ bool SplatEngine::applyPendingLoads() {
   planner_.invalidate();
   pendingOrder_.reset();  // an order for the old world indexes past a smaller new one
   drawCount_ = 0;         // the first frustum sort decides what is visible
-  const GpuWorld& gpu = *renderer_->world();
+  const GpuWorldInfo gpu = renderer_->world().value_or(GpuWorldInfo{});
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", gpu.count, millisSince(start), gpu.shDegree);
   emit(Event::worldReady, {}, sourceCount_);
   return true;
@@ -173,7 +156,7 @@ void SplatEngine::publishPose() {
   stats_.publishPose(camera_.position(), camera_.yaw(), camera_.pitch());
 }
 
-SplatEngine::FrameCamera SplatEngine::frameCamera(VkExtent2D extent) const {
+SplatEngine::FrameCamera SplatEngine::frameCamera(Extent extent) const {
   FrameCamera c;
   c.view = camera_.viewMatrix();
   const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -189,7 +172,7 @@ SplatEngine::FrameCamera SplatEngine::frameCamera(VkExtent2D extent) const {
 // Visibility: only the splats inside a widened frustum reach the GPU, which pays per
 // splat it processes. The planner says when the view changed enough to ask again.
 
-void SplatEngine::requestVisible(const FrameCamera& camera, float dt, VkExtent2D extent) {
+void SplatEngine::requestVisible(const FrameCamera& camera, float dt, Extent extent) {
   auto frustum = planner_.update(camera.axes, dt, lastSort_.cullMillis);
   // A pixel at unit depth: what a node or a tile may cover on screen before it is refined.
   const float pixelScale = 2.0f / (camera.proj.at(1, 1) * static_cast<float>(extent.height));
@@ -256,25 +239,25 @@ void SplatEngine::startBenchmark(float seconds) {
   renderer_->setVsync(false);  // so frame times are not vsync multiples
 }
 
-void SplatEngine::driveBenchmark(float dt, const GpuWorld& world) {
+void SplatEngine::driveBenchmark(float dt, const GpuWorldInfo& world) {
   if (benchmark_.pending()) {
     camera_.setMotionEnabled(false);
     camera_.setOrientation(0.0f, 0.0f);
     benchmark_.begin(world.count);
     return;
   }
-  if (benchmark_.running()) camera_.look(benchmark_.step(dt, frameLoop_->lastGpuMillis()), 0.0f);
+  if (benchmark_.running()) camera_.look(benchmark_.step(dt, renderer_->lastGpuMillis()), 0.0f);
 }
 
 StatsPublisher::Sample SplatEngine::sample() const {
   StatsPublisher::Sample s;
-  s.gpuMillis = frameLoop_->lastGpuMillis();
+  s.gpuMillis = renderer_->lastGpuMillis();
   s.sortMillis = lastSort_.sortMillis;
   s.cullMillis = lastSort_.cullMillis;
   s.selectMillis = lastSort_.selectMillis;
   s.selected = lastSort_.selected;
   s.drawn = drawCount_;
-  const GpuWorld* world = renderer_->world();
+  const std::optional<GpuWorldInfo> world = renderer_->world();
   s.sourceSplats = world ? sourceCount_ : 0;
   s.gpuSplats = world ? (streamer_ ? streamer_->held() : world->count) : 0;
   s.walking = camera_.hasCollider();
@@ -297,10 +280,10 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   if (!renderer_->ready()) return;
   if (applyPendingLoads()) redrawNeeded_ = true;
 
-  const VkExtent2D extent = renderer_->drawExtent();
-  const GpuWorld* world = renderer_->world();
+  const Extent extent = renderer_->drawExtent();
+  const std::optional<GpuWorldInfo> world = renderer_->world();
   std::optional<FrameCamera> camera;
-  if (world != nullptr) {
+  if (world) {
     const float dt = frameSeconds(frameTimeNanos);
     driveBenchmark(dt, *world);
     camera_.update(dt);
@@ -320,7 +303,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
     return;
   }
 
-  VulkanSplatRenderer::Frame frame;
+  SplatRenderer::Frame frame;
   if (camera) {
     if (pendingOrder_) {
       drawCount_ = static_cast<uint32_t>(pendingOrder_->size());

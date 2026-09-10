@@ -1,6 +1,6 @@
-#include "diagnostics/StatsPublisher.h"
+#include "splatkit/diagnostics/StatsPublisher.h"
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {

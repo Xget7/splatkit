@@ -171,11 +171,12 @@ The [library README](packages/splatkit-android/README.md#api) documents every me
 
 ## How it works
 
-The repository is a monorepo with two packages and one app:
+The repository is a monorepo with three packages and one app:
 
 ```
-packages/splat-core/          C++17 core: formats, sorting, math, navigation. No graphics, no platform code.
-packages/splatkit-android/    Android library: Vulkan renderer, camera, input, SplatSurfaceView.
+packages/splat-core/          C++17 core: formats, sorting, math, navigation, tiles. No graphics, no platform code.
+packages/splatkit-engine/     C++17 engine shared by the platforms: the frame, the camera, the diagnostics, the renderer interface.
+packages/splatkit-android/    Android library: Vulkan renderer, input, SplatSurfaceView.
 apps/android-dev/             Development and benchmark app.
 docs/adr/                     Architecture decision records, one file per decision.
 docs/BENCHMARKS.md            Every measurement, with device, commit and settings.
@@ -186,8 +187,10 @@ docs/ROADMAP.md               What works, what is next, what is open, what is de
 It has no graphics dependency and no host framework in it.
 The same core can sit under a Metal or WebGPU engine without touching the formats, the sorting or the navigation.
 
-**splatkit-android** owns the Vulkan context, swapchain and frame loop.
-The engine sorts on movement and culls on rotation, blends in the encoded colour space the scene was trained in, and draws only when the camera, the world or the surface has changed, so a still scene costs no GPU time.
+**splatkit-engine** is the frame: it sorts on movement and culls on rotation, streams the tiles of a tiled world, blends in the encoded colour space the scene was trained in, and draws only when the camera, the world or the surface has changed, so a still scene costs no GPU time.
+It reaches the GPU through one `SplatRenderer` interface that each platform implements.
+
+**splatkit-android** owns the Vulkan context, swapchain and frame loop behind that interface.
 A Choreographer driven render thread and a JNI boundary connect it to the Kotlin view.
 
 Every non obvious choice is written down in [docs/adr](docs/adr), from why the project is Android first and Vulkan direct to why blending happens in the encoded space and why the CPU sort is the baseline.

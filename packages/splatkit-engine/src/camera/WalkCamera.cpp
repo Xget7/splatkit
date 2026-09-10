@@ -1,4 +1,4 @@
-#include "camera/WalkCamera.h"
+#include "splatkit/camera/WalkCamera.h"
 
 #include <algorithm>
 #include <cmath>

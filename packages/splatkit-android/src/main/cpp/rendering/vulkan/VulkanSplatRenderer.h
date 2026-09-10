@@ -13,8 +13,7 @@
 #include "rendering/vulkan/Swapchain.h"
 #include "rendering/vulkan/VulkanContext.h"
 #include "splat/formats/SplatCloud.h"
-#include "splat/math/Mat4.h"
-#include "splat/math/Vec3.h"
+#include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
 
@@ -23,10 +22,10 @@ namespace splatkit {
 // the world bound to them. Survives losing and regaining the window, and the world stays
 // through it. A rebuild that fails drops the surface and logs; the view stays blank
 // until the host attaches a surface again. Render thread only.
-class VulkanSplatRenderer {
+class VulkanSplatRenderer final : public SplatRenderer {
  public:
   VulkanSplatRenderer(VulkanContext& ctx, FrameLoop& frameLoop);
-  ~VulkanSplatRenderer();
+  ~VulkanSplatRenderer() override;
 
   VulkanSplatRenderer(const VulkanSplatRenderer&) = delete;
   VulkanSplatRenderer& operator=(const VulkanSplatRenderer&) = delete;
@@ -36,47 +35,32 @@ class VulkanSplatRenderer {
   // The window changed size while staying attached. Rebuilds the swapchain if needed.
   void onSurfaceResized(uint32_t width, uint32_t height);
 
-  // Fraction of the surface resolution the splats are drawn at, [0.1, 2]. Away from one
-  // the frame is drawn offscreen and rescaled with a linear blit.
-  void setRenderScale(float scale);
-  float renderScale() const { return renderScale_; }
-  // Blend in linear light instead of the encoded space; flips the swapchain format.
-  void setLinearBlending(bool linear);
-  bool linearBlending() const { return linearBlending_; }
-  // Off, frame times stop being multiples of the vsync, which benchmarks need.
-  void setVsync(bool vsync);
+  void setRenderScale(float scale) override;
+  float renderScale() const override { return renderScale_; }
+  // Flips the swapchain format.
+  void setLinearBlending(bool linear) override;
+  bool linearBlending() const override { return linearBlending_; }
+  void setVsync(bool vsync) override;
 
-  // True when a surface with pipelines is up: frames can be drawn and worlds uploaded.
-  bool ready() const { return swapchain_ && splats_ && triangle_; }
-  // Where the splats are drawn: the target's size with a render scale, else the swapchain's.
-  VkExtent2D drawExtent() const;
-  // Counts the rebuilds of the swapchain or the target. A frame drawn before one is gone.
-  uint32_t generation() const { return generation_; }
+  // True when a surface with pipelines is up.
+  bool ready() const override { return swapchain_ && splats_ && triangle_; }
+  // The target's size with a render scale, else the swapchain's.
+  Extent drawExtent() const override;
+  // Counts the rebuilds of the swapchain or the target.
+  uint32_t generation() const override { return generation_; }
 
-  // Uploads a world and draws it from now on, once the GPU is done with the previous one.
-  // Needs `ready()`. Fails, keeping the previous world, when the upload does.
-  bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree);
-  // Replaces the world with an empty slab of `capacity` records for a tiled world, drawn
-  // from now on; tiles land in it through `uploadTile`. Needs `ready()`.
-  bool createSlab(uint32_t capacity, int shDegree);
-  // Uploads a tile into records [offset, offset + count) of the slab (blocking). A frame
-  // in flight that still names those records may draw a mix of old and new for one frame.
-  bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud);
-  const GpuWorld* world() const { return world_.get(); }
+  // Uploads once the GPU is done with the previous world. Needs `ready()`.
+  bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
+  bool createSlab(uint32_t capacity, int shDegree) override;
+  // A frame in flight that still names those records may draw a mix of old and new for
+  // one frame.
+  bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) override;
+  std::optional<GpuWorldInfo> world() const override;
 
-  struct Frame {
-    // A new draw order for the world, copied in before the draw; nullptr keeps the last.
-    const uint32_t* order = nullptr;
-    uint32_t orderCount = 0;
-    uint32_t drawCount = 0;  // entries of the order buffer to draw
-    int shDegree = 0;        // capped by what the world carries
-    splat::Mat4 view = splat::Mat4::identity();
-    splat::Mat4 proj = splat::Mat4::identity();
-    splat::Vec3 cameraPosition;
-  };
-  // Records and presents one frame: the world, or the debug triangle without one.
-  // Returns false when nothing was presented, e.g. the swapchain was rebuilt instead.
-  bool draw(const Frame& frame);
+  // The world, or the debug triangle without one.
+  bool draw(const Frame& frame) override;
+  double lastGpuMillis() const override { return frameLoop_.lastGpuMillis(); }
+  const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
   bool createSurface();

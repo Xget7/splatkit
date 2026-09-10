@@ -13,23 +13,12 @@
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"
 #include "splat/math/Vec3.h"
+#include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
 
-// Exactly the layout the vertex shader reads (std430, 32 bytes).
-// Vertex fetch is the floor of the frame on Adreno 640 (8 ms for 500k splats at 48
-// bytes), so the record is as small as the source data allows: SPZ stores colour and
-// alpha as 8 bits, and the covariance keeps 11 bits of mantissa as half floats.
-struct GpuSplat {
-  float position[3];
-  uint32_t rgba8;     // colour and alpha, a real uint: never routed through a float, whose
-                      // NaN patterns some mobile compilers canonicalise
-  uint32_t cov[3];    // six halves: (xx, xy), (xz, yy), (yz, zz)
-  uint32_t lodAlpha;  // float bits of an opacity above 1 (level of detail nodes), else 0
-};
-static_assert(sizeof(GpuSplat) == 32, "GpuSplat must match the shader struct");
-
-// std140 layout of the Camera uniform block.
+// std140 layout of the Camera uniform block. The splat record is GpuSplat, the std430
+// layout the vertex shader reads.
 struct CameraUniform {
   splat::Mat4 view;
   splat::Mat4 proj;

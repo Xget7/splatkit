@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {

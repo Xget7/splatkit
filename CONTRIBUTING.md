@@ -51,8 +51,8 @@ The script configures both packages for the Android target and lints tests and t
 ## Code layout
 
 `packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, navigation, file mapping, the world loader and the visibility policy, each with tests.
-`packages/splatkit-android` owns everything Vulkan and Android.
-Its C++ is one `SplatEngine` (`cpp/engine`) that owns a `VulkanSplatRenderer` (surface, swapchain, pipelines, the world on the GPU), the camera, the sorter, a `Benchmark` and a `StatsPublisher`; `jni/` is the boundary to Kotlin and knows nothing else.
+`packages/splatkit-engine` is the engine without a graphics API: one `SplatEngine` that owns the camera, the sorter or the streamer, a `Benchmark` and a `StatsPublisher`, and draws through the `SplatRenderer` interface; the GPU record layout (`GpuSplat` and the packing) lives here so every renderer uploads the same bytes.
+`packages/splatkit-android` owns everything Vulkan and Android: `VulkanSplatRenderer` (surface, swapchain, pipelines, the world on the GPU) implements the interface, `AndroidEngine` wires it under the engine, and `jni/` is the boundary to Kotlin and knows nothing else.
 Its Kotlin has three layers: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope.
 The engine does not know what is hosting it; [ADR 0013](docs/adr/0013-engine-modules.md) records the split.
 

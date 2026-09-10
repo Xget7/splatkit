@@ -5,10 +5,9 @@
 #include <cstring>
 #include <vector>
 
-#include "Log.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
-#include "splat/math/Half.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {
@@ -20,17 +19,6 @@ VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
   VkShaderModule module = VK_NULL_HANDLE;
   vkCreateShaderModule(device, &info, nullptr, &module);
   return module;
-}
-
-uint32_t packRgba8(float r, float g, float b, float a) {
-  auto q = [](float v) {
-    return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
-  };
-  return q(r) | (q(g) << 8) | (q(b) << 16) | (q(a) << 24);
-}
-
-uint32_t packHalf2(float a, float b) {
-  return static_cast<uint32_t>(splat::toHalf(a)) | (static_cast<uint32_t>(splat::toHalf(b)) << 16);
 }
 
 }  // namespace
@@ -200,62 +188,6 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   vkDestroyShaderModule(device, frag, nullptr);
   return ok;
 }
-
-namespace {
-
-// Uints per splat of the harmonics buffer at a degree: the halves of bands 1 to
-// `degree`, channel fastest, two per uint, each splat starting on a uint.
-size_t shStride(int degree) {
-  const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
-  return (coefficients * 3 + 1) / 2;
-}
-
-// Bands 1 to `degree` of every splat, `shStride(degree)` uints each. The source cloud
-// must carry at least that degree.
-std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
-  const size_t n = cloud.count();
-  const size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
-  const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
-  const size_t halves = coefficients * 3;
-  const size_t stride = shStride(degree);
-  std::vector<uint32_t> packed(n * stride, 0);
-  for (size_t i = 0; i < n; ++i) {
-    const float* src = &cloud.sh[i * sourceCoefficients * 3];
-    for (size_t h = 0; h < halves; ++h) {
-      const uint32_t half = splat::toHalf(src[h]);
-      packed[i * stride + h / 2] |= half << ((h & 1) * 16);
-    }
-  }
-  return packed;
-}
-
-bool carriesSh(const splat::SplatCloud& cloud, int degree) {
-  const size_t n = cloud.count();
-  return degree > 0 && cloud.shDegree >= degree &&
-         cloud.sh.size() >=
-             n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
-}
-
-std::vector<GpuSplat> packSplats(const splat::SplatCloud& cloud) {
-  const size_t n = cloud.count();
-  std::vector<GpuSplat> packed(n);
-  for (size_t i = 0; i < n; ++i) {
-    GpuSplat& g = packed[i];
-    std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
-    const float alpha = cloud.alphas[i];
-    g.rgba8 =
-        packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2], alpha);
-    if (alpha > 1.0f) std::memcpy(&g.lodAlpha, &alpha, sizeof(g.lodAlpha));
-    const float* c = &cloud.covariances[i * 6];  // xx, xy, xz, yy, yz, zz
-    g.cov[0] = packHalf2(c[0], c[1]);
-    g.cov[1] = packHalf2(c[2], c[3]);
-    g.cov[2] = packHalf2(c[4], c[5]);
-    if (alpha <= 1.0f) g.lodAlpha = 0;
-  }
-  return packed;
-}
-
-}  // namespace
 
 std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cloud,
                                                      int maxShDegree) const {
