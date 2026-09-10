@@ -46,21 +46,17 @@ void TileScheduler::want(std::uint32_t index, float priority, std::vector<Wanted
   wanted.push_back({index, priority});
 }
 
-// The cover: the set of visible tiles to show this frame, chosen so that it fits the slab
-// next to whatever else must stay. Refinement goes biggest on screen first: a tile that
-// is not fine enough is swapped for its visible children when they fit, and stays as it
-// is when they do not, so the budget buys detail where it shows most. A child that
-// cannot be read pins its parent.
-std::vector<std::uint32_t> TileScheduler::cover(const TileView& view,
-                                                const std::vector<std::uint32_t>& pinned) {
-  std::vector<bool> isPinned(states_.size(), false);
-  std::uint64_t reserved = 0;  // splats the slab must hold: the cover and the pins
-  for (const std::uint32_t tile : pinned) {
-    if (!isPinned[tile]) reserved += tileset_->tiles[tile].count;
-    isPinned[tile] = true;
-  }
+// The cover: the set of visible tiles to show this frame, chosen so that it fits the
+// slab. Refinement goes biggest on screen first: a tile that is not fine enough is
+// swapped for its visible children when they fit, and stays as it is when they do not,
+// so the budget buys detail where it shows most. A child that cannot be read pins its
+// parent. Pinned tiles are not charged: they are the last cover or the one before, on
+// their way out or in this one, and charging them would shrink the cover it replaces
+// them with until nothing fits and nothing ever draws.
+std::vector<std::uint32_t> TileScheduler::cover(const TileView& view) {
+  std::uint64_t reserved = 0;  // splats of the cover, stand-ins included
   const auto costOf = [&](std::uint32_t tile) -> std::uint64_t {
-    return isPinned[tile] ? 0 : tileset_->tiles[tile].count;
+    return tileset_->tiles[tile].count;
   };
 
   std::vector<std::uint32_t> out;
@@ -170,7 +166,7 @@ TileScheduler::Plan TileScheduler::plan(const TileView& view,
   Plan plan;
   std::vector<Wanted> wanted;
   std::vector<bool> inCover(states_.size(), false);
-  for (const std::uint32_t tile : cover(view, pinned)) inCover[tile] = true;
+  for (const std::uint32_t tile : cover(view)) inCover[tile] = true;
   if (visible(tileset_->root, view)) visit(tileset_->root, view, plan, wanted, inCover);
   // The root is wanted whatever the cover: the coarsest fallback of a turn.
   if (states_[tileset_->root] != TileState::resident && !inCover[tileset_->root]) {

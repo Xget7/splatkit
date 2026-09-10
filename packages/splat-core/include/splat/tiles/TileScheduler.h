@@ -61,7 +61,8 @@ class TileScheduler {
     std::vector<Drop> drop;           // evicted this frame; their ranges are free again
   };
   // `pinned` are tiles a draw order still refers to: they count as used this frame, so
-  // they are never evicted from under it. They are drawn only if the walk chooses them.
+  // they are never evicted from under it. They are drawn only if the walk chooses them,
+  // and they do not shrink the cover: a load that finds no room waits for them to go.
   Plan plan(const TileView& view, const std::vector<std::uint32_t>& pinned = {});
 
   // The upload landed: the tile draws from the next plan on.
@@ -84,7 +85,7 @@ class TileScheduler {
     std::uint32_t tile;
     float priority;
   };
-  std::vector<std::uint32_t> cover(const TileView& view, const std::vector<std::uint32_t>& pinned);
+  std::vector<std::uint32_t> cover(const TileView& view);
   bool visit(std::uint32_t index, const TileView& view, Plan& plan, std::vector<Wanted>& wanted,
              const std::vector<bool>& inCover);
   bool visible(std::uint32_t index, const TileView& view) const;

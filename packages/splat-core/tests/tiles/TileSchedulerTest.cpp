@@ -203,9 +203,10 @@ TEST(TileScheduler, APinnedTileIsNotEvictedWhileNotDrawn) {
 
   auto plan = scheduler.plan(inZero, {7});
   EXPECT_TRUE(plan.drop.empty());
-  EXPECT_TRUE(plan.load.empty());  // octant 0 has no room until 7 is let go
+  EXPECT_TRUE(plan.load.empty());  // octant 0 is wanted but has no room until 7 is let go
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
   EXPECT_EQ(scheduler.state(7), TileState::resident);
+  EXPECT_EQ(scheduler.state(0), TileState::absent);
 
   plan = scheduler.plan(inZero);
   ASSERT_EQ(plan.drop.size(), 1u);
@@ -228,6 +229,25 @@ TEST(TileScheduler, AChildWaitingForItsSiblingsIsNotEvictedToMakeRoomForThem) {
     EXPECT_EQ(scheduler.state(first), TileState::resident) << "plan " << i;
     for (const auto& d : plan.drop) EXPECT_NE(d.tile, first);
   }
+}
+
+// The order on the GPU names the fine cover; the cover it is replaced with must be the
+// same fine one, not a coarser one squeezed in next to it.
+TEST(TileScheduler, PinnedTilesDoNotShrinkTheCover) {
+  auto set = octants();
+  TileScheduler scheduler(set, 500);  // the root and the four octants in front
+  const TileView inside = from({0, 0, 0}, {0, 0, -1}, 1.0f, 0.001f);
+  scheduler.plan(inside);
+  scheduler.markResident(set->root);
+  auto plan = scheduler.plan(inside);
+  for (const auto& l : plan.load) scheduler.markResident(l.tile);
+  plan = scheduler.plan(inside);
+  std::sort(plan.draw.begin(), plan.draw.end());
+  ASSERT_EQ(plan.draw, (std::vector<std::uint32_t>{0, 1, 2, 3}));
+  plan = scheduler.plan(inside, {0, 1, 2, 3});
+  std::sort(plan.draw.begin(), plan.draw.end());
+  EXPECT_EQ(plan.draw, (std::vector<std::uint32_t>{0, 1, 2, 3}));
+  EXPECT_TRUE(plan.load.empty());
 }
 
 }  // namespace
