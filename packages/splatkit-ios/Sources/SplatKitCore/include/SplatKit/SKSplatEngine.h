@@ -15,6 +15,12 @@ typedef struct {
   float pitch;
 } SKCameraPose;
 
+typedef struct {
+  float x;
+  float y;
+  float z;
+} SKVec3;
+
 /// A snapshot of what the engine is doing, refreshed twice a second.
 typedef struct {
   float fps;
@@ -64,6 +70,8 @@ typedef NS_ENUM(NSInteger, SKSplatEvent) {
 @property(nonatomic, readonly) NSString* gpuDescription;
 
 - (void)lookWithDeltaYaw:(float)deltaYaw deltaPitch:(float)deltaPitch;
+/// Scripted camera: from `position` looking at `target` with `up` at the top of the frame.
+- (void)lookAtFrom:(SKVec3)position target:(SKVec3)target up:(SKVec3)up;
 - (void)walkForward:(float)forward right:(float)right;
 - (void)setVelocityForward:(float)forward right:(float)right;
 /// Device to reference rotation, row major 3x3, device axes x right, y up, z out of the

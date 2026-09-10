@@ -18,6 +18,21 @@ TEST(WalkCamera, StartsAtTheOriginLookingDownNegativeZ) {
   EXPECT_EQ(camera.position().x, 0.0f);
 }
 
+TEST(WalkCamera, LookAtFramesTheTargetWithTheGivenUpAndPassesThePole) {
+  WalkCamera camera;
+  // Straight above the origin, with +z at the top of the frame: a pose pitch cannot hold.
+  camera.setLookAt({0, 10, 0}, {0, 0, 0}, {0, 0, 1});
+  const splat::Vec3 forward = camera.rotation().transformDirection({0, 0, -1});
+  const splat::Vec3 top = camera.rotation().transformDirection({0, 1, 0});
+  EXPECT_NEAR(forward.y, -1.0f, 1e-6f);
+  EXPECT_NEAR(top.z, 1.0f, 1e-6f);
+  const splat::Vec3 origin = camera.viewMatrix().transformPoint({0, 0, 0});
+  EXPECT_NEAR(origin.z, -10.0f, 1e-5f);
+  EXPECT_NEAR(camera.pitch(), -kPi / 2, 1e-5f);
+  camera.look(0.0f, 0.0f);  // a touch takes the view back to yaw and pitch
+  EXPECT_NEAR(camera.rotation().transformDirection({0, 0, -1}).y, -1.0f, 1e-2f);
+}
+
 TEST(WalkCamera, YawTurnsLeftAboutUpAndWalkFollowsTheView) {
   WalkCamera camera;
   camera.look(kPi / 2, 0.0f);  // a quarter turn to the left: forward is now -x

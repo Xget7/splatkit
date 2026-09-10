@@ -59,6 +59,9 @@ class SplatEngine {
 
   // Set on the render thread; read from any thread, refreshed every frame.
   void setCameraPose(const CameraPose& pose);
+  // Scripted camera: from `position` looking at `target` with `up` at the top of the
+  // frame, whatever the roll. Teleports like setCameraPose.
+  void setCameraLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up);
   CameraPose cameraPose() const { return stats_.pose(); }
 
   // What the host needs to know about loading. Ready events fire on the render thread

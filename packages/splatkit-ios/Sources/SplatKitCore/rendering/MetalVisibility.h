@@ -26,8 +26,10 @@ class MetalVisibility {
   // sort. `order()` and `drawArguments(slot)` are valid once the command buffer
   // completes. `slot` picks the set of CPU written inputs (count, ranges, arguments) of
   // this frame, so the previous frame's pass may still be reading its own.
+  // `sh` and `shDegree` are the world's harmonics, evaluated here once per drawn splat.
   void encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms, id<MTLBuffer> splats,
-              const SplatRenderer::Range* ranges, uint32_t rangeCount);
+              id<MTLBuffer> sh, int shDegree, const SplatRenderer::Range* ranges,
+              uint32_t rangeCount);
 
   // The sort alone, of the first `count(slot)` pairs of `keys()` and `values()`,
   // ascending by key; the count is read from `countBuffer(slot)`. For tests, and used
@@ -37,8 +39,11 @@ class MetalVisibility {
   id<MTLBuffer> keys() const { return keys_[0]; }
   id<MTLBuffer> values() const { return values_[0]; }
   id<MTLBuffer> countBuffer(uint32_t slot) const { return count_[slot]; }
-  // The sorted slab indices, farthest first; `count(slot)` of them.
+  // The sorted projection slots, farthest first; `count(slot)` of them.
   id<MTLBuffer> order() const { return values_[0]; }
+  // The projections of the drawn splats (`Projected` in the shader, kProjectedBytes each),
+  // indexed by the slots in `order()`.
+  id<MTLBuffer> projected() const { return projected_; }
   id<MTLBuffer> drawArguments(uint32_t slot) const { return drawArguments_[slot]; }
   uint32_t count(uint32_t slot) const {
     return *static_cast<const uint32_t*>(count_[slot].contents);
@@ -51,10 +56,12 @@ class MetalVisibility {
   static constexpr uint32_t kPasses = 32 / kDigitBits;
   static constexpr uint32_t kMaxRanges = 65536;
   static constexpr uint32_t kSlots = 2;  // frames whose inputs may be in flight at once
+  static constexpr uint32_t kProjectedBytes = 32;
+  static constexpr int kShDegrees = 4;
 
  private:
   id<MTLDevice> device_ = nil;
-  id<MTLComputePipelineState> visibility_ = nil;
+  std::array<id<MTLComputePipelineState>, kShDegrees> visibility_{};  // per SH degree
   id<MTLComputePipelineState> prepare_ = nil;
   id<MTLComputePipelineState> histogram_ = nil;
   id<MTLComputePipelineState> scan_ = nil;
@@ -64,6 +71,7 @@ class MetalVisibility {
   std::array<id<MTLBuffer>, 2> keys_{};
   std::array<id<MTLBuffer>, 2> values_{};
   id<MTLBuffer> histogram_buffer_ = nil;
+  id<MTLBuffer> projected_ = nil;
   id<MTLBuffer> totals_ = nil;
   // Written by the CPU for a frame, read by that frame's passes: one set per slot.
   std::array<id<MTLBuffer>, kSlots> count_{};

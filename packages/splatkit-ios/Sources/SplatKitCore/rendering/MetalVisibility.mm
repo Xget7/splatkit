@@ -8,11 +8,16 @@
 namespace splatkit {
 namespace {
 
-id<MTLComputePipelineState> pipeline(id<MTLDevice> device, id<MTLLibrary> library,
-                                     const char* name) {
-  id<MTLFunction> function = [library newFunctionWithName:@(name)];
+id<MTLComputePipelineState> pipeline(id<MTLDevice> device, id<MTLLibrary> library, const char* name,
+                                     MTLFunctionConstantValues* constants = nil) {
+  NSError* functionError = nil;
+  id<MTLFunction> function = constants == nil ? [library newFunctionWithName:@(name)]
+                                              : [library newFunctionWithName:@(name)
+                                                              constantValues:constants
+                                                                       error:&functionError];
   if (function == nil) {
-    LOGE("kernel %s missing", name);
+    LOGE("kernel %s missing: %s", name,
+         functionError == nil ? "" : functionError.localizedDescription.UTF8String);
     return nil;
   }
   NSError* error = nil;
@@ -31,7 +36,14 @@ id<MTLBuffer> buffer(id<MTLDevice> device, size_t bytes) {
 
 bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library) {
   device_ = device;
-  visibility_ = pipeline(device, library, "visibility");
+  bool ok = true;
+  for (int degree = 0; degree < kShDegrees; ++degree) {
+    MTLFunctionConstantValues* constants = [MTLFunctionConstantValues new];
+    uint32_t value = static_cast<uint32_t>(degree);
+    [constants setConstantValue:&value type:MTLDataTypeUInt atIndex:0];
+    visibility_[static_cast<size_t>(degree)] = pipeline(device, library, "visibility", constants);
+    ok = ok && visibility_[static_cast<size_t>(degree)] != nil;
+  }
   prepare_ = pipeline(device, library, "prepareSort");
   histogram_ = pipeline(device, library, "radixHistogram");
   scan_ = pipeline(device, library, "radixScan");
@@ -44,8 +56,7 @@ bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library) {
     ranges_[slot] = buffer(device, size_t{kMaxRanges} * 2 * sizeof(uint32_t));
     rangeStarts_[slot] = buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
   }
-  return visibility_ != nil && prepare_ != nil && histogram_ != nil && scan_ != nil &&
-         scatter_ != nil;
+  return ok && prepare_ != nil && histogram_ != nil && scan_ != nil && scatter_ != nil;
 }
 
 bool MetalVisibility::reserve(uint32_t capacity) {
@@ -54,8 +65,9 @@ bool MetalVisibility::reserve(uint32_t capacity) {
   for (auto& k : keys_) k = buffer(device_, size_t{capacity} * sizeof(uint32_t));
   for (auto& v : values_) v = buffer(device_, size_t{capacity} * sizeof(uint32_t));
   histogram_buffer_ = buffer(device_, size_t{blocks} * kBins * sizeof(uint32_t));
+  projected_ = buffer(device_, size_t{capacity} * kProjectedBytes);
   if (keys_[0] == nil || keys_[1] == nil || values_[0] == nil || values_[1] == nil ||
-      histogram_buffer_ == nil) {
+      histogram_buffer_ == nil || projected_ == nil) {
     LOGE("visibility buffers for %u splats failed", capacity);
     capacity_ = 0;
     return false;
@@ -65,8 +77,8 @@ bool MetalVisibility::reserve(uint32_t capacity) {
 }
 
 void MetalVisibility::encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms,
-                             id<MTLBuffer> splats, const SplatRenderer::Range* ranges,
-                             uint32_t rangeCount) {
+                             id<MTLBuffer> splats, id<MTLBuffer> sh, int shDegree,
+                             const SplatRenderer::Range* ranges, uint32_t rangeCount) {
   rangeCount = std::min(rangeCount, kMaxRanges);
   starts_.resize(size_t{rangeCount} + 1);
   uint32_t total = 0;
@@ -82,7 +94,8 @@ void MetalVisibility::encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuff
   *static_cast<uint32_t*>(count_[slot].contents) = 0;
 
   id<MTLComputeCommandEncoder> cull = [cmd computeCommandEncoder];
-  [cull setComputePipelineState:visibility_];
+  const int degree = std::clamp(shDegree, 0, kShDegrees - 1);
+  [cull setComputePipelineState:visibility_[static_cast<size_t>(degree)]];
   [cull setBuffer:uniforms offset:0 atIndex:0];
   [cull setBuffer:splats offset:0 atIndex:1];
   [cull setBuffer:ranges_[slot] offset:0 atIndex:2];
@@ -91,6 +104,8 @@ void MetalVisibility::encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuff
   [cull setBuffer:keys_[0] offset:0 atIndex:5];
   [cull setBuffer:values_[0] offset:0 atIndex:6];
   [cull setBuffer:count_[slot] offset:0 atIndex:7];
+  [cull setBuffer:sh offset:0 atIndex:8];
+  [cull setBuffer:projected_ offset:0 atIndex:9];
   const NSUInteger groups = (std::max(total, 1u) + kThreads - 1) / kThreads;
   [cull dispatchThreadgroups:MTLSizeMake(groups, 1, 1)
        threadsPerThreadgroup:MTLSizeMake(kThreads, 1, 1)];

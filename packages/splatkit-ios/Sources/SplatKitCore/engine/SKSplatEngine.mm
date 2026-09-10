@@ -109,6 +109,11 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
   _engine->setCameraPose({pose.x, pose.y, pose.z, pose.yaw, pose.pitch});
 }
 
+- (void)lookAtFrom:(SKVec3)position target:(SKVec3)target up:(SKVec3)up {
+  _engine->setCameraLookAt({position.x, position.y, position.z}, {target.x, target.y, target.z},
+                           {up.x, up.y, up.z});
+}
+
 - (SKSplatStats)stats {
   const splatkit::Stats s = _engine->stats();
   return {s.fps, s.frameMillis, s.gpuMillis, s.sortMillis, s.splatCount, s.walking, s.motion};

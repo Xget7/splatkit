@@ -29,6 +29,7 @@ void WalkCamera::setCollider(std::unique_ptr<splat::Collider> collider) {
 }
 
 void WalkCamera::look(float deltaYaw, float deltaPitch) {
+  scripted_ = false;
   yaw_ += deltaYaw;
   if (!motion_) pitch_ = std::clamp(pitch_ + deltaPitch, -kMaxPitch, kMaxPitch);
 }
@@ -74,8 +75,29 @@ void WalkCamera::setPosition(splat::Vec3 position) {
 }
 
 void WalkCamera::setOrientation(float yaw, float pitch) {
+  scripted_ = false;
   yaw_ = yaw;
   pitch_ = std::clamp(pitch, -kMaxPitch, kMaxPitch);
+}
+
+void WalkCamera::setLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up) {
+  setPosition(position);
+  const splat::Vec3 forward = splat::normalize(target - position);
+  splat::Vec3 right = splat::cross(forward, up);
+  if (splat::length(right) < 1e-6f) right = splat::cross(forward, {0, 0, 1});
+  right = splat::normalize(right);
+  const splat::Vec3 top = splat::cross(right, forward);
+  splat::Mat4 r = splat::Mat4::identity();
+  for (int i = 0; i < 3; ++i) {
+    r.at(i, 0) = (&right.x)[i];
+    r.at(i, 1) = (&top.x)[i];
+    r.at(i, 2) = -(&forward.x)[i];
+  }
+  scriptedRotation_ = r;
+  scripted_ = true;
+  // Yaw and pitch keep describing the view for whoever reads them.
+  yaw_ = std::atan2(-forward.x, -forward.z);
+  pitch_ = std::asin(std::clamp(forward.y, -1.0f, 1.0f));
 }
 
 void WalkCamera::setVelocity(float forward, float right) {
@@ -107,6 +129,7 @@ splat::Vec3 WalkCamera::position() const {
 }
 
 splat::Mat4 WalkCamera::rotation() const {
+  if (scripted_) return scriptedRotation_;
   const splat::Mat4 yaw = splat::Mat4::rotation(yaw_, {0, 1, 0});
   if (motion_) return yaw * referenceToWorld_ * attitude_;
   return yaw * splat::Mat4::rotation(pitch_, {1, 0, 0});

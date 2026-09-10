@@ -5,7 +5,10 @@ import Foundation
 /// `--tileset <file>` (a tileset.json), `--collider <file>`, `--residency <splats>`,
 /// `--scale <f>`, `--sh <n>`, `--shdraw <n>`, `--budget <n>`, `--margin <deg>`,
 /// `--linear`, `--gyro <0|1>`, `--pose x,y,z,yaw,pitch`, `--walk <m/s>`,
-/// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png).
+/// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png),
+/// `--orbit x,y,z` (circle that pivot looking at it; `--axis x,y,z` of the circle, x by
+/// default so the path goes over and under; `--radius`, `--speed <deg/s>`,
+/// `--zoom <fraction>`, `--zoomperiod <seconds>`, `--start <deg>`, `--top axis|tangent`).
 struct LaunchArgs {
     let values: [String: String]
 

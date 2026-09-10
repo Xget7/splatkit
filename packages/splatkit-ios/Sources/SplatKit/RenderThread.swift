@@ -160,6 +160,10 @@ final class RenderThread {
         post { [self] in engine?.setMotionEnabled(enabled) }
     }
 
+    func lookAt(from position: SKVec3, target: SKVec3, up: SKVec3) {
+        post { [self] in engine?.lookAt(from: position, target: target, up: up) }
+    }
+
     func setCameraPose(_ pose: SKCameraPose) {
         post { [self] in engine?.cameraPose = pose }
     }

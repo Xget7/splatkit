@@ -27,6 +27,10 @@ class WalkCamera {
   void look(float deltaYaw, float deltaPitch);
   // Absolute orientation in radians, for reproducible captures and benchmarks.
   void setOrientation(float yaw, float pitch);
+  // Scripted paths: from `position`, look at `target` with `up` at the top of the frame.
+  // Any roll goes; the view stays continuous through the poles yaw and pitch cannot pass.
+  // The next `look`, `setOrientation` or attitude update takes the view back.
+  void setLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up);
   float yaw() const { return yaw_; }
   float pitch() const { return pitch_; }
   // Teleport. When walking, the next update snaps to the floor under the new point.
@@ -58,6 +62,8 @@ class WalkCamera {
   float velocityRight_ = 0;
   bool motion_ = false;
   splat::Mat4 attitude_ = splat::Mat4::identity();
+  bool scripted_ = false;  // rotation() is scriptedRotation_ until yaw or pitch move
+  splat::Mat4 scriptedRotation_ = splat::Mat4::identity();
   splat::Mat4 referenceToWorld_;
 };
 

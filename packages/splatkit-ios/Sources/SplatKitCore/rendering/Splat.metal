@@ -131,33 +131,31 @@ static float3 shColor(const device uint* shData, uint index, float3 d) {
   return c;
 }
 
-vertex SplatVertex splatVertex(uint vertexId [[vertex_id]], uint instanceId [[instance_id]],
-                               constant Camera& cam [[buffer(0)]],
-                               const device Splat* splats [[buffer(1)]],
-                               const device uint* order [[buffer(2)]],
-                               const device uint* shData [[buffer(3)]]) {
-  SplatVertex out;
-  uint index = order[instanceId];
-  Splat s = splats[index];
+// A splat projected for this frame: what the four vertices of its quad need, 32 bytes,
+// written once per drawn splat by the visibility kernel so no vertex reads the splat or
+// its harmonics again.
+struct Projected {
+  float2 center;  // normalized device coordinates
+  uint axis1;     // half2, pixels: the ellipse's axes at one sigma
+  uint axis2;
+  uint color0;    // half2: red, green
+  uint color1;    // half2: blue, alpha
+  float radius;   // sigmas the quad reaches
+  uint index;     // slab index, for whoever needs to know which splat this was
+};
 
+// Projects splat `index` for the camera: false when it is outside the view. The cull is
+// the same 20 percent margin around the frustum whichever stage calls it.
+static bool projectSplat(constant Camera& cam, Splat s, uint index, const device uint* shData,
+                         thread Projected& out) {
   float4 viewPos4 = cam.view * float4(s.px, s.py, s.pz, 1.0);
   float3 viewPos = viewPos4.xyz;
-  // Behind the camera: emit a vertex outside clip space so the quad is discarded.
-  if (viewPos.z >= 0.0) {
-    out.position = float4(0.0, 0.0, 2.0, 1.0);
-    out.relativePosition = float2(0.0);
-    out.color = float4(0.0);
-    return out;
-  }
-
+  if (viewPos.z >= 0.0) return false;
   float4 clip = cam.proj * viewPos4;
   float bounds = 1.2 * clip.w;
   if (clip.z < 0.0 || clip.z > clip.w || clip.x < -bounds || clip.x > bounds ||
       clip.y < -bounds || clip.y > bounds) {
-    out.position = float4(0.0, 0.0, 2.0, 1.0);
-    out.relativePosition = float2(0.0);
-    out.color = float4(0.0);
-    return out;
+    return false;
   }
 
   float2 c0 = unpackHalf2(s.cov0);
@@ -177,19 +175,60 @@ vertex SplatVertex splatVertex(uint vertexId [[vertex_id]], uint instanceId [[in
   float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius,
                      sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
 
-  float2 corner = kCorners[vertexId];
-  float2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;
-  out.position = float4(clip.xy + delta * clip.w, clip.z, clip.w);
-  out.relativePosition = radius * corner;
-
   float3 rgb = rgba.rgb;
   if (SH_DEGREE >= 1u) {
     float3 dir = normalize(float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz);
     rgb = max(rgb + shColor(shData, index, dir), float3(0.0));
   }
   if (cam.outputLinear == 1u) rgb = pow(rgb, float3(2.2));
-  out.color = float4(rgb, alpha);
+
+  out.center = clip.xy / clip.w;
+  out.axis1 = as_type<uint>(half2(axis1));
+  out.axis2 = as_type<uint>(half2(axis2));
+  out.color0 = as_type<uint>(half2(rgb.rg));
+  out.color1 = as_type<uint>(half2(rgb.b, alpha));
+  out.radius = radius;
+  out.index = index;
+  return true;
+}
+
+// One corner of the projected splat's quad.
+static SplatVertex expandQuad(constant Camera& cam, Projected p, uint vertexId) {
+  float2 corner = kCorners[vertexId];
+  float2 delta = (corner.x * unpackHalf2(p.axis1) + corner.y * unpackHalf2(p.axis2)) * 2.0 *
+                 p.radius / cam.screenSize;
+  SplatVertex out;
+  out.position = float4(p.center + delta, 0.0, 1.0);
+  out.relativePosition = p.radius * corner;
+  out.color = float4(unpackHalf2(p.color0), unpackHalf2(p.color1));
   return out;
+}
+
+// The CPU order path: every vertex projects its splat.
+vertex SplatVertex splatVertex(uint vertexId [[vertex_id]], uint instanceId [[instance_id]],
+                               constant Camera& cam [[buffer(0)]],
+                               const device Splat* splats [[buffer(1)]],
+                               const device uint* order [[buffer(2)]],
+                               const device uint* shData [[buffer(3)]]) {
+  uint index = order[instanceId];
+  Projected p;
+  if (!projectSplat(cam, splats[index], index, shData, p)) {
+    // Outside the view: a vertex outside clip space so the quad is discarded.
+    SplatVertex out;
+    out.position = float4(0.0, 0.0, 2.0, 1.0);
+    out.relativePosition = float2(0.0);
+    out.color = float4(0.0);
+    return out;
+  }
+  return expandQuad(cam, p, vertexId);
+}
+
+// The GPU order path: the visibility kernel projected the splats already.
+vertex SplatVertex projectedVertex(uint vertexId [[vertex_id]], uint instanceId [[instance_id]],
+                                   constant Camera& cam [[buffer(0)]],
+                                   const device Projected* projected [[buffer(1)]],
+                                   const device uint* order [[buffer(2)]]) {
+  return expandQuad(cam, projected[order[instanceId]], vertexId);
 }
 
 fragment float4 splatFragment(SplatVertex in [[stage_in]]) {
@@ -224,8 +263,8 @@ fragment float4 blitFragment(BlitVertex in [[stage_in]], texture2d<float> source
 
 // Visibility on the GPU: which splats of the slab ranges to draw, ordered back to front.
 //
-// `visibility` projects every splat of the ranges named, keeps the ones inside the view
-// and appends a (key, slab index) pair per survivor; key is the bit pattern of the
+// `visibility` projects every splat of the ranges named, keeps the ones inside the view,
+// stores each survivor's projection and appends a (key, projection slot) pair for it; key is the bit pattern of the
 // squared distance to the camera, inverted, so an ascending sort puts the farthest
 // first, the same order the CPU DistanceSorter produces. `prepareSort` turns the count
 // into the dispatch and draw arguments, and the radix kernels sort the pairs by key:
@@ -273,26 +312,21 @@ kernel void visibility(uint t [[thread_position_in_grid]],
                        constant uint& rangeCount [[buffer(4)]],
                        device uint* keys [[buffer(5)]],
                        device uint* values [[buffer(6)]],
-                       device atomic_uint* count [[buffer(7)]]) {
+                       device atomic_uint* count [[buffer(7)]],
+                       const device uint* shData [[buffer(8)]],
+                       device Projected* projected [[buffer(9)]]) {
   // Every thread of the simdgroup takes part in the reductions below, so a thread past
   // the end goes through with nothing to add instead of returning.
   const uint total = rangeStarts[rangeCount];
   bool visible = false;
   uint key = 0;
-  uint index = 0;
+  Projected p;
   if (t < total) {
     uint r = findRange(rangeStarts, rangeCount, t);
-    index = ranges[r].offset + (t - rangeStarts[r]);
+    uint index = ranges[r].offset + (t - rangeStarts[r]);
     Splat s = splats[index];
-    float4 world = float4(s.px, s.py, s.pz, 1.0);
-    float4 viewPos = cam.view * world;
-    if (viewPos.z < 0.0) {
-      float4 clip = cam.proj * viewPos;
-      float bounds = 1.2 * clip.w;
-      visible = clip.z >= 0.0 && clip.z <= clip.w && clip.x >= -bounds && clip.x <= bounds &&
-                clip.y >= -bounds && clip.y <= bounds;
-    }
-    float3 d = world.xyz - cam.cameraPosition.xyz;
+    visible = projectSplat(cam, s, index, shData, p);
+    float3 d = float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz;
     key = ~as_type<uint>(dot(d, d));
   }
   uint rank = simd_prefix_exclusive_sum(visible ? 1u : 0u);
@@ -303,8 +337,10 @@ kernel void visibility(uint t [[thread_position_in_grid]],
   }
   base = simd_broadcast_first(base);
   if (visible) {
+    // The value is the slot of the projection, so the draw never touches the splat.
     keys[base + rank] = key;
-    values[base + rank] = index;
+    values[base + rank] = base + rank;
+    projected[base + rank] = p;
   }
 }
 

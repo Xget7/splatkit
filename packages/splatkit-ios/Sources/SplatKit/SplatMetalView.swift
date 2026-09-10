@@ -137,6 +137,15 @@ public final class SplatMetalView: UIView {
         set { renderThread.setCameraPose(SKCameraPose(x: newValue.x, y: newValue.y, z: newValue.z, yaw: newValue.yaw, pitch: newValue.pitch)) }
     }
 
+    /// Scripted camera: teleports to `position` looking at `target`, with `up` at the top
+    /// of the frame whatever the roll, so a path can pass over the poles that yaw and
+    /// pitch cannot. The next touch or motion update takes the view back.
+    public func lookAt(from position: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) {
+        renderThread.lookAt(from: SKVec3(x: position.x, y: position.y, z: position.z),
+                            target: SKVec3(x: target.x, y: target.y, z: target.z),
+                            up: SKVec3(x: up.x, y: up.y, z: up.z))
+    }
+
     /// Fraction of the view's resolution the splats are drawn at, in [0.1, 2]. Below one
     /// the frame is drawn smaller and upscaled; above one it is supersampled.
     public var renderScale: Float = 1 {

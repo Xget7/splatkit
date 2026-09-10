@@ -94,6 +94,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLLibrary> library_ = nil;
   std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
   id<MTLRenderPipelineState> blitPipeline_ = nil;
+  id<MTLRenderPipelineState> projectedPipeline_ = nil;  // the GPU order path
   MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
   std::array<id<MTLBuffer>, kFramesInFlight> uniforms_{};
   dispatch_semaphore_t inFlight_ = nullptr;

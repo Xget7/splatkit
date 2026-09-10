@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var walkSpeed: Float = 1.5
     @State private var captureMessage = ""
+    @State private var orbit: OrbitPath?
     private let args = LaunchArgs()
 
     var body: some View {
@@ -91,7 +92,26 @@ struct ContentView: View {
                 view.cameraPose = CameraPose(x: p[0], y: p[1], z: p[2], yaw: p.count > 3 ? p[3] : 0, pitch: p.count > 4 ? p[4] : 0)
             }
         }
-        view.setMotionEnabled(args.bool("gyro") ?? !(args.has("benchmark") || args.has("capture")))
+        if let pivot = args.string("orbit") {
+            let p = pivot.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
+            if p.count >= 3 {
+                var settings = OrbitPath.Settings(pivot: SIMD3<Float>(p[0], p[1], p[2]))
+                if let axis = args.string("axis") {
+                    let a = axis.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
+                    if a.count >= 3 { settings.axis = SIMD3<Float>(a[0], a[1], a[2]) }
+                }
+                if let v = args.float("radius") { settings.radius = v }
+                if let v = args.float("speed") { settings.degreesPerSecond = v }
+                if let v = args.float("zoom") { settings.zoom = v }
+                if let v = args.float("zoomperiod") { settings.zoomPeriod = v }
+                if let v = args.float("start") { settings.startDegrees = v }
+                if let v = args.string("top") { settings.topIsAxis = v != "tangent" }
+                let path = OrbitPath(view: view, settings: settings)
+                orbit = path
+                path.begin()
+            }
+        }
+        view.setMotionEnabled(args.bool("gyro") ?? !(args.has("benchmark") || args.has("capture") || args.has("orbit")))
         session.motion = view.isMotionEnabled
         if let v = args.float("walk") { view.setWalkVelocity(forward: v, right: 0) }
         if args.has("benchmark") {

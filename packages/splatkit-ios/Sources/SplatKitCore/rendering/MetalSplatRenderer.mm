@@ -184,6 +184,16 @@ bool MetalSplatRenderer::createPipelines() {
       return false;
     }
     splatPipelines_[static_cast<size_t>(degree)] = state;
+    if (degree == 0) {
+      // The GPU order path draws from the projections the visibility kernel wrote, so
+      // one pipeline serves every degree.
+      desc.vertexFunction = [library_ newFunctionWithName:@"projectedVertex"];
+      projectedPipeline_ = [device_ newRenderPipelineStateWithDescriptor:desc error:&error];
+      if (projectedPipeline_ == nil) {
+        LOGE("projected pipeline: %s", error.localizedDescription.UTF8String);
+        return false;
+      }
+    }
   }
   MTLRenderPipelineDescriptor* blit = [MTLRenderPipelineDescriptor new];
   blit.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
@@ -322,7 +332,9 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   const bool gpuOrder = world_ && frame.ranges != nullptr && gpuSort_;
   if (gpuOrder) {
     id<MTLCommandBuffer> sort = [queue_ commandBuffer];
-    visibility_.encode(sort, slot, uniforms_[slot], world_->splats, frame.ranges, frame.rangeCount);
+    const int degree = std::clamp(std::min(frame.shDegree, world_->shDegree), 0, kMaxShDegree);
+    visibility_.encode(sort, slot, uniforms_[slot], world_->splats, world_->sh, degree,
+                       frame.ranges, frame.rangeCount);
     std::atomic<double>* sortMillis = &lastSortMillis_;
     std::atomic<uint32_t>* drawn = &lastDrawCount_;
     id<MTLBuffer> countBuffer = visibility_.countBuffer(slot);
@@ -341,17 +353,19 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   pass.colorAttachments[0].clearColor = MTLClearColorMake(0.05, 0.05, 0.08, 1.0);
   id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:pass];
   if (world_ && (drawCount > 0 || gpuOrder)) {
-    const int degree = std::clamp(std::min(frame.shDegree, world_->shDegree), 0, kMaxShDegree);
-    [encoder setRenderPipelineState:splatPipelines_[static_cast<size_t>(degree)]];
     [encoder setVertexBuffer:uniforms_[slot] offset:0 atIndex:0];
-    [encoder setVertexBuffer:world_->splats offset:0 atIndex:1];
-    [encoder setVertexBuffer:world_->sh offset:0 atIndex:3];
     if (gpuOrder) {
+      [encoder setRenderPipelineState:projectedPipeline_];
+      [encoder setVertexBuffer:visibility_.projected() offset:0 atIndex:1];
       [encoder setVertexBuffer:visibility_.order() offset:0 atIndex:2];
       [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 indirectBuffer:visibility_.drawArguments(slot)
           indirectBufferOffset:0];
     } else {
+      const int degree = std::clamp(std::min(frame.shDegree, world_->shDegree), 0, kMaxShDegree);
+      [encoder setRenderPipelineState:splatPipelines_[static_cast<size_t>(degree)]];
+      [encoder setVertexBuffer:world_->splats offset:0 atIndex:1];
+      [encoder setVertexBuffer:world_->sh offset:0 atIndex:3];
       [encoder setVertexBuffer:world_->orders[world_->current] offset:0 atIndex:2];
       [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                   vertexStart:0

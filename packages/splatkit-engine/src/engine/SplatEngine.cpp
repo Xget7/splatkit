@@ -158,6 +158,13 @@ void SplatEngine::setCameraPose(const CameraPose& pose) {
   publishPose();
 }
 
+void SplatEngine::setCameraLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up) {
+  camera_.setLookAt(position, target, up);
+  planner_.invalidate();
+  redrawNeeded_ = true;
+  publishPose();
+}
+
 void SplatEngine::publishPose() {
   stats_.publishPose(camera_.position(), camera_.yaw(), camera_.pitch());
 }
