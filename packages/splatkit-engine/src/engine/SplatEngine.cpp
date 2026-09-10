@@ -115,6 +115,9 @@ bool SplatEngine::applyPendingLoads() {
     splat::StreamOptions options;
     options.residency = residency;
     options.loaderThreads = 2;
+    // A renderer that sorts on the GPU takes the ranges of the tiles to draw each frame.
+    gpuSort_ = renderer_->sortsOnGpu();
+    options.cpuSort = !gpuSort_;
     sorter_.reset();
     streamer_ = std::make_unique<splat::TileStreamer>(std::move(*world->tiles), options);
   } else {
@@ -123,11 +126,14 @@ bool SplatEngine::applyPendingLoads() {
       emit(Event::worldFailed, "GPU upload failed");
       return false;
     }
-    // The sorter keeps the positions, or the tree, whose attributes are already on the GPU.
+    // The sorter keeps the positions, or the tree, whose attributes are already on the
+    // GPU. A renderer that sorts on the GPU takes the whole world as one range instead;
+    // a world with a level of detail tree keeps the CPU sorter, which selects the nodes.
     streamer_.reset();
-    sorter_ = world->tree
-                  ? std::make_unique<splat::AsyncSorter>(world->tree)
-                  : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
+    gpuSort_ = renderer_->sortsOnGpu() && !world->tree;
+    sorter_ = world->tree ? std::make_unique<splat::AsyncSorter>(world->tree)
+              : gpuSort_  ? nullptr
+                         : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
   }
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
@@ -180,7 +186,7 @@ void SplatEngine::requestVisible(const FrameCamera& camera, float dt, Extent ext
     streamTiles(camera, pixelScale, frustum);
     return;
   }
-  if (!frustum) return;
+  if (!frustum || !sorter_) return;
   splat::LodSettings lod;
   lod.budget = static_cast<std::size_t>(loadedBudget_);
   lod.pixelScaleLimit = pixelScale;
@@ -209,10 +215,22 @@ void SplatEngine::streamTiles(const FrameCamera& camera, float pixelScale,
     }
   }
   for (const uint32_t tile : step.failed) LOGE("tile %u could not be read", tile);
+  if (gpuSort_) {
+    if (step.drawChanged) redrawNeeded_ = true;
+    return;
+  }
   if (requested || step.drawChanged) streamer_->requestVisible(view.frustum);
 }
 
 void SplatEngine::takeSortResult() {
+  if (gpuSort_) {
+    lastSort_.sortMillis = renderer_->lastSortMillis();
+    lastSort_.cullMillis = 0;
+    lastSort_.selectMillis = 0;
+    lastSort_.selected = streamer_ ? streamer_->drawnSplats() : sourceCount_;
+    drawCount_ = renderer_->lastDrawCount();
+    return;
+  }
   if (streamer_) {
     auto sorted = streamer_->take();
     if (!sorted) return;
@@ -304,6 +322,19 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   }
 
   SplatRenderer::Frame frame;
+  if (camera && gpuSort_) {
+    // The renderer culls and sorts the ranges itself; the streamer keeps them resident
+    // while frames in flight may draw them.
+    if (streamer_) {
+      ranges_.clear();
+      for (const auto& r : streamer_->ranges()) ranges_.push_back({r.offset, r.count});
+      streamer_->drawnNow();
+    } else {
+      ranges_.assign(1, {0, renderer_->world()->count});
+    }
+    frame.ranges = ranges_.data();
+    frame.rangeCount = static_cast<uint32_t>(ranges_.size());
+  }
   if (camera) {
     if (pendingOrder_) {
       drawCount_ = static_cast<uint32_t>(pendingOrder_->size());

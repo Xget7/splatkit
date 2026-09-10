@@ -175,6 +175,8 @@ class SplatEngine {
   uint32_t sourceCount_ = 0;  // splats in the loaded file, what hosts and the HUD count
   uint32_t drawCount_ = 0;    // entries of the order buffer to draw: the visible splats
   std::optional<std::vector<uint32_t>> pendingOrder_;  // sorted, waiting for a frame
+  bool gpuSort_ = false;  // the renderer orders the ranges of the loaded world itself
+  std::vector<SplatRenderer::Range> ranges_;  // what the GPU sort draws this frame
   struct SortTimings {
     double sortMillis = 0;
     double cullMillis = 0;

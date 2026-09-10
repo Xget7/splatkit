@@ -18,6 +18,9 @@ namespace splat {
 struct StreamOptions {
   std::uint32_t residency = 2000000;  // slab capacity in splats
   std::size_t loaderThreads = 1;
+  // False when the renderer culls and sorts on the GPU from `ranges()`: positions are
+  // then not kept for the CPU sorter, and `drawnNow` replaces requestVisible and take.
+  bool cpuSort = true;
 };
 
 // Streaming of one tiled world, everything but the GPU: the scheduler decides, the
@@ -51,6 +54,12 @@ class TileStreamer {
   void requestVisible(const Frustum& frustum);
   std::optional<SlabSorter::Result> take();
 
+  // For a renderer that orders the ranges itself: the slab ranges of the tiles to draw,
+  // and the notice that a frame draws them now, so they stay resident until the frames
+  // in flight are done.
+  const std::vector<SlabSorter::Range>& ranges() const { return ranges_; }
+  void drawnNow();
+
   const TiledWorld& world() const { return world_; }
   const std::vector<std::uint32_t>& drawn() const { return drawn_; }
   TileState state(std::uint32_t tile) const { return scheduler_.state(tile); }
@@ -67,6 +76,7 @@ class TileStreamer {
   std::vector<std::uint32_t> drawn_;
   std::vector<SlabSorter::Range> ranges_;
   std::size_t drawnSplats_ = 0;
+  bool cpuSort_ = true;
 
   // The tiles each order refers to, from the request until the frames that drew it are
   // done, so their ranges are not reused under a frame still reading them.

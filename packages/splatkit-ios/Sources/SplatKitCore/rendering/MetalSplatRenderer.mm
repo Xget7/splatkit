@@ -49,6 +49,8 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
     return nullptr;
   }
   for (auto& uniform : r->uniforms_) uniform = makeBuffer(r->device_, sizeof(CameraUniform));
+  r->gpuSort_ = r->visibility_.create(r->device_, r->library_);
+  if (!r->gpuSort_) LOGW("GPU sort unavailable, sorting on the CPU");
   r->inFlight_ = dispatch_semaphore_create(kFramesInFlight);
   r->description_ = std::string(r->device_.name.UTF8String) + ", Metal";
   LOGI("%s", r->description_.c_str());
@@ -221,6 +223,7 @@ bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDe
   // Identity order until the sorter runs.
   auto* order = static_cast<uint32_t*>(world->orders[0].contents);
   for (uint32_t i = 0; i < n; ++i) order[i] = i;
+  if (gpuSort_ && !visibility_.reserve(world->count)) return false;
   waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
   return true;
@@ -243,6 +246,7 @@ bool MetalSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
     LOGE("slab of %u splats failed", capacity);
     return false;
   }
+  if (gpuSort_ && !visibility_.reserve(capacity)) return false;
   waitIdle();
   world_ = std::move(world);
   return true;
@@ -314,6 +318,21 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   u.cameraPosition[2] = frame.cameraPosition.z;
   std::memcpy(uniforms_[slot].contents, &u, sizeof(u));
 
+  // The GPU order: its own command buffer, so its time is known apart from the draw's.
+  const bool gpuOrder = world_ && frame.ranges != nullptr && gpuSort_;
+  if (gpuOrder) {
+    id<MTLCommandBuffer> sort = [queue_ commandBuffer];
+    visibility_.encode(sort, uniforms_[slot], world_->splats, frame.ranges, frame.rangeCount);
+    std::atomic<double>* sortMillis = &lastSortMillis_;
+    std::atomic<uint32_t>* drawn = &lastDrawCount_;
+    id<MTLBuffer> countBuffer = visibility_.countBuffer();
+    [sort addCompletedHandler:^(id<MTLCommandBuffer> done) {
+      sortMillis->store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
+      drawn->store(*static_cast<const uint32_t*>(countBuffer.contents));
+    }];
+    [sort commit];
+  }
+
   id<MTLCommandBuffer> cmd = [queue_ commandBuffer];
   MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
   pass.colorAttachments[0].texture = target_ != nil ? target_ : drawable.texture;
@@ -321,17 +340,24 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   pass.colorAttachments[0].clearColor = MTLClearColorMake(0.05, 0.05, 0.08, 1.0);
   id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:pass];
-  if (world_ && drawCount > 0) {
+  if (world_ && (drawCount > 0 || gpuOrder)) {
     const int degree = std::clamp(std::min(frame.shDegree, world_->shDegree), 0, kMaxShDegree);
     [encoder setRenderPipelineState:splatPipelines_[static_cast<size_t>(degree)]];
     [encoder setVertexBuffer:uniforms_[slot] offset:0 atIndex:0];
     [encoder setVertexBuffer:world_->splats offset:0 atIndex:1];
-    [encoder setVertexBuffer:world_->orders[world_->current] offset:0 atIndex:2];
     [encoder setVertexBuffer:world_->sh offset:0 atIndex:3];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                vertexStart:0
-                vertexCount:4
-              instanceCount:drawCount];
+    if (gpuOrder) {
+      [encoder setVertexBuffer:visibility_.order() offset:0 atIndex:2];
+      [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                indirectBuffer:visibility_.drawArguments()
+          indirectBufferOffset:0];
+    } else {
+      [encoder setVertexBuffer:world_->orders[world_->current] offset:0 atIndex:2];
+      [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  vertexStart:0
+                  vertexCount:4
+                instanceCount:drawCount];
+    }
   }
   [encoder endEncoding];
 

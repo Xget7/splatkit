@@ -59,12 +59,25 @@ class SplatRenderer {
   virtual bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) = 0;
   virtual std::optional<GpuWorldInfo> world() const = 0;
 
+  // A run of the world's records: what a tile occupies in a slab.
+  struct Range {
+    uint32_t offset = 0;
+    uint32_t count = 0;
+  };
+  // True when the renderer culls and sorts on the GPU: the engine then hands it the
+  // ranges to draw in every frame instead of an order.
+  virtual bool sortsOnGpu() const { return false; }
+
   struct Frame {
     // A new draw order for the world, copied in before the draw; nullptr keeps the last.
     const uint32_t* order = nullptr;
     uint32_t orderCount = 0;
     uint32_t drawCount = 0;  // entries of the order buffer to draw
-    int shDegree = 0;        // capped by what the world carries
+    // For a renderer that sorts on the GPU: the ranges to draw, every frame. The order
+    // fields are unused then.
+    const Range* ranges = nullptr;
+    uint32_t rangeCount = 0;
+    int shDegree = 0;  // capped by what the world carries
     splat::Mat4 view = splat::Mat4::identity();
     splat::Mat4 proj = splat::Mat4::identity();
     splat::Vec3 cameraPosition;
@@ -76,6 +89,10 @@ class SplatRenderer {
   // GPU time of the most recently completed frame, from timestamps at both ends of it.
   // Zero until the first frame completes or if unsupported.
   virtual double lastGpuMillis() const = 0;
+  // GPU time of the last visibility pass, when the renderer sorts on the GPU.
+  virtual double lastSortMillis() const { return 0; }
+  // Splats the last frame drew, when the renderer sorts on the GPU.
+  virtual uint32_t lastDrawCount() const { return 0; }
   // GPU name and API version, for a HUD.
   virtual const std::string& deviceDescription() const = 0;
 };

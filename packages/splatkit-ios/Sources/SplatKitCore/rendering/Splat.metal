@@ -221,3 +221,230 @@ fragment float4 blitFragment(BlitVertex in [[stage_in]], texture2d<float> source
   constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
   return source.sample(linearSampler, in.uv);
 }
+
+// Visibility on the GPU: which splats of the slab ranges to draw, ordered back to front.
+//
+// `visibility` projects every splat of the ranges named, keeps the ones inside the view
+// and appends a (key, slab index) pair per survivor; key is the bit pattern of the
+// squared distance to the camera, inverted, so an ascending sort puts the farthest
+// first, the same order the CPU DistanceSorter produces. `prepareSort` turns the count
+// into the dispatch and draw arguments, and the radix kernels sort the pairs by key:
+// a least significant digit radix sort, 4 bits per pass, 8 passes, each pass a block
+// histogram, a scan of the histograms per digit, and a stable scatter. Stability comes
+// from a fixed element order: thread t of a block owns elements t*16 to t*16+15, and
+// ranks are the prefix over threads, then over a thread's own elements.
+
+struct Range {
+  uint offset;
+  uint count;
+};
+
+constant uint kSortThreads = 256;
+constant uint kSortPerThread = 16;
+constant uint kSortBlock = kSortThreads * kSortPerThread;
+constant uint kSortBins = 16;
+constant uint kSortSimdgroups = kSortThreads / 32;
+
+struct SortDispatch {
+  uint threadgroupsX, threadgroupsY, threadgroupsZ;  // MTLDispatchThreadgroupsIndirectArguments
+  uint blocks;  // the same number, for the kernels
+};
+
+struct DrawArguments {  // MTLDrawPrimitivesIndirectArguments
+  uint vertexCount, instanceCount, vertexStart, baseInstance;
+};
+
+static uint findRange(const device uint* starts, uint rangeCount, uint t) {
+  uint lo = 0, hi = rangeCount;  // starts[r] <= t < starts[r + 1]
+  while (hi - lo > 1) {
+    uint mid = (lo + hi) / 2;
+    if (starts[mid] <= t) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+kernel void visibility(uint t [[thread_position_in_grid]],
+                       constant Camera& cam [[buffer(0)]],
+                       const device Splat* splats [[buffer(1)]],
+                       const device Range* ranges [[buffer(2)]],
+                       const device uint* rangeStarts [[buffer(3)]],
+                       constant uint& rangeCount [[buffer(4)]],
+                       device uint* keys [[buffer(5)]],
+                       device uint* values [[buffer(6)]],
+                       device atomic_uint* count [[buffer(7)]]) {
+  // Every thread of the simdgroup takes part in the reductions below, so a thread past
+  // the end goes through with nothing to add instead of returning.
+  const uint total = rangeStarts[rangeCount];
+  bool visible = false;
+  uint key = 0;
+  uint index = 0;
+  if (t < total) {
+    uint r = findRange(rangeStarts, rangeCount, t);
+    index = ranges[r].offset + (t - rangeStarts[r]);
+    Splat s = splats[index];
+    float4 world = float4(s.px, s.py, s.pz, 1.0);
+    float4 viewPos = cam.view * world;
+    if (viewPos.z < 0.0) {
+      float4 clip = cam.proj * viewPos;
+      float bounds = 1.2 * clip.w;
+      visible = clip.z >= 0.0 && clip.z <= clip.w && clip.x >= -bounds && clip.x <= bounds &&
+                clip.y >= -bounds && clip.y <= bounds;
+    }
+    float3 d = world.xyz - cam.cameraPosition.xyz;
+    key = ~as_type<uint>(dot(d, d));
+  }
+  uint rank = simd_prefix_exclusive_sum(visible ? 1u : 0u);
+  uint survivors = simd_sum(visible ? 1u : 0u);
+  uint base = 0;
+  if (simd_is_first() && survivors > 0) {
+    base = atomic_fetch_add_explicit(count, survivors, memory_order_relaxed);
+  }
+  base = simd_broadcast_first(base);
+  if (visible) {
+    keys[base + rank] = key;
+    values[base + rank] = index;
+  }
+}
+
+kernel void prepareSort(const device uint* count [[buffer(0)]],
+                        device SortDispatch* dispatch [[buffer(1)]],
+                        device DrawArguments* draw [[buffer(2)]]) {
+  uint n = count[0];
+  uint blocks = (n + kSortBlock - 1) / kSortBlock;
+  dispatch->threadgroupsX = max(blocks, 1u);
+  dispatch->threadgroupsY = 1;
+  dispatch->threadgroupsZ = 1;
+  dispatch->blocks = max(blocks, 1u);
+  draw->vertexCount = 4;
+  draw->instanceCount = n;
+  draw->vertexStart = 0;
+  draw->baseInstance = 0;
+}
+
+// Counts the digits of each block: histogram[digit * blocks + block].
+kernel void radixHistogram(uint tid [[thread_index_in_threadgroup]],
+                           uint block [[threadgroup_position_in_grid]],
+                           const device uint* keys [[buffer(0)]],
+                           const device uint* count [[buffer(1)]],
+                           const device SortDispatch* dispatch [[buffer(2)]],
+                           constant uint& shift [[buffer(3)]],
+                           device uint* histogram [[buffer(4)]]) {
+  threadgroup atomic_uint bins[kSortBins];
+  if (tid < kSortBins) atomic_store_explicit(&bins[tid], 0u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  uint n = count[0];
+  uint first = block * kSortBlock + tid * kSortPerThread;
+  uint local[kSortBins] = {0};
+  for (uint i = 0; i < kSortPerThread; ++i) {
+    uint e = first + i;
+    if (e < n) local[(keys[e] >> shift) & (kSortBins - 1)] += 1;
+  }
+  for (uint b = 0; b < kSortBins; ++b) {
+    uint c = simd_sum(local[b]);
+    if (simd_is_first() && c > 0) atomic_fetch_add_explicit(&bins[b], c, memory_order_relaxed);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < kSortBins) {
+    histogram[tid * dispatch->blocks + block] =
+        atomic_load_explicit(&bins[tid], memory_order_relaxed);
+  }
+}
+
+// One threadgroup per digit: exclusive scan of that digit's row of block counts, in
+// place, and the row total into totals[digit].
+kernel void radixScan(uint tid [[thread_index_in_threadgroup]],
+                      uint digit [[threadgroup_position_in_grid]],
+                      uint lane [[thread_index_in_simdgroup]],
+                      uint sg [[simdgroup_index_in_threadgroup]],
+                      const device SortDispatch* dispatch [[buffer(0)]],
+                      device uint* histogram [[buffer(1)]],
+                      device uint* totals [[buffer(2)]]) {
+  threadgroup uint sgTotals[kSortSimdgroups];
+  threadgroup uint sgOffsets[kSortSimdgroups];
+  uint blocks = dispatch->blocks;
+  device uint* row = histogram + digit * blocks;
+  uint carry = 0;
+  for (uint start = 0; start < blocks; start += kSortThreads) {
+    uint i = start + tid;
+    uint v = i < blocks ? row[i] : 0u;
+    uint p = simd_prefix_exclusive_sum(v);
+    uint s = simd_sum(v);
+    if (lane == 0) sgTotals[sg] = s;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0) {
+      uint run = 0;
+      for (uint g = 0; g < kSortSimdgroups; ++g) {
+        sgOffsets[g] = run;
+        run += sgTotals[g];
+      }
+      sgTotals[0] = run;  // the chunk total, read after the barrier
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (i < blocks) row[i] = carry + sgOffsets[sg] + p;
+    carry += sgTotals[0];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  if (tid == 0) totals[digit] = carry;
+}
+
+// Moves every pair to its place for this digit, keeping the order of equal digits.
+kernel void radixScatter(uint tid [[thread_index_in_threadgroup]],
+                         uint block [[threadgroup_position_in_grid]],
+                         uint lane [[thread_index_in_simdgroup]],
+                         uint sg [[simdgroup_index_in_threadgroup]],
+                         const device uint* keysIn [[buffer(0)]],
+                         const device uint* valuesIn [[buffer(1)]],
+                         device uint* keysOut [[buffer(2)]],
+                         device uint* valuesOut [[buffer(3)]],
+                         const device uint* count [[buffer(4)]],
+                         const device SortDispatch* dispatch [[buffer(5)]],
+                         constant uint& shift [[buffer(6)]],
+                         const device uint* histogram [[buffer(7)]],
+                         const device uint* totals [[buffer(8)]]) {
+  threadgroup uint sgTotals[kSortSimdgroups][kSortBins];
+  threadgroup uint sgOffsets[kSortSimdgroups][kSortBins];
+  threadgroup uint digitBase[kSortBins];
+  uint n = count[0];
+  uint blocks = dispatch->blocks;
+  uint first = block * kSortBlock + tid * kSortPerThread;
+
+  uint keys[kSortPerThread];
+  uint local[kSortBins] = {0};
+  for (uint i = 0; i < kSortPerThread; ++i) {
+    uint e = first + i;
+    keys[i] = e < n ? keysIn[e] : 0u;
+    if (e < n) local[(keys[i] >> shift) & (kSortBins - 1)] += 1;
+  }
+  // Rank of this thread's first element of each digit among the block's: the prefix over
+  // the threads before it, simdgroup by simdgroup.
+  uint threadPrefix[kSortBins];
+  for (uint b = 0; b < kSortBins; ++b) {
+    threadPrefix[b] = simd_prefix_exclusive_sum(local[b]);
+    uint s = simd_sum(local[b]);
+    if (lane == 0) sgTotals[sg][b] = s;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < kSortBins) {
+    uint run = 0;
+    for (uint g = 0; g < kSortSimdgroups; ++g) {
+      sgOffsets[g][tid] = run;
+      run += sgTotals[g][tid];
+    }
+    uint base = 0;
+    for (uint d = 0; d < tid; ++d) base += totals[d];
+    digitBase[tid] = base;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  uint used[kSortBins] = {0};
+  for (uint i = 0; i < kSortPerThread; ++i) {
+    uint e = first + i;
+    if (e >= n) break;
+    uint d = (keys[i] >> shift) & (kSortBins - 1);
+    uint dst = digitBase[d] + histogram[d * blocks + block] + sgOffsets[sg][d] +
+               threadPrefix[d] + used[d];
+    used[d] += 1;
+    keysOut[dst] = keys[i];
+    valuesOut[dst] = valuesIn[e];
+  }
+}

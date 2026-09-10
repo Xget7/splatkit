@@ -186,6 +186,46 @@ TEST(TileStreamer, TilesOfTheOrderOnTheGpuStayUntilANewerOrderIsTaken) {
   EXPECT_LE(streamer.held(), 500u);
 }
 
+// A renderer that orders the ranges itself has no order to take: `drawnNow` pins the
+// drawn tiles the same way, until the frames that may draw them are done.
+TEST(TileStreamer, TilesDrawnNowStayUntilTheFramesInFlightAreDone) {
+  const BuiltWorld built;
+  const Tileset& set = *built.world.tileset;
+  StreamOptions options;
+  options.residency = 500;
+  options.cpuSort = false;
+  TileStreamer streamer(built.world, options);
+  const TileView near = from({0, 0, 3}, 0.0001f);
+  ASSERT_GE(settle(streamer, near), 0);
+  const std::vector<std::uint32_t> shown = streamer.drawn();
+  ASSERT_GT(shown.size(), 1u);
+  ASSERT_EQ(streamer.ranges().size(), shown.size());
+  streamer.drawnNow();
+
+  // Walking away without drawing again: what the GPU draws stays resident.
+  const TileView far = from({20, 0, 3}, 0.0001f);
+  for (int round = 0; round < 300; ++round) {
+    auto step = streamer.update(far);
+    for (const auto& a : step.arrived) streamer.commit(a.tile);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  for (const std::uint32_t tile : shown) {
+    EXPECT_EQ(streamer.state(tile), TileState::resident) << set.tiles[tile].file;
+  }
+  EXPECT_LE(streamer.held(), 450u);
+
+  // Drawing the far set frees the near tiles a couple of updates later, and the far
+  // cluster refines all the way.
+  for (int pass = 0; pass < 3; ++pass) {
+    ASSERT_GE(settle(streamer, far), 0);
+    streamer.drawnNow();
+  }
+  for (const std::uint32_t tile : streamer.drawn()) {
+    EXPECT_EQ(set.tiles[tile].level, 0) << set.tiles[tile].file;
+  }
+  EXPECT_LE(streamer.held(), 500u);
+}
+
 TEST(TileStreamer, FarAwayOnlyTheRootIsDrawn) {
   const BuiltWorld built;
   StreamOptions options;

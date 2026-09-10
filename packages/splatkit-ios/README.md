@@ -59,5 +59,7 @@ cmake/                             embeds the shader source into the library
 ```
 
 The shader is compiled at run time from the embedded source, so the library is a plain static archive with no metallib to ship.
-The renderer keeps two frames in flight, writes each new draw order into the buffer the frame in flight is not reading, and reads GPU time from the command buffer.
+The renderer keeps two frames in flight and reads GPU time from the command buffer.
+The visible order is made on the GPU (`MetalVisibility`, ADR 0017): a cull of the slab ranges to draw, a radix sort by distance and an indirect draw, so the CPU never sorts for this renderer; the sort's own time is what `readStats().sortMillis` reports.
+The sort has unit tests that run on a Mac: `cmake -S packages/splatkit-ios -B build/ios-mac && cmake --build build/ios-mac && ctest --test-dir build/ios-mac`.
 Colours blend in the encoded space by default, on a `bgra8Unorm` layer; `linearBlending` switches the layer to `bgra8Unorm_srgb`.

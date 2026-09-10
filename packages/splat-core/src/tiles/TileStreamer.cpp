@@ -24,7 +24,8 @@ TileStreamer::TileStreamer(TiledWorld world, const StreamOptions& options)
     : world_(std::move(world)),
       scheduler_(world_.tileset, options.residency),
       loader_(decodeOptions(world_), options.loaderThreads),
-      sorter_(options.residency) {}
+      sorter_(options.residency),
+      cpuSort_(options.cpuSort) {}
 
 std::vector<std::uint32_t> TileStreamer::pinned() const {
   std::vector<std::uint32_t> out(shown_);
@@ -81,7 +82,7 @@ TileStreamer::Step TileStreamer::update(const TileView& view) {
 void TileStreamer::commit(std::uint32_t tile) {
   auto it = arrived_.find(tile);
   if (it == arrived_.end()) return;
-  sorter_.place(scheduler_.offset(tile), std::move(it->second->positions));
+  if (cpuSort_) sorter_.place(scheduler_.offset(tile), std::move(it->second->positions));
   arrived_.erase(it);
   scheduler_.markResident(tile);
 }
@@ -109,6 +110,12 @@ std::optional<SlabSorter::Result> TileStreamer::take() {
     requested_.pop_front();
   }
   return result;
+}
+
+void TileStreamer::drawnNow() {
+  if (drawn_ == shown_) return;
+  retired_.push_back({updates_, std::move(shown_)});
+  shown_ = drawn_;
 }
 
 }  // namespace splat

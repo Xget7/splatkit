@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "rendering/MetalVisibility.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -60,6 +61,11 @@ class MetalSplatRenderer final : public SplatRenderer {
   // capture at a time; a request while one is pending replaces it.
   void captureNextFrame(CaptureHandler handler);
   double lastGpuMillis() const override { return lastGpuMillis_.load(); }
+  // The cull and the sort run as compute passes on the GPU (MetalVisibility); the engine
+  // hands over the ranges to draw and never sorts on the CPU for this renderer.
+  bool sortsOnGpu() const override { return gpuSort_; }
+  double lastSortMillis() const override { return lastSortMillis_.load(); }
+  uint32_t lastDrawCount() const override { return lastDrawCount_.load(); }
   const std::string& deviceDescription() const override { return description_; }
 
   static constexpr int kMaxShDegree = 3;
@@ -102,6 +108,10 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t generation_ = 0;
   uint64_t frame_ = 0;
   std::atomic<double> lastGpuMillis_{0};
+  MetalVisibility visibility_;
+  bool gpuSort_ = false;
+  std::atomic<double> lastSortMillis_{0};
+  std::atomic<uint32_t> lastDrawCount_{0};
   CaptureHandler capture_;
   std::string description_;
 };
