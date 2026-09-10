@@ -301,6 +301,40 @@ void merge(const Cloud& from, const std::vector<Gaussian>& decoded,
   ++to.numPoints;
 }
 
+// The member contributing most stands for `members`, as it is except for its size: its
+// axes grow so that its area is the members' total, and its opacity keeps their total
+// contribution like a merge does. Position, orientation, colour and harmonics are one
+// real splat's, so the level keeps the edges and colours the leaves have.
+void select(const Cloud& from, const std::vector<Gaussian>& decoded,
+            const std::vector<std::uint32_t>& members, Cloud& to) {
+  std::uint32_t best = members[0];
+  float bestWeight = -1.0f;
+  float totalArea = 0.0f;
+  float totalWeight = 0.0f;
+  for (const std::uint32_t i : members) {
+    const Gaussian& g = decoded[i];
+    const float a = area(g.covariance);
+    const float w = a * g.alpha;
+    totalArea += a;
+    totalWeight += w;
+    if (w > bestWeight) {
+      bestWeight = w;
+      best = i;
+    }
+  }
+  const float ownArea = std::max(area(decoded[best].covariance), 1e-30f);
+  const float grow = std::sqrt(std::max(totalArea / ownArea, 1.0f));  // area scales squared
+  const float alpha = std::min(1.0f, totalWeight / std::max(totalArea, 1e-30f));
+  const std::size_t sh = shStride(from);
+  to.positions.insert(to.positions.end(), &from.positions[best * 3], &from.positions[best * 3] + 3);
+  for (int k = 0; k < 3; ++k) to.scales.push_back(from.scales[best * 3 + k] + std::log(grow));
+  to.rotations.insert(to.rotations.end(), &from.rotations[best * 4], &from.rotations[best * 4] + 4);
+  to.colors.insert(to.colors.end(), &from.colors[best * 3], &from.colors[best * 3] + 3);
+  to.alphas.push_back(logit(alpha));
+  if (sh > 0) to.sh.insert(to.sh.end(), &from.sh[best * sh], &from.sh[best * sh] + sh);
+  ++to.numPoints;
+}
+
 std::uint64_t cellKey(const float* p, const Bounds& cube, float cell) {
   std::uint64_t key = 0;
   for (int k = 0; k < 3; ++k) {
@@ -310,9 +344,10 @@ std::uint64_t cellKey(const float* p, const Bounds& cube, float cell) {
   return key;
 }
 
-// Merges `from` down to at most `budget` splats on the finest grid over `cube` that gets
-// there. Returns the cloud and the cell size used, the error of the tile it becomes.
-std::pair<Cloud, float> coarsen(const Cloud& from, const Bounds& cube, std::uint32_t budget) {
+// Coarsens `from` down to at most `budget` splats on the finest grid over `cube` that
+// gets there. Returns the cloud and the cell size used, the error of the tile it becomes.
+std::pair<Cloud, float> coarsen(const Cloud& from, const Bounds& cube, std::uint32_t budget,
+                                Coarsening how) {
   const auto n = static_cast<std::size_t>(from.numPoints);
   const float edge = cube.max[0] - cube.min[0];
   float cell = edge / std::max(4.0f, 4.0f * std::cbrt(static_cast<float>(budget)));
@@ -338,7 +373,11 @@ std::pair<Cloud, float> coarsen(const Cloud& from, const Bounds& cube, std::uint
     members.clear();
     const std::uint64_t key = keyed[i].first;
     for (; i < n && keyed[i].first == key; ++i) members.push_back(keyed[i].second);
-    merge(from, decoded, members, out);
+    if (how == Coarsening::select) {
+      select(from, decoded, members, out);
+    } else {
+      merge(from, decoded, members, out);
+    }
   }
   return {std::move(out), cell};
 }
@@ -378,8 +417,8 @@ struct Builder {
   }
 
   // Builds the tile over `cube` holding `indices` and returns its index and its splats,
-  // which the parent merges. A leaf is written as it is; an interior tile splits into
-  // octants and is written as the merge of what came back from them.
+  // which the parent coarsens. A leaf is written as it is; an interior tile splits into
+  // octants and is written as the coarsening of what came back from them.
   std::pair<std::uint32_t, Cloud> build(std::uint32_t* indices, std::size_t n, const Bounds& cube,
                                         int depth) {
     if (n <= options.tileSplats || depth >= 24) {
@@ -421,7 +460,7 @@ struct Builder {
       for (std::size_t i = 0; i < static_cast<std::size_t>(tile.numPoints); ++i)
         append(merged, tile, i);
     }
-    auto [tile, cell] = coarsen(merged, cube, options.tileSplats);
+    auto [tile, cell] = coarsen(merged, cube, options.tileSplats, options.coarsening);
     merged = Cloud{};
     const std::uint32_t index = emit(tile, level, cell, std::move(children));
     return {index, std::move(tile)};

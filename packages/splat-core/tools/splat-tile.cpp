@@ -1,11 +1,13 @@
 // splat-tile: partitions a Gaussian splat scene into tiles with offline levels of detail,
 // the form the engine streams (ADR 0015).
 //
-//   splat-tile in.ply|in.spz out_dir [--tile N] [--sh N]
+//   splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--coarsen merge|select]
 //
 // --tile N  the most splats per tile, 262144 by default. Leaves split until they fit and
-//           every level above merges back down to it.
+//           every level above coarsens back down to it.
 // --sh N    keeps spherical harmonics up to degree N before tiling.
+// --coarsen how a level is made from the tiles below it: `merge` (default) blends each
+//           grid cell into one covering splat; `select` keeps the cell's strongest splat.
 //
 // Writes out_dir/tileset.json and one spz per tile. Coordinates are written as they are.
 #include <chrono>
@@ -23,7 +25,9 @@
 namespace {
 
 int usage() {
-  std::fprintf(stderr, "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--sh N]\n");
+  std::fprintf(
+      stderr,
+      "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--coarsen merge|select]\n");
   return 2;
 }
 
@@ -57,7 +61,15 @@ int run(int argc, char** argv) {
       options.tileSplats = static_cast<uint32_t>(std::atoi(argv[++i]));
     else if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc)
       sh = std::atoi(argv[++i]);
-    else
+    else if (std::strcmp(argv[i], "--coarsen") == 0 && i + 1 < argc) {
+      const char* how = argv[++i];
+      if (std::strcmp(how, "merge") == 0)
+        options.coarsening = splat::Coarsening::merge;
+      else if (std::strcmp(how, "select") == 0)
+        options.coarsening = splat::Coarsening::select;
+      else
+        return usage();
+    } else
       return usage();
   }
   if (sh > 3 || options.tileSplats == 0) return usage();

@@ -154,6 +154,40 @@ TEST(TileBuilder, AMergedSplatCoversItsMembers) {
   }
 }
 
+TEST(TileBuilder, ASelectedSplatIsAMemberGrownToCoverTheCell) {
+  const TempDir dir;
+  TileBuildOptions options;
+  options.tileSplats = 64;
+  options.coarsening = splat::Coarsening::select;
+  const spz::GaussianCloud source = clusters(200, 0.3f, 20.0f);
+  const spz::GaussianCloud copy = source;
+  auto built = buildTiles(source, dir.path.string(), options);
+  ASSERT_TRUE(built.ok()) << built.error().message;
+  const Tileset& set = built.value();
+  const Tile& root = set.tiles[set.root];
+  ASSERT_GT(root.level, 0);
+  spz::GaussianCloud c = spz::loadSpz((dir.path / root.file).string(), {});
+  ASSERT_GT(c.numPoints, 0);
+  ASSERT_LE(static_cast<uint32_t>(c.numPoints), 64u);
+  for (int i = 0; i < c.numPoints; ++i) {
+    // Every splat of the level sits exactly where one of the source splats sits, with
+    // its colour, and is no smaller than it (spz quantises positions to 1/4096).
+    bool found = false;
+    for (int j = 0; j < copy.numPoints && !found; ++j) {
+      bool same = true;
+      for (int k = 0; k < 3; ++k) {
+        same = same && std::abs(c.positions[i * 3 + k] - copy.positions[j * 3 + k]) < 2e-3f;
+      }
+      if (!same) continue;
+      found = true;
+      EXPECT_NEAR(c.colors[i * 3], copy.colors[j * 3], 0.02f);
+      for (int k = 0; k < 3; ++k) EXPECT_GE(c.scales[i * 3 + k], copy.scales[j * 3 + k] - 0.05f);
+    }
+    EXPECT_TRUE(found) << "splat " << i;
+    EXPECT_GT(1.0f / (1.0f + std::exp(-c.alphas[i])), 0.5f);
+  }
+}
+
 TEST(TileBuilder, RefusesAnEmptyCloud) {
   const TempDir dir;
   EXPECT_FALSE(buildTiles(spz::GaussianCloud{}, dir.path.string()).ok());
