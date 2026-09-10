@@ -116,6 +116,10 @@ class SplatEngine {
   void setMotionEnabled(bool enabled) { camera_.setMotionEnabled(enabled); }
   void setVelocity(float forward, float right) { camera_.setVelocity(forward, right); }
 
+  // Draws the next frame even when nothing changed, for a renderer that has something
+  // to do with it, such as a capture.
+  void requestRedraw() { redrawNeeded_ = true; }
+
   // Readable from any thread. Refreshed twice a second by the render loop.
   Stats stats() const { return stats_.stats(); }
 

@@ -181,6 +181,7 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
         }
         completion(ok);
       });
+  _engine->requestRedraw();
 }
 
 @end

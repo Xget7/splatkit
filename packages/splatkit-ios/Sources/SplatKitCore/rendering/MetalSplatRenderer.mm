@@ -276,6 +276,9 @@ std::optional<GpuWorldInfo> MetalSplatRenderer::world() const {
 bool MetalSplatRenderer::draw(const Frame& frame) {
   if (!ready() || splatPipelines_[0] == nil) return false;
   dispatch_semaphore_wait(inFlight_, DISPATCH_TIME_FOREVER);
+  // A capture copies the presented pixels out before the drawable goes to the screen,
+  // and the layer only hands out readable drawables while `framebufferOnly` is off.
+  if (capture_) layer_.framebufferOnly = NO;
   id<CAMetalDrawable> drawable = [layer_ nextDrawable];
   if (drawable == nil) {
     dispatch_semaphore_signal(inFlight_);
@@ -344,31 +347,30 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
     [scale endEncoding];
   }
 
-  // A capture copies the presented pixels out before the drawable goes to the screen.
-  // The layer only hands out readable drawables while `framebufferOnly` is off, so it
-  // is turned off for the frame after a request and back on once the copy is encoded.
   id<MTLBuffer> captured = nil;
   CaptureHandler onCapture;
-  if (capture_ && !drawable.texture.framebufferOnly) {
-    const NSUInteger bytesPerRow = NSUInteger{width_} * 4;
-    captured = [device_ newBufferWithLength:bytesPerRow * height_
-                                    options:MTLResourceStorageModeShared];
-    id<MTLBlitCommandEncoder> copy = [cmd blitCommandEncoder];
-    [copy copyFromTexture:drawable.texture
-                     sourceSlice:0
-                     sourceLevel:0
-                    sourceOrigin:MTLOriginMake(0, 0, 0)
-                      sourceSize:MTLSizeMake(width_, height_, 1)
-                        toBuffer:captured
-               destinationOffset:0
-          destinationBytesPerRow:bytesPerRow
-        destinationBytesPerImage:bytesPerRow * height_];
-    [copy endEncoding];
-    onCapture = std::move(capture_);
-    capture_ = nullptr;
-    layer_.framebufferOnly = YES;
-  } else if (capture_) {
-    layer_.framebufferOnly = NO;
+  if (capture_) {
+    if (drawable.texture.framebufferOnly) {
+      LOGW("capture skipped: the drawable is not readable yet");
+    } else {
+      const NSUInteger bytesPerRow = NSUInteger{width_} * 4;
+      captured = [device_ newBufferWithLength:bytesPerRow * height_
+                                      options:MTLResourceStorageModeShared];
+      id<MTLBlitCommandEncoder> copy = [cmd blitCommandEncoder];
+      [copy copyFromTexture:drawable.texture
+                       sourceSlice:0
+                       sourceLevel:0
+                      sourceOrigin:MTLOriginMake(0, 0, 0)
+                        sourceSize:MTLSizeMake(width_, height_, 1)
+                          toBuffer:captured
+                 destinationOffset:0
+            destinationBytesPerRow:bytesPerRow
+          destinationBytesPerImage:bytesPerRow * height_];
+      [copy endEncoding];
+      onCapture = std::move(capture_);
+      capture_ = nullptr;
+      layer_.framebufferOnly = YES;
+    }
   }
 
   [cmd presentDrawable:drawable];
