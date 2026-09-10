@@ -22,8 +22,10 @@ add_executable(splat_core_tests
   tiles/TileStreamerTest.cpp
   sorting/SlabSorterTest.cpp
   math/FrustumTest.cpp
+  tools/CloudEditTest.cpp
 )
 target_link_libraries(splat_core_tests PRIVATE splat_core spz ZLIB::ZLIB GTest::gtest_main)
+target_include_directories(splat_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 target_compile_definitions(splat_core_tests PRIVATE
   SPLAT_FIXTURES_DIR="${SPLAT_FIXTURES_DIR}"
 )

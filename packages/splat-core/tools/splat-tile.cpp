@@ -2,12 +2,15 @@
 // the form the engine streams (ADR 0015).
 //
 //   splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--coarsen merge|select]
+//              [--prune-alpha T]
 //
 // --tile N  the most splats per tile, 262144 by default. Leaves split until they fit and
 //           every level above coarsens back down to it.
 // --sh N    keeps spherical harmonics up to degree N before tiling.
 // --coarsen how a level is made from the tiles below it: `merge` (default) blends each
 //           grid cell into one covering splat; `select` keeps the cell's strongest splat.
+// --prune-alpha T  drops splats whose stored opacity is below T (0 to 1) before tiling.
+//           1/255 drops only what draws nothing; higher trades faint layers for speed.
 //
 // Writes out_dir/tileset.json and one spz per tile. Coordinates are written as they are.
 #include <chrono>
@@ -19,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "CloudEdit.h"
 #include "load-spz.h"
 #include "splat/tiles/TileBuilder.h"
 
@@ -27,22 +31,9 @@ namespace {
 int usage() {
   std::fprintf(
       stderr,
-      "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--coarsen merge|select]\n");
+      "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--coarsen merge|select]\n"
+      "                  [--prune-alpha T]\n");
   return 2;
-}
-
-// Truncates the harmonics to `degree`; spz stores them per point, coefficient major.
-void truncateSh(spz::GaussianCloud& cloud, int degree) {
-  if (degree >= cloud.shDegree) return;
-  const int from = (cloud.shDegree + 1) * (cloud.shDegree + 1) - 1;
-  const int to = (degree + 1) * (degree + 1) - 1;
-  std::vector<float> sh(static_cast<size_t>(cloud.numPoints) * to * 3);
-  for (int i = 0; i < cloud.numPoints; ++i) {
-    std::memcpy(&sh[static_cast<size_t>(i) * to * 3], &cloud.sh[static_cast<size_t>(i) * from * 3],
-                static_cast<size_t>(to) * 3 * sizeof(float));
-  }
-  cloud.sh = std::move(sh);
-  cloud.shDegree = degree;
 }
 
 bool endsWith(const std::string& s, const char* suffix) {
@@ -56,6 +47,7 @@ int run(int argc, char** argv) {
   const std::string out = argv[2];
   splat::TileBuildOptions options;
   int sh = -1;
+  float pruneAlpha = -1.0f;
   for (int i = 3; i < argc; ++i) {
     if (std::strcmp(argv[i], "--tile") == 0 && i + 1 < argc)
       options.tileSplats = static_cast<uint32_t>(std::atoi(argv[++i]));
@@ -69,10 +61,12 @@ int run(int argc, char** argv) {
         options.coarsening = splat::Coarsening::select;
       else
         return usage();
-    } else
+    } else if (std::strcmp(argv[i], "--prune-alpha") == 0 && i + 1 < argc)
+      pruneAlpha = std::strtof(argv[++i], nullptr);
+    else
       return usage();
   }
-  if (sh > 3 || options.tileSplats == 0) return usage();
+  if (sh > 3 || options.tileSplats == 0 || pruneAlpha > 1.0f) return usage();
 
   const auto start = std::chrono::steady_clock::now();
   spz::GaussianCloud cloud =
@@ -82,7 +76,11 @@ int run(int argc, char** argv) {
     return 1;
   }
   std::printf("%d splats, sh degree %d\n", cloud.numPoints, cloud.shDegree);
-  if (sh >= 0) truncateSh(cloud, sh);
+  if (pruneAlpha >= 0.0f) {
+    const int dropped = splat::tools::pruneAlpha(cloud, pruneAlpha);
+    std::printf("pruned %d splats below opacity %.4f\n", dropped, pruneAlpha);
+  }
+  if (sh >= 0) splat::tools::truncateSh(cloud, sh);
   std::filesystem::create_directories(out);
 
   auto built = splat::buildTiles(cloud, out, options);
