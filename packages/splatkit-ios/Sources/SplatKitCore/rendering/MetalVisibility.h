@@ -39,11 +39,13 @@ class MetalVisibility {
   id<MTLBuffer> keys() const { return keys_[0]; }
   id<MTLBuffer> values() const { return values_[0]; }
   id<MTLBuffer> countBuffer(uint32_t slot) const { return count_[slot]; }
-  // The sorted projection slots, farthest first; `count(slot)` of them.
+  // The sorted projection slots, nearest first; `count(slot)` of them.
   id<MTLBuffer> order() const { return values_[0]; }
   // The projections of the drawn splats (`Projected` in the shader, kProjectedBytes each),
   // indexed by the slots in `order()`.
   id<MTLBuffer> projected() const { return projected_; }
+  // kDrawBatches MTLDrawPrimitivesIndirectArguments, consecutive instance ranges of the
+  // order, small first: the draw goes batch by batch with a saturation mask between.
   id<MTLBuffer> drawArguments(uint32_t slot) const { return drawArguments_[slot]; }
   uint32_t count(uint32_t slot) const {
     return *static_cast<const uint32_t*>(count_[slot].contents);
@@ -57,6 +59,8 @@ class MetalVisibility {
   static constexpr uint32_t kMaxRanges = 65536;
   static constexpr uint32_t kSlots = 2;  // frames whose inputs may be in flight at once
   static constexpr uint32_t kProjectedBytes = 32;
+  static constexpr uint32_t kDrawBatches = 7;
+  static constexpr uint32_t kDrawArgumentBytes = 16;
   static constexpr int kShDegrees = 4;
 
  private:

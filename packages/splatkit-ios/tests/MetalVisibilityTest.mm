@@ -148,7 +148,7 @@ struct CameraUniform {
   float cameraPosition[4];
 };
 
-TEST_F(MetalVisibilityTest, CullsAndOrdersTheRangesBackToFront) {
+TEST_F(MetalVisibilityTest, CullsAndOrdersTheRangesFrontToBack) {
   Gpu& gpu = Gpu::get();
   // Six splats: two ranges of three. The camera at the origin looks down -z.
   // 0: 10 m ahead, 1: behind, 2: 2 m ahead, 3: far to the side (outside the view),
@@ -185,10 +185,16 @@ TEST_F(MetalVisibilityTest, CullsAndOrdersTheRangesBackToFront) {
   const uint32_t stride = MetalVisibility::kProjectedBytes / sizeof(uint32_t);
   std::vector<uint32_t> drawn;
   for (int i = 0; i < 3; ++i) drawn.push_back(projected[order[i] * stride + stride - 1]);
-  EXPECT_EQ(drawn, (std::vector<uint32_t>{0, 4, 2}));
+  EXPECT_EQ(drawn, (std::vector<uint32_t>{2, 4, 0}));
+  // The batches partition the instances, in order.
   const auto* draw = static_cast<const uint32_t*>(visibility.drawArguments(1).contents);
-  EXPECT_EQ(draw[0], 4u);  // vertices per instance
-  EXPECT_EQ(draw[1], 3u);  // instances
+  uint32_t next = 0;
+  for (uint32_t b = 0; b < MetalVisibility::kDrawBatches; ++b) {
+    EXPECT_EQ(draw[b * 4], 4u);         // vertices per instance
+    EXPECT_EQ(draw[b * 4 + 3], next);   // base instance
+    next += draw[b * 4 + 1];            // instances
+  }
+  EXPECT_EQ(next, 3u);
 }
 
 }  // namespace

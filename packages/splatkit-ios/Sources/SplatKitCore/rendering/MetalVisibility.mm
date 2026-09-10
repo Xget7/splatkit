@@ -52,7 +52,7 @@ bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library) {
   for (uint32_t slot = 0; slot < kSlots; ++slot) {
     count_[slot] = buffer(device, sizeof(uint32_t));
     dispatch_[slot] = buffer(device, 4 * sizeof(uint32_t));
-    drawArguments_[slot] = buffer(device, 4 * sizeof(uint32_t));
+    drawArguments_[slot] = buffer(device, kDrawBatches * kDrawArgumentBytes);
     ranges_[slot] = buffer(device, size_t{kMaxRanges} * 2 * sizeof(uint32_t));
     rangeStarts_[slot] = buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
   }

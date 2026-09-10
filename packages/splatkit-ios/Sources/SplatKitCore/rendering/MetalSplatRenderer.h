@@ -76,6 +76,9 @@ class MetalSplatRenderer final : public SplatRenderer {
   bool createPipelines();
   bool createTarget();
   MTLPixelFormat pixelFormat() const;
+  // Where the splats are drawn: the drawable's format, or half floats when the GPU order
+  // path accumulates coverage front to back, which 8 bits would round away.
+  MTLPixelFormat targetFormat() const;
   void waitIdle();
 
   // The world on the GPU: the records, the harmonics, and two order buffers so that a
@@ -94,7 +97,15 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLLibrary> library_ = nil;
   std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
   id<MTLRenderPipelineState> blitPipeline_ = nil;
-  id<MTLRenderPipelineState> projectedPipeline_ = nil;  // the GPU order path
+  // The GPU order path: front to back in batches, a saturation mask between them, the
+  // background last.
+  id<MTLRenderPipelineState> projectedPipeline_ = nil;
+  id<MTLRenderPipelineState> maskPipeline_ = nil;
+  id<MTLRenderPipelineState> backgroundPipeline_ = nil;
+  id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
+  id<MTLDepthStencilState> maskDepth_ = nil;   // always write
+  id<MTLTexture> depth_ = nil;                 // memoryless, the size of the colour target
+  bool createDepth(NSUInteger width, NSUInteger height);
   MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
   std::array<id<MTLBuffer>, kFramesInFlight> uniforms_{};
   dispatch_semaphore_t inFlight_ = nullptr;

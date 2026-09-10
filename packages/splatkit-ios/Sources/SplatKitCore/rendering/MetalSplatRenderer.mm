@@ -9,6 +9,11 @@
 #include "splatkit/Log.h"
 
 namespace splatkit {
+
+namespace {
+constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth16Unorm;
+constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
+}  // namespace
 namespace {
 
 // The Camera buffer of the shader: two float4x4, three float2, two uints and a float4.
@@ -79,7 +84,7 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   layer_.pixelFormat = pixelFormat();
   layer_.framebufferOnly = YES;
   ++generation_;
-  if (pipelineFormat_ != pixelFormat() && !createPipelines()) {
+  if (pipelineFormat_ != targetFormat() && !createPipelines()) {
     LOGE("rendering stopped: no pipelines");
     layer_ = nil;
   }
@@ -132,11 +137,31 @@ Extent MetalSplatRenderer::drawExtent() const {
   return {width_, height_};
 }
 
+// The depth buffer only ever lives in tile memory: cleared at the start of the pass,
+// written by the saturation mask, gone at the end.
+bool MetalSplatRenderer::createDepth(NSUInteger width, NSUInteger height) {
+  if (depth_ != nil && depth_.width == width && depth_.height == height) return true;
+  MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:kDepthFormat
+                                                                                  width:width
+                                                                                 height:height
+                                                                              mipmapped:NO];
+  desc.usage = MTLTextureUsageRenderTarget;
+  desc.storageMode = MTLStorageModeMemoryless;
+  depth_ = [device_ newTextureWithDescriptor:desc];
+  if (depth_ == nil)
+    LOGE("depth buffer %lux%lu failed", (unsigned long)width, (unsigned long)height);
+  return depth_ != nil;
+}
+
+MTLPixelFormat MetalSplatRenderer::targetFormat() const {
+  return gpuSort_ ? MTLPixelFormatRGBA16Float : pixelFormat();
+}
+
 bool MetalSplatRenderer::createTarget() {
   target_ = nil;
-  if (renderScale_ == 1.0f || width_ == 0 || height_ == 0) return true;
+  if ((renderScale_ == 1.0f && !gpuSort_) || width_ == 0 || height_ == 0) return true;
   MTLTextureDescriptor* desc = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:pixelFormat()
+      texture2DDescriptorWithPixelFormat:targetFormat()
                                    width:std::max(1u, static_cast<uint32_t>(width_ * renderScale_))
                                   height:std::max(1u, static_cast<uint32_t>(height_ * renderScale_))
                                mipmapped:NO];
@@ -153,7 +178,7 @@ bool MetalSplatRenderer::createTarget() {
 // One splat pipeline per spherical harmonics degree, specialised through a function
 // constant so a degree 0 world pays nothing for SH, plus the render scale pass.
 bool MetalSplatRenderer::createPipelines() {
-  pipelineFormat_ = pixelFormat();
+  pipelineFormat_ = targetFormat();
   NSError* error = nil;
   id<MTLFunction> fragment = [library_ newFunctionWithName:@"splatFragment"];
   for (int degree = 0; degree <= kMaxShDegree; ++degree) {
@@ -171,6 +196,7 @@ bool MetalSplatRenderer::createPipelines() {
     desc.vertexFunction = vertex;
     desc.fragmentFunction = fragment;
     desc.colorAttachments[0].pixelFormat = pipelineFormat_;
+    desc.depthAttachmentPixelFormat = kDepthFormat;
     // "Over" compositing, back to front: out = src.a * src + (1 - src.a) * dst.
     desc.colorAttachments[0].blendingEnabled = YES;
     desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
@@ -184,21 +210,58 @@ bool MetalSplatRenderer::createPipelines() {
       return false;
     }
     splatPipelines_[static_cast<size_t>(degree)] = state;
-    if (degree == 0) {
-      // The GPU order path draws from the projections the visibility kernel wrote, so
-      // one pipeline serves every degree.
-      desc.vertexFunction = [library_ newFunctionWithName:@"projectedVertex"];
-      projectedPipeline_ = [device_ newRenderPipelineStateWithDescriptor:desc error:&error];
-      if (projectedPipeline_ == nil) {
-        LOGE("projected pipeline: %s", error.localizedDescription.UTF8String);
-        return false;
-      }
-    }
   }
+
+  // The GPU order path draws the projections the visibility kernel wrote, front to
+  // back with "under" compositing of premultiplied colour onto a clear of zero:
+  // out = (1 - dst.a) * src + dst, for colour and coverage alike.
+  MTLRenderPipelineDescriptor* under = [MTLRenderPipelineDescriptor new];
+  under.vertexFunction = [library_ newFunctionWithName:@"projectedVertex"];
+  under.fragmentFunction = [library_ newFunctionWithName:@"splatFragmentUnder"];
+  under.colorAttachments[0].pixelFormat = pipelineFormat_;
+  under.depthAttachmentPixelFormat = kDepthFormat;
+  under.colorAttachments[0].blendingEnabled = YES;
+  under.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOneMinusDestinationAlpha;
+  under.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
+  under.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOneMinusDestinationAlpha;
+  under.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOne;
+  projectedPipeline_ = [device_ newRenderPipelineStateWithDescriptor:under error:&error];
+  if (projectedPipeline_ == nil) {
+    LOGE("projected pipeline: %s", error.localizedDescription.UTF8String);
+    return false;
+  }
+  // The background goes under whatever coverage is left, with the same blend.
+  under.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
+  under.fragmentFunction = [library_ newFunctionWithName:@"backgroundFragment"];
+  backgroundPipeline_ = [device_ newRenderPipelineStateWithDescriptor:under error:&error];
+  if (backgroundPipeline_ == nil) {
+    LOGE("background pipeline: %s", error.localizedDescription.UTF8String);
+    return false;
+  }
+  // The saturation mask touches the depth buffer only.
+  MTLRenderPipelineDescriptor* mask = [MTLRenderPipelineDescriptor new];
+  mask.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
+  mask.fragmentFunction = [library_ newFunctionWithName:@"saturationMask"];
+  mask.colorAttachments[0].pixelFormat = pipelineFormat_;
+  mask.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
+  mask.depthAttachmentPixelFormat = kDepthFormat;
+  maskPipeline_ = [device_ newRenderPipelineStateWithDescriptor:mask error:&error];
+  if (maskPipeline_ == nil) {
+    LOGE("saturation mask pipeline: %s", error.localizedDescription.UTF8String);
+    return false;
+  }
+  MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
+  depth.depthCompareFunction = MTLCompareFunctionLessEqual;
+  depth.depthWriteEnabled = NO;
+  splatDepth_ = [device_ newDepthStencilStateWithDescriptor:depth];
+  depth.depthCompareFunction = MTLCompareFunctionAlways;
+  depth.depthWriteEnabled = YES;
+  maskDepth_ = [device_ newDepthStencilStateWithDescriptor:depth];
+
   MTLRenderPipelineDescriptor* blit = [MTLRenderPipelineDescriptor new];
   blit.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
   blit.fragmentFunction = [library_ newFunctionWithName:@"blitFragment"];
-  blit.colorAttachments[0].pixelFormat = pipelineFormat_;
+  blit.colorAttachments[0].pixelFormat = pixelFormat();
   blitPipeline_ = [device_ newRenderPipelineStateWithDescriptor:blit error:&error];
   if (blitPipeline_ == nil) {
     LOGE("blit pipeline: %s", error.localizedDescription.UTF8String);
@@ -347,23 +410,41 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
 
   id<MTLCommandBuffer> cmd = [queue_ commandBuffer];
   MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
-  pass.colorAttachments[0].texture = target_ != nil ? target_ : drawable.texture;
+  id<MTLTexture> colour = target_ != nil ? target_ : drawable.texture;
+  pass.colorAttachments[0].texture = colour;
   pass.colorAttachments[0].loadAction = MTLLoadActionClear;
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-  pass.colorAttachments[0].clearColor = MTLClearColorMake(0.05, 0.05, 0.08, 1.0);
+  // Front to back accumulates onto nothing and puts the background under at the end.
+  pass.colorAttachments[0].clearColor = gpuOrder ? MTLClearColorMake(0, 0, 0, 0) : kBackground;
+  if (createDepth(colour.width, colour.height)) {
+    pass.depthAttachment.texture = depth_;
+    pass.depthAttachment.loadAction = MTLLoadActionClear;
+    pass.depthAttachment.storeAction = MTLStoreActionDontCare;
+    pass.depthAttachment.clearDepth = 1.0;
+  }
   id<MTLRenderCommandEncoder> encoder = [cmd renderCommandEncoderWithDescriptor:pass];
   if (world_ && (drawCount > 0 || gpuOrder)) {
     [encoder setVertexBuffer:uniforms_[slot] offset:0 atIndex:0];
     if (gpuOrder) {
-      [encoder setRenderPipelineState:projectedPipeline_];
       [encoder setVertexBuffer:visibility_.projected() offset:0 atIndex:1];
       [encoder setVertexBuffer:visibility_.order() offset:0 atIndex:2];
-      [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                indirectBuffer:visibility_.drawArguments(slot)
-          indirectBufferOffset:0];
+      id<MTLBuffer> arguments = visibility_.drawArguments(slot);
+      for (uint32_t batch = 0; batch < MetalVisibility::kDrawBatches; ++batch) {
+        if (batch > 0) {
+          [encoder setRenderPipelineState:maskPipeline_];
+          [encoder setDepthStencilState:maskDepth_];
+          [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        }
+        [encoder setRenderPipelineState:projectedPipeline_];
+        [encoder setDepthStencilState:splatDepth_];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  indirectBuffer:arguments
+            indirectBufferOffset:batch * MetalVisibility::kDrawArgumentBytes];
+      }
     } else {
       const int degree = std::clamp(std::min(frame.shDegree, world_->shDegree), 0, kMaxShDegree);
       [encoder setRenderPipelineState:splatPipelines_[static_cast<size_t>(degree)]];
+      [encoder setDepthStencilState:splatDepth_];
       [encoder setVertexBuffer:world_->splats offset:0 atIndex:1];
       [encoder setVertexBuffer:world_->sh offset:0 atIndex:3];
       [encoder setVertexBuffer:world_->orders[world_->current] offset:0 atIndex:2];
@@ -372,6 +453,15 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
                   vertexCount:4
                 instanceCount:drawCount];
     }
+  }
+  if (gpuOrder) {
+    const float background[4] = {static_cast<float>(kBackground.red),
+                                 static_cast<float>(kBackground.green),
+                                 static_cast<float>(kBackground.blue), 1.0f};
+    [encoder setRenderPipelineState:backgroundPipeline_];
+    [encoder setDepthStencilState:splatDepth_];
+    [encoder setFragmentBytes:background length:sizeof(background) atIndex:0];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
   }
   [encoder endEncoding];
 

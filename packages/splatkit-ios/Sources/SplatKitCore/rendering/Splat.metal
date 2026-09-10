@@ -38,6 +38,12 @@ struct SplatVertex {
   float4 color;
 };
 
+// Front to back, the GPU order path stops shading a pixel once it is opaque: every
+// splat quad sits at kSplatDepth and the saturation mask writes kMaskDepth in front of it.
+constant float kSplatDepth = 0.5;
+constant float kMaskDepth = 0.25;
+constant float kSaturated = 254.0 / 255.0;
+
 constant float kBoundsRadius = 3.0;     // draw out to 3 sigma; beyond that nothing is visible
 constant float kLodBoundsRadius = 5.0;  // an opacity of 1000 stays solid out past 3 sigma
 constant float2 kCorners[4] = {float2(-1, -1), float2(-1, 1), float2(1, -1), float2(1, 1)};
@@ -198,7 +204,7 @@ static SplatVertex expandQuad(constant Camera& cam, Projected p, uint vertexId) 
   float2 delta = (corner.x * unpackHalf2(p.axis1) + corner.y * unpackHalf2(p.axis2)) * 2.0 *
                  p.radius / cam.screenSize;
   SplatVertex out;
-  out.position = float4(p.center + delta, 0.0, 1.0);
+  out.position = float4(p.center + delta, kSplatDepth, 1.0);
   out.relativePosition = p.radius * corner;
   out.color = float4(unpackHalf2(p.color0), unpackHalf2(p.color1));
   return out;
@@ -231,14 +237,27 @@ vertex SplatVertex projectedVertex(uint vertexId [[vertex_id]], uint instanceId 
   return expandQuad(cam, projected[order[instanceId]], vertexId);
 }
 
-fragment float4 splatFragment(SplatVertex in [[stage_in]]) {
+// The Gaussian falloff evaluated at this pixel, scaled by the splat's opacity. The
+// vertex stage sized the quad so that nothing outside it would pass the threshold.
+// Level of detail nodes carry an opacity above one: a solid core that fades at the edge.
+static float splatAlpha(SplatVertex in) {
   float r2 = dot(in.relativePosition, in.relativePosition);
-  // The Gaussian falloff evaluated at this pixel, scaled by the splat's opacity. The
-  // vertex stage sized the quad so that nothing outside it would pass the threshold.
-  // Level of detail nodes carry an opacity above one: a solid core that fades at the edge.
-  float alpha = min(exp(-0.5 * r2) * in.color.a, 1.0);
+  return min(exp(-0.5 * r2) * in.color.a, 1.0);
+}
+
+// Back to front with "over" blending: straight colour.
+fragment float4 splatFragment(SplatVertex in [[stage_in]]) {
+  float alpha = splatAlpha(in);
   if (alpha < 1.0 / 255.0) discard_fragment();
   return float4(in.color.rgb, alpha);
+}
+
+// Front to back with "under" blending: premultiplied colour, the target accumulating
+// colour and coverage from a clear of zero.
+fragment float4 splatFragmentUnder(SplatVertex in [[stage_in]]) {
+  float alpha = splatAlpha(in);
+  if (alpha < 1.0 / 255.0) discard_fragment();
+  return float4(in.color.rgb * alpha, alpha);
 }
 
 // The render scale pass: one triangle over the whole drawable, sampling the offscreen
@@ -261,17 +280,35 @@ fragment float4 blitFragment(BlitVertex in [[stage_in]], texture2d<float> source
   return source.sample(linearSampler, in.uv);
 }
 
+// Between the batches of the front to back draw: where the pixel's coverage is complete
+// the mask lands in the depth buffer in front of every splat, and the batches after it
+// fail the depth test there before shading. Reads the target in place (tile memory).
+struct MaskOut {
+  float depth [[depth(any)]];
+};
+
+fragment MaskOut saturationMask(BlitVertex in [[stage_in]], float4 dst [[color(0)]]) {
+  if (dst.a < kSaturated) discard_fragment();
+  MaskOut out;
+  out.depth = kMaskDepth;
+  return out;
+}
+
+// Last, under everything: the background shows through what coverage is left.
+fragment float4 backgroundFragment(BlitVertex in [[stage_in]], constant float4& color [[buffer(0)]]) {
+  return color;
+}
+
 // Visibility on the GPU: which splats of the slab ranges to draw, ordered back to front.
 //
 // `visibility` projects every splat of the ranges named, keeps the ones inside the view,
-// stores each survivor's projection and appends a (key, projection slot) pair for it; key is the bit pattern of the
-// squared distance to the camera, inverted, so an ascending sort puts the farthest
-// first, the same order the CPU DistanceSorter produces. `prepareSort` turns the count
+// stores each survivor's projection and appends a (key, projection slot) pair for it;
+// key is the bit pattern of the squared distance to the camera, so an ascending sort
+// puts the nearest first: the draw goes front to back and stops where pixels saturate. `prepareSort` turns the count
 // into the dispatch and draw arguments, and the radix kernels sort the pairs by key:
-// a least significant digit radix sort, 4 bits per pass, 8 passes, each pass a block
+// a least significant digit radix sort, 8 bits per pass, 4 passes, each pass a block
 // histogram, a scan of the histograms per digit, and a stable scatter. Stability comes
-// from a fixed element order: thread t of a block owns elements t*16 to t*16+15, and
-// ranks are the prefix over threads, then over a thread's own elements.
+// from ranking in memory order: simdgroup by simdgroup, row by row, lane by lane.
 
 struct Range {
   uint offset;
@@ -294,6 +331,11 @@ struct SortDispatch {
 struct DrawArguments {  // MTLDrawPrimitivesIndirectArguments
   uint vertexCount, instanceCount, vertexStart, baseInstance;
 };
+
+// The front to back draw goes in batches with a saturation mask between them; the first
+// batches are small because the nearest splats saturate most of the picture early.
+constant uint kDrawBatches = 7;
+constant uint kBatchEndSixtyFourths[kDrawBatches] = {1, 2, 4, 8, 16, 32, 64};
 
 static uint findRange(const device uint* starts, uint rangeCount, uint t) {
   uint lo = 0, hi = rangeCount;  // starts[r] <= t < starts[r + 1]
@@ -327,7 +369,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
     Splat s = splats[index];
     visible = projectSplat(cam, s, index, shData, p);
     float3 d = float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz;
-    key = ~as_type<uint>(dot(d, d));
+    key = as_type<uint>(dot(d, d));  // non-negative floats sort as their bits do
   }
   uint rank = simd_prefix_exclusive_sum(visible ? 1u : 0u);
   uint survivors = simd_sum(visible ? 1u : 0u);
@@ -353,10 +395,15 @@ kernel void prepareSort(const device uint* count [[buffer(0)]],
   dispatch->threadgroupsY = 1;
   dispatch->threadgroupsZ = 1;
   dispatch->blocks = max(blocks, 1u);
-  draw->vertexCount = 4;
-  draw->instanceCount = n;
-  draw->vertexStart = 0;
-  draw->baseInstance = 0;
+  uint start = 0;
+  for (uint b = 0; b < kDrawBatches; ++b) {
+    uint end = uint((ulong(n) * kBatchEndSixtyFourths[b]) / 64);
+    draw[b].vertexCount = 4;
+    draw[b].instanceCount = end - start;
+    draw[b].vertexStart = 0;
+    draw[b].baseInstance = start;
+    start = end;
+  }
 }
 
 // The lanes of this simdgroup whose element has the same digit as this lane's. Every
