@@ -6,18 +6,21 @@ SlabAllocator::SlabAllocator(std::uint32_t capacity) : capacity_(capacity) {
   if (capacity > 0) free_[0] = capacity;
 }
 
+// Best fit: the smallest hole that takes the range, so big holes stay whole for big tiles.
 std::optional<std::uint32_t> SlabAllocator::allocate(std::uint32_t count) {
   if (count == 0) return std::nullopt;
+  auto best = free_.end();
   for (auto it = free_.begin(); it != free_.end(); ++it) {
     if (it->second < count) continue;
-    const std::uint32_t offset = it->first;
-    const std::uint32_t left = it->second - count;
-    free_.erase(it);
-    if (left > 0) free_[offset + count] = left;
-    used_ += count;
-    return offset;
+    if (best == free_.end() || it->second < best->second) best = it;
   }
-  return std::nullopt;
+  if (best == free_.end()) return std::nullopt;
+  const std::uint32_t offset = best->first;
+  const std::uint32_t left = best->second - count;
+  free_.erase(best);
+  if (left > 0) free_[offset + count] = left;
+  used_ += count;
+  return offset;
 }
 
 void SlabAllocator::release(std::uint32_t offset, std::uint32_t count) {

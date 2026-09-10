@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <optional>
@@ -25,7 +26,7 @@ struct StreamOptions {
 // then asks for the visible order like it does for a single file world.
 class TileStreamer {
  public:
-  TileStreamer(TiledWorld world, const StreamOptions& options = {});
+  explicit TileStreamer(TiledWorld world, const StreamOptions& options = {});
 
   struct Arrival {
     std::uint32_t tile;
@@ -52,6 +53,7 @@ class TileStreamer {
 
   const TiledWorld& world() const { return world_; }
   const std::vector<std::uint32_t>& drawn() const { return drawn_; }
+  TileState state(std::uint32_t tile) const { return scheduler_.state(tile); }
   std::size_t drawnSplats() const { return drawnSplats_; }
   std::uint32_t held() const { return scheduler_.held(); }
   std::uint32_t residency() const { return scheduler_.residency(); }
@@ -65,6 +67,18 @@ class TileStreamer {
   std::vector<std::uint32_t> drawn_;
   std::vector<SlabSorter::Range> ranges_;
   std::size_t drawnSplats_ = 0;
+
+  // The tiles each order refers to, from the request until the frames that drew it are
+  // done, so their ranges are not reused under a frame still reading them.
+  struct Order {
+    std::uint64_t request;
+    std::vector<std::uint32_t> tiles;
+  };
+  std::deque<Order> requested_;       // asked for, not taken yet
+  std::vector<std::uint32_t> shown_;  // the order taken last, on the GPU now
+  std::deque<Order> retired_;         // replaced; `request` holds the update they retire at
+  std::uint64_t updates_ = 0;
+  std::vector<std::uint32_t> pinned() const;
 };
 
 }  // namespace splat

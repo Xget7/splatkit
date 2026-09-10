@@ -24,7 +24,8 @@ spz::GaussianCloud clusters(int perCluster, float r, float gap) {
   c.shDegree = 0;
   for (int cluster = 0; cluster < 2; ++cluster) {
     for (int i = 0; i < perCluster; ++i) {
-      c.positions.insert(c.positions.end(), {spread(rng) + cluster * gap, spread(rng), spread(rng)});
+      c.positions.insert(c.positions.end(),
+                         {spread(rng) + cluster * gap, spread(rng), spread(rng)});
       const float s = std::log(r);
       c.scales.insert(c.scales.end(), {s, s, s});
       c.rotations.insert(c.rotations.end(), {0, 0, 0, 1});
@@ -42,6 +43,8 @@ struct TempDir {
     path = fs::temp_directory_path() / ("splat-stream-" + std::to_string(std::random_device{}()));
     fs::create_directories(path);
   }
+  TempDir(const TempDir&) = delete;
+  TempDir& operator=(const TempDir&) = delete;
   ~TempDir() { fs::remove_all(path); }
 };
 
@@ -85,7 +88,7 @@ struct BuiltWorld {
 };
 
 TEST(TileStreamer, StreamsDownToTheFinestTilesNearTheCamera) {
-  BuiltWorld built;
+  const BuiltWorld built;
   StreamOptions options;
   options.residency = 1000;
   TileStreamer streamer(built.world, options);
@@ -123,8 +126,68 @@ TEST(TileStreamer, StreamsDownToTheFinestTilesNearTheCamera) {
   EXPECT_LT(*std::max_element(order->order.begin(), order->order.end()), 1000u);
 }
 
+// A tile the order on the GPU still draws keeps its range until a newer order replaced it
+// and the frames that used it are done, however far the camera went.
+TEST(TileStreamer, TilesOfTheOrderOnTheGpuStayUntilANewerOrderIsTaken) {
+  const BuiltWorld built;
+  const Tileset& set = *built.world.tileset;
+  StreamOptions options;
+  options.residency = 500;  // one cluster's leaves and their parents, not both clusters'
+  TileStreamer streamer(built.world, options);
+  const TileView near = from({0, 0, 3}, 0.0001f);
+  ASSERT_GE(settle(streamer, near), 0);
+  const std::vector<std::uint32_t> shown = streamer.drawn();
+  ASSERT_GT(shown.size(), 1u);
+  for (const std::uint32_t tile : shown) ASSERT_EQ(set.tiles[tile].level, 0);
+  streamer.requestVisible(near.frustum);
+  std::optional<SlabSorter::Result> order;
+  for (int i = 0; i < 500 && !order; ++i) {
+    order = streamer.take();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+  ASSERT_TRUE(order);
+
+  // Walk to the far cluster, which needs the room, without taking any order: what the
+  // GPU draws stays, and the far cluster makes do with what fits.
+  const TileView far = from({20, 0, 3}, 0.0001f);
+  for (int round = 0; round < 300; ++round) {
+    auto step = streamer.update(far);
+    for (const auto& a : step.arrived) streamer.commit(a.tile);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  for (const std::uint32_t tile : shown) {
+    EXPECT_EQ(streamer.state(tile), TileState::resident) << set.tiles[tile].file;
+  }
+  EXPECT_LE(streamer.held(), 450u);
+
+  // Once the order for the far view is taken and the frames that drew the old one are
+  // done, the near tiles may go and the far cluster refines all the way.
+  streamer.requestVisible(far.frustum);
+  order.reset();
+  for (int i = 0; i < 500 && !order; ++i) {
+    order = streamer.take();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+  ASSERT_TRUE(order);
+  // Orders keep flowing as the draw set refines, like the engine asks for them.
+  for (int pass = 0; pass < 3; ++pass) {
+    ASSERT_GE(settle(streamer, far), 0);
+    streamer.requestVisible(far.frustum);
+    order.reset();
+    for (int i = 0; i < 500 && !order; ++i) {
+      order = streamer.take();
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    ASSERT_TRUE(order);
+  }
+  for (const std::uint32_t tile : streamer.drawn()) {
+    EXPECT_EQ(set.tiles[tile].level, 0) << set.tiles[tile].file;
+  }
+  EXPECT_LE(streamer.held(), 500u);
+}
+
 TEST(TileStreamer, FarAwayOnlyTheRootIsDrawn) {
-  BuiltWorld built;
+  const BuiltWorld built;
   StreamOptions options;
   options.residency = 1000;
   TileStreamer streamer(built.world, options);
@@ -134,7 +197,7 @@ TEST(TileStreamer, FarAwayOnlyTheRootIsDrawn) {
 }
 
 TEST(TileStreamer, AMissingTileFileIsReportedAndItsParentStays) {
-  BuiltWorld built;
+  const BuiltWorld built;
   const Tileset& set = *built.world.tileset;
   const TileView near = from({0, 0, 3}, 0.0001f);
   // Remove one leaf file the camera can see.
@@ -161,14 +224,15 @@ TEST(TileStreamer, AMissingTileFileIsReportedAndItsParentStays) {
   bool parentDrawn = false;
   for (const std::uint32_t tile : streamer.drawn()) {
     leafDrawn = leafDrawn || tile == leaf;
-    for (const std::uint32_t child : set.tiles[tile].children) parentDrawn = parentDrawn || child == leaf;
+    for (const std::uint32_t child : set.tiles[tile].children)
+      parentDrawn = parentDrawn || child == leaf;
   }
   EXPECT_FALSE(leafDrawn);
   EXPECT_TRUE(parentDrawn);
 }
 
 TEST(TiledWorld, ConvertsBoundsBetweenFrames) {
-  Bounds b{{1, 2, 3}, {4, 5, 6}};
+  const Bounds b{{1, 2, 3}, {4, 5, 6}};
   const Bounds r = convertBounds(b, CoordinateFrame::rdf, CoordinateFrame::rub);
   EXPECT_EQ(r.min, (std::array<float, 3>{1, -5, -6}));
   EXPECT_EQ(r.max, (std::array<float, 3>{4, -2, -3}));

@@ -31,6 +31,16 @@ TEST(SlabAllocator, ReleasedNeighboursMergeBackIntoOneRange) {
   EXPECT_EQ(slab.used(), 100u);
 }
 
+TEST(SlabAllocator, PrefersTheSmallestHoleThatFits) {
+  SlabAllocator slab(100);
+  const auto a = slab.allocate(20);
+  const auto b = slab.allocate(30);
+  ASSERT_TRUE(a && b);
+  slab.release(*a, 20);              // a hole of 20 at 0, and 50 free at the end
+  EXPECT_EQ(slab.allocate(10), 0u);  // goes in the small hole, not the big one
+  EXPECT_TRUE(slab.allocate(50));    // the big hole is still whole
+}
+
 TEST(SlabAllocator, RefusesNothingAndTooMuch) {
   SlabAllocator slab(10);
   EXPECT_FALSE(slab.allocate(0));

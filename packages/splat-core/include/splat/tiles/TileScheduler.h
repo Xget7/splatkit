@@ -27,13 +27,18 @@ enum class TileState : std::uint8_t {
 };
 
 // Decides, per frame, which resident tiles to draw, which tiles to load next and which
-// to drop (CONTEXT.md "Streaming", ADR 0015). Walks the tileset from the root: a tile
-// fine enough for the camera is drawn whole; one that is not is replaced by its visible
-// children when all of them are resident and drawn as it is otherwise, while the
-// children load. Tiles out of view are neither drawn nor loaded. Loads go biggest on
-// screen first and are placed in the slab up front, so what is asked for always has a
-// home; when the slab is full the least recently drawn tiles make room. The root is
-// always wanted, so a turn towards something not loaded still finds the coarsest cover.
+// to drop (CONTEXT.md "Streaming", ADR 0015). First it picks the cover: the visible tiles
+// to show, refined biggest on screen first for as long as the children fit the slab, so
+// a scene too dense for the residency budget is shown at the finest level that fits
+// rather than left with holes. Then it walks the tileset down to that cover: a cover
+// tile is drawn when resident and loaded otherwise; while a tile's finer cover is on
+// its way the tile is drawn under the pieces that landed, so nothing is a hole and
+// nothing already fine turns coarse. Tiles out of view are neither drawn nor loaded.
+// Loads are placed in the slab up front, so what is asked for always has a home; the
+// least recently drawn tiles make room. The root is always wanted, so a turn towards
+// something not loaded still finds the coarsest cover.
+// A tile stays put while any draw order names its range (see `plan`); without that a
+// tile landing in a range the order on the GPU still reads would draw in its place.
 // Not thread safe: the render thread owns it.
 class TileScheduler {
  public:
@@ -55,7 +60,9 @@ class TileScheduler {
     std::vector<Load> load;           // every tile wanted and not resident, most urgent first
     std::vector<Drop> drop;           // evicted this frame; their ranges are free again
   };
-  Plan plan(const TileView& view);
+  // `pinned` are tiles a draw order still refers to: they count as used this frame, so
+  // they are never evicted from under it. They are drawn only if the walk chooses them.
+  Plan plan(const TileView& view, const std::vector<std::uint32_t>& pinned = {});
 
   // The upload landed: the tile draws from the next plan on.
   void markResident(std::uint32_t tile);
@@ -77,7 +84,9 @@ class TileScheduler {
     std::uint32_t tile;
     float priority;
   };
-  void visit(std::uint32_t index, const TileView& view, Plan& plan, std::vector<Wanted>& wanted);
+  std::vector<std::uint32_t> cover(const TileView& view, const std::vector<std::uint32_t>& pinned);
+  bool visit(std::uint32_t index, const TileView& view, Plan& plan, std::vector<Wanted>& wanted,
+             const std::vector<bool>& inCover);
   bool visible(std::uint32_t index, const TileView& view) const;
   float screenError(std::uint32_t index, Vec3 origin) const;
   bool fineEnough(std::uint32_t index, const TileView& view) const;

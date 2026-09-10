@@ -44,8 +44,10 @@ Gaussian decodeGaussian(const Cloud& c, std::size_t i) {
   const float sx = std::exp(c.scales[i * 3]);
   const float sy = std::exp(c.scales[i * 3 + 1]);
   const float sz = std::exp(c.scales[i * 3 + 2]);
-  float x = c.rotations[i * 4], y = c.rotations[i * 4 + 1], z = c.rotations[i * 4 + 2],
-        w = c.rotations[i * 4 + 3];
+  float x = c.rotations[i * 4];
+  float y = c.rotations[i * 4 + 1];
+  float z = c.rotations[i * 4 + 2];
+  float w = c.rotations[i * 4 + 3];
   const float n = std::sqrt(x * x + y * y + z * z + w * w);
   if (n > 0) {
     x /= n;
@@ -64,7 +66,8 @@ Gaussian decodeGaussian(const Cloud& c, std::size_t i) {
   auto dotRow = [&](int a, int b) {
     return m[a][0] * m[b][0] + m[a][1] * m[b][1] + m[a][2] * m[b][2];
   };
-  g.covariance = {dotRow(0, 0), dotRow(0, 1), dotRow(0, 2), dotRow(1, 1), dotRow(1, 2), dotRow(2, 2)};
+  g.covariance = {dotRow(0, 0), dotRow(0, 1), dotRow(0, 2),
+                  dotRow(1, 1), dotRow(1, 2), dotRow(2, 2)};
   g.alpha = sigmoid(c.alphas[i]);
   return g;
 }
@@ -85,22 +88,27 @@ void jacobiEigen(const std::array<float, 6>& upper, std::array<float, 3>& values
       for (int q = p + 1; q < 3; ++q) {
         if (std::abs(a[p][q]) < 1e-30) continue;
         const double theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
-        const double t = (theta >= 0 ? 1.0 : -1.0) / (std::abs(theta) + std::sqrt(theta * theta + 1));
-        const double c = 1 / std::sqrt(t * t + 1), s = t * c;
-        for (int k = 0; k < 3; ++k) {
-          const double akp = a[k][p], akq = a[k][q];
-          a[k][p] = c * akp - s * akq;
-          a[k][q] = s * akp + c * akq;
+        const double t =
+            (theta >= 0 ? 1.0 : -1.0) / (std::abs(theta) + std::sqrt(theta * theta + 1));
+        const double c = 1 / std::sqrt(t * t + 1);
+        const double s = t * c;
+        for (auto& k : a) {
+          const double akp = k[p];
+          const double akq = k[q];
+          k[p] = c * akp - s * akq;
+          k[q] = s * akp + c * akq;
         }
         for (int k = 0; k < 3; ++k) {
-          const double apk = a[p][k], aqk = a[q][k];
+          const double apk = a[p][k];
+          const double aqk = a[q][k];
           a[p][k] = c * apk - s * aqk;
           a[q][k] = s * apk + c * aqk;
         }
-        for (int k = 0; k < 3; ++k) {
-          const double vkp = v[k][p], vkq = v[k][q];
-          v[k][p] = c * vkp - s * vkq;
-          v[k][q] = s * vkp + c * vkq;
+        for (auto& k : v) {
+          const double vkp = k[p];
+          const double vkq = k[q];
+          k[p] = c * vkp - s * vkq;
+          k[q] = s * vkp + c * vkq;
         }
       }
     }
@@ -137,12 +145,15 @@ void encodeShape(const std::array<float, 6>& cov, float* scales, float* rotation
                     r[0][1] * (r[1][0] * r[2][2] - r[1][2] * r[2][0]) +
                     r[0][2] * (r[1][0] * r[2][1] - r[1][1] * r[2][0]);
   if (det < 0) {
-    for (int k = 0; k < 3; ++k) r[k][2] = -r[k][2];
+    for (auto& k : r) k[2] = -k[2];
   }
   for (int k = 0; k < 3; ++k) scales[k] = std::log(std::sqrt(std::max(e[k], 1e-12f)));
   // Rotation matrix to quaternion (Shepperd's method).
   const float trace = r[0][0] + r[1][1] + r[2][2];
-  float x, y, z, w;
+  float x = NAN;
+  float y = NAN;
+  float z = NAN;
+  float w = NAN;
   if (trace > 0) {
     const float s = std::sqrt(trace + 1.0f) * 2;
     w = 0.25f * s;
@@ -219,7 +230,7 @@ Bounds boundsOf(const Cloud& c) {
 
 // Splats close in space end up close in the file, what the sort and the GPU fetch want.
 void orderSpatially(Cloud& c) {
-  const std::size_t n = static_cast<std::size_t>(c.numPoints);
+  const auto n = static_cast<std::size_t>(c.numPoints);
   if (n < 2) return;
   const Bounds b = boundsOf(c);
   std::vector<std::pair<std::uint32_t, std::uint32_t>> keyed(n);
@@ -251,7 +262,8 @@ void merge(const Cloud& from, const std::vector<Gaussian>& decoded,
   total = std::max(total, 1e-30f);
   for (float& w : weights) w /= total;
 
-  std::array<float, 3> center{0, 0, 0}, rgb{0, 0, 0};
+  std::array<float, 3> center{0, 0, 0};
+  std::array<float, 3> rgb{0, 0, 0};
   std::vector<float> shSum(sh, 0.0f);
   for (std::size_t k = 0; k < members.size(); ++k) {
     const std::uint32_t i = members[k];
@@ -277,7 +289,8 @@ void merge(const Cloud& from, const std::vector<Gaussian>& decoded,
   }
   const float alpha = std::min(1.0f, total / std::max(area(cov), 1e-30f));
 
-  float scales[3], rotation[4];
+  float scales[3];
+  float rotation[4];
   encodeShape(cov, scales, rotation);
   to.positions.insert(to.positions.end(), center.begin(), center.end());
   to.scales.insert(to.scales.end(), scales, scales + 3);
@@ -300,7 +313,7 @@ std::uint64_t cellKey(const float* p, const Bounds& cube, float cell) {
 // Merges `from` down to at most `budget` splats on the finest grid over `cube` that gets
 // there. Returns the cloud and the cell size used, the error of the tile it becomes.
 std::pair<Cloud, float> coarsen(const Cloud& from, const Bounds& cube, std::uint32_t budget) {
-  const std::size_t n = static_cast<std::size_t>(from.numPoints);
+  const auto n = static_cast<std::size_t>(from.numPoints);
   const float edge = cube.max[0] - cube.min[0];
   float cell = edge / std::max(4.0f, 4.0f * std::cbrt(static_cast<float>(budget)));
   std::unordered_set<std::uint64_t> occupied;
@@ -358,7 +371,8 @@ struct Builder {
     entry.children = std::move(children);
     spz::PackOptions pack;
     pack.version = 2;  // gzip container, the one every reader supports
-    if (!spz::saveSpz(tile, pack, directory + "/" + entry.file)) fail("could not write " + entry.file);
+    if (!spz::saveSpz(tile, pack, directory + "/" + entry.file))
+      fail("could not write " + entry.file);
     set.tiles.push_back(std::move(entry));
     return static_cast<std::uint32_t>(set.tiles.size() - 1);
   }
@@ -393,7 +407,7 @@ struct Builder {
     std::vector<std::uint32_t> children;
     int level = 0;
     for (int o = 0; o < 8; ++o) {
-      const std::size_t count = static_cast<std::size_t>(edges[o + 1] - edges[o]);
+      const auto count = static_cast<std::size_t>(edges[o + 1] - edges[o]);
       if (count == 0) continue;
       Bounds child;
       for (int k = 0; k < 3; ++k) {
@@ -404,7 +418,8 @@ struct Builder {
       auto [index, tile] = build(edges[o], count, child, depth + 1);
       children.push_back(index);
       level = std::max(level, set.tiles[index].level + 1);
-      for (std::size_t i = 0; i < static_cast<std::size_t>(tile.numPoints); ++i) append(merged, tile, i);
+      for (std::size_t i = 0; i < static_cast<std::size_t>(tile.numPoints); ++i)
+        append(merged, tile, i);
     }
     auto [tile, cell] = coarsen(merged, cube, options.tileSplats);
     merged = Cloud{};
@@ -415,10 +430,11 @@ struct Builder {
 
 }  // namespace
 
-Result<Tileset> buildTiles(Cloud cloud, const std::string& directory, const TileBuildOptions& options) {
+Result<Tileset> buildTiles(const Cloud& cloud, const std::string& directory,
+                           const TileBuildOptions& options) {
   if (cloud.numPoints <= 0) return Error{ErrorCode::corrupt, "buildTiles: empty cloud"};
   if (options.tileSplats == 0) return Error{ErrorCode::corrupt, "buildTiles: tileSplats is 0"};
-  const std::size_t n = static_cast<std::size_t>(cloud.numPoints);
+  const auto n = static_cast<std::size_t>(cloud.numPoints);
   // The root cube: the bounds grown to a cube so every octant is a cube too.
   Bounds tight = boundsOf(cloud);
   float edge = 0.0f;

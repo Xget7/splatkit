@@ -60,7 +60,7 @@ Result<Tileset> readTileset(const std::string& json) {
   }
   if (set.root >= set.tiles.size()) return corrupt("root out of range");
   for (const Tile& t : set.tiles) {
-    for (std::uint32_t c : t.children) {
+    for (const std::uint32_t c : t.children) {
       if (c >= set.tiles.size()) return corrupt("child out of range");
       if (set.tiles[c].level >= t.level) return corrupt("a child is not below its parent");
     }

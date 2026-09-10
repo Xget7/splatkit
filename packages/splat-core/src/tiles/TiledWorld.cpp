@@ -29,7 +29,8 @@ Result<TiledWorld> openTiledWorld(const std::string& path, CoordinateFrame sourc
       std::string(reinterpret_cast<const char*>(file.value().data()), file.value().size()));
   if (!parsed) return parsed.error();
   Tileset set = std::move(parsed.value());
-  for (Tile& tile : set.tiles) tile.bounds = convertBounds(tile.bounds, sourceFrame, kInternalFrame);
+  for (Tile& tile : set.tiles)
+    tile.bounds = convertBounds(tile.bounds, sourceFrame, kInternalFrame);
 
   TiledWorld world;
   const auto slash = path.find_last_of('/');

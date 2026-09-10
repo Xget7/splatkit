@@ -60,9 +60,9 @@ void TileLoader::run() {
       std::unique_lock<std::mutex> lock(mutex_);
       wake_.wait(lock, [this] { return stop_ || !queue_.empty(); });
       if (stop_) return;
-      auto best = std::max_element(queue_.begin(), queue_.end(), [](const Request& a, const Request& b) {
-        return a.priority < b.priority;
-      });
+      auto best = std::max_element(
+          queue_.begin(), queue_.end(),
+          [](const Request& a, const Request& b) { return a.priority < b.priority; });
       request = std::move(*best);
       queue_.erase(best);
       started_.push_back(request.tile);

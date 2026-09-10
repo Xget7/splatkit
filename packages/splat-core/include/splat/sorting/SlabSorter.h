@@ -29,7 +29,8 @@ class SlabSorter {
     std::vector<std::uint32_t> order;  // the visible splats of the ranges, back to front
     double sortMillis = 0;             // the most recent sort, which this order may reuse
     double cullMillis = 0;
-    std::size_t sorted = 0;  // splats in the ranges sorted
+    std::size_t sorted = 0;     // splats in the ranges sorted
+    std::uint64_t request = 0;  // the requestVisible this order answers
   };
 
   explicit SlabSorter(std::uint32_t capacity);
@@ -40,8 +41,9 @@ class SlabSorter {
 
   // Positions (xyz per splat) of a tile that landed at `offset`. Applied before the next sort.
   void place(std::uint32_t offset, std::vector<float> positions);
-  // Schedules the visible order of these ranges from this camera.
-  void requestVisible(const Frustum& frustum, std::vector<Range> ranges);
+  // Schedules the visible order of these ranges from this camera. Returns the id of the
+  // request, which the result carries; a newer request replaces one not started yet.
+  std::uint64_t requestVisible(const Frustum& frustum, std::vector<Range> ranges);
   // The newest finished order not yet taken, if any.
   std::optional<Result> take();
 
@@ -53,6 +55,7 @@ class SlabSorter {
   struct Request {
     Frustum frustum;
     std::vector<Range> ranges;
+    std::uint64_t id = 0;
   };
   void run();
 
@@ -63,6 +66,7 @@ class SlabSorter {
   bool stop_ = false;
   std::vector<Placement> placements_;
   std::optional<Request> pending_;
+  std::uint64_t requests_ = 0;
   std::optional<Result> finished_;
   // Worker thread only.
   std::vector<std::uint32_t> sorted_;

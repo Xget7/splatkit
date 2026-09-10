@@ -8,7 +8,7 @@
 namespace splat {
 
 // Hands out ranges of one fixed size buffer, the slab every resident tile lives in on the
-// GPU. First fit over a free list that merges neighbours, so a tile dropped next to a
+// GPU. Best fit over a free list that merges neighbours, so a tile dropped next to a
 // free range grows it. Not thread safe.
 class SlabAllocator {
  public:

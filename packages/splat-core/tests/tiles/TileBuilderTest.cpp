@@ -48,6 +48,8 @@ struct TempDir {
     path = fs::temp_directory_path() / ("splat-tiles-" + std::to_string(std::random_device{}()));
     fs::create_directories(path);
   }
+  TempDir(const TempDir&) = delete;
+  TempDir& operator=(const TempDir&) = delete;
   ~TempDir() { fs::remove_all(path); }
 };
 
@@ -59,7 +61,7 @@ bool inside(const float* p, const splat::Bounds& b, float slack = 1e-4f) {
 }
 
 TEST(TileBuilder, SplitsUntilTilesFitAndMergesBackUp) {
-  TempDir dir;
+  const TempDir dir;
   TileBuildOptions options;
   options.tileSplats = 500;
   auto built = buildTiles(clusters(1200, 0.05f, 20.0f), dir.path.string(), options);
@@ -80,7 +82,7 @@ TEST(TileBuilder, SplitsUntilTilesFitAndMergesBackUp) {
     } else {
       EXPECT_GT(t.error, 0.0f);
       EXPECT_FALSE(t.children.empty());
-      for (uint32_t c : t.children) {
+      for (const uint32_t c : t.children) {
         EXPECT_LT(set.tiles[c].level, t.level);
         EXPECT_TRUE(inside(set.tiles[c].bounds.min.data(), t.bounds, 1.0f));
       }
@@ -93,7 +95,7 @@ TEST(TileBuilder, SplitsUntilTilesFitAndMergesBackUp) {
 }
 
 TEST(TileBuilder, TileFilesHoldWhatTheIndexSaysInsideTheirBounds) {
-  TempDir dir;
+  const TempDir dir;
   TileBuildOptions options;
   options.tileSplats = 300;
   auto built = buildTiles(clusters(400, 0.05f, 20.0f), dir.path.string(), options);
@@ -109,12 +111,12 @@ TEST(TileBuilder, TileFilesHoldWhatTheIndexSaysInsideTheirBounds) {
 }
 
 TEST(TileBuilder, WritesAnIndexTheReaderAccepts) {
-  TempDir dir;
+  const TempDir dir;
   TileBuildOptions options;
   options.tileSplats = 300;
   auto built = buildTiles(clusters(400, 0.05f, 20.0f), dir.path.string(), options);
   ASSERT_TRUE(built.ok()) << built.error().message;
-  std::ifstream in(dir.path / "tileset.json");
+  const std::ifstream in(dir.path / "tileset.json");
   std::stringstream text;
   text << in.rdbuf();
   auto read = readTileset(text.str());
@@ -127,7 +129,7 @@ TEST(TileBuilder, AMergedSplatCoversItsMembers) {
   // Two clusters far apart, forced into one tile at level 1: each cluster of overlapping
   // splats merges into splats that sit on the cluster, no smaller than a member, opaque
   // where the members were, with unit rotations and the cluster's colour.
-  TempDir dir;
+  const TempDir dir;
   TileBuildOptions options;
   options.tileSplats = 64;
   auto built = buildTiles(clusters(200, 0.3f, 20.0f), dir.path.string(), options);
@@ -153,7 +155,7 @@ TEST(TileBuilder, AMergedSplatCoversItsMembers) {
 }
 
 TEST(TileBuilder, RefusesAnEmptyCloud) {
-  TempDir dir;
+  const TempDir dir;
   EXPECT_FALSE(buildTiles(spz::GaussianCloud{}, dir.path.string()).ok());
 }
 

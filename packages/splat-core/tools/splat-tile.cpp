@@ -73,13 +73,14 @@ int run(int argc, char** argv) {
   if (sh >= 0) truncateSh(cloud, sh);
   std::filesystem::create_directories(out);
 
-  auto built = splat::buildTiles(std::move(cloud), out, options);
+  auto built = splat::buildTiles(cloud, out, options);
   if (!built.ok()) {
     std::fprintf(stderr, "%s\n", built.error().message.c_str());
     return 1;
   }
   const splat::Tileset& set = built.value();
-  std::vector<std::size_t> tilesPerLevel, splatsPerLevel;
+  std::vector<std::size_t> tilesPerLevel;
+  std::vector<std::size_t> splatsPerLevel;
   std::vector<std::uintmax_t> bytesPerLevel;
   for (const splat::Tile& t : set.tiles) {
     const auto level = static_cast<std::size_t>(t.level);

@@ -46,6 +46,7 @@ TileView from(Vec3 origin, Vec3 forward, float tanHalf, float limit) {
 
 std::vector<std::uint32_t> tilesOf(const std::vector<TileScheduler::Load>& loads) {
   std::vector<std::uint32_t> out;
+  out.reserve(loads.size());
   for (const auto& l : loads) out.push_back(l.tile);
   std::sort(out.begin(), out.end());
   return out;
@@ -58,20 +59,24 @@ TEST(TileScheduler, AsksForTheRootFirstAndDrawsItUntilTheChildrenAreThere) {
 
   auto plan = scheduler.plan(inside);
   EXPECT_TRUE(plan.draw.empty());
-  ASSERT_EQ(plan.load.size(), 1u);
+  // The root first, as the fallback, then the four octants in front of the camera; the
+  // four behind it are not wanted.
+  ASSERT_EQ(plan.load.size(), 5u);
   EXPECT_EQ(plan.load[0].tile, set->root);
+  EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3, set->root}));
   EXPECT_EQ(scheduler.state(set->root), TileState::loading);
 
   scheduler.markResident(set->root);
   plan = scheduler.plan(inside);
   EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
-  // The four octants in front of the camera; the four behind it are not wanted.
   EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{0, 1, 2, 3}));
   EXPECT_EQ(scheduler.held(), 500u);
 
+  // Two landed: they are drawn, and the root under them where the other two go.
   for (int i = 0; i < 2; ++i) scheduler.markResident(static_cast<std::uint32_t>(i));
   plan = scheduler.plan(inside);
-  EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
+  std::sort(plan.draw.begin(), plan.draw.end());
+  EXPECT_EQ(plan.draw, (std::vector<std::uint32_t>{0, 1, set->root}));
   EXPECT_EQ(tilesOf(plan.load), (std::vector<std::uint32_t>{2, 3}));
 
   for (int i = 2; i < 4; ++i) scheduler.markResident(static_cast<std::uint32_t>(i));
@@ -124,15 +129,17 @@ TEST(TileScheduler, MakesRoomByDroppingWhatWasNotDrawnLately) {
   EXPECT_EQ(scheduler.held(), 200u);
 }
 
-TEST(TileScheduler, WhatIsDrawnThisFrameIsNeverDropped) {
+TEST(TileScheduler, ACoverThatDoesNotFitIsNotStarted) {
   auto set = octants();
   TileScheduler scheduler(set, 250);
   const TileView inside = from({0, 0, 0}, {0, 0, -1}, 1.0f, 0.001f);
   scheduler.plan(inside);
   scheduler.markResident(set->root);
   auto plan = scheduler.plan(inside);
-  // Eight octants wanted, one fits next to the root; the root stays.
-  EXPECT_EQ(plan.load.size(), 1u);
+  // Four octants would be finer, but they do not fit: the root is shown as it is,
+  // whole, rather than one octant and a hole.
+  EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
+  EXPECT_TRUE(plan.load.empty());
   EXPECT_TRUE(plan.drop.empty());
   EXPECT_EQ(scheduler.state(set->root), TileState::resident);
 }
@@ -151,6 +158,25 @@ TEST(TileScheduler, AFailedTileIsNeverAskedForAgain) {
   EXPECT_EQ(scheduler.held(), 100u);
 }
 
+TEST(TileScheduler, ATurnOntoAMissingChildKeepsTheSiblingsOnScreen) {
+  auto set = octants();
+  TileScheduler scheduler(set, 1000);
+  // Inside octant 7 looking +x: only 7 wanted and drawn.
+  const TileView narrow = from({5, 5, 5}, {1, 0, 0}, 0.27f, 0.001f);
+  scheduler.plan(narrow);
+  scheduler.markResident(set->root);
+  scheduler.plan(narrow);
+  scheduler.markResident(7);
+  EXPECT_EQ(scheduler.plan(narrow).draw, std::vector<std::uint32_t>{7});
+  // Turn around to a wide view of the other octants: 7 stays drawn while they load.
+  const TileView wide = from({5, 5, 5}, {-1, 0, 0}, 1.0f, 0.001f);
+  auto plan = scheduler.plan(wide);
+  std::sort(plan.draw.begin(), plan.draw.end());
+  EXPECT_EQ(plan.draw, (std::vector<std::uint32_t>{7, set->root}));
+  EXPECT_FALSE(plan.load.empty());
+  for (const auto& l : plan.load) EXPECT_NE(l.tile, 7u);
+}
+
 TEST(TileScheduler, AnAbandonedLoadFreesItsRange) {
   auto set = octants();
   TileScheduler scheduler(set, 1000);
@@ -163,6 +189,45 @@ TEST(TileScheduler, AnAbandonedLoadFreesItsRange) {
   EXPECT_EQ(scheduler.held(), 100u);
   auto plan = scheduler.plan(narrow);
   EXPECT_EQ(tilesOf(plan.load), std::vector<std::uint32_t>{7});
+}
+
+TEST(TileScheduler, APinnedTileIsNotEvictedWhileNotDrawn) {
+  auto set = octants();
+  TileScheduler scheduler(set, 250);  // the root and one octant
+  const TileView inSeven = from({5, 5, 5}, {1, 0, 0}, 0.27f, 0.001f);
+  const TileView inZero = from({-5, -5, -5}, {-1, 0, 0}, 0.27f, 0.001f);
+  scheduler.plan(inSeven);
+  scheduler.markResident(set->root);
+  scheduler.plan(inSeven);
+  scheduler.markResident(7);
+
+  auto plan = scheduler.plan(inZero, {7});
+  EXPECT_TRUE(plan.drop.empty());
+  EXPECT_TRUE(plan.load.empty());  // octant 0 has no room until 7 is let go
+  EXPECT_EQ(plan.draw, std::vector<std::uint32_t>{set->root});
+  EXPECT_EQ(scheduler.state(7), TileState::resident);
+
+  plan = scheduler.plan(inZero);
+  ASSERT_EQ(plan.drop.size(), 1u);
+  EXPECT_EQ(plan.drop[0].tile, 7u);
+}
+
+TEST(TileScheduler, AChildWaitingForItsSiblingsIsNotEvictedToMakeRoomForThem) {
+  auto set = octants();
+  TileScheduler scheduler(set, 500);  // the root and the four octants in front
+  const TileView inside = from({0, 0, 0}, {0, 0, -1}, 1.0f, 0.001f);
+  scheduler.plan(inside);
+  scheduler.markResident(set->root);
+  auto plan = scheduler.plan(inside);
+  ASSERT_EQ(plan.load.size(), 4u);
+  const std::uint32_t first = plan.load[0].tile;
+  scheduler.markResident(first);
+  scheduler.markAbsent(plan.load[1].tile);  // its read was abandoned
+  for (int i = 0; i < 5; ++i) {
+    plan = scheduler.plan(inside);
+    EXPECT_EQ(scheduler.state(first), TileState::resident) << "plan " << i;
+    for (const auto& d : plan.drop) EXPECT_NE(d.tile, first);
+  }
 }
 
 }  // namespace

@@ -23,12 +23,15 @@ void SlabSorter::place(std::uint32_t offset, std::vector<float> positions) {
   placements_.push_back({offset, std::move(positions)});
 }
 
-void SlabSorter::requestVisible(const Frustum& frustum, std::vector<Range> ranges) {
+std::uint64_t SlabSorter::requestVisible(const Frustum& frustum, std::vector<Range> ranges) {
+  std::uint64_t id = 0;
   {
     const std::lock_guard<std::mutex> lock(mutex_);
-    pending_ = Request{frustum, std::move(ranges)};
+    id = ++requests_;
+    pending_ = Request{frustum, std::move(ranges), id};
   }
   wake_.notify_one();
+  return id;
 }
 
 std::optional<SlabSorter::Result> SlabSorter::take() {
@@ -79,7 +82,8 @@ void SlabSorter::run() {
     const std::lock_guard<std::mutex> lock(mutex_);
     std::vector<std::uint32_t> recycled =
         finished_ ? std::move(finished_->order) : std::vector<std::uint32_t>();
-    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled), sorted_.size()};
+    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled),
+                       sorted_.size(), request.id};
     order = std::move(recycled);
   }
 }
