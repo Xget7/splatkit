@@ -22,6 +22,10 @@ class DistanceSorter {
 
   std::size_t count() const { return positions_.size() / 3; }
 
+  // Overwrites the positions of splats [first, first + n) with `xyz`, for a slab that
+  // tiles land in. Not concurrent with a sort or a cull.
+  void place(std::size_t first, const float* xyz, std::size_t n);
+
   // Fills `order` with every splat index, farthest first.
   void sort(Vec3 from, std::vector<uint32_t>& order);
 

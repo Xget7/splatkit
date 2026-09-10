@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 
 #include "splat/math/Vec3.h"
@@ -34,6 +35,23 @@ struct Frustum {
     constexpr float kOpen = 1e6f;  // tan of nearly 90 degrees: no bound on that axis
     const float half = std::atan(tanHalf) + marginRadians;
     return half >= 1.5533f ? kOpen : std::tan(half);  // 89 degrees
+  }
+
+  // True when an axis aligned box may overlap the view volume: it is not wholly past any
+  // of the five bounding planes. Conservative near the corners, which suits a cull.
+  bool intersects(const std::array<float, 3>& min, const std::array<float, 3>& max) const {
+    const Vec3 normals[5] = {-forward, right - forward * tanHalfX, -right - forward * tanHalfX,
+                             up - forward * tanHalfY, -up - forward * tanHalfY};
+    for (const Vec3& n : normals) {
+      bool allOutside = true;
+      for (int corner = 0; corner < 8 && allOutside; ++corner) {
+        const Vec3 p{(corner & 1) ? max[0] : min[0], (corner & 2) ? max[1] : min[1],
+                     (corner & 4) ? max[2] : min[2]};
+        if (dot(p - origin, n) <= 0.0f) allOutside = false;
+      }
+      if (allOutside) return false;
+    }
+    return true;
   }
 
   // True when the point is in front of the camera and inside the widened field of view.

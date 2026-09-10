@@ -17,6 +17,11 @@ add_executable(splat_core_tests
   diagnostics/TimingSummaryTest.cpp
   tiles/TilesetTest.cpp
   tiles/TileBuilderTest.cpp
+  tiles/SlabAllocatorTest.cpp
+  tiles/TileSchedulerTest.cpp
+  tiles/TileStreamerTest.cpp
+  sorting/SlabSorterTest.cpp
+  math/FrustumTest.cpp
 )
 target_link_libraries(splat_core_tests PRIVATE splat_core spz ZLIB::ZLIB GTest::gtest_main)
 target_compile_definitions(splat_core_tests PRIVATE

@@ -41,6 +41,12 @@ add_library(splat_core STATIC
   src/diagnostics/TimingSummary.cpp
   src/tiles/Tileset.cpp
   src/tiles/TileBuilder.cpp
+  src/tiles/SlabAllocator.cpp
+  src/tiles/TileScheduler.cpp
+  src/tiles/TileLoader.cpp
+  src/tiles/TiledWorld.cpp
+  src/tiles/TileStreamer.cpp
+  src/sorting/SlabSorter.cpp
 )
 target_include_directories(splat_core PUBLIC include)
 find_package(ZLIB REQUIRED)  # the SPZ gzip container is inflated here, with a ceiling
