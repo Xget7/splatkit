@@ -43,9 +43,9 @@ std::vector<Pair> sortOnGpu(MetalVisibility& v, const std::vector<Pair>& pairs) 
     keys[i] = pairs[i].key;
     values[i] = pairs[i].value;
   }
-  *static_cast<uint32_t*>(v.countBuffer().contents) = static_cast<uint32_t>(pairs.size());
+  *static_cast<uint32_t*>(v.countBuffer(0).contents) = static_cast<uint32_t>(pairs.size());
   id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
-  v.encodeSort(cmd);
+  v.encodeSort(cmd, 0);
   [cmd commit];
   [cmd waitUntilCompleted];
   std::vector<Pair> out(pairs.size());
@@ -120,11 +120,11 @@ TEST_F(MetalVisibilityTest, ReportsTheSortTimeOfFiveMillionKeys) {
     keys[i] = pairs[i].key;
     values[i] = pairs[i].value;
   }
-  *static_cast<uint32_t*>(visibility.countBuffer().contents) = static_cast<uint32_t>(n);
+  *static_cast<uint32_t*>(visibility.countBuffer(0).contents) = static_cast<uint32_t>(n);
   double best = 1e9;
   for (int i = 0; i < 3; ++i) {
     id<MTLCommandBuffer> cmd = [Gpu::get().queue commandBuffer];
-    visibility.encodeSort(cmd);
+    visibility.encodeSort(cmd, 0);
     [cmd commit];
     [cmd waitUntilCompleted];
     best = std::min(best, (cmd.GPUEndTime - cmd.GPUStartTime) * 1000.0);
@@ -174,14 +174,14 @@ TEST_F(MetalVisibilityTest, CullsAndOrdersTheRangesBackToFront) {
   const SplatRenderer::Range ranges[2] = {{0, 3}, {3, 2}};
 
   id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
-  visibility.encode(cmd, uniforms, splatBuffer, ranges, 2);
+  visibility.encode(cmd, 1, uniforms, splatBuffer, ranges, 2);
   [cmd commit];
   [cmd waitUntilCompleted];
 
-  ASSERT_EQ(visibility.count(), 3u);
+  ASSERT_EQ(visibility.count(1), 3u);
   const auto* order = static_cast<const uint32_t*>(visibility.order().contents);
   EXPECT_EQ(std::vector<uint32_t>(order, order + 3), (std::vector<uint32_t>{0, 4, 2}));
-  const auto* draw = static_cast<const uint32_t*>(visibility.drawArguments().contents);
+  const auto* draw = static_cast<const uint32_t*>(visibility.drawArguments(1).contents);
   EXPECT_EQ(draw[0], 4u);  // vertices per instance
   EXPECT_EQ(draw[1], 3u);  // instances
 }

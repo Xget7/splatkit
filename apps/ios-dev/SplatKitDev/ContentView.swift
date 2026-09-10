@@ -39,7 +39,7 @@ struct ContentView: View {
             Text(session.gpu)
             Text(session.status)
             Text(String(format: "%.0f fps  frame %.1f ms  gpu %.1f ms  sort %.0f ms", s.fps, s.frameMillis, s.gpuMillis, s.sortMillis))
-            Text("\(s.splatCount) drawn  \(s.walking ? "walk" : "fly")  \(s.motion ? "gyro" : "touch")")
+            Text("\(s.splatCount) splats  \(s.walking ? "walk" : "fly")  \(s.motion ? "gyro" : "touch")")
             if !captureMessage.isEmpty { Text(captureMessage) }
         }
         .font(.system(size: 12, weight: .medium, design: .monospaced))

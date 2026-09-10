@@ -322,10 +322,10 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   const bool gpuOrder = world_ && frame.ranges != nullptr && gpuSort_;
   if (gpuOrder) {
     id<MTLCommandBuffer> sort = [queue_ commandBuffer];
-    visibility_.encode(sort, uniforms_[slot], world_->splats, frame.ranges, frame.rangeCount);
+    visibility_.encode(sort, slot, uniforms_[slot], world_->splats, frame.ranges, frame.rangeCount);
     std::atomic<double>* sortMillis = &lastSortMillis_;
     std::atomic<uint32_t>* drawn = &lastDrawCount_;
-    id<MTLBuffer> countBuffer = visibility_.countBuffer();
+    id<MTLBuffer> countBuffer = visibility_.countBuffer(slot);
     [sort addCompletedHandler:^(id<MTLCommandBuffer> done) {
       sortMillis->store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
       drawn->store(*static_cast<const uint32_t*>(countBuffer.contents));
@@ -349,7 +349,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
     if (gpuOrder) {
       [encoder setVertexBuffer:visibility_.order() offset:0 atIndex:2];
       [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                indirectBuffer:visibility_.drawArguments()
+                indirectBuffer:visibility_.drawArguments(slot)
           indirectBufferOffset:0];
     } else {
       [encoder setVertexBuffer:world_->orders[world_->current] offset:0 atIndex:2];

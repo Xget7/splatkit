@@ -69,7 +69,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   const std::string& deviceDescription() const override { return description_; }
 
   static constexpr int kMaxShDegree = 3;
-  static constexpr uint32_t kFramesInFlight = 2;
+  static constexpr uint32_t kFramesInFlight = MetalVisibility::kSlots;
 
  private:
   MetalSplatRenderer() = default;
