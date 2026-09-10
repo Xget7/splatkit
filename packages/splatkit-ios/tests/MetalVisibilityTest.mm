@@ -122,7 +122,7 @@ TEST_F(MetalVisibilityTest, ReportsTheSortTimeOfFiveMillionKeys) {
   }
   *static_cast<uint32_t*>(visibility.countBuffer(0).contents) = static_cast<uint32_t>(n);
   double best = 1e9;
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 10; ++i) {
     id<MTLCommandBuffer> cmd = [Gpu::get().queue commandBuffer];
     visibility.encodeSort(cmd, 0);
     [cmd commit];

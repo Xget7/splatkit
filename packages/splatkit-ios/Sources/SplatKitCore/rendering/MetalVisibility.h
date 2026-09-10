@@ -46,8 +46,9 @@ class MetalVisibility {
 
   static constexpr uint32_t kThreads = 256;
   static constexpr uint32_t kBlock = kThreads * 16;
-  static constexpr uint32_t kBins = 16;
-  static constexpr uint32_t kPasses = 8;
+  static constexpr uint32_t kDigitBits = 8;
+  static constexpr uint32_t kBins = 1u << kDigitBits;
+  static constexpr uint32_t kPasses = 32 / kDigitBits;
   static constexpr uint32_t kMaxRanges = 65536;
   static constexpr uint32_t kSlots = 2;  // frames whose inputs may be in flight at once
 

@@ -111,7 +111,7 @@ void MetalVisibility::encodeSort(id<MTLCommandBuffer> cmd, uint32_t slot) {
 
   const MTLSize threads = MTLSizeMake(kThreads, 1, 1);
   for (uint32_t pass = 0; pass < kPasses; ++pass) {
-    const uint32_t shift = pass * 4;
+    const uint32_t shift = pass * kDigitBits;
     const uint32_t in = pass & 1u;
     const uint32_t out = in ^ 1u;
 

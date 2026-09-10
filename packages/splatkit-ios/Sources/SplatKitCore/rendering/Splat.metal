@@ -242,7 +242,9 @@ struct Range {
 constant uint kSortThreads = 256;
 constant uint kSortPerThread = 16;
 constant uint kSortBlock = kSortThreads * kSortPerThread;
-constant uint kSortBins = 16;
+constant uint kSortDigitBits = 8;
+constant uint kSortBins = 1u << kSortDigitBits;
+constant uint kSortPerSimdgroup = 32 * kSortPerThread;
 constant uint kSortSimdgroups = kSortThreads / 32;
 
 struct SortDispatch {
@@ -321,33 +323,51 @@ kernel void prepareSort(const device uint* count [[buffer(0)]],
   draw->baseInstance = 0;
 }
 
+// The lanes of this simdgroup whose element has the same digit as this lane's. Every
+// lane of the simdgroup must call it; a lane past the end passes valid = false.
+static uint matchDigit(uint digit, bool valid) {
+  uint peers = uint(simd_vote::vote_t(simd_ballot(valid)));
+  for (uint b = 0; b < kSortDigitBits; ++b) {
+    bool bit = (digit >> b) & 1u;
+    uint vote = uint(simd_vote::vote_t(simd_ballot(bit)));
+    peers &= bit ? vote : ~vote;
+  }
+  return peers;
+}
+
+// The block's elements are owned simdgroup by simdgroup, each simdgroup holding a
+// contiguous run that it reads one coalesced row of 32 at a time. Ranking simdgroup
+// major, then row, then lane therefore follows memory order, which keeps the sort
+// stable without a counter per thread.
+static uint simdgroupElement(uint block, uint sg, uint row, uint lane) {
+  return block * kSortBlock + sg * kSortPerSimdgroup + row * 32 + lane;
+}
+
 // Counts the digits of each block: histogram[digit * blocks + block].
 kernel void radixHistogram(uint tid [[thread_index_in_threadgroup]],
                            uint block [[threadgroup_position_in_grid]],
+                           uint lane [[thread_index_in_simdgroup]],
+                           uint sg [[simdgroup_index_in_threadgroup]],
                            const device uint* keys [[buffer(0)]],
                            const device uint* count [[buffer(1)]],
                            const device SortDispatch* dispatch [[buffer(2)]],
                            constant uint& shift [[buffer(3)]],
                            device uint* histogram [[buffer(4)]]) {
   threadgroup atomic_uint bins[kSortBins];
-  if (tid < kSortBins) atomic_store_explicit(&bins[tid], 0u, memory_order_relaxed);
+  atomic_store_explicit(&bins[tid], 0u, memory_order_relaxed);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   uint n = count[0];
-  uint first = block * kSortBlock + tid * kSortPerThread;
-  uint local[kSortBins] = {0};
-  for (uint i = 0; i < kSortPerThread; ++i) {
-    uint e = first + i;
-    if (e < n) local[(keys[e] >> shift) & (kSortBins - 1)] += 1;
-  }
-  for (uint b = 0; b < kSortBins; ++b) {
-    uint c = simd_sum(local[b]);
-    if (simd_is_first() && c > 0) atomic_fetch_add_explicit(&bins[b], c, memory_order_relaxed);
+  for (uint row = 0; row < kSortPerThread; ++row) {
+    uint e = simdgroupElement(block, sg, row, lane);
+    bool valid = e < n;
+    uint d = valid ? (keys[e] >> shift) & (kSortBins - 1) : 0u;
+    uint peers = matchDigit(d, valid);
+    if (valid && ctz(peers) == lane) {
+      atomic_fetch_add_explicit(&bins[d], popcount(peers), memory_order_relaxed);
+    }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (tid < kSortBins) {
-    histogram[tid * dispatch->blocks + block] =
-        atomic_load_explicit(&bins[tid], memory_order_relaxed);
-  }
+  histogram[tid * dispatch->blocks + block] = atomic_load_explicit(&bins[tid], memory_order_relaxed);
 }
 
 // One threadgroup per digit: exclusive scan of that digit's row of block counts, in
@@ -401,50 +421,63 @@ kernel void radixScatter(uint tid [[thread_index_in_threadgroup]],
                          constant uint& shift [[buffer(6)]],
                          const device uint* histogram [[buffer(7)]],
                          const device uint* totals [[buffer(8)]]) {
-  threadgroup uint sgTotals[kSortSimdgroups][kSortBins];
-  threadgroup uint sgOffsets[kSortSimdgroups][kSortBins];
+  // How many of each digit the simdgroup has ranked so far; after the rows, its offset
+  // within the block for that digit.
+  threadgroup uint sgCounts[kSortSimdgroups][kSortBins];
+  threadgroup uint sgTotals[kSortSimdgroups];
   threadgroup uint digitBase[kSortBins];
+  threadgroup uint blockBase[kSortBins];
   uint n = count[0];
   uint blocks = dispatch->blocks;
-  uint first = block * kSortBlock + tid * kSortPerThread;
+
+  for (uint g = 0; g < kSortSimdgroups; ++g) sgCounts[g][tid] = 0;
+  blockBase[tid] = histogram[tid * blocks + block];
+  {  // digitBase[d] = sum of the totals of the digits below d
+    uint v = totals[tid];
+    uint p = simd_prefix_exclusive_sum(v);
+    uint s = simd_sum(v);
+    if (lane == 0) sgTotals[sg] = s;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    uint run = 0;
+    for (uint g = 0; g < sg; ++g) run += sgTotals[g];
+    digitBase[tid] = run + p;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
 
   uint keys[kSortPerThread];
-  uint local[kSortBins] = {0};
-  for (uint i = 0; i < kSortPerThread; ++i) {
-    uint e = first + i;
-    keys[i] = e < n ? keysIn[e] : 0u;
-    if (e < n) local[(keys[i] >> shift) & (kSortBins - 1)] += 1;
-  }
-  // Rank of this thread's first element of each digit among the block's: the prefix over
-  // the threads before it, simdgroup by simdgroup.
-  uint threadPrefix[kSortBins];
-  for (uint b = 0; b < kSortBins; ++b) {
-    threadPrefix[b] = simd_prefix_exclusive_sum(local[b]);
-    uint s = simd_sum(local[b]);
-    if (lane == 0) sgTotals[sg][b] = s;
+  uint ranks[kSortPerThread];
+  for (uint row = 0; row < kSortPerThread; ++row) {
+    uint e = simdgroupElement(block, sg, row, lane);
+    bool valid = e < n;
+    keys[row] = valid ? keysIn[e] : 0u;
+    uint d = (keys[row] >> shift) & (kSortBins - 1);
+    uint peers = matchDigit(d, valid);
+    uint leader = ctz(peers);
+    uint base = 0;
+    if (valid && leader == lane) {
+      base = sgCounts[sg][d];
+      sgCounts[sg][d] = base + popcount(peers);
+    }
+    base = simd_shuffle(base, valid ? leader : lane);
+    ranks[row] = base + popcount(peers & ((1u << lane) - 1u));
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (tid < kSortBins) {
+  {  // exclusive prefix over the simdgroups of digit tid, in place
     uint run = 0;
     for (uint g = 0; g < kSortSimdgroups; ++g) {
-      sgOffsets[g][tid] = run;
-      run += sgTotals[g][tid];
+      uint v = sgCounts[g][tid];
+      sgCounts[g][tid] = run;
+      run += v;
     }
-    uint base = 0;
-    for (uint d = 0; d < tid; ++d) base += totals[d];
-    digitBase[tid] = base;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  uint used[kSortBins] = {0};
-  for (uint i = 0; i < kSortPerThread; ++i) {
-    uint e = first + i;
-    if (e >= n) break;
-    uint d = (keys[i] >> shift) & (kSortBins - 1);
-    uint dst = digitBase[d] + histogram[d * blocks + block] + sgOffsets[sg][d] +
-               threadPrefix[d] + used[d];
-    used[d] += 1;
-    keysOut[dst] = keys[i];
+  for (uint row = 0; row < kSortPerThread; ++row) {
+    uint e = simdgroupElement(block, sg, row, lane);
+    if (e >= n) continue;
+    uint d = (keys[row] >> shift) & (kSortBins - 1);
+    uint dst = digitBase[d] + blockBase[d] + sgCounts[sg][d] + ranks[row];
+    keysOut[dst] = keys[row];
     valuesOut[dst] = valuesIn[e];
   }
 }
