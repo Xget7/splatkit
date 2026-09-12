@@ -65,6 +65,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool draw(const Frame& frame) override;
   double lastGpuMillis() const override { return frameLoop_.lastGpuMillis(); }
   double lastSortMillis() const override { return compute_ ? compute_->stats().sortMillis : 0; }
+  double lastCullMillis() const override { return compute_ ? compute_->stats().cullMillis : 0; }
   double lastSelectMillis() const override { return compute_ ? compute_->stats().selectMillis : 0; }
   uint32_t lastDrawCount() const override { return compute_ ? compute_->stats().drawn : 0; }
   uint32_t lastSelectedCount() const override { return compute_ ? compute_->stats().selected : 0; }
