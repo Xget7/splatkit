@@ -246,7 +246,7 @@
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/PrepareIndirect.metalh": "33d1bb05d25b4f766860dca93eb19f885b026856fc2931bcbc740202f0bacfc7",
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/Splat.metal": "a6a259e9eea7b843dd16dd8e1a872057c4e83e931e411807451e4097cc4ec8d4",
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatLOD.metal": "5815c9079ff0ffe2b0a19f8b93a6a45700a2597f8b4cbffa0ff8fce62b164073",
-  "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatProjection.metalh": "adf051fc4f87b147824a9dc725e325cb3077cc614462535c40439c19ba09f383",
+  "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatProjection.metalh": "12f5374c54b14888e7a0c7d83b50e5d52a8563bbe62ff3bfba24363a12a25e22",
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatRadixSort.metal": "e8dd07e81aae35ad9078dcca6746868ff1c990bb1389bbea07c6517d0a8b3414",
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatRaster.metal": "d07a81e3883991dbc7762019429849f5cb669e7adbde426456aa7a43f5aa4f90",
   "packages/splatkit-ios/Sources/SplatKitCore/rendering/shaders/SplatTileRaster.metal": "684c417c9c40361aa71c314ca7a5ec834d24a8e4510f1f5111a143cfc57d01cc",
