@@ -116,8 +116,9 @@ class VisibilityPass {
   bool createDescriptors();
   bool createPipelines();
   bool updateDescriptors(uint32_t slot, const Input& input) const;
-  void barrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
-               VkAccessFlags srcAccess, VkAccessFlags dstAccess, const Output& output) const;
+  static void barrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage,
+                      VkPipelineStageFlags dstStage, VkAccessFlags srcAccess,
+                      VkAccessFlags dstAccess, const Output& output);
 
   const VulkanContext& ctx_;
   VisibilityCapabilities capabilities_;

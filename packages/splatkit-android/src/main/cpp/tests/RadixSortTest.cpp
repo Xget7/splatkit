@@ -20,14 +20,14 @@ std::vector<uint32_t> read(VulkanTestContext& gpu, VkBuffer source, uint32_t cou
   const VkDeviceSize bytes = VkDeviceSize{count} * 4;
   auto staging = GpuBuffer::deviceLocal(
       *gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-  require(bool(staging), "readback intermediate allocation");
+  require(static_cast<bool>(staging), "readback intermediate allocation");
   gpu.submit([&](VkCommandBuffer cmd) {
     VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                          1, &barrier, 0, nullptr, 0, nullptr);
-    VkBufferCopy copy{0, 0, bytes};
+    const VkBufferCopy copy{0, 0, bytes};
     vkCmdCopyBuffer(cmd, source, staging->handle(), 1, &copy);
   });
   auto raw = gpu.readback(*staging, bytes);
@@ -52,12 +52,12 @@ int main() {
     }
     std::puts("radix stage=create");
     auto result = RadixSort::create(*gpu.context);
-    require(bool(result), "create radix");
+    require(static_cast<bool>(result), "create radix");
     auto sort = std::move(result.value());
     require(sort->output(0).keys == VK_NULL_HANDLE, "unreserved output");
     std::puts("radix stage=reserve-one");
     require(sort->reserve(0) && sort->capacity() == 1, "zero reserve");
-    const auto old = sort->output(0).keys;
+    auto* const old = sort->output(0).keys;
     require(!sort->reserve(RadixSort::kMaxCapacity + 1), "reject oversized capacity");
     require(sort->capacity() == 1 && sort->output(0).keys == old, "transactional reserve failure");
     const bool large = std::getenv("SPLATKIT_RADIX_LARGE") != nullptr;
@@ -87,6 +87,8 @@ int main() {
       bad.keysOffset = 1;
       require(!sort->encode(cmd, 0, bad), "reject misaligned offset");
       bad = input;
+      // Fixed uint32_t underlying type permits this value; exercise enum validation.
+      // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
       bad.keyBits = static_cast<RadixSort::KeyBits>(9);
       require(!sort->encode(cmd, 0, bad), "reject key mode");
       bad = input;
@@ -106,7 +108,9 @@ int main() {
         for (uint32_t pattern = 0; pattern < 4; ++pattern) {
           std::printf("radix case=%u bits=%u n=%u pattern=%u stage=upload\n", cases,
                       bits == RadixSort::KeyBits::low16 ? 16u : 32u, n, pattern);
-          std::vector<uint32_t> inKeys(n), inValues(n), expected(n);
+          std::vector<uint32_t> inKeys(n);
+          std::vector<uint32_t> inValues(n);
+          std::vector<uint32_t> expected(n);
           std::iota(inValues.begin(), inValues.end(), 0);
           std::iota(expected.begin(), expected.end(), 0);
           for (uint32_t i = 0; i < n; ++i) {

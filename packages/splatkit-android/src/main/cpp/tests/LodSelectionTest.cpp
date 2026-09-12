@@ -12,7 +12,10 @@
 #include "tests/VulkanTestContext.h"
 
 namespace {
-using namespace splatkit;
+using splatkit::CameraUniform;
+using splatkit::GpuBuffer;
+using splatkit::LodSelection;
+namespace test = splatkit::test;
 using test::require;
 
 void attributes(splat::LodTree& tree) {
@@ -49,7 +52,8 @@ void expand(const splat::LodTree& tree, uint32_t node, std::vector<uint32_t>& le
   for (uint32_t k = 0; k < entry.childCount; ++k) expand(tree, entry.childStart + k, leaves);
 }
 void covering(const splat::LodTree& tree, const std::vector<uint32_t>& cut) {
-  std::vector<uint32_t> represented, expected;
+  std::vector<uint32_t> represented;
+  std::vector<uint32_t> expected;
   for (auto index : cut) expand(tree, index, represented);
   expand(tree, 0, expected);
   std::sort(represented.begin(), represented.end());
@@ -85,8 +89,8 @@ Selection select(const test::VulkanTestContext& gpu, const LodSelection& lod,
   require(copy != nullptr, "result copy allocation");
   gpu.submit([&](VkCommandBuffer cmd) {
     require(lod.encode(cmd, 0, {uniforms->handle(), 0}), "encode selection");
-    VkBufferCopy state{0, 0, LodSelection::kDiagnosticBytes};
-    VkBufferCopy indices{0, LodSelection::kDiagnosticBytes, output.capacity * 4ull};
+    const VkBufferCopy state{0, 0, LodSelection::kDiagnosticBytes};
+    const VkBufferCopy indices{0, LodSelection::kDiagnosticBytes, output.capacity * 4ull};
     vkCmdCopyBuffer(cmd, output.state, copy->handle(), 1, &state);
     vkCmdCopyBuffer(cmd, output.indices, copy->handle(), 1, &indices);
     if (doubleFrame) {
@@ -115,10 +119,10 @@ Selection select(const test::VulkanTestContext& gpu, const LodSelection& lod,
 
 void tests(const test::VulkanTestContext& gpu) {
   auto created = LodSelection::create(*gpu.context);
-  require(bool(created), "LOD pipeline creation");
+  require(static_cast<bool>(created), "LOD pipeline creation");
   auto lod = std::move(created.value());
   const auto tree = binary(512);
-  for (uint32_t capacity : {1u, 7u, 127u, 128u, 129u, 257u, 512u}) {
+  for (const uint32_t capacity : {1u, 7u, 127u, 128u, 129u, 257u, 512u}) {
     require(lod->upload(tree, capacity, {0, 4, false}), "binary hierarchy upload");
     auto result = select(gpu, *lod, camera());
     covering(tree, result.cut);
@@ -179,9 +183,9 @@ void tests(const test::VulkanTestContext& gpu) {
                        {{-0.6f, 0, -2}, 0.1f, 0, 0}, {{0.6f, 0, -2}, 0.1f, 0, 0},
                        {{0.8f, 0, -2}, 0.1f, 0, 0}};
   attributes(appearance);
-  for (size_t i = 0; i < appearance.nodes.colors.size(); ++i) appearance.nodes.colors[i] = 1;
+  for (float& color : appearance.nodes.colors) color = 1;
   for (size_t i = 0; i < appearance.nodeCount(); ++i)
-    for (uint32_t axis : {0u, 3u, 5u}) appearance.nodes.covariances[i * 6 + axis] = 0.01f;
+    for (const uint32_t axis : {0u, 3u, 5u}) appearance.nodes.covariances[i * 6 + axis] = 0.01f;
   appearance.nodes.colors[5 * 3] = 0;
   appearance.nodes.colors[6 * 3 + 1] = 0;
   appearance.selection = splat::buildLodSelectionData(appearance);
@@ -196,7 +200,7 @@ void tests(const test::VulkanTestContext& gpu) {
 
   // 32768 active interior nodes -> 256 workgroup totals -> two scan blocks.
   const auto large = binary(65536);
-  for (uint32_t capacity : {40000u, 65536u}) {
+  for (const uint32_t capacity : {40000u, 65536u}) {
     require(lod->upload(large, capacity, {0, 4, false}), "multiblock upload");
     auto result = select(gpu, *lod, camera());
     covering(large, result.cut);

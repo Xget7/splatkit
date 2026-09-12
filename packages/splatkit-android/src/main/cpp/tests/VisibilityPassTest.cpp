@@ -12,7 +12,12 @@
 #include "tests/VulkanTestContext.h"
 
 namespace {
-using namespace splatkit;
+using splatkit::CameraUniform;
+using splatkit::GpuBuffer;
+using splatkit::GpuSplat;
+using splatkit::packSplats;
+using splatkit::VisibilityPass;
+namespace test = splatkit::test;
 using test::require;
 using Mode = VisibilityPass::CandidateMode;
 
@@ -28,7 +33,7 @@ CameraUniform camera() {
 std::vector<GpuSplat> source(uint32_t count) {
   splat::SplatCloud cloud;
   for (uint32_t i = 0; i < count; ++i) {
-    cloud.positions.insert(cloud.positions.end(), {0, 0, -float(1 + i % 10)});
+    cloud.positions.insert(cloud.positions.end(), {0, 0, -static_cast<float>(1 + i % 10)});
     cloud.covariances.insert(cloud.covariances.end(), {0.01f, 0, 0, 0.01f, 0, 0.01f});
     cloud.colors.insert(cloud.colors.end(), {1, 0, 0});
     cloud.alphas.push_back(0.5f);
@@ -53,7 +58,7 @@ struct Fixture {
     require(uniforms != nullptr, "uniform allocation");
     setCamera(camera());
   }
-  void setCamera(const CameraUniform& cam) {
+  void setCamera(const CameraUniform& cam) const {
     std::memcpy(uniforms->mapped(), &cam, sizeof(cam));
     uniforms->flush(0, sizeof(cam));
   }
@@ -82,9 +87,11 @@ Result run(const test::VulkanTestContext& gpu, const VisibilityPass& pass,
   gpu.submit([&](VkCommandBuffer cmd) {
     require(pass.encode(cmd, slot, input), "visibility encode");
     auto out = pass.output(slot);
-    VkBufferCopy count{0, 0, 4}, status{0, 4, 4}, draw{0, 8, 16};
-    VkBufferCopy indices{0, 24, pass.capacity() * 4ull};
-    VkBufferCopy keys{0, 24 + pass.capacity() * 4ull, pass.capacity() * 4ull};
+    const VkBufferCopy count{0, 0, 4};
+    const VkBufferCopy status{0, 4, 4};
+    const VkBufferCopy draw{0, 8, 16};
+    const VkBufferCopy indices{0, 24, pass.capacity() * 4ull};
+    const VkBufferCopy keys{0, 24 + pass.capacity() * 4ull, pass.capacity() * 4ull};
     vkCmdCopyBuffer(cmd, out.count, copy->handle(), 1, &count);
     vkCmdCopyBuffer(cmd, out.status, copy->handle(), 1, &status);
     vkCmdCopyBuffer(cmd, out.indirect, copy->handle(), 1, &draw);
@@ -138,11 +145,11 @@ void ranges(VisibilityPass::Input& in, const GpuBuffer& records, uint32_t count,
 
 void tests(const test::VulkanTestContext& gpu) {
   auto created = VisibilityPass::create(*gpu.context, 0);
-  require(bool(created), "create subgroup visibility pass");
+  require(static_cast<bool>(created), "create subgroup visibility pass");
   auto pass = std::move(created.value());
-  Fixture f(gpu);
+  const Fixture f(gpu);
   require(pass->reserve(300), "reserve output");
-  for (uint32_t n : {0u, 1u, 127u, 128u, 129u, 257u, 300u}) {
+  for (const uint32_t n : {0u, 1u, 127u, 128u, 129u, 257u, 300u}) {
     auto in = f.input();
     in.sourceCount = n;
     std::vector<uint32_t> expected(n);
@@ -158,7 +165,8 @@ void tests(const test::VulkanTestContext& gpu) {
   auto in = f.input();
   indexed(in, *indexBuffer, *countBuffer, 3);
   membership(run(gpu, *pass, in), {299, 0, 128});
-  const uint32_t zero = 0, excessive = 4;
+  const uint32_t zero = 0;
+  const uint32_t excessive = 4;
   require(countBuffer->upload(&zero, 4), "zero GPU count");
   membership(run(gpu, *pass, in), {});
   in.candidateCapacity = 0;
@@ -213,19 +221,20 @@ void tests(const test::VulkanTestContext& gpu) {
       const float nearPlane = cam.proj.at(2, 3) / cam.proj.at(2, 2);
       const float farPlane = cam.proj.at(2, 3) / (cam.proj.at(2, 2) + 1);
       for (size_t i = 0; i < result.count; ++i) {
-        const float depth = float(1 + result.indices[i] % 10);
-        uint32_t expected;
+        const auto depth = static_cast<float>(1 + result.indices[i] % 10);
+        uint32_t expected = 0;
         std::memcpy(&expected, &depth, 4);
         if (bits == VisibilityPass::KeyBits::low16)
-          expected = uint32_t(std::clamp((depth - nearPlane) / (farPlane - nearPlane), 0.0f, 1.0f) *
-                              65535);
+          expected = static_cast<uint32_t>(
+              std::clamp((depth - nearPlane) / (farPlane - nearPlane), 0.0f, 1.0f) * 65535);
         if (order == VisibilityPass::KeyOrder::descending)
           expected = bits == VisibilityPass::KeyBits::low16 ? 65535 - expected : ~expected;
         if (bits == VisibilityPass::KeyBits::full32)
           require(result.keys[i] == expected,
                   "32-bit depth key preserves float bits and BTF inversion");
         else
-          require(result.keys[i] <= 65535 && std::abs(int64_t(result.keys[i]) - expected) <= 1,
+          require(result.keys[i] <= 65535 &&
+                      std::abs(static_cast<int64_t>(result.keys[i]) - expected) <= 1,
                   "16-bit quantized depth key (one-bin floating-point tolerance)");
       }
     }
@@ -255,6 +264,8 @@ void tests(const test::VulkanTestContext& gpu) {
     bad.splatsOffset = std::numeric_limits<VkDeviceSize>::max();
     require(!pass->encode(cmd, 0, bad), "reject offset overflow or misalignment");
     bad = in;
+    // Fixed uint32_t underlying type permits this value; exercise enum validation.
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     bad.mode = static_cast<Mode>(99);
     require(!pass->encode(cmd, 0, bad), "reject unknown mode");
     bad = in;

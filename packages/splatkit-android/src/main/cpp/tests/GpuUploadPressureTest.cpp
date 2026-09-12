@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < memory.memoryTypeCount; ++i)
       std::printf("memory-type=%u flags=0x%x heap=%u\n", i, memory.memoryTypes[i].propertyFlags,
                   memory.memoryTypes[i].heapIndex);
-    constexpr auto usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    constexpr auto kUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     std::vector<std::unique_ptr<GpuBuffer>> pressure;
     const VkDeviceSize pairBytes = VkDeviceSize{capacity} * 4;
     const VkDeviceSize histogramBytes = VkDeviceSize{(capacity + 2047) / 2048} * 1024;
@@ -30,18 +30,18 @@ int main(int argc, char** argv) {
         pairBytes, pairBytes, pairBytes, pairBytes, histogramBytes, 1024, 16, 4, 4};
     for (unsigned slot = 0; slot < 2; ++slot) {
       for (auto size : sizes) {
-        auto buffer = GpuBuffer::deviceLocal(*gpu.context, size, usage);
-        require(bool(buffer), "pressure allocation");
+        auto buffer = GpuBuffer::deviceLocal(*gpu.context, size, kUsage);
+        require(static_cast<bool>(buffer), "pressure allocation");
         pressure.push_back(std::move(buffer));
       }
     }
     for (unsigned i = 0; i < 2; ++i) {
-      auto buffer = GpuBuffer::deviceLocal(*gpu.context, pairBytes, usage);
-      require(bool(buffer), "input allocation");
+      auto buffer = GpuBuffer::deviceLocal(*gpu.context, pairBytes, kUsage);
+      require(static_cast<bool>(buffer), "input allocation");
       pressure.push_back(std::move(buffer));
     }
-    auto count = GpuBuffer::deviceLocal(*gpu.context, 4, usage);
-    require(bool(count), "count allocation");
+    auto count = GpuBuffer::deviceLocal(*gpu.context, 4, kUsage);
+    require(static_cast<bool>(count), "count allocation");
     const std::array<uint8_t, 4> countBytes{0x13, 0x57, 0x9b, 0xdf};
     std::puts("upload-pressure stage=first-four-byte-upload (no shader executed)");
     require(count->upload(countBytes.data(), countBytes.size()), "first four-byte upload");
@@ -50,20 +50,20 @@ int main(int argc, char** argv) {
             "exact four-byte roundtrip");
 
     // One full staging window and a partial tail, with 16-byte guards on both sides.
-    constexpr size_t payloadBytes = 2 * 1024 * 1024 + 28;
-    constexpr size_t guardBytes = 16;
-    std::vector<uint8_t> expected(payloadBytes + 2 * guardBytes, 0xa5);
-    auto destination = GpuBuffer::deviceLocal(*gpu.context, expected.size(), usage);
-    require(bool(destination), "guarded allocation");
+    constexpr size_t kPayloadBytes = 2 * 1024 * 1024 + 28;
+    constexpr size_t kGuardBytes = 16;
+    std::vector<uint8_t> expected(kPayloadBytes + 2 * kGuardBytes, 0xa5);
+    auto destination = GpuBuffer::deviceLocal(*gpu.context, expected.size(), kUsage);
+    require(static_cast<bool>(destination), "guarded allocation");
     std::puts("upload-pressure stage=guarded-window-upload");
     require(destination->upload(expected.data(), expected.size()), "initialize guards");
     for (uint32_t pass = 0; pass < 3; ++pass) {
       uint32_t state = pass + 1;
-      for (size_t i = guardBytes; i < guardBytes + payloadBytes; ++i) {
+      for (size_t i = kGuardBytes; i < kGuardBytes + kPayloadBytes; ++i) {
         state = state * 1664525U + 1013904223U;
         expected[i] = static_cast<uint8_t>(state >> 24);
       }
-      require(destination->upload(guardBytes, expected.data() + guardBytes, payloadBytes),
+      require(destination->upload(kGuardBytes, expected.data() + kGuardBytes, kPayloadBytes),
               "repeated window upload");
       require(gpu.readback(*destination, expected.size()) == expected,
               "exact payload and untouched guards");

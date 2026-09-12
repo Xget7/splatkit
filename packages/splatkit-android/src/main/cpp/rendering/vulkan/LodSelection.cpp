@@ -75,7 +75,7 @@ bool LodSelection::initialize() {
   allocate.descriptorSetCount = kSlots;
   allocate.pSetLayouts = layouts.data();
   if (vkAllocateDescriptorSets(ctx_.device(), &allocate, sets_.data()) != VK_SUCCESS) return false;
-  VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Config)};
+  const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Config)};
   VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   layout.setLayoutCount = 1;
   layout.pSetLayouts = &setLayout_;
@@ -133,7 +133,7 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
     return false;
   size_t words = 32;
   auto region = [&](size_t length) {
-    const uint32_t start = static_cast<uint32_t>(words);
+    const auto start = static_cast<uint32_t>(words);
     words += length;
     return start;
   };
@@ -152,14 +152,14 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
   if (words > std::numeric_limits<uint32_t>::max() ||
       std::max({clusterBytes, leafBytes, scratchBytes, indexBytes}) > limits_.maxStorageBufferRange)
     return false;
-  constexpr auto storage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  auto clusters = GpuBuffer::deviceLocal(ctx_, clusterBytes, storage);
-  auto leaves = GpuBuffer::deviceLocal(ctx_, leafBytes, storage);
+  constexpr auto kStorage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+  auto clusters = GpuBuffer::deviceLocal(ctx_, clusterBytes, kStorage);
+  auto leaves = GpuBuffer::deviceLocal(ctx_, leafBytes, kStorage);
   auto scratch = GpuBuffer::deviceLocal(
       ctx_, scratchBytes,
-      storage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   auto indices =
-      GpuBuffer::deviceLocal(ctx_, indexBytes, storage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      GpuBuffer::deviceLocal(ctx_, indexBytes, kStorage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   if (!clusters || !leaves || !scratch || !indices ||
       !clusters->upload(data->clusters.data(), clusterBytes) ||
       !leaves->upload(data->leaves.data(), leafBytes))
@@ -183,11 +183,12 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
       input.cameraOffset % limits_.minUniformBufferOffsetAlignment != 0 ||
       input.cameraOffset > std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform))
     return false;
-  VkDescriptorBufferInfo buffers[] = {{input.camera, input.cameraOffset, sizeof(CameraUniform)},
-                                      {clusters_->handle(), 0, clusters_->size()},
-                                      {leaves_->handle(), 0, leaves_->size()},
-                                      {scratch_->handle(), 0, scratch_->size()},
-                                      {indices_->handle(), 0, indices_->size()}};
+  const VkDescriptorBufferInfo buffers[] = {
+      {input.camera, input.cameraOffset, sizeof(CameraUniform)},
+      {clusters_->handle(), 0, clusters_->size()},
+      {leaves_->handle(), 0, leaves_->size()},
+      {scratch_->handle(), 0, scratch_->size()},
+      {indices_->handle(), 0, indices_->size()}};
   VkWriteDescriptorSet writes[5]{};
   for (uint32_t i = 0; i < 5; ++i) {
     writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};

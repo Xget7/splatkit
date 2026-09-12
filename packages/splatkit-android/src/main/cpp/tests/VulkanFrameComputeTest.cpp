@@ -10,7 +10,13 @@
 #include "tests/VulkanTestContext.h"
 
 namespace {
-using namespace splatkit;
+using splatkit::CameraUniform;
+using splatkit::GpuBuffer;
+using splatkit::GpuSplat;
+using splatkit::packSplats;
+using splatkit::SplatRenderer;
+using splatkit::VulkanFrameCompute;
+namespace test = splatkit::test;
 using test::require;
 
 splat::SplatCloud cloud(uint32_t count) {
@@ -97,7 +103,7 @@ void tests(const test::VulkanTestContext& gpu) {
   for (const char* bits : {"32", "16"}) {
     require(setenv("SPLATKIT_VULKAN_SORT_BITS", bits, 1) == 0, "set test precision");
     auto created = VulkanFrameCompute::create(*gpu.context, 257);
-    require(bool(created), "create GPU frame");
+    require(static_cast<bool>(created), "create GPU frame");
     auto pass = std::move(created.value());
     const auto actual = run(gpu, *pass, inputs, 0, 257, ranges);
     if (actual != expected) {
@@ -141,10 +147,10 @@ void tests(const test::VulkanTestContext& gpu) {
   tree.nodes.positions = {0, 0, -3, 0, 0, -1, 0, 0, -5};
   tree.nodes.covariances[0] = tree.nodes.covariances[3] = tree.nodes.covariances[5] = 1;
   tree.selection = splat::buildLodSelectionData(tree);
-  Inputs lodInputs(gpu, tree.nodes);
-  for (uint32_t budget : {1u, 2u}) {
+  const Inputs lodInputs(gpu, tree.nodes);
+  for (const uint32_t budget : {1u, 2u}) {
     auto created = VulkanFrameCompute::create(*gpu.context, 3, &tree, budget);
-    require(bool(created), "create GPU LOD frame");
+    require(static_cast<bool>(created), "create GPU LOD frame");
     auto pass = std::move(created.value());
     require(pass->hasLod(), "hierarchy is GPU selected");
     const auto cut = budget == 1 ? std::vector<uint32_t>{0} : std::vector<uint32_t>{2, 1};

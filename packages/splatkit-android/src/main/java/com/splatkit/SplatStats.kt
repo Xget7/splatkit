@@ -9,6 +9,7 @@ class SplatStats {
     var frameMillis = 0f
     /** GPU time of the last frame from timestamp queries; zero when unsupported. */
     var gpuMillis = 0f
+    /** Sort duration; the GPU path reports zero when timestamp queries are unavailable. */
     var sortMillis = 0f
     /** Loaded source splats, not the number currently drawn or GPU-resident tree records. */
     var splatCount = 0

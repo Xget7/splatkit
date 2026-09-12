@@ -177,7 +177,7 @@ bool VisibilityPass::createDescriptors() {
 
 bool VisibilityPass::createPipelines() {
   VkDevice device = ctx_.device();
-  VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 32};
+  const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 32};
   VkPipelineLayoutCreateInfo visibilityLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   visibilityLayoutInfo.setLayoutCount = 1;
   visibilityLayoutInfo.pSetLayouts = &visibilitySetLayout_;
@@ -329,15 +329,15 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
       return false;
     candidateCountInfo = {input.candidateCount, input.candidateCountOffset, sizeof(uint32_t)};
   }
-  VkDescriptorBufferInfo camera{input.camera, input.cameraOffset, sizeof(CameraUniform)};
-  VkDescriptorBufferInfo splats{input.splats, input.splatsOffset, sourceBytes};
-  VkDescriptorBufferInfo indices{out.indices, 0, VK_WHOLE_SIZE};
-  VkDescriptorBufferInfo depthKeys{out.depthKeys, 0, VK_WHOLE_SIZE};
-  VkDescriptorBufferInfo count{out.count, 0, sizeof(uint32_t)};
-  VkDescriptorBufferInfo indirect{out.indirect, 0, sizeof(VkDrawIndirectCommand)};
-  VkDescriptorBufferInfo status{out.status, 0, sizeof(uint32_t)};
-  VkDescriptorBufferInfo visibilityInfos[8] = {camera, splats, indices,       depthKeys,
-                                               count,  status, candidateInfo, candidateCountInfo};
+  const VkDescriptorBufferInfo camera{input.camera, input.cameraOffset, sizeof(CameraUniform)};
+  const VkDescriptorBufferInfo splats{input.splats, input.splatsOffset, sourceBytes};
+  const VkDescriptorBufferInfo indices{out.indices, 0, VK_WHOLE_SIZE};
+  const VkDescriptorBufferInfo depthKeys{out.depthKeys, 0, VK_WHOLE_SIZE};
+  const VkDescriptorBufferInfo count{out.count, 0, sizeof(uint32_t)};
+  const VkDescriptorBufferInfo indirect{out.indirect, 0, sizeof(VkDrawIndirectCommand)};
+  const VkDescriptorBufferInfo status{out.status, 0, sizeof(uint32_t)};
+  const VkDescriptorBufferInfo visibilityInfos[8] = {
+      camera, splats, indices, depthKeys, count, status, candidateInfo, candidateCountInfo};
   VkWriteDescriptorSet writes[8]{};
   for (uint32_t binding = 0; binding < 8; ++binding) {
     writes[binding] = {
@@ -354,7 +354,7 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
   }
   vkUpdateDescriptorSets(ctx_.device(), 8, writes, 0, nullptr);
 
-  VkDescriptorBufferInfo prepareInfos[3] = {count, indirect, status};
+  const VkDescriptorBufferInfo prepareInfos[3] = {count, indirect, status};
   VkWriteDescriptorSet prepareWrites[3]{};
   for (uint32_t binding = 0; binding < 3; ++binding) {
     prepareWrites[binding] = {
@@ -367,11 +367,11 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
 
 void VisibilityPass::barrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage,
                              VkPipelineStageFlags dstStage, VkAccessFlags srcAccess,
-                             VkAccessFlags dstAccess, const Output& out) const {
+                             VkAccessFlags dstAccess, const Output& out) {
   VkBufferMemoryBarrier barriers[5]{};
   VkBuffer buffers[5] = {out.indices, out.depthKeys, out.count, out.indirect, out.status};
-  VkDeviceSize sizes[5] = {VK_WHOLE_SIZE, VK_WHOLE_SIZE, sizeof(uint32_t),
-                           sizeof(VkDrawIndirectCommand), sizeof(uint32_t)};
+  const VkDeviceSize sizes[5] = {VK_WHOLE_SIZE, VK_WHOLE_SIZE, sizeof(uint32_t),
+                                 sizeof(VkDrawIndirectCommand), sizeof(uint32_t)};
   for (uint32_t i = 0; i < 5; ++i) {
     barriers[i] = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                    nullptr,

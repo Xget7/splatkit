@@ -137,10 +137,8 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
-     * Angular margin around the view, in degrees, kept drawn so that what turns into
-     * view before the next cull lands is already there; the engine widens it further
-     * during a fast turn. 10 by default. Wider draws more that is off screen, narrower
-     * risks an empty edge on a flick.
+     * CPU fallback's angular culling margin, in degrees. The GPU path evaluates the
+     * current camera each frame and uses projected splat bounds instead.
      */
     var cullMarginDegrees: Float = 10f
         set(value) {
@@ -161,11 +159,11 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
-     * Most splats drawn per frame, or 0 to draw them all. With a budget, a world loaded
-     * afterwards gets a level of detail hierarchy (about 1.5 times the splats in GPU
-     * memory) and every frame draws the nodes that cover the scene at about a pixel
-     * each, nearest in full detail, so frame time stops depending on the scene's size.
-     * Applies to worlds loaded after it is set.
+     * LOD selection capacity for subsequently loaded worlds. Zero disables automatic
+     * hierarchy construction; a .lodsplat file already contains its hierarchy.
+     * Vulkan GPU selection supports at most 2.2M nodes. Coarse parents are approximate,
+     * and the full hierarchy must fit GPU memory. Non-LOD visibility above 3M survivors
+     * fails closed instead of truncating or issuing an unsafe draw.
      */
     var splatBudget: Int = 0
         set(value) {

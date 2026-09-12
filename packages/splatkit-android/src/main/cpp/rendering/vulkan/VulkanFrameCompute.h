@@ -23,6 +23,8 @@ class VulkanFrameCompute {
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
       uint32_t budget = 2200000);
   ~VulkanFrameCompute();
+  VulkanFrameCompute(const VulkanFrameCompute&) = delete;
+  VulkanFrameCompute& operator=(const VulkanFrameCompute&) = delete;
 
   struct Draw {
     VkBuffer order = VK_NULL_HANDLE;

@@ -2,7 +2,7 @@
 
 Public API: `SplatSurfaceView`; JNI and Vulkan classes are internal.
 Current source enables `VulkanFrameCompute`: GPU LOD → visibility → stable radix → indirect draw.
-Maven alpha04 predates this integration. Hybrid tiles and RN GPU options remain pending.
+Alpha05 integrates this path; Maven alpha04 predates it. Hybrid tiles and RN GPU options remain pending.
 
 Contracts live beside code: [VisibilityPass.h](../src/main/cpp/rendering/vulkan/VisibilityPass.h), [shader ABI](../src/main/cpp/rendering/vulkan/VulkanShaderTypes.h).
 The context outlives allocations; reuse slots after fences, resize/destroy after all consumers finish.

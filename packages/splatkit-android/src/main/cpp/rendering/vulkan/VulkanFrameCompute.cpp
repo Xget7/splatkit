@@ -100,7 +100,8 @@ bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame
   }
   std::sort(rangeRecords_.begin(), rangeRecords_.end(),
             [](const RangeRecord& a, const RangeRecord& b) { return a.offset < b.offset; });
-  uint32_t end = 0, count = 0;
+  uint32_t end = 0;
+  uint32_t count = 0;
   for (auto& range : rangeRecords_) {
     if (range.offset < end) return false;
     end = range.offset + range.count;
@@ -146,7 +147,7 @@ void VulkanFrameCompute::collect(uint32_t slot) {
 void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
                                          const VisibilityPass::Output& visible,
                                          uint32_t candidates) {
-  auto target = readback_[slot]->handle();
+  auto* target = readback_[slot]->handle();
   uint32_t words[8]{0, candidates, 0, 0, 0, 0, 0, 0};
   vkCmdUpdateBuffer(cmd, target, 0, sizeof(words), words);
   dependency(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,

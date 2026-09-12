@@ -37,14 +37,14 @@ RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
   vkGetPhysicalDeviceQueueFamilyProperties(ctx.physicalDevice(), &count, nullptr);
   std::vector<VkQueueFamilyProperties> queues(count);
   vkGetPhysicalDeviceQueueFamilyProperties(ctx.physicalDevice(), &count, queues.data());
-  constexpr VkSubgroupFeatureFlags required = VK_SUBGROUP_FEATURE_BASIC_BIT |
-                                              VK_SUBGROUP_FEATURE_ARITHMETIC_BIT |
-                                              VK_SUBGROUP_FEATURE_BALLOT_BIT;
+  constexpr VkSubgroupFeatureFlags kRequired = VK_SUBGROUP_FEATURE_BASIC_BIT |
+                                               VK_SUBGROUP_FEATURE_ARITHMETIC_BIT |
+                                               VK_SUBGROUP_FEATURE_BALLOT_BIT;
   if (ctx.queueFamily() >= count ||
       !(queues[ctx.queueFamily()].queueFlags & VK_QUEUE_COMPUTE_BIT)) {
     result.reason = "selected queue lacks compute";
   } else if (!(subgroup.supportedStages & kShader) ||
-             (subgroup.supportedOperations & required) != required || !subgroup.subgroupSize) {
+             (subgroup.supportedOperations & kRequired) != kRequired || !subgroup.subgroupSize) {
     result.reason = "compute subgroup basic/arithmetic/ballot unavailable";
   } else if (limits.maxComputeWorkGroupInvocations < 128 ||
              limits.maxComputeWorkGroupSize[0] < 128 || limits.maxComputeSharedMemorySize < 7168 ||
@@ -76,7 +76,7 @@ splat::Result<std::unique_ptr<RadixSort>> RadixSort::create(const VulkanContext&
 }
 
 RadixSort::~RadixSort() {
-  for (auto pipeline : pipelines_)
+  for (auto* pipeline : pipelines_)
     if (pipeline) vkDestroyPipeline(ctx_.device(), pipeline, nullptr);
   if (layout_) vkDestroyPipelineLayout(ctx_.device(), layout_, nullptr);
   if (pool_) vkDestroyDescriptorPool(ctx_.device(), pool_, nullptr);
@@ -84,7 +84,7 @@ RadixSort::~RadixSort() {
 }
 
 bool RadixSort::initialize() {
-  const auto device = ctx_.device();
+  auto* const device = ctx_.device();
   std::array<VkDescriptorSetLayoutBinding, kBindings> bindings{};
   for (uint32_t i = 0; i < kBindings; ++i)
     bindings[i] = {i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kShader, nullptr};
@@ -206,7 +206,7 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
   for (uint32_t set = 0; set < 3; ++set) {
     const uint32_t in = set == 1 ? 1 : 0;
     const uint32_t out = in ^ 1;
-    VkDescriptorBufferInfo infos[kBindings] = {
+    const VkDescriptorBufferInfo infos[kBindings] = {
         set == 0 ? VkDescriptorBufferInfo{input.keys, input.keysOffset, bytes} : info(s.keys[in]),
         set == 0 ? VkDescriptorBufferInfo{input.values, input.valuesOffset, bytes}
                  : info(s.values[in]),
