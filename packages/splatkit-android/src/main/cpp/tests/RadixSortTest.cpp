@@ -95,7 +95,7 @@ int main() {
       bad.keys = sort->output(1).keys;
       require(!sort->encode(cmd, 0, bad), "reject owned output alias");
     });
-    std::vector<uint32_t> sizes{0, 1, 31, 32, 33, 67, 127, 128, 129, 257};
+    std::vector<uint32_t> sizes{0, 1, 31, 32, 33, 63, 64, 65, 67, 127, 128, 129, 257};
     if (!tiny) sizes.insert(sizes.end(), {2047, 2048, 2049, 4097, 262145});
     if (large && !tiny) sizes.push_back(capacity);
     std::mt19937 random(0x51a7u);

@@ -243,7 +243,7 @@ void SplatEngine::streamTiles(const FrameCamera& camera, float pixelScale,
 void SplatEngine::takeSortResult() {
   if (gpuSort_) {
     lastSort_.sortMillis = renderer_->lastSortMillis();
-    lastSort_.cullMillis = 0;
+    lastSort_.cullMillis = renderer_->lastCullMillis();
     lastSort_.selectMillis = renderer_->lastSelectMillis();
     lastSort_.selected = streamer_ ? streamer_->drawnSplats() : sourceCount_;
     drawCount_ = renderer_->lastDrawCount();

@@ -141,6 +141,7 @@ void VulkanFrameCompute::collect(uint32_t slot) {
                                              : (uint64_t{1} << timestampBits_) - 1;
   const double millis = static_cast<double>(timestampPeriod_) * 1e-6;
   stats_.selectMillis = lod_ ? ((ticks[1] - ticks[0]) & mask) * millis : 0;
+  stats_.cullMillis = ((ticks[2] - ticks[1]) & mask) * millis;
   stats_.sortMillis = ((ticks[3] - ticks[2]) & mask) * millis;
 }
 

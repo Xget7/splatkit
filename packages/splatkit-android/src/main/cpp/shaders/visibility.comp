@@ -226,6 +226,11 @@ bool resolveCandidate(uint logical, out uint source, inout uint errors) {
 void main() {
   uint groupIndex = gl_WorkGroupID.x + gl_WorkGroupID.y * constants.dispatchGroupsX;
   uint logical = groupIndex * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+  // Uniform workgroup exit: indexed LOD usually fills only a fraction of its capacity.
+  // Keep group zero for empty-input/projection diagnostics, and never hide invalid counts.
+  if (constants.mode == 1u && groupIndex > 0u &&
+      candidateCount <= constants.candidateCapacity &&
+      groupIndex * gl_WorkGroupSize.x >= candidateCount) return;
   uint sourceIndex = 0u, errors = 0u, key = 0u;
   if (constants.mode == 2u && logical < constants.rangeCount && !validRange(logical)) errors |= 8u;
   bool candidate = resolveCandidate(logical, sourceIndex, errors);

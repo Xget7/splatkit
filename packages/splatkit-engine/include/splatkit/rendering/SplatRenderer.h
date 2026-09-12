@@ -105,8 +105,9 @@ class SplatRenderer {
   // GPU time of the most recently completed frame, from timestamps at both ends of it.
   // Zero until the first frame completes or if unsupported.
   virtual double lastGpuMillis() const = 0;
-  // GPU time of the last visibility pass, when the renderer sorts on the GPU.
+  // GPU times of completed sort and visibility passes; zero when unavailable.
   virtual double lastSortMillis() const { return 0; }
+  virtual double lastCullMillis() const { return 0; }
   // Splats the last frame drew, when the renderer sorts on the GPU.
   virtual uint32_t lastDrawCount() const { return 0; }
   virtual uint32_t lastSelectedCount() const { return 0; }

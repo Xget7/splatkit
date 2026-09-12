@@ -7,12 +7,12 @@ An arm64 emulator can test functionality; it is not a phone performance measurem
 
 ## Install
 
-New GPU integration: `0.1.0-alpha05`. Check [releases](https://github.com/Xget7/splatkit-android/releases) for publication status.
+Adreno-corrected GPU integration: `0.1.0-alpha06`. Check [releases](https://github.com/Xget7/splatkit-android/releases) for publication status.
 Maven `0.1.0-alpha04` is the older CPU-ordering artifact.
 
 ```kotlin
 dependencies {
-    implementation("io.github.xget7:splatkit-android:0.1.0-alpha05")
+    implementation("io.github.xget7:splatkit-android:0.1.0-alpha06")
 }
 ```
 

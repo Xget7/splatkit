@@ -33,7 +33,7 @@ class VulkanFrameCompute {
   };
   struct Stats {
     uint32_t drawn = 0, selected = 0, limited = 0, evaluated = 0, status = 0;
-    double sortMillis = 0, selectMillis = 0;
+    double sortMillis = 0, selectMillis = 0, cullMillis = 0;
   };
   // Nullopt means encoding failed; caller must still submit/end its acquired frame.
   std::optional<Draw> encode(VkCommandBuffer cmd, uint32_t slot, VkBuffer camera,
