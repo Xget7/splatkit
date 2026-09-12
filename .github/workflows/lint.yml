@@ -14,4 +14,4 @@ jobs:
         with:
           packages: "ndk;27.1.12297006 cmake;3.22.1"
       - name: clang-format and clang-tidy
-        run: scripts/lint-cpp.sh
+        run: ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006" scripts/lint-cpp.sh
