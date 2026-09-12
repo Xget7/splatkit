@@ -159,6 +159,34 @@ void tests(const test::VulkanTestContext& gpu) {
   }
   std::puts("PASS prefix, empty, subgroup tails and descriptor slots");
 
+  // LOD reserves far more entries than it emits. Poison inactive groups so reading
+  // a capacity tail instead of the GPU count becomes a visible diagnostic failure.
+  std::vector<uint32_t> sparseIndices(4097, UINT32_MAX);
+  std::iota(sparseIndices.begin(), sparseIndices.begin() + 300, 0);
+  auto sparseBuffer = upload(gpu, sparseIndices);
+  auto sparseCount = upload(gpu, std::vector<uint32_t>{0});
+  auto sparse = f.input();
+  indexed(sparse, *sparseBuffer, *sparseCount, 4097);
+  for (uint32_t n : {0u, 1u, 127u, 128u, 129u, 257u}) {
+    require(sparseCount->upload(&n, 4), "sparse GPU count");
+    std::vector<uint32_t> expected(n);
+    std::iota(expected.begin(), expected.end(), 0);
+    membership(run(gpu, *pass, sparse), expected);
+    membership(run(gpu, *pass, sparse, 1), expected);
+  }
+  uint32_t sparseInvalid = 4098;
+  require(sparseCount->upload(&sparseInvalid, 4), "sparse invalid count");
+  failed(run(gpu, *pass, sparse), VisibilityPass::kInvalidCount);
+  sparseInvalid = 0;
+  require(sparseCount->upload(&sparseInvalid, 4), "sparse empty count");
+  auto invalidProjection = camera();
+  invalidProjection.proj = splat::Mat4::identity();
+  f.setCamera(invalidProjection);
+  sparse.keyBits = VisibilityPass::KeyBits::low16;
+  failed(run(gpu, *pass, sparse), VisibilityPass::kInvalidProjection);
+  f.setCamera(camera());
+  std::puts("PASS sparse indexed workgroups, poisoned tails and empty diagnostics");
+
   require(pass->reserve(3), "small output capacity");
   auto indexBuffer = upload(gpu, std::vector<uint32_t>{299, 0, 128});
   auto countBuffer = upload(gpu, std::vector<uint32_t>{3});
