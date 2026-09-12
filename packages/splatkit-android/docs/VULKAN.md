@@ -30,6 +30,18 @@ LOD, complete indirect ordering and upload-pressure tests; standalone layers wer
 Kitchen 500k and house 2M render with app validation on; background/resume also passed.
 This is device correctness evidence, not lossless LOD or universal FPS acceptance.
 
+Mi 9 house 2M, SH0, 1080x2261, Release, 30-second turns:
+
+| Configuration | Mean FPS | GPU ms | Visibility ms* |
+|---|---:|---:|---:|
+| Full source | 19.2 | 51.9 | unavailable |
+| LOD before empty-group skip | 24.0 | 41.6 | 19.15 |
+| Same LOD, empty groups skipped (two runs) | 41.4 | 23.9 | 1.81 |
+
+*Stage means use ~2-second samples. Sort stayed ~3.18 ms; source 2M, drawn ~45k–125k.
+LOD quality/resolution were unchanged by this optimization. PSS snapshot: ~566 MiB.
+[Settings, hashes and measurements](../../../docs/benchmarks/2026-09-12-mi9-vulkan.json).
+
 ## Metal mapping
 
 | Metal | Vulkan / GLSL |
