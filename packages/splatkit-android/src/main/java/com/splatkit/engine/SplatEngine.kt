@@ -3,6 +3,8 @@ package com.splatkit.engine
 import android.view.Surface
 import com.splatkit.CameraPose
 import com.splatkit.SplatStats
+import com.splatkit.SPLAT_STATS_FLOATS
+import com.splatkit.decodeSplatStats
 
 /**
  * The JNI boundary to the C++ engine: one opaque handle owned by native code, one
@@ -15,7 +17,7 @@ import com.splatkit.SplatStats
 internal class SplatEngine {
     private var handle: Long = nativeCreate()
     private val poseScratch = FloatArray(POSE_FLOATS)
-    private val statsScratch = FloatArray(STATS_FLOATS)
+    private val statsScratch = FloatArray(SPLAT_STATS_FLOATS)
 
     /** False when Vulkan could not be brought up; every call is then a no-op. */
     val isValid: Boolean get() = handle != 0L
@@ -44,6 +46,7 @@ internal class SplatEngine {
     fun loadWorld(spzBytes: ByteArray) = nativeLoadWorld(handle, spzBytes)
     fun loadCollider(glbBytes: ByteArray) = nativeLoadCollider(handle, glbBytes)
     fun loadWorldFile(path: String) = nativeLoadWorldFile(handle, path)
+    fun loadTiledWorldFile(path: String) = nativeLoadTiledWorldFile(handle, path)
     fun loadColliderFile(path: String) = nativeLoadColliderFile(handle, path)
 
     // Camera and input.
@@ -70,6 +73,7 @@ internal class SplatEngine {
     fun setCullMargin(degrees: Float) = nativeSetCullMargin(handle, degrees)
     fun setLinearBlending(linear: Boolean) = nativeSetLinearBlending(handle, linear)
     fun setSplatBudget(budget: Int) = nativeSetSplatBudget(handle, budget)
+    fun setResidencyBudget(splats: Int) = nativeSetResidencyBudget(handle, splats)
     fun setMaxShDegree(degree: Int) = nativeSetMaxShDegree(handle, degree)
     fun setShDegree(degree: Int) = nativeSetShDegree(handle, degree)
 
@@ -86,14 +90,7 @@ internal class SplatEngine {
     fun readStats(into: SplatStats): SplatStats = synchronized(this) {
         if (handle == 0L) return into
         nativeStats(handle, statsScratch)
-        into.fps = statsScratch[0]
-        into.frameMillis = statsScratch[1]
-        into.gpuMillis = statsScratch[2]
-        into.sortMillis = statsScratch[3]
-        into.splatCount = statsScratch[4].toInt()
-        into.walking = statsScratch[5] != 0f
-        into.motion = statsScratch[6] != 0f
-        into
+        decodeSplatStats(statsScratch, into)
     }
 
     // The any-thread readers above take the same lock, so none of them can run on a
@@ -114,6 +111,7 @@ internal class SplatEngine {
     private external fun nativeLoadWorld(handle: Long, spzBytes: ByteArray)
     private external fun nativeLoadCollider(handle: Long, glbBytes: ByteArray)
     private external fun nativeLoadWorldFile(handle: Long, path: String)
+    private external fun nativeLoadTiledWorldFile(handle: Long, path: String)
     private external fun nativeLoadColliderFile(handle: Long, path: String)
     private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
     /** Fills [out] (at least [POSE_FLOATS]) with x, y, z, yaw, pitch. */
@@ -127,15 +125,15 @@ internal class SplatEngine {
     private external fun nativeSetCullMargin(handle: Long, degrees: Float)
     private external fun nativeSetLinearBlending(handle: Long, linear: Boolean)
     private external fun nativeSetSplatBudget(handle: Long, budget: Int)
+    private external fun nativeSetResidencyBudget(handle: Long, splats: Int)
     private external fun nativeSetMaxShDegree(handle: Long, degree: Int)
     private external fun nativeSetShDegree(handle: Long, degree: Int)
     private external fun nativeStartBenchmark(handle: Long, seconds: Float)
-    /** Fills [out] (at least [STATS_FLOATS]) with fps, frame ms, gpu ms, sort ms, splats, walking, motion. */
+    /** Fills [out] using the [decodeSplatStats] layout ([SPLAT_STATS_FLOATS] floats). */
     private external fun nativeStats(handle: Long, out: FloatArray)
 
     private companion object {
         const val POSE_FLOATS = 5
-        const val STATS_FLOATS = 7
 
         init {
             System.loadLibrary("splatkit")

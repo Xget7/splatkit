@@ -1,8 +1,9 @@
 #include "rendering/vulkan/GpuBuffer.h"
 
+#include <algorithm>
 #include <cstring>
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {
@@ -10,6 +11,7 @@ namespace {
 bool create(const VulkanContext& ctx, VkDeviceSize size, VkBufferUsageFlags usage,
             VmaAllocationCreateFlags flags, bool map, VkBuffer& buffer, VmaAllocation& allocation,
             void*& mapped) {
+  if (size == 0) return false;
   VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
   info.size = size;
   info.usage = usage;
@@ -26,6 +28,12 @@ bool create(const VulkanContext& ctx, VkDeviceSize size, VkBufferUsageFlags usag
     return false;
   }
   mapped = map ? result.pMappedData : nullptr;
+  if (map && !mapped) {
+    vmaDestroyBuffer(ctx.allocator(), buffer, allocation);
+    buffer = VK_NULL_HANDLE;
+    allocation = VK_NULL_HANDLE;
+    return false;
+  }
   return true;
 }
 
@@ -57,12 +65,19 @@ void GpuBuffer::flush(VkDeviceSize offset, VkDeviceSize size) const {
   vmaFlushAllocation(ctx_.allocator(), allocation_, offset, size);
 }
 
-bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
-  if (size > size_) return false;
-  auto staging = hostVisible(ctx_, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+void GpuBuffer::invalidate(VkDeviceSize offset, VkDeviceSize size) const {
+  vmaInvalidateAllocation(ctx_.allocator(), allocation_, offset, size);
+}
+
+bool GpuBuffer::upload(VkDeviceSize offset, const void* data, VkDeviceSize size) {
+  if (offset > size_ || size > size_ - offset) return false;
+  if (size == 0) return true;
+  if (!data || size > SIZE_MAX) return false;
+  // Bound transient mapped memory independently of the world size. Reuse the
+  // staging bytes only after each copy's fence, including the final partial window.
+  constexpr VkDeviceSize kStagingBytes = 2 * 1024 * 1024;
+  auto staging = hostVisible(ctx_, std::min(size, kStagingBytes), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   if (!staging) return false;
-  std::memcpy(staging->mapped(), data, static_cast<size_t>(size));
-  staging->flush(0, size);
 
   VkDevice device = ctx_.device();
   VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -80,18 +95,43 @@ bool GpuBuffer::upload(const void* data, VkDeviceSize size) {
   const VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
   VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  const VkBufferCopy region{0, 0, size};
   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.commandBufferCount = 1;
   submit.pCommandBuffers = &cmd;
   // Each step can fail under memory pressure, which is when a 2M splat upload runs.
-  const bool ok = vkAllocateCommandBuffers(device, &cmdInfo, &cmd) == VK_SUCCESS &&
-                  vkBeginCommandBuffer(cmd, &begin) == VK_SUCCESS &&
-                  (vkCmdCopyBuffer(cmd, staging->handle(), buffer_, 1, &region), true) &&
-                  vkEndCommandBuffer(cmd) == VK_SUCCESS &&
-                  vkCreateFence(device, &fenceInfo, nullptr, &fence) == VK_SUCCESS &&
-                  vkQueueSubmit(ctx_.queue(), 1, &submit, fence) == VK_SUCCESS &&
-                  vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS;
+  bool ok = vkAllocateCommandBuffers(device, &cmdInfo, &cmd) == VK_SUCCESS &&
+            vkCreateFence(device, &fenceInfo, nullptr, &fence) == VK_SUCCESS;
+  for (VkDeviceSize copied = 0; ok && copied < size;) {
+    const VkDeviceSize bytes = std::min(staging->size(), size - copied);
+    std::memcpy(staging->mapped(), static_cast<const uint8_t*>(data) + copied,
+                static_cast<size_t>(bytes));
+    ok = vmaFlushAllocation(ctx_.allocator(), staging->allocation_, 0, bytes) == VK_SUCCESS &&
+         vkResetCommandPool(device, pool, 0) == VK_SUCCESS &&
+         vkResetFences(device, 1, &fence) == VK_SUCCESS &&
+         vkBeginCommandBuffer(cmd, &begin) == VK_SUCCESS;
+    if (!ok) break;
+    const VkBufferCopy region{0, offset + copied, bytes};
+    VkBufferMemoryBarrier overwrite{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    overwrite.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+    overwrite.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    overwrite.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    overwrite.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    overwrite.buffer = buffer_;
+    overwrite.offset = region.dstOffset;
+    overwrite.size = bytes;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                         0, nullptr, 1, &overwrite, 0, nullptr);
+    vkCmdCopyBuffer(cmd, staging->handle(), buffer_, 1, &region);
+    VkMemoryBarrier ready{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    ready.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    ready.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0,
+                         1, &ready, 0, nullptr, 0, nullptr);
+    ok = vkEndCommandBuffer(cmd) == VK_SUCCESS &&
+         vkQueueSubmit(ctx_.queue(), 1, &submit, fence) == VK_SUCCESS &&
+         vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS;
+    copied += bytes;
+  }
 
   if (fence != VK_NULL_HANDLE) vkDestroyFence(device, fence, nullptr);
   vkDestroyCommandPool(device, pool, nullptr);

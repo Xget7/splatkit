@@ -94,6 +94,13 @@ class SplatSurfaceView @JvmOverloads constructor(
     fun loadCollider(file: File) = renderThread.loadColliderFile(file.absolutePath)
 
     /**
+     * Shows a tiled world from its index, a `tileset.json` with its tiles beside it (made
+     * offline by `splat-tile`). Only the index is read now; tiles stream in as the camera
+     * needs them, nearest and biggest on screen first, within [residencyBudget].
+     */
+    fun loadTiledWorld(tileset: File) = renderThread.loadTiledWorldFile(tileset.absolutePath)
+
+    /**
      * The camera's position and look direction. Reading gives the pose as of the last
      * frame; setting teleports, and when walking the camera settles on the floor under
      * the new point on the next frame. Any thread.
@@ -164,6 +171,18 @@ class SplatSurfaceView @JvmOverloads constructor(
         set(value) {
             field = value.coerceAtLeast(0)
             renderThread.setSplatBudget(field)
+        }
+
+    /**
+     * Residency budget of a tiled world: the most splats held on the GPU at once, about
+     * 32 bytes each plus the harmonics. Streaming fills it with what is nearest and
+     * biggest on screen and evicts what the camera left. Applies to tiled worlds loaded
+     * after it is set.
+     */
+    var residencyBudget: Int = 2_000_000
+        set(value) {
+            field = value.coerceIn(100_000, 8_000_000)
+            renderThread.setResidencyBudget(field)
         }
 
     /**

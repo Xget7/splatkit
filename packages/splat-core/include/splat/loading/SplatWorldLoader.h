@@ -11,6 +11,7 @@
 #include "splat/formats/SplatCloud.h"
 #include "splat/lod/LodTree.h"
 #include "splat/navigation/Collider.h"
+#include "splat/tiles/TiledWorld.h"
 
 namespace splat {
 
@@ -26,6 +27,7 @@ class SplatWorldLoader {
   struct World {
     std::unique_ptr<SplatCloud> cloud;
     std::shared_ptr<const LodTree> tree;
+    std::unique_ptr<TiledWorld> tiles;  // a tiled world: neither cloud nor tree (ADR 0015)
     int budget = 0;
     std::size_t sourceCount = 0;  // splats in the file, what hosts count
 
@@ -37,6 +39,7 @@ class SplatWorldLoader {
     int shDegree = 0;
     Bounds bounds;
     std::size_t nodeCount = 0;  // 0 without a tree
+    std::size_t tileCount = 0;  // 0 unless tiled
     double decodeMillis = 0;
     double reorderMillis = 0;
     double treeMillis = 0;
@@ -52,9 +55,16 @@ class SplatWorldLoader {
   void setBudget(int budget);
   int budget() const { return budget_.load(); }
 
+  // Highest SH degree materialized for worlds loaded from now on. The source SPZ remains full.
+  void setMaxShDegree(int degree);
+  int maxShDegree() const { return maxShDegree_.load(); }
+
   // Errors leave whatever was waiting untouched.
   Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size);
   Result<WorldReport> loadWorldFile(const std::string& path);
+  // A tiled world from its index (a tileset.json next to its tiles). Only the index is
+  // read here; tiles stream in as the camera needs them.
+  Result<WorldReport> loadTiledWorldFile(const std::string& path);
   Result<ColliderReport> loadCollider(const std::uint8_t* data, std::size_t size);
   Result<ColliderReport> loadColliderFile(const std::string& path);
 
@@ -64,6 +74,7 @@ class SplatWorldLoader {
 
  private:
   std::atomic<int> budget_{0};
+  std::atomic<int> maxShDegree_{3};
   std::mutex mutex_;
   std::unique_ptr<World> pendingWorld_;
   std::unique_ptr<Collider> pendingCollider_;

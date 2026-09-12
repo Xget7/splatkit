@@ -1,7 +1,7 @@
 # splatkit-android
 
 Android engine for Gaussian splat worlds: Vulkan renderer, walk and fly camera, touch and gyroscope input, and a `SurfaceView` to put in a layout.
-Consumes `splat-core` for formats, sorting and navigation.
+Uses shared `splatkit-engine`/`splat-core`.
 `apps/android-dev` is a plain Android host that uses everything below.
 
 Requirements: Android 10 (API 29) and a Vulkan 1.1 device.
@@ -114,6 +114,13 @@ The engine draws only when the camera, the world or the surface changed, so a st
 Declare `android:appCategory="game"` in the host manifest: Android's power HAL keys its game performance mode on it, and Xiaomi's Game Turbo lists such apps.
 Thread priority and big core affinity for the engine threads were measured on the Mi 9 and changed nothing (see the roadmap), so the library does not set them.
 
+`readStats()` exposes source `splatCount`/`loadedSplatCount`, completed `drawnSplatCount`, and compute/nonempty/hardware screen-tile counts.
+Snapshots can lag; zero drawn counts never imply the source count.
+Float transport preserves every integer through 16,777,216; larger counts may round.
+[iOS SwiftPM alpha](https://github.com/Xget7/splatkit-ios) is available; RN GPU options remain pending.
+
+Decoder tests: run `./gradlew :splatkit:testDebugUnitTest` from `apps/android-dev`.
+
 ## Logs
 
 Everything logs under the tag `SplatKit`.
@@ -121,15 +128,7 @@ MIUI hides application logs until `adb shell setprop persist.log.tag.SplatKit V`
 
 ## Layout
 
-| Domain | Where | Responsibility |
-|---|---|---|
-| Rendering | C++ `src/main/cpp/rendering` | Vulkan context, swapchain, frame loop, offscreen target, splat pipeline |
-| Engine | C++ `src/main/cpp/engine/SplatEngine.*` | Owns the renderer, the world, the camera and the sorter; runs the frame |
-| Diagnostics | C++ `src/main/cpp/diagnostics` | `Benchmark`, `StatsPublisher` |
-| Camera | C++ `src/main/cpp/camera` | Walk and fly camera over the `splat-core` character controller |
-| JNI | C++ `src/main/cpp/jni` | The boundary; events cross it through `SplatEngine.onNativeEvent` |
-| View | Kotlin `com.splatkit.SplatSurfaceView` | The public API: surface lifecycle, settings, loaders, listener |
-| Engine boundary | Kotlin `com.splatkit.engine`: `SplatEngine`, `RenderThread` | The JNI wrapper and the Choreographer driven render thread |
-| Input | Kotlin `com.splatkit.input`: `TouchInput`, `MotionInput` | Touch, joystick and gyroscope |
-
-Shaders in `src/main/cpp/shaders` compile to SPIR-V headers at build time.
+`rendering/vulkan`: GPU; `engine/AndroidEngine`: host; `jni`: boundary; `splatkit-engine`: orchestration; `splat-core`: algorithms.
+Current source integrates GPU LOD, visibility, stable radix and indirect drawing; Maven alpha04 predates it.
+Android arm64/Mac-GPU emulator checks pass; physical Android and image-quality acceptance remain pending.
+Contracts: [Vulkan](docs/VULKAN.md).

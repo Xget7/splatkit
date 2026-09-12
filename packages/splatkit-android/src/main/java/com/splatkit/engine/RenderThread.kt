@@ -114,6 +114,7 @@ internal class RenderThread {
     fun loadWorld(spzBytes: ByteArray) = decode { it.loadWorld(spzBytes) }
     fun loadCollider(glbBytes: ByteArray) = decode { it.loadCollider(glbBytes) }
     fun loadWorldFile(path: String) = decode { it.loadWorldFile(path) }
+    fun loadTiledWorldFile(path: String) = decode { it.loadTiledWorldFile(path) }
     fun loadColliderFile(path: String) = decode { it.loadColliderFile(path) }
 
     // Camera and input.
@@ -135,6 +136,7 @@ internal class RenderThread {
     fun setCullMargin(degrees: Float) = post { engine?.setCullMargin(degrees) }
     fun setLinearBlending(linear: Boolean) = post { engine?.setLinearBlending(linear) }
     fun setSplatBudget(budget: Int) = post { engine?.setSplatBudget(budget) }
+    fun setResidencyBudget(splats: Int) = post { engine?.setResidencyBudget(splats) }
     fun setMaxShDegree(degree: Int) = post { engine?.setMaxShDegree(degree) }
     fun setShDegree(degree: Int) = post { engine?.setShDegree(degree) }
 

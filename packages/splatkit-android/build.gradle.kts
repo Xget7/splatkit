@@ -35,6 +35,10 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}
+
 // Maven Central. Credentials and the signing key come from the environment on the
 // publishing machine (ORG_GRADLE_PROJECT_mavenCentralUsername, mavenCentralPassword,
 // signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <istream>
 #include <limits>
 #include <optional>
@@ -30,6 +31,29 @@ namespace splat {
 namespace {
 
 constexpr float kShC0 = 0.282095f;
+
+// Packed SPZ stores each splat's SH values contiguously, with RGB as the fastest axis.
+// Drop whole high-degree bands in place before the reference decoder allocates its float cloud.
+// The source file remains unchanged; this is only a runtime memory-quality setting.
+void truncatePackedSh(spz::PackedGaussians& packed, int requestedDegree) {
+  const int target = std::clamp(requestedDegree, 0, packed.shDegree);
+  if (target >= packed.shDegree) return;
+
+  const std::size_t pointCount = static_cast<std::size_t>(packed.numPoints);
+  const std::size_t oldStride =
+      static_cast<std::size_t>((packed.shDegree + 1) * (packed.shDegree + 1) - 1) * 3;
+  const std::size_t newStride = static_cast<std::size_t>((target + 1) * (target + 1) - 1) * 3;
+  if (newStride == 0) {
+    std::vector<std::uint8_t>().swap(packed.sh);
+  } else {
+    for (std::size_t i = 0; i < pointCount; ++i) {
+      std::memmove(packed.sh.data() + i * newStride, packed.sh.data() + i * oldStride, newStride);
+    }
+    packed.sh.resize(pointCount * newStride);
+    packed.sh.shrink_to_fit();
+  }
+  packed.shDegree = target;
+}
 
 bool looksLikeGzip(const std::uint8_t* data, std::size_t size) {
   return size >= 2 && data[0] == 0x1f && data[1] == 0x8b;
@@ -177,9 +201,19 @@ Result<SplatCloud> decodeSpz(const std::uint8_t* data, std::size_t size,
     }
     MemoryBuffer buffer(packed->data(), packed->size());
     std::istream in(&buffer);
-    cloud = spz::unpackGaussians(spz::deserializePackedGaussians(in), unpack);
+    auto packedGaussians = spz::deserializePackedGaussians(in);
+    if (packedGaussians.numPoints <= 0) {
+      return Error{ErrorCode::corrupt, "SPZ packed payload could not be decoded"};
+    }
+    truncatePackedSh(packedGaussians, options.maxShDegree);
+    cloud = spz::unpackGaussians(packedGaussians, unpack);
   } else {
-    cloud = spz::loadSpz(data, size, unpack);
+    auto packedGaussians = spz::loadSpzPacked(data, size);
+    if (packedGaussians.numPoints <= 0) {
+      return Error{ErrorCode::corrupt, "SPZ packed payload could not be decoded"};
+    }
+    truncatePackedSh(packedGaussians, options.maxShDegree);
+    cloud = spz::unpackGaussians(packedGaussians, unpack);
   }
   if (cloud.numPoints <= 0) {
     return Error{ErrorCode::corrupt, "SPZ container could not be decoded"};
