@@ -60,7 +60,7 @@ RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
     result.reason = "descriptor/range/dispatch limits too small";
   } else {
     result.supported = true;
-    result.reason = "stable subgroup histogram and workgroup bit-mask scatter available";
+    result.reason = "shared histogram and stable workgroup bit-mask scatter available";
   }
   return result;
 }
