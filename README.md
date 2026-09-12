@@ -9,7 +9,7 @@ Experimental alpha: APIs and quality/performance tradeoffs are still evolving.
 
 Android: API 29+, Vulkan 1.1, arm64-v8a. The GPU path additionally checks subgroup and memory limits.
 See the [Android releases](https://github.com/Xget7/splatkit-android/releases) for artifacts.
-Maven `0.1.0-alpha04` predates GPU ordering; `0.1.0-alpha05` is the new GPU integration.
+Maven `0.1.0-alpha04` predates GPU ordering; `0.1.0-alpha06` fixes Adreno sorting in alpha05.
 To build current source:
 
 ```sh

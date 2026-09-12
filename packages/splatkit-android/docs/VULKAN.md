@@ -2,7 +2,8 @@
 
 Public API: `SplatSurfaceView`; JNI and Vulkan classes are internal.
 Current source enables `VulkanFrameCompute`: GPU LOD → visibility → stable radix → indirect draw.
-Alpha05 integrates this path; Maven alpha04 predates it. Hybrid tiles and RN GPU options remain pending.
+Alpha06 fixes Adreno histogram corruption in alpha05; Maven alpha04 predates GPU ordering.
+Hybrid tiles and RN GPU options remain pending.
 
 Contracts live beside code: [VisibilityPass.h](../src/main/cpp/rendering/vulkan/VisibilityPass.h), [shader ABI](../src/main/cpp/rendering/vulkan/VulkanShaderTypes.h).
 The context outlives allocations; reuse slots after fences, resize/destroy after all consumers finish.
@@ -20,6 +21,14 @@ Evidence (2026-09-12): Android arm64 emulator / M4 Pro via MoltenVK passed
 native suites had layers off. Kitchen 500k loaded/drew with layers on and no captured validation errors.
 SwiftShader passes smaller suites but crashes on large mapped uploads, also reproduced without SDK code.
 No physical Android performance or reference-image quality acceptance follows.
+
+Physical Mi 9 / Adreno 640, Vulkan 1.1.128, driver 0x801f6000:
+alpha05 ballot grouping repeatedly lost duplicate keys at 31 inputs.
+Workgroup-local atomic histogram fixes this without global atomics.
+Alpha06 passes 152 stable-sort cases through 3M (including 63/64/65 tails), visibility,
+LOD, complete indirect ordering and upload-pressure tests; standalone layers were off.
+Kitchen 500k and house 2M render with app validation on; background/resume also passed.
+This is device correctness evidence, not lossless LOD or universal FPS acceptance.
 
 ## Metal mapping
 
