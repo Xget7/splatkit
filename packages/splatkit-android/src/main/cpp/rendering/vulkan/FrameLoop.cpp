@@ -1,6 +1,6 @@
 #include "rendering/vulkan/FrameLoop.h"
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 

@@ -35,16 +35,20 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}
+
 // Maven Central. Credentials and the signing key come from the environment on the
 // publishing machine (ORG_GRADLE_PROJECT_mavenCentralUsername, mavenCentralPassword,
 // signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.
 mavenPublishing {
-    coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha04")
+    coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha05")
     publishToMavenCentral(automaticRelease = true)
     if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
     pom {
         name.set("SplatKit Android")
-        description.set("Real-time Gaussian splatting engine for Android on Vulkan: SPZ scenes, CPU sort and cull, spherical harmonics, level of detail, and walk navigation with colliders.")
+        description.set("Native Android Gaussian splatting SDK: Vulkan GPU visibility, radix sorting, hierarchical LOD, spherical harmonics, and walk navigation with colliders.")
         url.set("https://github.com/Xget7/splatkit-android")
         licenses {
             license {

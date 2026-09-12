@@ -1,6 +1,6 @@
 #include "rendering/vulkan/Swapchain.h"
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 

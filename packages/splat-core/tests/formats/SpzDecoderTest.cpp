@@ -254,6 +254,29 @@ TEST(SpzDecoder, PassesHigherOrderShThrough) {
   EXPECT_NEAR(result.value().sh[8], -0.3f, 0.05f);
 }
 
+TEST(SpzDecoder, TruncatesHigherOrderShBeforeMaterializingTheCloud) {
+  spz::GaussianCloud cloud;
+  cloud.numPoints = 1;
+  cloud.shDegree = 1;
+  cloud.positions = {0, 0, 0};
+  cloud.scales = {0, 0, 0};
+  cloud.rotations = {0, 0, 0, 1};
+  cloud.alphas = {0};
+  cloud.colors = {0, 0, 0};
+  cloud.sh = {0.5f, -0.5f, 0.25f, 0.1f, 0.2f, 0.3f, -0.1f, -0.2f, -0.3f};
+  spz::PackOptions pack;
+  pack.version = 2;
+  std::vector<std::uint8_t> bytes;
+  ASSERT_TRUE(spz::saveSpz(cloud, pack, &bytes));
+
+  SpzDecodeOptions options;
+  options.maxShDegree = 0;
+  auto result = decodeSpz(bytes.data(), bytes.size(), options);
+  ASSERT_TRUE(result.ok()) << result.error().message;
+  EXPECT_EQ(result.value().shDegree, 0);
+  EXPECT_TRUE(result.value().sh.empty());
+}
+
 // Opt-in integration test against a real World Labs export.
 // Run with SPLAT_FIXTURES_DIR pointing at a folder containing kitchen_500k.spz.
 TEST(SpzDecoder, DecodesWorldLabsKitchen) {

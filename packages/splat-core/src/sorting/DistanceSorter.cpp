@@ -23,6 +23,12 @@ DistanceSorter::DistanceSorter(std::vector<float> positions)
   orderScratch_.resize(n);
 }
 
+void DistanceSorter::place(std::size_t first, const float* xyz, std::size_t n) {
+  if (first >= count()) return;
+  n = std::min(n, count() - first);
+  std::memcpy(&positions_[first * 3], xyz, n * 3 * sizeof(float));
+}
+
 namespace {
 
 // Key: bit pattern of the squared distance. Non negative floats compare like their bits,

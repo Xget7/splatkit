@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build the library and the dev app
         working-directory: apps/android-dev
-        run: ./gradlew :splatkit:assembleRelease :app:assembleRelease --no-daemon
+        run: ./gradlew :splatkit:assembleRelease :app:assembleRelease :splatkit:testDebugUnitTest --no-daemon
       - name: Keep the AAR
         uses: actions/upload-artifact@v4
         with:

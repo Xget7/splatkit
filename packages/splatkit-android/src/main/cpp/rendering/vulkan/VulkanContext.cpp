@@ -1,6 +1,6 @@
 #include "rendering/vulkan/VulkanContext.h"
 
-#include "Log.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 
@@ -9,7 +9,11 @@ namespace {
 VKAPI_ATTR VkBool32 VKAPI_CALL onValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                                    VkDebugUtilsMessageTypeFlagsEXT,
                                                    const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                                   void*) {
+                                                   void* userData) {
+  if (severity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)) {
+    static_cast<std::atomic<uint32_t>*>(userData)->fetch_add(1, std::memory_order_relaxed);
+  }
   if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
     LOGE("validation: %s", data->pMessage);
   } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
@@ -35,6 +39,7 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
   std::unique_ptr<VulkanContext> ctx(new VulkanContext());
 
   const bool validation = wantValidation();
+  ctx->validationEnabled_ = validation;
   LOGI("validation layers: %s", validation ? "on" : "off");
   vkb::InstanceBuilder builder;
   builder.set_app_name("SplatKit").set_engine_name("SplatKit").require_api_version(1, 1, 0);
@@ -42,7 +47,9 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
   // Adreno exposes VK_EXT_debug_utils but fails to create a messenger without the layer,
   // which is why a release build died here while a debug build did not.
   if (validation) {
-    builder.request_validation_layers(true).set_debug_callback(onValidationMessage);
+    builder.request_validation_layers(true)
+        .set_debug_callback(onValidationMessage)
+        .set_debug_callback_user_data_pointer(&ctx->validationMessageCount_);
   }
   auto instanceResult = builder.build();
   if (!instanceResult) {

@@ -54,8 +54,7 @@ struct Nodes {
       weights[k] = ellipsoidArea(semiAxes(&covariances[i * 6])) * alphas[i];
       total += weights[k];
     }
-    total = std::max(total, 1e-30f);
-    for (float& w : weights) w /= total;
+    for (float& w : weights) w = total > 1e-30f ? w / total : 1.0f / members.size();
 
     float center[3] = {0, 0, 0};
     float rgb[3] = {0, 0, 0};
@@ -68,6 +67,8 @@ struct Nodes {
       }
       for (std::size_t c = 0; c < shStride; ++c) shSum[c] += weights[k] * sh[i * shStride + c];
     }
+    // Summing normalized float weights can put an all-white parent just above one.
+    for (float& channel : rgb) channel = std::clamp(channel, 0.0f, 1.0f);
 
     const float filter2 = filter * filter;
     float cov[6] = {0, 0, 0, 0, 0, 0};
@@ -86,11 +87,11 @@ struct Nodes {
       cov[5] += w * (dz * dz + c[5] + filter2);
     }
 
-    // Opacity that keeps the merged contribution equal to the sum of the members'. It
-    // exceeds one where many opaque splats overlap; the renderer draws such a node with
-    // min(1, alpha * falloff), an opaque core that fades at the edge (Kerbl et al. 2024).
+    // Area-weighted falloff approximates the sum of isolated projected contributions.
+    // It is NOT exact energy/opacity conservation under perspective and alpha blending.
+    // It may exceed one; clamp only after Gaussian evaluation (Kerbl et al. 2024).
     const auto axes = semiAxes(cov);
-    const float alpha = std::clamp(total / std::max(ellipsoidArea(axes), 1e-30f), 1e-6f, 1000.0f);
+    const float alpha = std::clamp(total / std::max(ellipsoidArea(axes), 1e-30f), 0.0f, 1000.0f);
 
     const auto index = static_cast<uint32_t>(count());
     positions.insert(positions.end(), center, center + 3);
@@ -129,76 +130,124 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   tree.leafCount = leaves;
   if (leaves == 0) return tree;
 
-  // Levels: at level L the cell is base^L wide. A splat joins the hierarchy at the first
-  // level whose cell is at least its size, so small splats merge early and big ones late.
-  // The finest level is bounded below so that cell coordinates fit 21 bits each.
-  float extent = 0.0f;
-  for (int c = 0; c < 3; ++c) extent = std::max(extent, cloud.bounds.max[c] - cloud.bounds.min[c]);
-  float minSize = nodes.size[0];
-  for (const float s : nodes.size) minSize = std::min(minSize, s);
-  const float logBase = std::log(options.base);
-  const float finest = std::max(std::max(minSize, 1e-6f), extent / static_cast<float>(1 << 20));
-  int level = static_cast<int>(std::ceil(std::log(finest) / logBase));
-
-  std::vector<uint32_t> bySize(leaves);
-  std::iota(bySize.begin(), bySize.end(), 0u);
-  std::sort(bySize.begin(), bySize.end(),
-            [&](uint32_t a, uint32_t b) { return nodes.size[a] < nodes.size[b]; });
-
-  std::size_t frontier = 0;
-  std::vector<uint32_t> active;
-  std::vector<Cell> cells;
-  bool makeRoot = false;
-  const float* origin = cloud.bounds.min.data();
-  for (;;) {
-    const float step = std::pow(options.base, static_cast<float>(level));
-    while (frontier < leaves && nodes.size[bySize[frontier]] <= step)
-      active.push_back(bySize[frontier++]);
-
-    cells.clear();
-    cells.reserve(active.size());
-    uint64_t low[3] = {~0ull, ~0ull, ~0ull};
-    uint64_t high[3] = {0, 0, 0};
-    for (const uint32_t node : active) {
+  uint32_t root = 0;
+  if (options.octreeDepth > 0) {
+    // Morton prefixes describe nested cubes. Unlike the legacy size-adaptive grid,
+    // the number of spatial subdivisions is fixed offline, never built on the phone.
+    const uint32_t depth = std::clamp(options.octreeDepth, 1u, 10u);
+    const uint32_t resolution = 1u << depth;
+    float extent = 1e-6f;
+    for (int c = 0; c < 3; ++c)
+      extent = std::max(extent, cloud.bounds.max[c] - cloud.bounds.min[c]);
+    std::vector<Cell> active;
+    active.reserve(leaves);
+    for (uint32_t i = 0; i < leaves; ++i) {
       uint64_t key = 0;
-      for (int c = 0; c < 3; ++c) {
-        const auto g = static_cast<uint64_t>(
-            std::max(0.0f, std::floor((nodes.positions[node * 3 + c] - origin[c]) / step)));
-        low[c] = std::min(low[c], g);
-        high[c] = std::max(high[c], g);
-        key = (key << 21) | (g & 0x1FFFFF);
+      for (uint32_t c = 0; c < 3; ++c) {
+        const float unit =
+            std::clamp((nodes.positions[i * 3 + c] - cloud.bounds.min[c]) / extent, 0.0f, 1.0f);
+        const uint32_t grid = std::min(static_cast<uint32_t>(unit * resolution), resolution - 1);
+        for (uint32_t bit = 0; bit < depth; ++bit)
+          key |= uint64_t{(grid >> bit) & 1u} << (3 * bit + c);
       }
-      cells.push_back({makeRoot ? 0 : key, node});
+      active.push_back({key, i});
     }
-    std::sort(cells.begin(), cells.end(),
-              [](const Cell& a, const Cell& b) { return a.key < b.key; });
-
-    std::vector<uint32_t> next;
+    std::sort(active.begin(), active.end(), [](const Cell& a, const Cell& b) {
+      return a.key == b.key ? a.node < b.node : a.key < b.key;
+    });
     std::vector<uint32_t> members;
-    std::size_t cellCount = 0;
-    for (std::size_t start = 0; start < cells.size();) {
-      std::size_t end = start + 1;
-      while (end < cells.size() && cells[end].key == cells[start].key) ++end;
-      ++cellCount;
-      if (end - start > 1) {
-        members.clear();
-        for (std::size_t k = start; k < end; ++k) members.push_back(cells[k].node);
-        next.push_back(nodes.merge(members, 0.5f * step));
-      } else {
-        next.push_back(cells[start].node);
+    for (uint32_t level = 0; level <= depth; ++level) {
+      std::vector<Cell> next;
+      for (size_t start = 0; start < active.size();) {
+        size_t end = start + 1;
+        while (end < active.size() && active[end].key == active[start].key) ++end;
+        uint32_t node = active[start].node;
+        if (end - start > 1) {
+          members.clear();
+          for (size_t j = start; j < end; ++j) members.push_back(active[j].node);
+          // Moment matching includes within-child covariance and between-child means.
+          // No cell-size blur is added in the offline path.
+          node = nodes.merge(members, 0.0f);
+        }
+        next.push_back({active[start].key >> 3, node});
+        start = end;
       }
-      start = end;
+      active = std::move(next);
     }
-    active.swap(next);
-    ++level;
+    root = active.front().node;
+  } else {
+    // Levels: at level L the cell is base^L wide. A splat joins the hierarchy at the first
+    // level whose cell is at least its size, so small splats merge early and big ones late.
+    // The finest level is bounded below so that cell coordinates fit 21 bits each.
+    float extent = 0.0f;
+    for (int c = 0; c < 3; ++c)
+      extent = std::max(extent, cloud.bounds.max[c] - cloud.bounds.min[c]);
+    float minSize = nodes.size[0];
+    for (const float s : nodes.size) minSize = std::min(minSize, s);
+    const float logBase = std::log(options.base);
+    const float finest = std::max(std::max(minSize, 1e-6f), extent / static_cast<float>(1 << 20));
+    int level = static_cast<int>(std::ceil(std::log(finest) / logBase));
 
-    if (frontier < leaves) continue;
-    if (cellCount == 1) break;
-    uint64_t range = 0;
-    for (int c = 0; c < 3; ++c) range = std::max(range, high[c] - low[c]);
-    if (range <= 1) makeRoot = true;  // everything left shares a cell: one more merge is the root
+    std::vector<uint32_t> bySize(leaves);
+    std::iota(bySize.begin(), bySize.end(), 0u);
+    std::sort(bySize.begin(), bySize.end(),
+              [&](uint32_t a, uint32_t b) { return nodes.size[a] < nodes.size[b]; });
+
+    std::size_t frontier = 0;
+    std::vector<uint32_t> active;
+    std::vector<Cell> cells;
+    bool makeRoot = false;
+    const float* origin = cloud.bounds.min.data();
+    for (;;) {
+      const float step = std::pow(options.base, static_cast<float>(level));
+      while (frontier < leaves && nodes.size[bySize[frontier]] <= step)
+        active.push_back(bySize[frontier++]);
+
+      cells.clear();
+      cells.reserve(active.size());
+      uint64_t low[3] = {~0ull, ~0ull, ~0ull};
+      uint64_t high[3] = {0, 0, 0};
+      for (const uint32_t node : active) {
+        uint64_t key = 0;
+        for (int c = 0; c < 3; ++c) {
+          const auto g = static_cast<uint64_t>(
+              std::max(0.0f, std::floor((nodes.positions[node * 3 + c] - origin[c]) / step)));
+          low[c] = std::min(low[c], g);
+          high[c] = std::max(high[c], g);
+          key = (key << 21) | (g & 0x1FFFFF);
+        }
+        cells.push_back({makeRoot ? 0 : key, node});
+      }
+      std::sort(cells.begin(), cells.end(),
+                [](const Cell& a, const Cell& b) { return a.key < b.key; });
+
+      std::vector<uint32_t> next;
+      std::vector<uint32_t> members;
+      std::size_t cellCount = 0;
+      for (std::size_t start = 0; start < cells.size();) {
+        std::size_t end = start + 1;
+        while (end < cells.size() && cells[end].key == cells[start].key) ++end;
+        ++cellCount;
+        if (end - start > 1) {
+          members.clear();
+          for (std::size_t k = start; k < end; ++k) members.push_back(cells[k].node);
+          next.push_back(nodes.merge(members, 0.5f * step));
+        } else {
+          next.push_back(cells[start].node);
+        }
+        start = end;
+      }
+      active.swap(next);
+      ++level;
+
+      if (frontier < leaves) continue;
+      if (cellCount == 1) break;
+      uint64_t range = 0;
+      for (int c = 0; c < 3; ++c) range = std::max(range, high[c] - low[c]);
+      if (range <= 1) makeRoot = true;  // everything left shares a cell: one more merge is the root
+    }
+    root = active[0];
   }
-  const uint32_t root = active[0];
 
   // Lay the tree out root first, level by level, children of a node contiguous. The
   // selection walks it from the root and never touches a node before its parent.

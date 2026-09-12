@@ -7,6 +7,7 @@
 #include "splat/formats/GlbDecoder.h"
 #include "splat/formats/SplatDecoder.h"
 #include "splat/io/MappedFile.h"
+#include "splat/lod/LodFile.h"
 #include "splat/sorting/SpatialOrder.h"
 
 namespace splat {
@@ -24,11 +25,33 @@ void SplatWorldLoader::setBudget(int budget) {
   budget_.store(std::max(budget, 0));
 }
 
+void SplatWorldLoader::setMaxShDegree(int degree) {
+  maxShDegree_.store(std::clamp(degree, 0, 3));
+}
+
 Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,
                                                                   std::size_t size) {
   WorldReport report;
   auto start = Clock::now();
-  auto decoded = decodeSplatFile(data, size);
+  if (isLodSplat(data, size)) {
+    auto decoded = decodeLodSplat(data, size, maxShDegree_.load());
+    if (!decoded) return decoded.error();
+    auto world = std::make_unique<World>();
+    world->tree = std::make_shared<const LodTree>(std::move(decoded.value()));
+    world->budget = budget() > 0 ? budget() : 1200000;
+    world->sourceCount = world->tree->leafCount;
+    report.splatCount = world->sourceCount;
+    report.nodeCount = world->tree->nodeCount();
+    report.shDegree = world->tree->nodes.shDegree;
+    report.bounds = world->tree->nodes.bounds;
+    report.decodeMillis = millisSince(start);
+    const std::lock_guard<std::mutex> lock(mutex_);
+    pendingWorld_ = std::move(world);
+    return report;
+  }
+  SplatDecodeOptions options;
+  options.maxShDegree = maxShDegree_.load();
+  auto decoded = decodeSplatFile(data, size, options);
   if (!decoded) return decoded.error();
   report.decodeMillis = millisSince(start);
   auto cloud = std::make_unique<SplatCloud>(std::move(decoded.value()));
@@ -61,6 +84,28 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(const std:
   auto file = MappedFile::open(path);
   if (!file) return file.error();
   return loadWorld(file.value().data(), file.value().size());
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadTiledWorldFile(
+    const std::string& path) {
+  const auto start = Clock::now();
+  auto opened = openTiledWorld(path);
+  if (!opened) return opened.error();
+  auto world = std::make_unique<World>();
+  world->tiles = std::make_unique<TiledWorld>(std::move(opened.value()));
+  const Tileset& set = *world->tiles->tileset;
+  world->sourceCount = set.splatCount;
+
+  WorldReport report;
+  report.splatCount = set.splatCount;
+  report.shDegree = set.shDegree;
+  report.bounds = set.tiles[set.root].bounds;
+  report.tileCount = set.tiles.size();
+  report.decodeMillis = millisSince(start);
+
+  const std::lock_guard<std::mutex> lock(mutex_);
+  pendingWorld_ = std::move(world);
+  return report;
 }
 
 Result<SplatWorldLoader::ColliderReport> SplatWorldLoader::loadCollider(const std::uint8_t* data,

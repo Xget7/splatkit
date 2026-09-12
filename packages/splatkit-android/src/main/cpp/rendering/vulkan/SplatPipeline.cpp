@@ -3,12 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <vector>
 
-#include "Log.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
-#include "splat/math/Half.h"
+#include "splatkit/Log.h"
 
 namespace splatkit {
 namespace {
@@ -20,17 +20,6 @@ VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
   VkShaderModule module = VK_NULL_HANDLE;
   vkCreateShaderModule(device, &info, nullptr, &module);
   return module;
-}
-
-uint32_t packRgba8(float r, float g, float b, float a) {
-  auto q = [](float v) {
-    return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
-  };
-  return q(r) | (q(g) << 8) | (q(b) << 16) | (q(a) << 24);
-}
-
-uint32_t packHalf2(float a, float b) {
-  return static_cast<uint32_t>(splat::toHalf(a)) | (static_cast<uint32_t>(splat::toHalf(b)) << 16);
 }
 
 }  // namespace
@@ -201,76 +190,107 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   return ok;
 }
 
-namespace {
-
-// Bands 1 to `degree` of every splat as halves, channel fastest, two per uint. The source
-// keeps its own degree's coefficients per splat; a lower target degree keeps the leading
-// ones, which is exactly the lower degree expansion.
-std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
-  const size_t n = cloud.count();
-  const size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
-  const auto coefficients = static_cast<size_t>((degree + 1) * (degree + 1) - 1);
-  const size_t halves = coefficients * 3;
-  const size_t stride = (halves + 1) / 2;
-  std::vector<uint32_t> packed(n * stride, 0);
-  for (size_t i = 0; i < n; ++i) {
-    const float* src = &cloud.sh[i * sourceCoefficients * 3];
-    for (size_t h = 0; h < halves; ++h) {
-      const uint32_t half = splat::toHalf(src[h]);
-      packed[i * stride + h / 2] |= half << ((h & 1) * 16);
-    }
-  }
-  return packed;
-}
-
-}  // namespace
-
 std::unique_ptr<GpuWorld> SplatPipeline::uploadWorld(const splat::SplatCloud& cloud,
-                                                     int maxShDegree) const {
+                                                     int maxShDegree, bool cpuOrder) const {
   const size_t n = cloud.count();
-  const int shDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
-  const bool shComplete =
-      cloud.sh.size() >=
-      n * 3 * static_cast<size_t>((cloud.shDegree + 1) * (cloud.shDegree + 1) - 1);
-  std::vector<uint32_t> sh =
-      (shDegree > 0 && shComplete) ? packSh(cloud, shDegree) : std::vector<uint32_t>{0};
-  std::vector<GpuSplat> packed(n);
-  for (size_t i = 0; i < n; ++i) {
-    GpuSplat& g = packed[i];
-    std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
-    const float alpha = cloud.alphas[i];
-    g.rgba8 =
-        packRgba8(cloud.colors[i * 3], cloud.colors[i * 3 + 1], cloud.colors[i * 3 + 2], alpha);
-    if (alpha > 1.0f) std::memcpy(&g.lodAlpha, &alpha, sizeof(g.lodAlpha));
-    const float* c = &cloud.covariances[i * 6];  // xx, xy, xz, yy, yz, zz
-    g.cov[0] = packHalf2(c[0], c[1]);
-    g.cov[1] = packHalf2(c[2], c[3]);
-    g.cov[2] = packHalf2(c[4], c[5]);
-    if (alpha <= 1.0f) g.lodAlpha = 0;
-  }
-  // Identity order until the sorter runs.
-  std::vector<uint32_t> order(n);
-  for (uint32_t i = 0; i < n; ++i) order[i] = i;
+  if (n > std::numeric_limits<uint32_t>::max() || cloud.positions.size() != n * 3 ||
+      cloud.covariances.size() != n * 6 || cloud.colors.size() != n * 3 || cloud.alphas.size() != n)
+    return nullptr;
+  const int requestedDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
+  const int shDegree = carriesSh(cloud, requestedDegree) ? requestedDegree : 0;
+  const size_t stride = shDegree ? shStride(shDegree) : 0;
+  const VkDeviceSize sourceBytes = std::max(size_t{1}, n) * sizeof(GpuSplat);
+  const VkDeviceSize orderBytes = (cpuOrder ? std::max(size_t{1}, n) : 1) * sizeof(uint32_t);
+  const VkDeviceSize shBytes = std::max(size_t{1}, n * stride) * sizeof(uint32_t);
+  VkPhysicalDeviceProperties properties{};
+  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
+  if (std::max({sourceBytes, orderBytes, shBytes}) > properties.limits.maxStorageBufferRange)
+    return nullptr;
 
   auto world = std::make_unique<GpuWorld>();
   world->count = static_cast<uint32_t>(n);
-  world->shDegree = sh.size() > 1 ? shDegree : 0;
-  world->splats = GpuBuffer::deviceLocal(ctx_, packed.size() * sizeof(GpuSplat),
-                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->order = GpuBuffer::deviceLocal(ctx_, order.size() * sizeof(uint32_t),
-                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = GpuBuffer::deviceLocal(ctx_, sh.size() * sizeof(uint32_t),
-                                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->shDegree = shDegree;
+  world->splats = GpuBuffer::deviceLocal(ctx_, sourceBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->order = GpuBuffer::deviceLocal(ctx_, orderBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = GpuBuffer::deviceLocal(ctx_, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   if (!world->splats || !world->order || !world->sh) return nullptr;
   for (auto& staging : world->orderStaging) {
-    staging = GpuBuffer::hostVisible(ctx_, order.size() * sizeof(uint32_t),
+    if (!cpuOrder) break;
+    staging = GpuBuffer::hostVisible(ctx_, orderBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    if (!staging) return nullptr;
+  }
+  // Bounded packing/upload windows: do not retain full packed + mapped copies of a 10M cloud.
+  const size_t chunk = (2 * 1024 * 1024) / std::max(sizeof(GpuSplat), stride * sizeof(uint32_t));
+  std::vector<GpuSplat> packed(std::min(n, chunk));
+  std::vector<uint32_t> sh(std::min(n, chunk) * stride);
+  std::vector<uint32_t> order(cpuOrder ? std::min(n, chunk) : 0);
+  for (size_t offset = 0; offset < n; offset += chunk) {
+    const size_t count = std::min(chunk, n - offset);
+    packSplatRange(cloud, offset, count, packed.data());
+    if (!world->splats->upload(offset * sizeof(GpuSplat), packed.data(), count * sizeof(GpuSplat)))
+      return nullptr;
+    if (stride) {
+      packShRange(cloud, shDegree, offset, count, sh.data());
+      if (!world->sh->upload(offset * stride * 4, sh.data(), count * stride * 4)) return nullptr;
+    }
+    if (cpuOrder) {
+      for (size_t i = 0; i < count; ++i) order[i] = static_cast<uint32_t>(offset + i);
+      if (!world->order->upload(offset * 4, order.data(), count * 4)) return nullptr;
+    }
+  }
+  const uint32_t zero = 0;
+  if ((!cpuOrder || !n) && !world->order->upload(&zero, sizeof(zero))) return nullptr;
+  if ((!stride || !n) && !world->sh->upload(&zero, sizeof(zero))) return nullptr;
+  return world;
+}
+
+std::unique_ptr<GpuWorld> SplatPipeline::createSlab(uint32_t capacity, int shDegree,
+                                                    bool cpuOrder) const {
+  if (capacity == 0) return nullptr;
+  auto world = std::make_unique<GpuWorld>();
+  world->count = capacity;
+  world->shDegree = std::clamp(shDegree, 0, kMaxShDegree);
+  const VkDeviceSize shBytes =
+      world->shDegree > 0 ? VkDeviceSize{capacity} * shStride(world->shDegree) * sizeof(uint32_t)
+                          : sizeof(uint32_t);
+  VkPhysicalDeviceProperties properties{};
+  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
+  if (std::max(shBytes, VkDeviceSize{capacity} * sizeof(GpuSplat)) >
+      properties.limits.maxStorageBufferRange)
+    return nullptr;
+  world->splats = GpuBuffer::deviceLocal(ctx_, VkDeviceSize{capacity} * sizeof(GpuSplat),
+                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->order =
+      GpuBuffer::deviceLocal(ctx_, VkDeviceSize{cpuOrder ? capacity : 1u} * sizeof(uint32_t),
+                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = GpuBuffer::deviceLocal(ctx_, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  if (!world->splats || !world->order || !world->sh) return nullptr;
+  for (auto& staging : world->orderStaging) {
+    if (!cpuOrder) break;
+    staging = GpuBuffer::hostVisible(ctx_, VkDeviceSize{capacity} * sizeof(uint32_t),
                                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     if (!staging) return nullptr;
   }
-  if (!world->splats->upload(packed.data(), packed.size() * sizeof(GpuSplat))) return nullptr;
-  if (!world->order->upload(order.data(), order.size() * sizeof(uint32_t))) return nullptr;
-  if (!world->sh->upload(sh.data(), sh.size() * sizeof(uint32_t))) return nullptr;
   return world;
+}
+
+bool SplatPipeline::uploadTile(const GpuWorld& slab, uint32_t offset,
+                               const splat::SplatCloud& cloud) {
+  const size_t n = cloud.count();
+  if (n == 0) return true;
+  if (offset > slab.count || n > slab.count - offset) return false;
+  const std::vector<GpuSplat> packed = packSplats(cloud);
+  if (!slab.splats->upload(VkDeviceSize{offset} * sizeof(GpuSplat), packed.data(),
+                           packed.size() * sizeof(GpuSplat))) {
+    return false;
+  }
+  if (slab.shDegree == 0) return true;
+  const size_t stride = shStride(slab.shDegree);
+  const std::vector<uint32_t> sh = carriesSh(cloud, slab.shDegree)
+                                       ? packSh(cloud, slab.shDegree)
+                                       : std::vector<uint32_t>(n * stride, 0);
+  return slab.sh->upload(VkDeviceSize{offset} * stride * sizeof(uint32_t), sh.data(),
+                         sh.size() * sizeof(uint32_t));
 }
 
 void SplatPipeline::bindWorld(const GpuWorld& world) {
@@ -298,7 +318,7 @@ void SplatPipeline::bindWorld(const GpuWorld& world) {
 void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
                                 const uint32_t* order, uint32_t count) {
   const VkDeviceSize bytes = std::min(count, world.count) * sizeof(uint32_t);
-  if (bytes == 0) return;
+  if (bytes == 0 || !world.orderStaging[frameSlot]) return;
   const GpuBuffer& staging = *world.orderStaging[frameSlot];
   std::memcpy(staging.mapped(), order, static_cast<size_t>(bytes));
   staging.flush(0, bytes);
@@ -328,11 +348,9 @@ void SplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot, const G
                        0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
-void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                         uint32_t count, int shDegree, const splat::Mat4& view,
-                         const splat::Mat4& proj, const splat::Vec3& cameraPosition,
-                         VkExtent2D extent) {
-  if (count == 0) return;
+VkBuffer SplatPipeline::updateCamera(uint32_t frameSlot, const splat::Mat4& view,
+                                     const splat::Mat4& proj, const splat::Vec3& cameraPosition,
+                                     VkExtent2D extent) {
   CameraUniform u{};
   u.cameraPosition[0] = cameraPosition.x;
   u.cameraPosition[1] = cameraPosition.y;
@@ -348,6 +366,36 @@ void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld
   u.outputLinear = outputLinear_ ? 1u : 0u;
   std::memcpy(uniforms_[frameSlot]->mapped(), &u, sizeof(u));
   uniforms_[frameSlot]->flush(0, sizeof(u));
+  return uniforms_[frameSlot]->handle();
+}
+
+void SplatPipeline::bindOrder(uint32_t frameSlot, VkBuffer order, uint32_t capacity) {
+  const VkDescriptorBufferInfo info{order, 0,
+                                    VkDeviceSize{std::max(1u, capacity)} * sizeof(uint32_t)};
+  VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+  write.dstSet = sets_[frameSlot];
+  write.dstBinding = 2;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  write.pBufferInfo = &info;
+  vkUpdateDescriptorSets(ctx_.device(), 1, &write, 0, nullptr);
+}
+
+void SplatPipeline::drawIndirect(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+                                 int shDegree, VkBuffer arguments) {
+  const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, kMaxShDegree);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines_[static_cast<size_t>(degree)]);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0,
+                          nullptr);
+  vkCmdDrawIndirect(cmd, arguments, 0, 1, sizeof(VkDrawIndirectCommand));
+}
+
+void SplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+                         uint32_t count, int shDegree, const splat::Mat4& view,
+                         const splat::Mat4& proj, const splat::Vec3& cameraPosition,
+                         VkExtent2D extent) {
+  if (count == 0) return;
+  updateCamera(frameSlot, view, proj, cameraPosition, extent);
 
   const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, kMaxShDegree);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines_[static_cast<size_t>(degree)]);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -31,6 +32,8 @@ class VulkanContext {
   const vkb::Device& vkbDevice() const { return device_; }
   // "Adreno (TM) 640, Vulkan 1.1.128": what a HUD or a bug report wants to show.
   const std::string& deviceDescription() const { return deviceDescription_; }
+  bool validationEnabled() const { return validationEnabled_; }
+  uint32_t validationMessageCount() const { return validationMessageCount_.load(); }
 
   // True when the queue can present to this surface. Checked every time a surface arrives.
   bool supportsPresent(VkSurfaceKHR surface) const;
@@ -45,6 +48,8 @@ class VulkanContext {
   uint32_t queueFamily_ = 0;
   VmaAllocator allocator_ = VK_NULL_HANDLE;
   std::string deviceDescription_;
+  bool validationEnabled_ = false;
+  std::atomic<uint32_t> validationMessageCount_{0};
 };
 
 }  // namespace splatkit
