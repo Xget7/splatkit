@@ -1,0 +1,22 @@
+name: splatkit-rn-contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: packages/react-native-splatkit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: packages/react-native-splatkit/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run check

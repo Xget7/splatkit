@@ -5,10 +5,33 @@ import Foundation
 /// `--tileset <file>` (a tileset.json), `--collider <file>`, `--residency <splats>`,
 /// `--scale <f>`, `--sh <n>`, `--shdraw <n>`, `--budget <n>`, `--margin <deg>`,
 /// `--linear`, `--gyro <0|1>`, `--pose x,y,z,yaw,pitch`, `--walk <m/s>`,
-/// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png),
-/// `--orbit x,y,z` (circle that pivot looking at it; `--axis x,y,z` of the circle, x by
-/// default so the path goes over and under; `--radius`, `--speed <deg/s>`,
-/// `--zoom <fraction>`, `--zoomperiod <seconds>`, `--start <deg>`, `--top axis|tangent`).
+/// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png).
+/// The default world is kitchen_500k.spz. ISS stays in Documents; use --world iss_10M.spz.
+/// ISS orbits at a constant 45 m radius and 4 degrees/s; --radius, --speed and --start override it.
+/// Its long X axis stays horizontal in screen space, without changing the orbit plane.
+/// --orbit-horizontal 0 restores the previous vertical framing for benchmark comparisons.
+/// Its starting pose is prepared during loading; motion starts only after the first
+/// successful GPU frame. Loading stays covered while the renderer prepares that frame.
+/// --orbit 0, --pose, --walk or --benchmark disable the automatic orbit and enable touch look.
+/// No animated zoom. Gyro motion is opt-in with --gyro 1 on non-ISS worlds.
+/// --metal-culling 1 opts into GPU-private scratch, footprint culling at 0.5 px,
+/// and camera-depth sorting. Default 0 preserves the baseline; restart to change.
+/// --min-pixel-radius <px> selects the experimental cutoff (default 0.5; try 1.0 or 1.2).
+/// This is a source-footprint radius, not diameter, and has no effect without --metal-culling 1.
+/// --depth-key-bits <16|32> selects linear camera-depth quantization and two radix
+/// passes (16), or the unchanged four-pass ordering (32, default). Restart to change.
+/// Quantization can change transparency ordering within a bin; no splats are removed.
+/// --tile-raster 1 selects bounded hybrid 16x16 compute compositing, with T <= 0.0001.
+/// Hardware fallback retains its existing 254/255 opacity coverage mask.
+/// Dense tiles (>512 candidates) and tiles touched by large footprints (>16 tiles)
+/// use hardware completion, never truncated lists. Scratch is capped at 128 MiB.
+/// --keep-awake 1 disables idle screen locking only while this dev view is active.
+/// --resource-monitor 1 logs process footprint, remaining process allowance, Metal
+/// allocation and thermal state at 2 Hz, and pauses on memory/thermal pressure.
+/// --memory-limit-mib <MiB> lowers its conservative 2800 MiB process-footprint guard.
+/// --run-seconds <seconds> enables monitoring and pauses that long after the first world frame.
+/// These dev-only guards stop future frames, not allocations or GPU work in flight.
+/// Default 0 retains hardware rasterization. A GPU error stops submission until renderer recreation.
 struct LaunchArgs {
     let values: [String: String]
 

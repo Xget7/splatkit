@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <utility>
 
 #include "rendering/vulkan/RadixSort.h"
 #include "splatkit/Log.h"
@@ -53,8 +54,6 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   if (!radix || !radix.value()->reserve(capacity_) || !visibility_->reserve(capacity_))
     return false;
   radix_ = std::move(radix.value());
-  if (const char* bits = std::getenv("SPLATKIT_VULKAN_SORT_BITS"))
-    if (std::strcmp(bits, "16") == 0) keyBits_ = 16;
 
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
@@ -80,7 +79,22 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
     }
   }
   LOGI("Vulkan GPU frame: resident %u, visible capacity %u, LOD %d, radix bits %u", sourceCount_,
-       capacity_, lod_ ? 1 : 0, keyBits_);
+       capacity_, lod_ ? 1 : 0, sortKeyBits());
+  return true;
+}
+
+bool VulkanFrameCompute::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
+  if (visibility_ == nullptr) {
+    if (reason != nullptr) *reason = "Vulkan visibility pass unavailable";
+    return false;
+  }
+  if (!visibility_->setMinPixelRadius(policy.subpixelThreshold)) {
+    if (reason != nullptr) *reason = "invalid subpixelThreshold";
+    return false;
+  }
+  sortKeyBits_ = policy.sortDepth;
+  LOGI("Vulkan policy: %u-bit sort keys, %.3fpx sub-pixel radius", sortKeyBits(),
+       visibility_->minPixelRadius());
   return true;
 }
 
@@ -121,9 +135,24 @@ bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame
   return true;
 }
 
+void VulkanFrameCompute::submitted(uint32_t slot, uint64_t submission) {
+  if (slot < kSlots && pending_[slot]) submission_[slot] = submission;
+}
+
+void VulkanFrameCompute::collectCompleted(uint64_t completedSubmission) {
+  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+    if (pending_[slot] && submission_[slot] != 0 && submission_[slot] <= completedSubmission)
+      collect(slot);
+  }
+}
+
 void VulkanFrameCompute::collect(uint32_t slot) {
   if (!pending_[slot]) return;
   pending_[slot] = false;
+  const uint64_t submission = std::exchange(submission_[slot], 0);
+  // Slots finish in submission order but are read in slot order: skip an older frame.
+  if (submission != 0 && submission < collectedSubmission_) return;
+  collectedSubmission_ = std::max(collectedSubmission_, submission);
   readback_[slot]->invalidate(0, kReadbackBytes);
   const auto* words = static_cast<const uint32_t*>(readback_[slot]->mapped());
   stats_.drawn = words[0];
@@ -170,6 +199,7 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
   dependency(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
              VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
   pending_[slot] = true;
+  submission_[slot] = 0;
 }
 
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
@@ -183,7 +213,8 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   input.splats = splats.handle();
   input.splatsBytes = splats.size();
   input.sourceCount = sourceCount_;
-  input.keyBits = keyBits_ == 16 ? VisibilityPass::KeyBits::low16 : VisibilityPass::KeyBits::full32;
+  input.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VisibilityPass::KeyBits::low16
+                                                     : VisibilityPass::KeyBits::full32;
   input.keyOrder = VisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
   dependency(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -216,7 +247,8 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   sort.count = visible.count;
   sort.keysBytes = sort.valuesBytes = VkDeviceSize{capacity_} * sizeof(uint32_t);
   sort.countBytes = sizeof(uint32_t);
-  sort.keyBits = keyBits_ == 16 ? RadixSort::KeyBits::low16 : RadixSort::KeyBits::full32;
+  sort.keyBits =
+      sortKeyBits_ == SortKeyBits::low16 ? RadixSort::KeyBits::low16 : RadixSort::KeyBits::full32;
   if (!radix_->encode(cmd, slot, sort)) return std::nullopt;
   timestamp(3);
   // The sorter's checked GPU count is authoritative even if visibility succeeded.

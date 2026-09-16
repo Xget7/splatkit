@@ -38,4 +38,30 @@ AndroidEngine::~AndroidEngine() {
   if (ctx_) ctx_->waitIdle();
 }
 
+void AndroidEngine::setEventSink(EventSink sink) {
+  eventSink_ = std::move(sink);
+  engine_->setEventSink(
+      [this](SplatEngine::Event event, const std::string& message, uint32_t count) {
+        if (event == SplatEngine::Event::worldReady) {
+          awaitingWorldFrame_ = true;
+          worldFrameSplatCount_ = count;
+        }
+        if (eventSink_) eventSink_(static_cast<int>(event), message, count);
+      });
+}
+
+void AndroidEngine::render(int64_t frameTimeNanos) {
+  // Before the engine samples its stats, which a still scene would otherwise leave stale.
+  renderer_->collectCompletedFrames();
+  engine_->render(frameTimeNanos);
+  if (awaitingWorldFrame_ && renderer_->hasCompletedWorldFrame()) {
+    awaitingWorldFrame_ = false;
+    // The frame may have finished during this render: read it, so stats read after the
+    // event describe it instead of the stats window from before it.
+    renderer_->collectCompletedFrames();
+    engine_->publishStats();
+    if (eventSink_) eventSink_(kWorldFrameReady, {}, worldFrameSplatCount_);
+  }
+}
+
 }  // namespace splatkit

@@ -7,8 +7,8 @@ An arm64 emulator can test functionality; it is not a phone performance measurem
 
 ## Install
 
-Adreno-corrected GPU integration: `0.1.0-alpha06`. Check [releases](https://github.com/Xget7/splatkit-android/releases) for publication status.
-Maven `0.1.0-alpha04` is the older CPU-ordering artifact.
+Maven Central `0.1.0-alpha06` is the Adreno-corrected GPU pipeline; alpha05 corrupts Adreno sorting and alpha04 orders on the CPU.
+Render policy, `onWorldFrameReady`, the budgeted `loadWorld` and 16 KB alignment are unreleased source; see the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit-android/releases).
 
 ```kotlin
 dependencies {
@@ -16,8 +16,7 @@ dependencies {
 }
 ```
 
-For current source, use `implementation(project(":splatkit"))` in the included
-`apps/android-dev` host, or include `packages/splatkit-android` as a Gradle module.
+For current source, use `implementation(project(":splatkit"))` in the included `apps/android-dev` host, or include `packages/splatkit-android` as a Gradle module.
 
 ## Host
 
@@ -49,16 +48,21 @@ class WorldActivity : Activity() {
 ```
 
 Loads decode asynchronously; ready/failure callbacks run on the main thread.
+`onWorldReady` means uploaded; `onWorldFrameReady` fires once after a world draw's Vulkan fence completes.
+Keep the view resumed while waiting; completion does not prove visible pixels, presentation scanout or full streamed detail.
 Use `loadCollider(File)` for optional GLB walk collision; otherwise the camera flies.
-SPZ v2–v4 and offline `.lodsplat` worlds are supported. PLY needs offline conversion.
+SPZ v2–v4 and offline `.lodsplat` worlds are supported, and `loadTiledWorld` streams a `splat-tile` tileset.
+PLY needs offline conversion with `ply2spz`.
 Compose can host the view through `AndroidView`; forward the same lifecycle.
-React Native GPU controls are not implemented yet.
+The [React Native package](../react-native-splatkit/README.md) maps its `policy` prop to `applyRenderPolicy`.
 
 ## Controls
 
 | API | Contract |
 |---|---|
 | `loadWorld(bytes/file)`, `loadCollider(bytes/file)` | Load asynchronously; prefer files for large inputs. |
+| `loadWorld(file, maxShDegree, splatBudget, residencyBudget)` | Applies these load options on the render thread before this file's decode. |
+| `loadTiledWorld(tileset)` | Streams a tiled world from its `tileset.json` within `residencyBudget`. |
 | `cameraPose` | Read/set position in meters and yaw/pitch in radians. |
 | `applyQuality(RenderQuality)` | Apply preset; individual properties can override it. |
 | `renderScale` | Render-target scale, 0.1–2; changing it changes image quality. |
@@ -70,7 +74,8 @@ React Native GPU controls are not implemented yet.
 | `setMotionEnabled`, `setWalkVelocity` | Gyroscope and continuous forward/right velocity. |
 | `lookSensitivity`, `walkSensitivity` | Gesture tuning. |
 | `isAvailable`, `gpuDescription` | Renderer availability and driver description. |
-| `readStats()` | FPS, frame/GPU/sort ms, loaded/drawn and screen-tile counts. Completed snapshots can lag. |
+| `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. Only `sortDepth` and `subpixelThreshold` apply, with GPU visibility; other fields fall back with a warning each. |
+| `readStats()` | FPS, frame/GPU/sort ms, loaded/drawn and screen-tile counts. Drawn counts and GPU ms describe the newest frame the GPU finished, also while nothing redraws, and are current when `onWorldFrameReady` fires. |
 | `startBenchmark(seconds)` | Turn-in-place benchmark logged under `SplatKit`. |
 
 Unavailable GPU timings/tile counters report zero, not zero-cost execution.
@@ -81,10 +86,11 @@ Optional `com.splatkit.ui.SplatHudView` and `JoystickView` are host conveniences
 ## GPU contract
 
 GPU LOD → visibility/compaction → stable radix → indirect hardware draw.
-Full32 keys are default; internal `SPLATKIT_VULKAN_SORT_BITS=16` selects approximate two-pass sorting.
+Full32 keys are default; a `sortDepth` of 16 selects approximate two-pass sorting.
 Above 3M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
-Parents and subpixel rejection are approximate. There is no universal 10M or 30/60 FPS guarantee.
+Parents and subpixel rejection are approximate.
+There is no universal 10M or 30/60 FPS guarantee.
 Hybrid compute screen tiles remain Metal-only.
 
 [Architecture, limits and evidence](docs/VULKAN.md) ·
@@ -97,3 +103,5 @@ cd apps/android-dev
 ```
 
 Tests and emulator evidence do not replace physical Adreno/Mali validation or reference-image acceptance.
+Source builds enable 16 KB ELF alignment; CI checks every packaged shared library and APK ZIP alignment with `scripts/check_android_alignment.py`.
+Artifact alignment checks do not replace execution on a 16 KB device.

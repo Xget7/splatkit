@@ -1,0 +1,25 @@
+buildscript {
+    ext {
+        buildToolsVersion = "36.0.0"
+        minSdkVersion = 29
+        compileSdkVersion = 36
+        targetSdkVersion = 36
+        // Pinned to match packages/splatkit-android and packages/react-native-splatkit, which
+        // this app builds against directly (see settings.gradle).
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.2.0"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Versions are resolved by the React Native Gradle Plugin (com.facebook.react.rootproject),
+        // which pins them to what React Native 0.87.1 was built and tested against.
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

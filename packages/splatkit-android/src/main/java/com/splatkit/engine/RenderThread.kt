@@ -7,6 +7,9 @@ import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
 import com.splatkit.CameraPose
+import com.splatkit.DeviceCapabilities
+import com.splatkit.RenderPolicy
+import com.splatkit.RenderPolicyResolution
 import com.splatkit.SplatStats
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -114,6 +117,12 @@ internal class RenderThread {
     fun loadWorld(spzBytes: ByteArray) = decode { it.loadWorld(spzBytes) }
     fun loadCollider(glbBytes: ByteArray) = decode { it.loadCollider(glbBytes) }
     fun loadWorldFile(path: String) = decode { it.loadWorldFile(path) }
+    fun loadWorldFile(path: String, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) = post {
+        engine?.setMaxShDegree(maxShDegree)
+        engine?.setSplatBudget(splatBudget)
+        engine?.setResidencyBudget(residencyBudget)
+        decode { it.loadWorldFile(path) }
+    }
     fun loadTiledWorldFile(path: String) = decode { it.loadTiledWorldFile(path) }
     fun loadColliderFile(path: String) = decode { it.loadColliderFile(path) }
 
@@ -139,6 +148,21 @@ internal class RenderThread {
     fun setResidencyBudget(splats: Int) = post { engine?.setResidencyBudget(splats) }
     fun setMaxShDegree(degree: Int) = post { engine?.setMaxShDegree(degree) }
     fun setShDegree(degree: Int) = post { engine?.setShDegree(degree) }
+
+    // Policy. Posted so it lands before any decode queued after it on the same handler.
+
+    /** [completion] runs on the main thread, in request order; never after [release]. */
+    fun applyRenderPolicy(policy: RenderPolicy, completion: ((RenderPolicyResolution) -> Unit)? = null) = post {
+        val resolution = engine?.applyRenderPolicy(policy) ?: RenderPolicyResolution(
+            RenderPolicy(), accepted = false, preparationFailed = true, error = "SplatKit engine is released")
+        if (completion != null) mainHandler.post { completion(resolution) }
+    }
+
+    /** The policy currently applied. Any thread. */
+    fun renderPolicy(): RenderPolicy? = engine?.renderPolicy()
+
+    /** Native limits, features and accepted policy. Any thread. */
+    fun deviceCapabilities(): DeviceCapabilities? = engine?.deviceCapabilities()
 
     // Diagnostics.
 

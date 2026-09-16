@@ -21,6 +21,24 @@ jobs:
       - name: Build the library and the dev app
         working-directory: apps/android-dev
         run: ./gradlew :splatkit:assembleRelease :app:assembleRelease :splatkit:testDebugUnitTest --no-daemon
+      - name: Check 16 KB artifact alignment
+        run: |
+          python3 scripts/check_android_alignment.py \
+            --readelf "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --zipalign "$ANDROID_HOME/build-tools/36.0.0/zipalign" \
+            packages/splatkit-android/build/outputs/aar/splatkit-release.aar \
+            apps/android-dev/app/build/outputs/apk/release/app-release.apk
+      - name: Check world frame completion contract on host
+        run: |
+          mkdir -p build/native-contracts
+          c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+            -I packages/splatkit-android/src/main/cpp \
+            -I packages/splatkit-engine/include -I packages/splat-core/include \
+            packages/splatkit-android/src/main/cpp/tests/WorldFrameCompletionTest.cpp \
+            -o build/native-contracts/world-frame-completion
+          build/native-contracts/world-frame-completion
+      - name: Check harness regressions
+        run: python3 -m unittest discover -s scripts/tests
       - name: Keep the AAR
         uses: actions/upload-artifact@v4
         with:

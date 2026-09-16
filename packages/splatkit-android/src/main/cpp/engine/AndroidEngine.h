@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include <android/native_window.h>
@@ -23,6 +24,10 @@ class AndroidEngine {
   AndroidEngine& operator=(const AndroidEngine&) = delete;
 
   SplatEngine& engine() { return *engine_; }
+  static constexpr int kWorldFrameReady = 4;
+  using EventSink = std::function<void(int, const std::string&, uint32_t)>;
+  void setEventSink(EventSink sink);
+  void render(int64_t frameTimeNanos);
   // A new window (takes a reference) or nullptr when the surface is going away.
   void setWindow(ANativeWindow* window) { renderer_->setWindow(window); }
   // The window changed size while staying attached. Rebuilds the swapchain if needed.
@@ -32,6 +37,10 @@ class AndroidEngine {
 
  private:
   AndroidEngine() = default;
+
+  EventSink eventSink_;
+  bool awaitingWorldFrame_ = false;
+  uint32_t worldFrameSplatCount_ = 0;
 
   std::unique_ptr<VulkanContext> ctx_;
   std::unique_ptr<FrameLoop> frameLoop_;

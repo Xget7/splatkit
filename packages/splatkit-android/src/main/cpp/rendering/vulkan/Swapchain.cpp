@@ -12,7 +12,7 @@ splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext&
 
   // UNORM by default: splats blend in the encoded space, which is what the reference
   // rasterizer does and what training optimised for, and an sRGB attachment costs 40%
-  // of the frame on Adreno 640 (ADR 0011). Linear blending asks for sRGB first.
+  // of the frame on Adreno 640. Linear blending asks for sRGB first.
   vkb::SwapchainBuilder builder(ctx.physicalDevice(), ctx.device(), surface, ctx.queueFamily(),
                                 ctx.queueFamily());
   const VkSurfaceFormatKHR unorm[] = {

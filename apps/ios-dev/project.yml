@@ -11,6 +11,9 @@ targets:
     platform: iOS
     sources:
       - path: SplatKitDev
+        excludes:
+          - Resources/iss_10M.ply
+          - Resources/iss_10M.spz
       - path: ../../packages/splatkit-ios/Sources/SplatKit
     settings:
       base:

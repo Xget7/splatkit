@@ -1,69 +1,75 @@
 import QuartzCore
 import simd
 
-/// A scripted camera path for demos: the camera circles a pivot about an axis at a
-/// constant angular speed, always looking at the pivot, while the radius breathes in and
-/// out (the zoom). The top of the frame is the axis or the circle's tangent, both
-/// continuous through an orbit that passes over and under the scene. Every frame the pose is teleported,
-/// so the gyroscope must be off.
+/// Constant-distance inspection orbit. The camera moves; its field of view never changes.
 final class OrbitPath {
     struct Settings {
         var pivot: SIMD3<Float>
-        var axis = SIMD3<Float>(1, 0, 0)  // the circle is perpendicular to it
-        var radius: Float = 10            // meters at the widest
-        var degreesPerSecond: Float = 12
-        var zoom: Float = 0.3             // fraction of the radius the zoom comes in by
-        var zoomPeriod: Float = 0         // seconds per zoom in and out; 0 means one turn
-        var startDegrees: Float = 0
-        // What is at the top of the frame: the orbit's axis (the scene spins about the
-        // screen's vertical, right for a portrait phone) or the circle's tangent (the
-        // scene rolls past, like flying over it).
-        var topIsAxis = true
+        var radius: Float = 45
+        var degreesPerSecond: Float = 4
+        var startDegrees: Float = 90
+        var horizontal: Bool = true
+    }
+
+    // CADisplayLink retains its target. A weak proxy lets the session release this path.
+    private final class TickTarget: NSObject {
+        weak var owner: OrbitPath?
+        @objc func tick(_ link: CADisplayLink) { owner?.tick(link) }
     }
 
     private let view: SplatMetalView
     private let settings: Settings
-    private let axis: SIMD3<Float>
-    private let e1: SIMD3<Float>
-    private let e2: SIMD3<Float>
+    private let target = TickTarget()
     private var link: CADisplayLink?
-    private var start: CFTimeInterval = 0
+    private var lastTimestamp: CFTimeInterval?
+    private var angle: Double
 
     init(view: SplatMetalView, settings: Settings) {
         self.view = view
         self.settings = settings
-        let axis = simd_normalize(settings.axis)
-        self.axis = axis
-        // The circle's basis: as close to world up as the axis allows, and its cross.
-        var first = SIMD3<Float>(0, 1, 0) - axis * simd_dot(SIMD3<Float>(0, 1, 0), axis)
-        if simd_length(first) < 1e-4 { first = SIMD3<Float>(0, 0, 1) - axis * axis.z }
-        e1 = simd_normalize(first)
-        e2 = simd_normalize(simd_cross(axis, e1))
+        angle = Double(settings.startDegrees) * .pi / 180
+        target.owner = self
+        NSLog("SplatOrbit: axis=X horizontal=%d radius=%.2f speed=%.2f start=%.2f",
+              settings.horizontal ? 1 : 0, settings.radius, settings.degreesPerSecond, settings.startDegrees)
+        // Prepare the requested starting pose without advancing time during loading.
+        applyPose()
     }
 
+    deinit { end() }
+
     func begin() {
-        start = CACurrentMediaTime()
-        link = CADisplayLink(target: self, selector: #selector(tick))
-        link?.add(to: .main, forMode: .common)
-        tick()
+        guard link == nil else { return }
+        lastTimestamp = nil
+        applyPose()
+        let link = CADisplayLink(target: target, selector: #selector(TickTarget.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        self.link = link
     }
 
     func end() {
         link?.invalidate()
         link = nil
+        lastTimestamp = nil
     }
 
-    @objc private func tick() {
-        let t = Float(CACurrentMediaTime() - start)
-        let s = settings
-        let turn = 360 / max(s.degreesPerSecond, 0.01)
-        let period = s.zoomPeriod > 0 ? s.zoomPeriod : turn
-        // Radius eases from the full radius in to (1 - zoom) of it and back, once per period.
-        let phase = (1 - cos(2 * Float.pi * t / period)) / 2
-        let radius = s.radius * (1 - s.zoom * phase)
-        let angle = (s.startDegrees + s.degreesPerSecond * t) * Float.pi / 180
-        let outward = cos(angle) * e1 + sin(angle) * e2
-        let tangent = -sin(angle) * e1 + cos(angle) * e2
-        view.lookAt(from: s.pivot + radius * outward, target: s.pivot, up: s.topIsAxis ? axis : tangent)
+    private func tick(_ link: CADisplayLink) {
+        if let previous = lastTimestamp {
+            angle += (link.timestamp - previous) * Double(settings.degreesPerSecond) * .pi / 180
+            angle = angle.truncatingRemainder(dividingBy: 2 * .pi)
+        }
+        lastTimestamp = link.timestamp
+        applyPose()
+    }
+
+    private func applyPose() {
+        // Keep the same YZ orbit around the ISS's long X axis. A tangent up vector
+        // rolls the camera 90 degrees, keeping that axis horizontal at every angle.
+        // Unlike fixed world-Y up, it never becomes parallel to the viewing ray.
+        let outward = SIMD3<Float>(0, Float(cos(angle)), Float(sin(angle)))
+        let axis = SIMD3<Float>(1, 0, 0)
+        let up = settings.horizontal ? simd_cross(outward, axis) : axis
+        view.lookAt(from: settings.pivot + settings.radius * outward,
+                    target: settings.pivot, up: up)
     }
 }

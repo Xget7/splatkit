@@ -13,6 +13,7 @@
 #include "rendering/vulkan/Swapchain.h"
 #include "rendering/vulkan/VulkanContext.h"
 #include "rendering/vulkan/VulkanFrameCompute.h"
+#include "rendering/vulkan/WorldFrameCompletion.h"
 #include "splat/formats/SplatCloud.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -43,6 +44,9 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool linearBlending() const override { return linearBlending_; }
   void setVsync(bool vsync) override;
 
+  DeviceCapabilities deviceCapabilities() const override;
+  bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason) override;
+
   // True when a surface with pipelines is up.
   bool ready() const override { return swapchain_ && splats_ && triangle_; }
   // The target's size with a render scale, else the swapchain's.
@@ -63,6 +67,12 @@ class VulkanSplatRenderer final : public SplatRenderer {
 
   // The world, or the debug triangle without one.
   bool draw(const Frame& frame) override;
+  bool hasCompletedWorldFrame() {
+    return worldFrameCompletion_.completed(frameLoop_.completedSubmission());
+  }
+  // Reads the stats of frames the GPU finished, without waiting. Call once per vsync, drawn
+  // or not: a still scene draws no later frame whose encode would read them.
+  void collectCompletedFrames();
   double lastGpuMillis() const override { return frameLoop_.lastGpuMillis(); }
   double lastSortMillis() const override { return compute_ ? compute_->stats().sortMillis : 0; }
   double lastCullMillis() const override { return compute_ ? compute_->stats().cullMillis : 0; }
@@ -81,6 +91,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   VkFormat activeFormat() const;
   VkRenderPass activeRenderPass() const;
   void destroySurface();
+  void applyPolicyToCompute();
 
   VulkanContext& ctx_;
   FrameLoop& frameLoop_;
@@ -93,10 +104,12 @@ class VulkanSplatRenderer final : public SplatRenderer {
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<GpuWorld> world_;
   std::unique_ptr<VulkanFrameCompute> compute_;
+  RenderPolicy policy_;
   float renderScale_ = 1.0f;
   bool linearBlending_ = false;
   bool vsync_ = true;
   uint32_t generation_ = 0;
+  WorldFrameCompletion worldFrameCompletion_;
 };
 
 }  // namespace splatkit

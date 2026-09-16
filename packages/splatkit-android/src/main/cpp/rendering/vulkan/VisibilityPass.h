@@ -46,6 +46,8 @@ class VisibilityPass {
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
   float minPixelRadius() const { return minPixelRadius_; }
+  // Per-instance policy; render thread while the pass is idle. Finite and >= 0 or false.
+  bool setMinPixelRadius(float radius);
   const VisibilityCapabilities& capabilities() const { return capabilities_; }
 
   enum class CandidateMode : uint32_t { prefix, indices, ranges };

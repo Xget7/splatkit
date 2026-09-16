@@ -1,7 +1,7 @@
 # Contributing
 
 SplatKit is experimental and small enough to read in an afternoon.
-Pull requests are welcome; `docs/ROADMAP.md` lists what is open and how each item is proven.
+Pull requests are welcome.
 Open an issue before starting anything larger than a fix so the scope is agreed first.
 
 ## Build the core
@@ -15,6 +15,7 @@ ctest --test-dir build --output-on-failure
 
 `cmake -DSPLAT_CORE_SANITIZE=thread` or `address` builds the sanitized variants CI runs.
 Set `SPLAT_FIXTURES_DIR` to a folder with World Labs example files to run the integration tests.
+`python3 scripts/sdk_harness.py check engine` builds and tests `splatkit-engine`; the [harness](docs/AGENT_HARNESS.md) lists the Metal and Android checks.
 
 ## Build and run the Android dev app
 
@@ -42,8 +43,18 @@ xcrun devicectl device install app --device <udid> build/Build/Products/Release-
 xcrun devicectl device process launch --device <udid> --console com.splatkit.devapp -- --gyro 0
 ```
 
-The app reads its switches from the command line (`--world`, `--tileset`, `--collider`, `--residency`, `--scale`, `--pose`, `--benchmark`, `--capture`; see `LaunchArgs.swift`) and worlds from its Documents folder, which `devicectl device copy to` fills.
+The app reads its switches from the command line (`--world`, `--tileset`, `--collider`, `--scale`, `--pose`, `--benchmark`, `--capture` and more; see `LaunchArgs.swift`) and worlds from its Documents folder, which `devicectl device copy to` fills.
 The Objective-C++ sources build with warnings as errors; `scripts/lint-cpp.sh` formats them.
+
+## Build the React Native package
+
+```
+cd packages/react-native-splatkit
+npm ci
+npm run check                # TypeScript, contract tests and Fabric Codegen
+```
+
+Adapter changes also need the Android adapter host tests in its [README](packages/react-native-splatkit/android/README.md) and a run of the [RN dev app](apps/react-native-dev/README.md) on a device.
 
 ## Lint the C++
 
@@ -57,21 +68,24 @@ The script configures both packages for the Android target and lints tests and t
 
 ## What a pull request needs
 
-- Tests in `splat-core` for anything that touches decoding, sorting, math, navigation, loading or the visibility policy.
+- Tests in `splat-core` for anything that touches decoding, sorting, math, navigation, loading or the visibility policy, and in `splatkit-engine` for the render policy or engine orchestration.
 - `scripts/lint-cpp.sh` clean; CI runs it.
+- `npm run check` passing for React Native package changes; CI runs it.
 - A note in the description saying which device and driver it was tried on.
   Emulator only is fine for logic; renderer changes need a real GPU.
-- No planning documents: architecture decisions go in `docs/adr`, everything else in the pull request text.
+- No planning or decision documents: explain decisions in the pull request text and in comments beside the code they shape.
 - Plain dashes, no em dashes, one sentence per line in Markdown.
 
 ## Code layout
 
-`packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, navigation, file mapping, the world loader and the visibility policy, each with tests.
+`packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, tile streaming, navigation, file mapping, the world loader and the visibility policy, each with tests.
 `packages/splatkit-engine` is the engine without a graphics API: one `SplatEngine` that owns the camera, the sorter or the streamer, a `Benchmark` and a `StatsPublisher`, and draws through the `SplatRenderer` interface; the GPU record layout (`GpuSplat` and the packing) lives here so every renderer uploads the same bytes.
 `packages/splatkit-android` owns everything Vulkan and Android: `VulkanSplatRenderer` (surface, swapchain, pipelines, the world on the GPU) implements the interface, `AndroidEngine` wires it under the engine, and `jni/` is the boundary to Kotlin and knows nothing else.
+Its Kotlin has four packages: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope, and `com.splatkit.ui` the optional HUD and joystick views.
 `packages/splatkit-ios` owns everything Metal and iOS: `MetalSplatRenderer` implements the interface over a `CAMetalLayer`, `SKSplatEngine` is the Objective-C boundary to Swift, and `Sources/SplatKit` is the Swift layer (render thread, motion, `SplatMetalView`).
-Its Kotlin has three layers: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope.
-The engine does not know what is hosting it; [ADR 0013](docs/adr/0013-engine-modules.md) records the split.
+`packages/react-native-splatkit` is the Fabric package: the builder, contracts and Codegen spec in `src`, a Kotlin adapter over `SplatSurfaceView` in `android` and an Objective-C++ adapter over `SKSplatEngine` in `ios`.
+`apps/` holds one dev app per host: `android-dev`, `ios-dev` and `react-native-dev`.
+The engine does not know what is hosting it.
 
 ## Names
 
@@ -79,4 +93,3 @@ The root object of each layer carries the domain in its name, so a reader who se
 The same thing has the same name on both sides of a boundary: the Kotlin `SplatEngine` wraps the C++ `SplatEngine`, and the JNI symbols are derived from that one name.
 Objects below the root are named for their one job and live in the directory of that job, `rendering/vulkan`, `diagnostics`, `camera`, `jni`, `loading`, `sorting`; nothing sits loose at the root of `cpp/`.
 A name that only says what something is, `Engine`, `Renderer`, `Loader`, is not enough; a name that repeats the directory, `VulkanVulkanContext`, is too much.
-[ADR 0014](docs/adr/0014-names-carry-the-domain.md) records the rule.

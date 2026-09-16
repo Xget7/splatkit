@@ -1,12 +1,13 @@
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <numeric>
+#include <string>
 
 #include "rendering/vulkan/VulkanFrameCompute.h"
 #include "rendering/vulkan/VulkanShaderTypes.h"
 #include "splatkit/rendering/GpuLayout.h"
+#include "splatkit/rendering/RenderPolicy.h"
 #include "tests/VulkanTestContext.h"
 
 namespace {
@@ -14,6 +15,8 @@ using splatkit::CameraUniform;
 using splatkit::GpuBuffer;
 using splatkit::GpuSplat;
 using splatkit::packSplats;
+using splatkit::RenderPolicy;
+using splatkit::SortKeyBits;
 using splatkit::SplatRenderer;
 using splatkit::VulkanFrameCompute;
 namespace test = splatkit::test;
@@ -100,11 +103,16 @@ void tests(const test::VulkanTestContext& gpu) {
   for (auto range : ranges)
     for (uint32_t i = 0; i < range.count; ++i) expected.push_back(range.offset + i);
   std::sort(expected.rbegin(), expected.rend());
-  for (const char* bits : {"32", "16"}) {
-    require(setenv("SPLATKIT_VULKAN_SORT_BITS", bits, 1) == 0, "set test precision");
+  for (const SortKeyBits bits : {SortKeyBits::full32, SortKeyBits::low16}) {
     auto created = VulkanFrameCompute::create(*gpu.context, 257);
     require(static_cast<bool>(created), "create GPU frame");
     auto pass = std::move(created.value());
+    RenderPolicy policy;
+    policy.subpixelThreshold = pass->minPixelRadius();
+    policy.sortDepth = bits;
+    std::string reason;
+    require(pass->applyRenderPolicy(policy, &reason), "apply sort depth policy");
+    require(pass->sortKeyBits() == static_cast<uint32_t>(bits), "requested sort depth in effect");
     const auto actual = run(gpu, *pass, inputs, 0, 257, ranges);
     if (actual != expected) {
       std::fprintf(stderr, "range ordering: expected %zu, got %zu\n", expected.size(),
@@ -135,10 +143,40 @@ void tests(const test::VulkanTestContext& gpu) {
       require(!pass->encode(cmd, 2, inputs.camera->handle(), *inputs.splats, frame),
               "invalid frame slot rejected");
     });
-    std::printf("PASS %s-bit visibility/sort/indirect chain, ranges, empty view and diagnostics\n",
-                bits);
+    std::printf("PASS %u-bit visibility/sort/indirect chain, ranges, empty view and diagnostics\n",
+                pass->sortKeyBits());
   }
-  require(unsetenv("SPLATKIT_VULKAN_SORT_BITS") == 0, "restore test precision");
+
+  // A still scene encodes no new frame, so finished frames must report without a re-encode.
+  {
+    auto created = VulkanFrameCompute::create(*gpu.context, 257);
+    require(static_cast<bool>(created), "create GPU frame for completion");
+    auto pass = std::move(created.value());
+    require(run(gpu, *pass, inputs, 0, 257, ranges) == expected, "completion frame ordering");
+    pass->submitted(0, 1);
+    pass->collectCompleted(0);
+    require(pass->stats().drawn == 0, "unfinished submission is not read");
+    pass->collectCompleted(1);
+    require(pass->stats().drawn == expected.size(), "finished frame read without re-encode");
+    inputs.setView(100);
+    require(run(gpu, *pass, inputs, 1, 257, ranges).empty(), "offscreen completion frame");
+    pass->submitted(1, 2);
+    inputs.setView(0);
+    require(run(gpu, *pass, inputs, 0, 257, ranges) == expected, "newest completion frame");
+    pass->submitted(0, 3);
+    pass->collectCompleted(3);
+    require(pass->stats().drawn == expected.size(), "newest finished frame wins");
+    // Slot 1 now holds the older frame: reading it after slot 0 must not move stats back.
+    require(run(gpu, *pass, inputs, 1, 257, ranges) == expected, "older completion frame");
+    pass->submitted(1, 4);
+    inputs.setView(100);
+    require(run(gpu, *pass, inputs, 0, 257, ranges).empty(), "newer offscreen completion frame");
+    pass->submitted(0, 5);
+    inputs.setView(0);
+    pass->collectCompleted(5);
+    require(pass->stats().drawn == 0, "older slot never overwrites a newer frame");
+  }
+  std::puts("PASS finished frames report diagnostics without a re-encode, newest first");
 
   splat::LodTree tree;
   tree.leafCount = 2;

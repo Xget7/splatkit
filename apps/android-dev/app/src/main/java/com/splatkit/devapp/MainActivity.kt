@@ -41,6 +41,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.i(TAG, "lifecycle: create")
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
 
@@ -81,6 +82,9 @@ class MainActivity : Activity() {
             override fun onWorldReady(splatCount: Int) {
                 Log.i(TAG, "world ready: $splatCount splats")
                 applyPendingPose()
+            }
+            override fun onWorldFrameReady(splatCount: Int) {
+                Log.i(TAG, "world frame ready: $splatCount splats")
             }
             override fun onWorldFailed(message: String) = toast("World failed: $message")
             override fun onColliderReady() {
@@ -127,6 +131,7 @@ class MainActivity : Activity() {
         val worldKey = "$worldPath|$colliderPath|${intent?.getBooleanExtra("bytes", false)}"
         // The same world in a second intent keeps what is loaded: the settings above switch in place.
         val reload = worldKey != loadedWorld
+        Log.i(TAG, "world request: $worldKey reload=$reload")
         loadedWorld = worldKey
         // File reads are IO; keep them off the UI thread.
         if (reload) Thread {
@@ -177,15 +182,18 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Log.i(TAG, "lifecycle: resume")
         splatView.resume()
     }
 
     override fun onPause() {
+        Log.i(TAG, "lifecycle: pause")
         splatView.pause()
         super.onPause()
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "lifecycle: destroy")
         splatView.release()
         super.onDestroy()
     }

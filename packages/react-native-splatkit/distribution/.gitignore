@@ -1,0 +1,8 @@
+node_modules/
+build/
+.gradle/
+.kotlin/
+.cxx/
+local.properties
+*.tgz
+.DS_Store

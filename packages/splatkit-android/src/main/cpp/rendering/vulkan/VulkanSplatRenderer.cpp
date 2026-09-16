@@ -78,6 +78,64 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
   if (swapchain_) keepSurfaceIf(recreateSwapchain());
 }
 
+DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
+  DeviceCapabilities caps;
+  // GpuLOD clamps a hierarchy at 2.2M nodes; the Android adapter caps residency at 8M.
+  caps.limits.maxLodCapacitySplats = 2'200'000;
+  caps.limits.minResidencyCapacitySplats = 100'000;
+  caps.limits.maxResidencyCapacitySplats = 8'000'000;
+  // Vulkan has no screen-tile rasterization and conservative occlusion is unimplemented.
+  caps.supportsComputeTiles = false;
+  caps.supportsHiZOcclusion = false;
+  const bool gpu = selectsLodOnGpu();
+  caps.supportsSubgroups = gpu;
+  VkPhysicalDeviceProperties properties{};
+  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
+  caps.maxTextureDimension = properties.limits.maxImageDimension2D;
+  RenderPolicySupport& policy = caps.policy;
+  policy.fallback.raster = RasterStrategy::hardware;
+  policy.fallback.tileSize = 16;
+  policy.fallback.lodErrorPixels = 1.0f;
+  policy.fallback.alphaThreshold = 1.0f / 255.0f;
+  policy.fallback.subpixelThreshold = 0.5f;
+  policy.fallback.sortDepth = SortKeyBits::full32;
+  policy.fallback.enableFrustumCulling = true;
+  policy.fallback.enableEarlyTermination = true;
+  // The GPU visibility/sort path applies the sub-pixel cutoff and the key width per
+  // instance; without it the CPU path has neither, and the rest is not implemented.
+  policy.sortDepth = gpu;
+  policy.subpixelThreshold = gpu;
+  return caps;
+}
+
+bool VulkanSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
+  if (policy.sortDepth == policy_.sortDepth &&
+      policy.subpixelThreshold == policy_.subpixelThreshold) {
+    return true;
+  }
+  const RenderPolicy previous = policy_;
+  policy_ = policy;
+  if (compute_ != nullptr) {
+    ctx_.waitIdle();
+    if (!compute_->applyRenderPolicy(policy_, reason)) {
+      policy_ = previous;
+      std::string ignored;
+      compute_->applyRenderPolicy(previous, &ignored);
+      return false;
+    }
+  }
+  return true;
+}
+
+// Applies the stored policy to a freshly created frame compute, before any frame uses it.
+void VulkanSplatRenderer::applyPolicyToCompute() {
+  if (compute_ == nullptr) return;
+  std::string reason;
+  if (!compute_->applyRenderPolicy(policy_, &reason)) {
+    LOGW("Vulkan policy on the new compute pass failed: %s", reason.c_str());
+  }
+}
+
 Extent VulkanSplatRenderer::drawExtent() const {
   VkExtent2D extent{0, 0};
   if (target_) {
@@ -108,7 +166,9 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
   compute_ = compute ? std::move(compute.value()) : nullptr;
+  applyPolicyToCompute();
   splats_->bindWorld(*world_);
+  worldFrameCompletion_.reset();
   return true;
 }
 
@@ -131,7 +191,9 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   if (!world) return false;
   world_ = std::move(world);
   compute_ = std::move(compute.value());
+  applyPolicyToCompute();
   splats_->bindWorld(*world_);
+  worldFrameCompletion_.reset();
   return true;
 }
 
@@ -145,7 +207,9 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
   compute_ = compute ? std::move(compute.value()) : nullptr;
+  applyPolicyToCompute();
   splats_->bindWorld(*world_);
+  worldFrameCompletion_.reset();
   return true;
 }
 
@@ -218,12 +282,27 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   vkCmdEndRenderPass(cmd);
   if (target_) target_->blitTo(cmd, swapchain_->image(imageIndex), swapchain_->extent());
 
+  const uint64_t submittedBefore = frameLoop_.lastSubmission();
   status = frameLoop_.endFrame(*swapchain_, imageIndex);
+  if (gpuDraw && frameLoop_.lastSubmission() != submittedBefore)
+    compute_->submitted(slot, frameLoop_.lastSubmission());
+  const bool drewWorld =
+      world_ && (gpuDraw || (!compute_ && frame.orderSource == OrderSource::cpu &&
+                             std::min(frame.drawCount, world_->count) > 0));
+  if (drewWorld &&
+      (status == FrameLoop::Status::ok || status == FrameLoop::Status::swapchainSuboptimal)) {
+    worldFrameCompletion_.submitted(frameLoop_.lastSubmission());
+  }
   if (status == FrameLoop::Status::swapchainOutOfDate ||
       (status == FrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
     keepSurfaceIf(recreateSwapchain());
   }
   return true;
+}
+
+void VulkanSplatRenderer::collectCompletedFrames() {
+  const uint64_t completed = frameLoop_.completedSubmission();
+  if (compute_) compute_->collectCompleted(completed);
 }
 
 bool VulkanSplatRenderer::createSurface() {

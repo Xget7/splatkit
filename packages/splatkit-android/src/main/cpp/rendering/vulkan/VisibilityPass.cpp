@@ -110,6 +110,12 @@ splat::Result<std::unique_ptr<VisibilityPass>> VisibilityPass::create(const Vulk
   return pass;
 }
 
+bool VisibilityPass::setMinPixelRadius(float radius) {
+  if (!std::isfinite(radius) || radius < 0.0f) return false;
+  minPixelRadius_ = radius;
+  return true;
+}
+
 VisibilityPass::~VisibilityPass() {
   VkDevice device = ctx_.device();
   if (visibilityPipeline_) vkDestroyPipeline(device, visibilityPipeline_, nullptr);

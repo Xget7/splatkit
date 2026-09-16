@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    plugins {
+        id 'com.android.library' version '8.11.1'
+        id 'org.jetbrains.kotlin.android' version '2.2.0'
+        id 'com.vanniktech.maven.publish' version '0.34.0'
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = 'splatkit-fabric-android-verification'
+include ':adapter', ':splatkit'
+project(':adapter').projectDir = file('..')
+project(':splatkit').projectDir = file('../../../splatkit-android')

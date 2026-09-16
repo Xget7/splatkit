@@ -1,0 +1,21 @@
+# node (no trailing slash, so a symlinked node_modules is ignored too)
+node_modules
+npm-debug.log
+
+# Android / Gradle
+android/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/**/.cxx/
+android/local.properties
+*.iml
+*.hprof
+android/**/*.keystore
+!android/app/debug.keystore
+
+# Metro
+.metro-health-check*
+
+# macOS
+.DS_Store

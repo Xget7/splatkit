@@ -2,7 +2,7 @@
 
 Host integration: [Android](../packages/splatkit-android/README.md), [iOS](../packages/splatkit-ios/README.md).
 Use native views, forward lifecycle, load asynchronously; renderer internals stay private.
-React Native GPU controls remain pending.
+The [React Native package](../packages/react-native-splatkit/README.md) wires the renderer policy prop and events; the [RN dev app](../apps/react-native-dev/README.md) mounts it on Android, validated on a physical Mi 9; iOS device validation remains pending.
 
 ```sh
 python3 scripts/sdk_harness.py plan android

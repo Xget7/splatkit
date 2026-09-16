@@ -72,6 +72,9 @@ target_include_directories(splatkit SYSTEM PRIVATE ${vma_include} ${vkb_include}
 # Hide everything the JVM does not call. See splatkit.map.
 target_compile_options(splatkit PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
 target_link_options(splatkit PRIVATE
+  # NDK r27 requires explicit 16 KB alignment, including direct CMake builds.
+  "-Wl,-z,max-page-size=16384"
+  "-Wl,-z,common-page-size=16384"
   "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/splatkit.map"
   "-Wl,--exclude-libs,ALL"
 )

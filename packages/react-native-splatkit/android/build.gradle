@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.splatkit.reactnative'
+    compileSdk 36
+    defaultConfig { minSdk 29 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+    // A File, not a Provider: AGP 9 rejects Provider source directories by default.
+    sourceSets.main.java.srcDir layout.buildDirectory.dir('generated/source/codegen/java').get().asFile
+}
+
+def generateBindings = tasks.register('generateSplatKitCodegen', Exec) {
+    workingDir projectDir.parentFile
+    commandLine 'node', 'scripts/codegen-android.cjs', layout.buildDirectory.dir('generated/source/codegen').get().asFile
+    inputs.dir '../src/specs'
+    inputs.file '../package.json'
+    inputs.file '../scripts/codegen-android.cjs'
+    outputs.dir layout.buildDirectory.dir('generated/source/codegen')
+}
+tasks.named('preBuild').configure { dependsOn generateBindings }
+
+dependencies {
+    implementation 'com.facebook.react:react-android:0.87.1'
+    implementation project(':splatkit')
+    testImplementation 'junit:junit:4.13.2'
+}

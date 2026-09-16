@@ -43,6 +43,12 @@ class FrameLoop {
   // Ends recording, submits and presents.
   Status endFrame(const Swapchain& swapchain, uint32_t imageIndex);
 
+  uint64_t lastSubmission() const { return lastSubmission_; }
+  // Nonblocking fence queries of the frames still in flight, including when the engine has
+  // no new frame to draw; a finished frame's GPU time is read then too.
+  // Zero after a fence/device error: failed GPU work must never announce readiness.
+  uint64_t completedSubmission();
+
   // GPU time of the most recently completed frame, from timestamp queries at both ends
   // of its command buffer. Zero until the first frame completes or if unsupported.
   // Unlike wall time, this is not quantised by vsync, so it is the number to optimise.
@@ -55,9 +61,10 @@ class FrameLoop {
     VkFence inFlight = VK_NULL_HANDLE;
     VkSemaphore imageAvailable = VK_NULL_HANDLE;
     VkQueryPool timestamps = VK_NULL_HANDLE;  // two queries: start and end of the frame
-    bool timestampsWritten = false;
+    uint64_t submission = 0;                  // until the GPU is known to have finished it
   };
 
+  void finish(Frame& frame);
   void destroyRenderFinished();
 
   const VulkanContext& ctx_;
@@ -67,6 +74,10 @@ class FrameLoop {
   bool valid_ = false;
   float timestampPeriodNanos_ = 0;  // zero when the queue cannot timestamp
   double lastGpuMillis_ = 0;
+  uint64_t lastSubmission_ = 0;
+  uint64_t completedSubmission_ = 0;
+  uint64_t timedSubmission_ = 0;  // the frame lastGpuMillis_ measures
+  bool completionFailed_ = false;
 };
 
 }  // namespace splatkit

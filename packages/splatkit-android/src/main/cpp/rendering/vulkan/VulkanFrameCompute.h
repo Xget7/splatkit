@@ -16,7 +16,8 @@ class RadixSort;
 // Resident-world GPU ordering. Owns LOD, culling, sorting and delayed diagnostics.
 // Render thread only. Context/inputs outlive submissions. Create/destroy while idle;
 // encode only after the caller's slot fence, with consumers on the same queue.
-// Counts never return to CPU to decide dispatch/draw. Diagnostics lag by frame slots.
+// Counts never return to CPU to decide dispatch/draw. Diagnostics lag by frame slots: a
+// slot's are read when it is encoded again, or once its submission is known finished.
 class VulkanFrameCompute {
  public:
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
@@ -39,7 +40,21 @@ class VulkanFrameCompute {
   std::optional<Draw> encode(VkCommandBuffer cmd, uint32_t slot, VkBuffer camera,
                              const GpuBuffer& splats, const SplatRenderer::Frame& frame);
   const Stats& stats() const { return stats_; }
+  // The queue submission that carried the slot's last encode.
+  void submitted(uint32_t slot, uint64_t submission);
+  // Reads the diagnostics of every submitted frame up to `completedSubmission`, so a still
+  // scene that encodes nothing new reports its last frame. Never moves back to an older one.
+  void collectCompleted(uint64_t completedSubmission);
   bool hasLod() const { return lod_ != nullptr; }
+
+  // Per-instance renderer policy. Render thread, while idle. Only sortDepth and
+  // subpixelThreshold are honoured; the caller resolves the rest.
+  bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
+  uint32_t sortKeyBits() const { return sortKeyBits_ == SortKeyBits::low16 ? 16u : 32u; }
+  float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
+  const VisibilityCapabilities& visibilityCapabilities() const {
+    return visibility_->capabilities();
+  }
 
  private:
   explicit VulkanFrameCompute(const VulkanContext& ctx);
@@ -57,7 +72,7 @@ class VulkanFrameCompute {
   static constexpr uint32_t kMaxRanges = 65536;
   const VulkanContext& ctx_;
   uint32_t sourceCount_ = 0, capacity_ = 0;
-  uint32_t keyBits_ = 32;
+  SortKeyBits sortKeyBits_ = SortKeyBits::full32;
   uint32_t timestampBits_ = 0;
   float timestampPeriod_ = 0;
   std::unique_ptr<LodSelection> lod_;
@@ -66,6 +81,8 @@ class VulkanFrameCompute {
   std::array<std::unique_ptr<GpuBuffer>, kSlots> ranges_, readback_;
   std::array<VkQueryPool, kSlots> queries_{};
   std::array<bool, kSlots> pending_{};
+  std::array<uint64_t, kSlots> submission_{};  // of the pending encode; 0 when not submitted
+  uint64_t collectedSubmission_ = 0;
   std::vector<RangeRecord> rangeRecords_;
   Stats stats_;
 };

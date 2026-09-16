@@ -14,6 +14,21 @@ import java.io.File
 
 private const val TAG = "SplatKit"
 
+internal fun dispatchSplatEvent(
+    listener: SplatSurfaceView.Listener,
+    event: SplatEngine.Event,
+    message: String,
+    splatCount: Int,
+) {
+    when (event) {
+        SplatEngine.Event.WORLD_READY -> listener.onWorldReady(splatCount)
+        SplatEngine.Event.WORLD_FRAME_READY -> listener.onWorldFrameReady(splatCount)
+        SplatEngine.Event.WORLD_FAILED -> listener.onWorldFailed(message)
+        SplatEngine.Event.COLLIDER_READY -> listener.onColliderReady()
+        SplatEngine.Event.COLLIDER_FAILED -> listener.onColliderFailed(message)
+    }
+}
+
 /**
  * A SurfaceView that renders with SplatKit.
  *
@@ -52,20 +67,16 @@ class SplatSurfaceView @JvmOverloads constructor(
     init {
         holder.addCallback(this)
         renderThread.onEvent = { event, message, splatCount ->
-            val l = listener
-            if (l != null) when (event) {
-                SplatEngine.Event.WORLD_READY -> l.onWorldReady(splatCount)
-                SplatEngine.Event.WORLD_FAILED -> l.onWorldFailed(message)
-                SplatEngine.Event.COLLIDER_READY -> l.onColliderReady()
-                SplatEngine.Event.COLLIDER_FAILED -> l.onColliderFailed(message)
-            }
+            listener?.let { dispatchSplatEvent(it, event, message, splatCount) }
         }
     }
 
-    /** Loading outcomes, delivered on the main thread. All methods have empty defaults. */
+    /** Loading and first-frame outcomes on the main thread. All methods have empty defaults. */
     interface Listener {
-        /** The world is uploaded and drawing. */
+        /** The world is uploaded; its first GPU frame may still be pending. */
         fun onWorldReady(splatCount: Int) {}
+        /** The GPU completed a frame drawing this world. Does not guarantee display scanout. */
+        fun onWorldFrameReady(splatCount: Int) {}
         /** The bytes were not a readable SPZ, or the GPU refused them; the previous world stays. */
         fun onWorldFailed(message: String) {}
         /** Walk mode is on. */
@@ -89,6 +100,12 @@ class SplatSurfaceView @JvmOverloads constructor(
      * copied through the Java heap, so this is the way to load big worlds.
      */
     fun loadWorld(file: File) = renderThread.loadWorldFile(file.absolutePath)
+
+    /** Applies load-time options on the render thread before scheduling this file's decode. */
+    fun loadWorld(file: File, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) {
+        require(maxShDegree in 0..3 && splatBudget >= 0 && residencyBudget in 100_000..8_000_000)
+        renderThread.loadWorldFile(file.absolutePath, maxShDegree, splatBudget, residencyBudget)
+    }
 
     /** Decodes a collider GLB from a file; enables walk mode when ready. */
     fun loadCollider(file: File) = renderThread.loadColliderFile(file.absolutePath)
@@ -222,6 +239,21 @@ class SplatSurfaceView @JvmOverloads constructor(
 
     /** GPU name and Vulkan version reported by the driver. */
     val gpuDescription: String get() = renderThread.gpuDescription
+
+    /**
+     * Applies a render policy to this view's engine on the render thread, before any world
+     * loaded afterwards. The engine re-validates the whole request: an invalid one, or one the
+     * GPU cannot prepare, keeps the previous policy; unsupported valid choices fall back with a
+     * warning each. [completion] receives the outcome on the main thread, in request order.
+     */
+    fun applyRenderPolicy(policy: RenderPolicy, completion: ((RenderPolicyResolution) -> Unit)? = null) =
+        renderThread.applyRenderPolicy(policy, completion)
+
+    /** The policy currently applied, or null before the engine exists. Any thread. */
+    val renderPolicy: RenderPolicy? get() = renderThread.renderPolicy()
+
+    /** Native limits, features and accepted policy, or null before the engine exists. */
+    val deviceCapabilities: DeviceCapabilities? get() = renderThread.deviceCapabilities()
 
     /** True while the gyroscope drives the camera. */
     val isMotionEnabled: Boolean get() = motionEnabled

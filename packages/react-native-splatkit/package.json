@@ -1,0 +1,33 @@
+{
+  "name": "@splatkit/react-native",
+  "version": "0.1.0-alpha.1",
+  "description": "SplatKit Fabric view with native Metal and Vulkan adapters",
+  "repository": { "type": "git", "url": "https://github.com/Xget7/react-native-splatkit.git" },
+  "license": "MIT",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "react-native": "src/index.ts",
+  "codegenConfig": {
+    "name": "SplatKitSpec",
+    "type": "components",
+    "jsSrcsDir": "src/specs",
+    "android": { "javaPackageName": "com.splatkit.reactnative" },
+    "ios": { "componentProvider": { "SplatKitView": "SplatKitViewComponentView" } }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test tests/*.test.cjs",
+    "codegen": "node scripts/codegen.cjs",
+    "check": "npm run typecheck && npm test && npm run codegen",
+    "prepack": "npm run check"
+  },
+  "engines": { "node": "^22.13.0 || ^24.3.0 || >=26.0.0" },
+  "devDependencies": {
+    "@react-native/codegen": "0.87.1",
+    "@types/react": "19.2.14",
+    "react": "19.2.4",
+    "react-native": "0.87.1",
+    "typescript": "5.9.3"
+  },
+  "files": ["build", "src", "scripts", "ios/*.h", "ios/*.mm", "android/build.gradle", "android/src", "SplatKitReactNative.podspec", "react-native.config.js", "README.md", "CHANGELOG.md"]
+}

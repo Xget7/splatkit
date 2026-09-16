@@ -1,5 +1,7 @@
 #include "rendering/vulkan/FrameLoop.h"
 
+#include <algorithm>
+
 #include "splatkit/Log.h"
 
 namespace splatkit {
@@ -83,9 +85,11 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
 
   // 1. Wait until the GPU finished the frame that last used this slot.
   if (vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, kTimeoutNanos) != VK_SUCCESS) {
+    completionFailed_ = true;
     LOGE("frame fence timed out: GPU stalled or device lost");
     return Status::error;
   }
+  finish(frame);
 
   // 2. Ask the swapchain for an image. The semaphore fires when it is really free.
   const VkResult acquired = vkAcquireNextImageKHR(
@@ -99,16 +103,6 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
   // Only reset the fence once we know we will submit, or the next wait would hang.
   vkResetFences(device, 1, &frame.inFlight);
 
-  // The fence wait above guarantees this slot's previous frame finished, so its
-  // timestamps are ready to read.
-  if (frame.timestamps && frame.timestampsWritten) {
-    uint64_t ticks[2] = {0, 0};
-    if (vkGetQueryPoolResults(device, frame.timestamps, 0, 2, sizeof(ticks), ticks,
-                              sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
-      lastGpuMillis_ = static_cast<double>(ticks[1] - ticks[0]) * timestampPeriodNanos_ * 1e-6;
-    }
-  }
-
   // 3. Start recording into a fresh command buffer.
   vkResetCommandPool(device, frame.pool, 0);
   VkCommandBufferBeginInfo beginInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -117,14 +111,13 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
   if (frame.timestamps) {
     vkCmdResetQueryPool(frame.cmd, frame.timestamps, 0, 2);
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, frame.timestamps, 0);
-    frame.timestampsWritten = true;
   }
   cmd = frame.cmd;
   return Status::ok;
 }
 
 FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t imageIndex) {
-  const Frame& frame = frames_[current_];
+  Frame& frame = frames_[current_];
   if (frame.timestamps) {
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame.timestamps, 1);
   }
@@ -141,9 +134,11 @@ FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t image
   submit.signalSemaphoreCount = 1;
   submit.pSignalSemaphores = &renderFinished_[imageIndex];
   if (vkQueueSubmit(ctx_.queue(), 1, &submit, frame.inFlight) != VK_SUCCESS) {
+    completionFailed_ = true;
     LOGE("vkQueueSubmit failed");
     return Status::error;
   }
+  frame.submission = ++lastSubmission_;
 
   // 5. Present once the render is done.
   VkSwapchainKHR handle = swapchain.handle();
@@ -164,10 +159,43 @@ FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t image
   // compares extents to tell the two apart.
   if (presented == VK_SUBOPTIMAL_KHR) return Status::swapchainSuboptimal;
   if (presented != VK_SUCCESS) {
+    completionFailed_ = true;
     LOGE("vkQueuePresentKHR failed: %d", presented);
     return Status::error;
   }
   return Status::ok;
+}
+
+uint64_t FrameLoop::completedSubmission() {
+  if (completionFailed_) return 0;
+  for (Frame& frame : frames_) {
+    if (frame.submission == 0) continue;
+    const VkResult status = vkGetFenceStatus(ctx_.device(), frame.inFlight);
+    if (status == VK_SUCCESS) {
+      finish(frame);
+    } else if (status != VK_NOT_READY) {
+      completionFailed_ = true;
+      LOGE("frame completion query failed: %d", status);
+      return 0;
+    }
+  }
+  return completedSubmission_;
+}
+
+// Once per submitted frame, after its fence: marks it complete and reads its GPU time.
+void FrameLoop::finish(Frame& frame) {
+  if (frame.submission == 0) return;
+  completedSubmission_ = std::max(completedSubmission_, frame.submission);
+  // Slots are polled in order, not by age: an older frame keeps a newer one's time.
+  if (frame.timestamps && frame.submission > timedSubmission_) {
+    uint64_t ticks[2] = {0, 0};
+    if (vkGetQueryPoolResults(ctx_.device(), frame.timestamps, 0, 2, sizeof(ticks), ticks,
+                              sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+      lastGpuMillis_ = static_cast<double>(ticks[1] - ticks[0]) * timestampPeriodNanos_ * 1e-6;
+      timedSubmission_ = frame.submission;
+    }
+  }
+  frame.submission = 0;
 }
 
 }  // namespace splatkit

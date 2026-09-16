@@ -81,7 +81,7 @@ tidy() {  # <compile database dir> <sources...>
   local extra=()
   (( fix )) && extra=(--fix --fix-errors)
   printf '%s\n' "$@" | xargs -P "$(getconf _NPROCESSORS_ONLN)" -n 4 \
-    "$clang_tidy" -p "$db" --quiet "${extra[@]}" || failed=1
+    "$clang_tidy" -p "$db" --quiet ${extra[@]+"${extra[@]}"} || failed=1
 }
 
 echo "clang-tidy splat-core"
