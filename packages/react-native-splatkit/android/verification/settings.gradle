@@ -1,7 +1,16 @@
 pluginManagement {
+    // :adapter (../build.gradle, this package's android/build.gradle) applies com.facebook.react
+    // directly, so its plugin id must resolve here too, the same way a real app's settings.gradle
+    // resolves it (see apps/react-native-dev/android/settings.gradle); the package's own devDependency
+    // on react-native brings this in under its node_modules.
+    includeBuild '../../node_modules/@react-native/gradle-plugin'
     repositories { google(); mavenCentral(); gradlePluginPortal() }
     plugins {
-        id 'com.android.library' version '8.11.1'
+        // AGP tracks what the com.facebook.react plugin (react-native 0.87.1's gradle-plugin,
+        // gradle/libs.versions.toml) was built against, the same version apps/react-native-dev
+        // resolves through com.facebook.react.rootproject; :adapter now applies com.facebook.react
+        // directly, so this build needs the same AGP, not packages/splatkit-android's own 8.11.1.
+        id 'com.android.library' version '9.2.1'
         id 'org.jetbrains.kotlin.android' version '2.2.0'
         id 'com.vanniktech.maven.publish' version '0.34.0'
     }

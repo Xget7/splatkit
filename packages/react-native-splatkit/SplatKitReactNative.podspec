@@ -6,14 +6,16 @@ Pod::Spec.new do |s|
   s.license = { :type => 'MIT' }
   s.author = { 'SplatKit' => 'opensource@splatkit.dev' }
   s.platforms = { :ios => '17.0' }
-  s.source = { :git => 'https://github.com/Xget7/react-native-splatkit.git', :tag => s.version.to_s }
+  s.source = { :git => 'https://github.com/Xget7/react-native-splatkit.git', :tag => "v#{s.version}" }
   s.source_files = 'ios/**/*.{h,mm}'
   s.public_header_files = 'ios/*.h'
-  s.dependency 'React-Core'
+  # The engine and SplatKit/SKSplatEngine.h; scripts/fetch-ios-xcframework.cjs installs it at npm prepack.
+  s.vendored_frameworks = 'ios/SplatKitCore.xcframework'
+  # The spz loader calls the system zlib.
+  s.libraries = 'c++', 'z'
   s.frameworks = 'UIKit', 'QuartzCore', 'Metal'
   s.requires_arc = true
-  s.pod_target_xcconfig = {
-    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
-    'HEADER_SEARCH_PATHS' => '$(inherited) "${PODS_TARGET_SRCROOT}/../splatkit-ios/Sources/SplatKitCore/include"'
-  }
+
+  # Defined by the app's Podfile (react_native_pods); adds the Fabric dependencies and flags, so it runs last.
+  install_modules_dependencies(s)
 end

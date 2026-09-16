@@ -6,3 +6,5 @@ build/
 local.properties
 *.tgz
 .DS_Store
+# Fetched by scripts/fetch-ios-xcframework.cjs at npm prepack.
+ios/SplatKitCore.xcframework/

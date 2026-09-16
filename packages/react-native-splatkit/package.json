@@ -7,6 +7,7 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "react-native": "src/index.ts",
+  "publishConfig": { "access": "public" },
   "codegenConfig": {
     "name": "SplatKitSpec",
     "type": "components",
@@ -19,9 +20,14 @@
     "test": "tsc && node --test tests/*.test.cjs",
     "codegen": "node scripts/codegen.cjs",
     "check": "npm run typecheck && npm test && npm run codegen",
-    "prepack": "npm run check"
+    "fetch:ios-xcframework": "node scripts/fetch-ios-xcframework.cjs",
+    "prepack": "npm run check && npm run fetch:ios-xcframework"
   },
   "engines": { "node": "^22.13.0 || ^24.3.0 || >=26.0.0" },
+  "peerDependencies": {
+    "react": "^19.2.3",
+    "react-native": "~0.87.1"
+  },
   "devDependencies": {
     "@react-native/codegen": "0.87.1",
     "@types/react": "19.2.14",
@@ -29,5 +35,10 @@
     "react-native": "0.87.1",
     "typescript": "5.9.3"
   },
-  "files": ["build", "src", "scripts", "ios/*.h", "ios/*.mm", "android/build.gradle", "android/src", "SplatKitReactNative.podspec", "react-native.config.js", "README.md", "CHANGELOG.md"]
+  "files": [
+    "build", "src", "scripts",
+    "ios/*.h", "ios/*.mm", "ios/SplatKitCore.xcframework",
+    "android/build.gradle", "android/src",
+    "SplatKitReactNative.podspec", "react-native.config.js", "README.md", "CHANGELOG.md"
+  ]
 }

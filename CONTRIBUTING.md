@@ -55,6 +55,14 @@ npm run check                # TypeScript, contract tests and Fabric Codegen
 ```
 
 Adapter changes also need the Android adapter host tests in its [README](packages/react-native-splatkit/android/README.md) and a run of the [RN dev app](apps/react-native-dev/README.md) on a device.
+Check build wiring changes in a fresh React Native app outside this repository, installing the `npm pack` tarball.
+`prepack` fetches and checksum-verifies the iOS `SplatKitCore.xcframework`; `SPLATKIT_IOS_XCFRAMEWORK_PATH` substitutes a local `scripts/package-ios.sh` build.
+
+## Publish the React Native package
+
+Release `splatkit-android` and `splatkit-ios` first, then match the Android version in `android/build.gradle` and `scripts/ios-xcframework.json`.
+Export with `scripts/export-ios-source.py --platform react-native` and push to [react-native-splatkit](https://github.com/Xget7/react-native-splatkit).
+A `v<package.json version>` tag there runs `.github/workflows/publish.yml`, which needs the `NPM_TOKEN` secret and publishes prereleases under the `next` dist-tag.
 
 ## Lint the C++
 

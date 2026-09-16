@@ -10,7 +10,12 @@ using namespace facebook::react;
 @property(nonatomic, strong) SplatKitRNView *splatView;
 @end
 
-@implementation SplatKitViewComponentView
+@implementation SplatKitViewComponentView {
+  // Fabric mounts with updateProps before updateEventEmitter, so world and policy work waits for
+  // finalizeUpdates; otherwise the capability and policy events of the first engine are dropped.
+  BOOL _worldChanged;
+  BOOL _policyChanged;
+}
 
 + (ComponentDescriptorProvider)componentDescriptorProvider {
   return concreteComponentDescriptorProvider<SplatKitViewComponentDescriptor>();
@@ -103,8 +108,7 @@ using namespace facebook::react;
   auto previous = oldProps ? std::static_pointer_cast<const SplatKitViewProps>(oldProps) : nullptr;
   _splatView.paused = next.paused; _splatView.renderScale = next.renderScale; _splatView.shDegree = next.shDegree;
   // Codegen gives an absent policy revision 0; like Android, 0 or less means no policy.
-  const bool policyChanged = !previous || next.policy.revision != previous->policy.revision;
-  if (policyChanged) {
+  if (!previous || next.policy.revision != previous->policy.revision) {
     SKRenderPolicy policy;
     policy.raster = static_cast<uint32_t>(next.policy.raster);
     policy.tileSize = static_cast<uint32_t>(next.policy.tileSize);
@@ -116,17 +120,27 @@ using namespace facebook::react;
     policy.enableEarlyTermination = next.policy.enableEarlyTermination;
     policy.sortDepth = static_cast<uint32_t>(next.policy.sortDepth);
     [_splatView setPolicy:policy revision:next.policy.revision];
+    _policyChanged = YES;
   }
-  if (!previous || next.world.requestId != previous->world.requestId) {
-    if (next.world.requestId.empty()) {
+  if (!previous || next.world.requestId != previous->world.requestId) _worldChanged = YES;
+}
+
+- (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask {
+  [super finalizeUpdates:updateMask];
+  const BOOL worldChanged = _worldChanged, policyChanged = _policyChanged;
+  _worldChanged = NO;
+  _policyChanged = NO;
+  if (worldChanged) {
+    const auto &world = std::static_pointer_cast<const SplatKitViewProps>(_props)->world;
+    if (world.requestId.empty()) {
       // An empty request ID means no world; release the current one like Android's null world.
       [_splatView dispose];
     } else {
       // The engine this load creates applies the stored policy, so it is applied once.
-      [_splatView loadWorld:[NSString stringWithUTF8String:next.world.filePath.c_str()]
-                   requestId:[NSString stringWithUTF8String:next.world.requestId.c_str()]
-               maxShDegree:next.world.maxShDegree lodCapacity:next.world.lodCapacitySplats
-         residencyCapacity:next.world.residencyCapacitySplats];
+      [_splatView loadWorld:[NSString stringWithUTF8String:world.filePath.c_str()]
+                   requestId:[NSString stringWithUTF8String:world.requestId.c_str()]
+               maxShDegree:world.maxShDegree lodCapacity:world.lodCapacitySplats
+         residencyCapacity:world.residencyCapacitySplats];
       return;
     }
   }
@@ -135,6 +149,8 @@ using namespace facebook::react;
 
 - (void)prepareForRecycle {
   [super prepareForRecycle];
+  _worldChanged = NO;
+  _policyChanged = NO;
   _splatView.worldEvent = nil;
   _splatView.statsEvent = nil;
   _splatView.policyEvent = nil;

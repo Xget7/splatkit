@@ -1,18 +1,17 @@
 # Android Fabric adapter
 
-`SplatKitPackage` registers `SplatKitView` using the generated Codegen delegate.
-The pinned React Native baseline is 0.87.1; the module requires SDK 36, minSdk 29, Java 17 and the repository's `:splatkit` project.
-Codegen runs before compilation and emits Java and Fabric C++ bindings into `build/generated/source/codegen`.
-A consuming Fabric application must register the package and link the generated `SplatKitSpec` component descriptor through its Codegen/autolinking setup.
-No Maven dependency is published; the SplatKit repository's RN dev app is the verified consumer, on a physical Mi 9.
+`SplatKitPackage` registers `SplatKitView` through the generated Codegen delegate.
+The module needs compileSdk 36 or the app's `rootProject.ext` value, minSdk 29, Java 17 and arm64-v8a.
+It applies `com.facebook.react`, so the consuming app autolinks it and runs its Codegen.
+It depends on `io.github.xget7:splatkit-android:0.1.0-alpha07`, or on `project(':splatkit')` when the build defines one, as in the SplatKit repository.
 
-From the SplatKit repository root, after `npm ci` in the package:
+Host tests, from the SplatKit repository root after `npm ci` in the package:
 
 ```sh
-apps/android-dev/gradlew -p packages/react-native-splatkit/android/verification :adapter:compileDebugKotlin :adapter:testDebugUnitTest
+apps/react-native-dev/android/gradlew -p packages/react-native-splatkit/android/verification :adapter:compileDebugKotlin :adapter:testDebugUnitTest
 ```
 
-Verification uses AGP 8.11.1 and Kotlin 2.2.0 and compiles against the real RN artifact and generated interfaces.
+The verification build has no `:app` to seed plugin Codegen, so it runs `scripts/codegen-android.cjs` instead; see `android/verification/build.gradle`.
 The host tests cover request validation, stale outcomes, upload/frame ordering, the stats rate limit and policy prop parsing.
 They do not mount Fabric, exercise Activity/surface lifecycle or run Vulkan.
 

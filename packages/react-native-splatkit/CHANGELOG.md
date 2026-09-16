@@ -2,7 +2,6 @@
 
 Notable changes to the SplatKit React Native package.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions before 1.0 may break APIs.
-The package is not published to npm yet.
 
 ## Unreleased
 
@@ -16,14 +15,22 @@ This release replaces the previous `react-native-splatkit` binding, which bound 
 - A versioned `policy` prop, the `onCapabilities` event and `onPolicyEvent` reporting `applied`, `warning` or `rejected` with the effective policy.
 - `onWorldEvent` with `uploaded`, `frameReady` and `failed` phases, and `onStats` snapshots throttled to 2 Hz with timing availability flags.
 - Shared failure codes `INVALID_REQUEST`, `WORLD_LOAD_FAILED`, `GPU_UNAVAILABLE`, `INVALID_POLICY` and `POLICY_PREPARATION_FAILED`.
+- Standalone build wiring for installing outside the SplatKit repository: the Android module applies the `com.facebook.react` Gradle plugin for autolinking and Codegen and depends on `io.github.xget7:splatkit-android` from Maven Central by default, and `SplatKitReactNative.podspec` vendors a `SplatKitCore.xcframework` fetched and checksum-verified at `npm prepack`.
+- `peerDependencies` on `react` and `react-native` 0.87, and a `publish.yml` workflow that publishes a `v*` tag to npm.
+- One-finger look and two-finger walk on iOS, matching the Android SDK view's touch input.
+
+### Fixed
+
+- iOS dropped the first engine's `onCapabilities` and `onPolicyEvent`, because Fabric mounts props before the event emitter; world and policy work now runs in `finalizeUpdates`.
 
 ### Removed
 
 - The `react-native-splatkit` package name, `SplatView` and its `source`, `collider`, `quality`, `cameraPose`, `motionEnabled`, sensitivity and `statsInterval` props.
 - The `onEngineReady`, `onWorldReady`, `onWorldFailed`, `onColliderReady` and `onColliderFailed` events, and the imperative `setWalkVelocity`, `setCameraPose` and `startBenchmark` handle.
-  Colliders, camera control and input are not wired into the Fabric view yet.
+  Colliders and camera poses are not wired into the Fabric view yet.
 
 ### Known limitations
 
-- The package builds only inside the [SplatKit repository](https://github.com/Xget7/splatkit-android); standalone installs are not supported yet.
-- Android is validated on a physical Mi 9; iOS compiles against the simulator SDK and has not run on a device.
+- Not published to npm yet; external consumer apps were validated from an `npm pack` tarball.
+- A fresh React Native 0.87.1 app builds the tarball on both platforms and ran it on an iPhone 17 Pro; on Android only the SplatKit RN dev app has run, on a Mi 9.
+- iOS has no gyroscope toggle, and colliders, camera poses and joysticks are not exposed.

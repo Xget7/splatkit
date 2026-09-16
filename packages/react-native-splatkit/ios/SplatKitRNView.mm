@@ -12,6 +12,9 @@ static NSString *const kErrorPolicyPreparationFailed = @"POLICY_PREPARATION_FAIL
 
 /// Stats snapshots leave the render thread at most twice a second.
 static const CFTimeInterval kStatsInterval = 0.5;
+/// SplatMetalView's and the Android view's touch sensitivities: radians and meters per point dragged.
+static const float kLookSensitivity = 0.004f;
+static const float kWalkSensitivity = 0.01f;
 
 @class _SplatKitRNLinkProxy;
 
@@ -63,6 +66,14 @@ static const CFTimeInterval kStatsInterval = 0.5;
     _loaderQueue = dispatch_queue_create("com.splatkit.rn.loader", DISPATCH_QUEUE_SERIAL);
     self.linkProxy = [[_SplatKitRNLinkProxy alloc] init];
     self.linkProxy.target = self;
+    // One finger looks around and two fingers walk, like the SDK views.
+    UIPanGestureRecognizer *look = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onLook:)];
+    look.maximumNumberOfTouches = 1;
+    [self addGestureRecognizer:look];
+    UIPanGestureRecognizer *walk = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onWalk:)];
+    walk.minimumNumberOfTouches = 2;
+    walk.maximumNumberOfTouches = 2;
+    [self addGestureRecognizer:walk];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self selector:@selector(appDidEnterBackground)
                    name:UIApplicationDidEnterBackgroundNotification object:nil];
@@ -92,6 +103,21 @@ static const CFTimeInterval kStatsInterval = 0.5;
 - (void)setShDegree:(NSInteger)value {
   _shDegree = MIN(MAX(value, 0), 3);
   [_engine setShDegree:(int)_shDegree];
+}
+
+// MARK: - Gestures
+
+// The engine renders on the main thread here, so gestures drive it directly.
+- (void)onLook:(UIPanGestureRecognizer *)gesture {
+  const CGPoint d = [gesture translationInView:self];
+  [_engine lookWithDeltaYaw:-(float)d.x * kLookSensitivity deltaPitch:-(float)d.y * kLookSensitivity];
+  [gesture setTranslation:CGPointZero inView:self];
+}
+
+- (void)onWalk:(UIPanGestureRecognizer *)gesture {
+  const CGPoint d = [gesture translationInView:self];
+  [_engine walkForward:-(float)d.y * kWalkSensitivity right:(float)d.x * kWalkSensitivity];
+  [gesture setTranslation:CGPointZero inView:self];
 }
 
 // MARK: - Policy and capabilities

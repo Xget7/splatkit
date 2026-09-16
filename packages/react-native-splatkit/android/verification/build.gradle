@@ -3,3 +3,32 @@ plugins {
     id 'org.jetbrains.kotlin.android' apply false
     id 'com.vanniktech.maven.publish' apply false
 }
+
+// :adapter declares `implementation 'com.facebook.react:react-android'` with no version; a real
+// app's com.facebook.react application plugin forces the real version build-wide, but this
+// harness has no :app project to do that, so force it here to the RN baseline it compiles against.
+project(':adapter').configurations.all {
+    resolutionStrategy.force 'com.facebook.react:react-android:0.87.1'
+}
+
+project(':adapter').afterEvaluate { adapter ->
+    // :adapter's own Codegen tasks (registered by the com.facebook.react plugin its build.gradle
+    // applies) read the shared root/codegenDir/reactNativeDir that only a real app's
+    // com.facebook.react *application* plugin seeds; this harness has no :app project, so those
+    // would resolve one directory too high (this build's own root is android/verification, not
+    // the package root). Disable them and run the package's own Codegen script instead, into the
+    // same directory the plugin's generated Java sourceSet already points at.
+    adapter.tasks.named('generateCodegenSchemaFromJavaScript') { enabled = false }
+    adapter.tasks.named('generateCodegenArtifactsFromSchema') { enabled = false }
+    def codegenOutput = adapter.layout.buildDirectory.dir('generated/source/codegen')
+    def packageRoot = adapter.projectDir.parentFile
+    def generateBindings = adapter.tasks.register('generateSplatKitCodegenForVerification', Exec) {
+        workingDir packageRoot
+        commandLine 'node', 'scripts/codegen-android.cjs', codegenOutput.get().asFile
+        inputs.dir new File(packageRoot, 'src/specs')
+        inputs.file new File(packageRoot, 'package.json')
+        inputs.file new File(packageRoot, 'scripts/codegen-android.cjs')
+        outputs.dir codegenOutput
+    }
+    adapter.tasks.named('preBuild') { dependsOn(generateBindings) }
+}

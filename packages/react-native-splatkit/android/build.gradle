@@ -1,33 +1,44 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
+    id 'com.facebook.react'
+}
+
+// SDK levels come from the including app's own root build.gradle, like the community RN
+// template sets them (rootProject.ext.compileSdkVersion, .minSdkVersion, ...); fall back to
+// this SDK's own minimums when nothing sets them (this package's verification harness).
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
 android {
     namespace 'com.splatkit.reactnative'
-    compileSdk 36
-    defaultConfig { minSdk 29 }
+    compileSdk safeExtGet('compileSdkVersion', 36)
+    defaultConfig { minSdk safeExtGet('minSdkVersion', 29) }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = '17' }
-    // A File, not a Provider: AGP 9 rejects Provider source directories by default.
-    sourceSets.main.java.srcDir layout.buildDirectory.dir('generated/source/codegen/java').get().asFile
 }
+// Codegen (schema, Java view manager bindings and the jni/CMakeLists.txt autolinking reads)
+// now comes from the com.facebook.react plugin applied above, which runs it from this
+// module's codegenConfig in ../package.json and adds the generated Java sourceSet itself.
 
-def generateBindings = tasks.register('generateSplatKitCodegen', Exec) {
-    workingDir projectDir.parentFile
-    commandLine 'node', 'scripts/codegen-android.cjs', layout.buildDirectory.dir('generated/source/codegen').get().asFile
-    inputs.dir '../src/specs'
-    inputs.file '../package.json'
-    inputs.file '../scripts/codegen-android.cjs'
-    outputs.dir layout.buildDirectory.dir('generated/source/codegen')
-}
-tasks.named('preBuild').configure { dependsOn generateBindings }
+// The SplatKit Android SDK: the Maven Central release by default, or the monorepo's own
+// :splatkit Gradle project when this module builds inside that repository (the RN dev app
+// and this package's own verification harness). Kept in one place, so bumping the release
+// this package targets only means changing this line.
+def splatkitAndroidVersion = '0.1.0-alpha07'
 
 dependencies {
-    implementation 'com.facebook.react:react-android:0.87.1'
-    implementation project(':splatkit')
+    // Version resolution comes from the React Native Gradle plugin applied above; a
+    // consuming app forces this to the react-native version it builds against.
+    implementation 'com.facebook.react:react-android'
+    if (rootProject.findProject(':splatkit') != null) {
+        implementation project(':splatkit')
+    } else {
+        implementation "io.github.xget7:splatkit-android:${splatkitAndroidVersion}"
+    }
     testImplementation 'junit:junit:4.13.2'
 }
