@@ -55,6 +55,10 @@ class SplatWorldLoader {
   void setBudget(int budget);
   int budget() const { return budget_.load(); }
 
+  // Highest SH degree materialized for worlds loaded from now on. The source SPZ remains full.
+  void setMaxShDegree(int degree);
+  int maxShDegree() const { return maxShDegree_.load(); }
+
   // Errors leave whatever was waiting untouched.
   Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size);
   Result<WorldReport> loadWorldFile(const std::string& path);
@@ -70,6 +74,7 @@ class SplatWorldLoader {
 
  private:
   std::atomic<int> budget_{0};
+  std::atomic<int> maxShDegree_{3};
   std::mutex mutex_;
   std::unique_ptr<World> pendingWorld_;
   std::unique_ptr<Collider> pendingCollider_;

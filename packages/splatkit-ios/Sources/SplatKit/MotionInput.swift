@@ -1,5 +1,8 @@
 import CoreMotion
 import UIKit
+#if canImport(SplatKitCore)
+import SplatKitCore
+#endif
 
 /// Turns the phone's orientation into a camera attitude.
 ///

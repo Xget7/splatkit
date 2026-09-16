@@ -1,8 +1,13 @@
 # splatkit-ios
 
 Gaussian splat rendering for iOS: the shared SplatKit engine drawn with Metal, wrapped in a `UIView`.
+Requires iOS 17+ and Apple GPU family 7+ (A14/M1+); unsupported GPUs report unavailable.
 
 ## Use it
+
+Swift Package Manager: add `https://github.com/Xget7/splatkit-ios`, product `SplatKit`, then `import SplatKit`.
+Choose exact version `0.1.0-alpha.2`.
+For source builds:
 
 Build the static libraries with `scripts/build-ios.sh` from the repository root, then add to your target:
 
@@ -11,7 +16,7 @@ Build the static libraries with `scripts/build-ios.sh` from the repository root,
 - `build/ios/lib` in the library search paths and `-lsplatkit_ios -lsplatkit_engine -lsplat_core -lspz -lzstd -lz -lc++` in the linker flags,
 - the Metal, QuartzCore, CoreMotion, ImageIO, CoreGraphics and UniformTypeIdentifiers frameworks.
 
-A Swift package with a binary xcframework is planned; `apps/ios-dev/project.yml` is the reference setup until then.
+`scripts/package-ios.sh` builds the XCFramework; `Package.swift` pins its release checksum.
 
 ```swift
 let view = SplatMetalView()
@@ -30,7 +35,7 @@ Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the lay
 
 | Member | What it does |
 | --- | --- |
-| `loadWorld(file:)` | Decodes and shows a `.spz` or `.ply` world; the file is mapped, not copied |
+| `loadWorld(file:)` | Decodes and shows a `.spz`, `.ply` or `.lodsplat` world; the file is mapped, not copied |
 | `loadTiledWorld(tileset:)` | Streams a tiled world made by `splat-tile` within `residencyBudget` |
 | `loadCollider(file:)` | Decodes a GLB mesh and enables walk mode |
 | `cameraPose` | Position, yaw and pitch; set it to teleport |
@@ -51,7 +56,7 @@ Gestures: one finger looks, two fingers walk, a double tap toggles the gyroscope
 ## Layout
 
 ```
-Sources/SplatKitCore/rendering/    MetalSplatRenderer (Objective-C++) and Splat.metal, the SplatRenderer implementation
+Sources/SplatKitCore/rendering/    renderer, world, visibility, radix, LOD, tiles; shaders/ contains MSL
 Sources/SplatKitCore/engine/       SKSplatEngine, the Objective-C boundary over the shared engine
 Sources/SplatKitCore/include/      the public header Swift imports
 Sources/SplatKit/                  RenderThread, MotionInput, SplatMetalView
@@ -60,7 +65,44 @@ cmake/                             embeds the shader source into the library
 
 The shader is compiled at run time from the embedded source, so the library is a plain static archive with no metallib to ship.
 The renderer keeps two frames in flight and reads GPU time from the command buffer.
-The visible order is made on the GPU (`MetalVisibility`, ADR 0017): a cull of the slab ranges to draw, the projection and colour of each survivor, a radix sort by distance and an indirect draw, so the CPU never sorts for this renderer; the time of that pass is what `readStats().sortMillis` reports.
+GPU path: visibility → radix → indirect draw; compatibility frames may use CPU order.
+`sortMillis` includes visibility/radix.
 That path draws front to back and stops shading a pixel once it is opaque (ADR 0018), so the frame costs what the visible layers cost.
 The sort has unit tests that run on a Mac: `cmake -S packages/splatkit-ios -B build/ios-mac && cmake --build build/ios-mac && ctest --test-dir build/ios-mac`.
 Colours blend in the encoded space by default, on a `bgra8Unorm` layer; `linearBlending` switches the layer to `bgra8Unorm_srgb`.
+
+## Experiments
+
+Start motion after `splatView(_:worldFrameReady:)`, not upload-only `worldReady`.
+Keep the view attached/resumed while loading; readiness means GPU completion, not visual acceptance.
+
+Dev-only switches, applied before renderer creation:
+
+| Switch | Effect |
+|---|---|
+| `--metal-culling 1 --min-pixel-radius 1` | Covariance bounds, opacity/subpixel rejection |
+| `--depth-key-bits 16` | Two radix passes; uint32 storage unchanged; ties may shimmer |
+| `--tile-raster 1` | 16×16 tiles; compute ≤512 candidates, dense/large-footprint tiles use hardware |
+| `--budget 2200000` | LOD capacity, not guaranteed quality |
+| `--orbit-horizontal 0` | Previous vertical framing for benchmark reproduction |
+| `--run-seconds 20` | Bounded run with resource monitoring |
+
+Defaults: 32-bit sorting, tiles disabled.
+Culling, LOD and depth quantization are approximations pending visual acceptance.
+Tile termination uses transmittance ≤0.0001; hardware geometry submission remains.
+Private allocations still consume unified memory.
+The dev memory guard cannot cancel in-flight work or prevent allocation spikes.
+
+Build `splat_lod_build` from `splat-core/tools`; invoke `splat_lod_build input.spz output.lodsplat --depth 10 --sh 1`.
+Output must be new.
+Moment-matched parents remain approximate; original leaves survive.
+Parents use [moment-matching initialization](https://arxiv.org/html/2406.12080v1#S4.SS1), without training/refinement.
+v2 adds interior metadata and leaf packets; v1 remains readable.
+Layout/validation: [LodFile.cpp](../splat-core/src/lod/LodFile.cpp).
+Selection feeds visibility → radix → raster; denied refinements retain parents and report pressure.
+The hierarchy stays resident, without Hi-Z or temporal transitions.
+
+Stats: `loadedSplatCount` counts source splats; `drawnSplatCount` counts completed draw candidates.
+Tile counts distinguish compute, nonempty compute and hardware screen tiles.
+Command timings overlap; HUD sort includes visibility/radix.
+[Measurements](../../docs/BENCHMARKS.md) separate visual rejection, Mac checks and phone evidence.

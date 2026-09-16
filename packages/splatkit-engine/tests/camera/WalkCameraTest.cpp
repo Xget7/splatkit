@@ -29,8 +29,28 @@ TEST(WalkCamera, LookAtFramesTheTargetWithTheGivenUpAndPassesThePole) {
   const splat::Vec3 origin = camera.viewMatrix().transformPoint({0, 0, 0});
   EXPECT_NEAR(origin.z, -10.0f, 1e-5f);
   EXPECT_NEAR(camera.pitch(), -kPi / 2, 1e-5f);
-  camera.look(0.0f, 0.0f);  // a touch takes the view back to yaw and pitch
+  camera.look(0.0f, 0.0f);  // Touch must preserve the complete look-at orientation.
   EXPECT_NEAR(camera.rotation().transformDirection({0, 0, -1}).y, -1.0f, 1e-2f);
+  EXPECT_NEAR(camera.rotation().transformDirection({0, 1, 0}).z, 1.0f, 1e-5f);
+}
+
+TEST(WalkCamera, TouchAfterLookAtKeepsRollAndTurnsInScreenAxes) {
+  WalkCamera camera;
+  camera.setLookAt({0, -2, 130}, {0, -2, -2}, {1, 0, 0});
+  const auto before = camera.rotation();
+  camera.look(0, 0);
+  for (size_t i = 0; i < before.m.size(); ++i) {
+    EXPECT_NEAR(camera.rotation().m[i], before.m[i], 1e-6f);
+  }
+  camera.look(0.1f, 0.2f);
+  const auto expected =
+      before * splat::Mat4::rotation(0.1f, {0, 1, 0}) * splat::Mat4::rotation(0.2f, {1, 0, 0});
+  for (size_t i = 0; i < expected.m.size(); ++i) {
+    EXPECT_NEAR(camera.rotation().m[i], expected.m[i], 1e-6f);
+  }
+  EXPECT_FLOAT_EQ(camera.position().x, 0);
+  EXPECT_FLOAT_EQ(camera.position().y, -2);
+  EXPECT_FLOAT_EQ(camera.position().z, 130);
 }
 
 TEST(WalkCamera, YawTurnsLeftAboutUpAndWalkFollowsTheView) {

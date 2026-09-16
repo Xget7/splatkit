@@ -3,6 +3,8 @@ package com.splatkit.engine
 import android.view.Surface
 import com.splatkit.CameraPose
 import com.splatkit.SplatStats
+import com.splatkit.SPLAT_STATS_FLOATS
+import com.splatkit.decodeSplatStats
 
 /**
  * The JNI boundary to the C++ engine: one opaque handle owned by native code, one
@@ -15,7 +17,7 @@ import com.splatkit.SplatStats
 internal class SplatEngine {
     private var handle: Long = nativeCreate()
     private val poseScratch = FloatArray(POSE_FLOATS)
-    private val statsScratch = FloatArray(STATS_FLOATS)
+    private val statsScratch = FloatArray(SPLAT_STATS_FLOATS)
 
     /** False when Vulkan could not be brought up; every call is then a no-op. */
     val isValid: Boolean get() = handle != 0L
@@ -88,14 +90,7 @@ internal class SplatEngine {
     fun readStats(into: SplatStats): SplatStats = synchronized(this) {
         if (handle == 0L) return into
         nativeStats(handle, statsScratch)
-        into.fps = statsScratch[0]
-        into.frameMillis = statsScratch[1]
-        into.gpuMillis = statsScratch[2]
-        into.sortMillis = statsScratch[3]
-        into.splatCount = statsScratch[4].toInt()
-        into.walking = statsScratch[5] != 0f
-        into.motion = statsScratch[6] != 0f
-        into
+        decodeSplatStats(statsScratch, into)
     }
 
     // The any-thread readers above take the same lock, so none of them can run on a
@@ -134,12 +129,11 @@ internal class SplatEngine {
     private external fun nativeSetMaxShDegree(handle: Long, degree: Int)
     private external fun nativeSetShDegree(handle: Long, degree: Int)
     private external fun nativeStartBenchmark(handle: Long, seconds: Float)
-    /** Fills [out] (at least [STATS_FLOATS]) with fps, frame ms, gpu ms, sort ms, splats, walking, motion. */
+    /** Fills [out] using the [decodeSplatStats] layout ([SPLAT_STATS_FLOATS] floats). */
     private external fun nativeStats(handle: Long, out: FloatArray)
 
     private companion object {
         const val POSE_FLOATS = 5
-        const val STATS_FLOATS = 7
 
         init {
             System.loadLibrary("splatkit")

@@ -30,6 +30,12 @@ double millisSince(Clock::time_point start) {
 SplatEngine::SplatEngine(std::unique_ptr<SplatRenderer> renderer)
     : renderer_(std::move(renderer)) {}
 
+void SplatEngine::setMaxShDegree(int degree) {
+  degree = std::clamp(degree, 0, kMaxShDegree);
+  maxShDegree_ = degree;
+  loader_.setMaxShDegree(degree);
+}
+
 // The renderer goes first: it waits for the GPU, which may still read an order the
 // sorter or the streamer own.
 SplatEngine::~SplatEngine() {
@@ -121,19 +127,24 @@ bool SplatEngine::applyPendingLoads() {
     sorter_.reset();
     streamer_ = std::make_unique<splat::TileStreamer>(std::move(*world->tiles), options);
   } else {
-    if (!renderer_->uploadWorld(world->splats(), maxShDegree_.load())) {
+    const bool gpuLod = world->tree && renderer_->selectsLodOnGpu();
+    const bool uploaded = gpuLod ? renderer_->uploadLodWorld(*world->tree, maxShDegree_.load(),
+                                                             static_cast<uint32_t>(world->budget))
+                                 : renderer_->uploadWorld(world->splats(), maxShDegree_.load());
+    if (!uploaded) {
       LOGE("world upload failed");
       emit(Event::worldFailed, "GPU upload failed");
       return false;
     }
     // The sorter keeps the positions, or the tree, whose attributes are already on the
     // GPU. A renderer that sorts on the GPU takes the whole world as one range instead;
-    // a world with a level of detail tree keeps the CPU sorter, which selects the nodes.
+    // a tree uses CPU selection only on renderers without native GPU LOD support.
     streamer_.reset();
-    gpuSort_ = renderer_->sortsOnGpu() && !world->tree;
-    sorter_ = world->tree ? std::make_unique<splat::AsyncSorter>(world->tree)
-              : gpuSort_  ? nullptr
-                         : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
+    gpuSort_ = renderer_->sortsOnGpu() && (!world->tree || gpuLod);
+    sorter_ = gpuSort_ ? nullptr
+              : world->tree
+                  ? std::make_unique<splat::AsyncSorter>(world->tree)
+                  : std::make_unique<splat::AsyncSorter>(std::move(world->cloud->positions));
   }
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
@@ -232,8 +243,8 @@ void SplatEngine::streamTiles(const FrameCamera& camera, float pixelScale,
 void SplatEngine::takeSortResult() {
   if (gpuSort_) {
     lastSort_.sortMillis = renderer_->lastSortMillis();
-    lastSort_.cullMillis = 0;
-    lastSort_.selectMillis = 0;
+    lastSort_.cullMillis = renderer_->lastCullMillis();
+    lastSort_.selectMillis = renderer_->lastSelectMillis();
     lastSort_.selected = streamer_ ? streamer_->drawnSplats() : sourceCount_;
     drawCount_ = renderer_->lastDrawCount();
     return;
@@ -280,8 +291,13 @@ StatsPublisher::Sample SplatEngine::sample() const {
   s.sortMillis = lastSort_.sortMillis;
   s.cullMillis = lastSort_.cullMillis;
   s.selectMillis = lastSort_.selectMillis;
-  s.selected = lastSort_.selected;
+  s.selected = gpuSort_ && renderer_->lastSelectedCount() > 0 ? renderer_->lastSelectedCount()
+                                                              : lastSort_.selected;
   s.drawn = drawCount_;
+  const auto tiles = renderer_->lastScreenTileStats();
+  s.computeTiles = tiles.compute;
+  s.nonemptyComputeTiles = tiles.nonemptyCompute;
+  s.hardwareTiles = tiles.hardware;
   const std::optional<GpuWorldInfo> world = renderer_->world();
   s.sourceSplats = world ? sourceCount_ : 0;
   s.gpuSplats = world ? (streamer_ ? streamer_->held() : world->count) : 0;
@@ -330,6 +346,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
 
   SplatRenderer::Frame frame;
   if (camera && gpuSort_) {
+    frame.orderSource = SplatRenderer::OrderSource::gpu;
     // The renderer culls and sorts the ranges itself; the streamer keeps them resident
     // while frames in flight may draw them.
     if (streamer_) {
@@ -354,7 +371,10 @@ void SplatEngine::render(int64_t frameTimeNanos) {
     frame.proj = camera->proj;
     frame.cameraPosition = camera->axes.position;
   }
-  if (!renderer_->draw(frame)) return;  // the order and the redraw wait for the next frame
+  if (!renderer_->draw(frame)) {
+    stats_.onFrame(frameTimeNanos, false, sampler);
+    return;  // The order and the redraw wait for the next frame; FPS must still age to zero.
+  }
   pendingOrder_.reset();
   redrawNeeded_ = false;
   lastDrawnView_ = camera ? camera->view : splat::Mat4::identity();

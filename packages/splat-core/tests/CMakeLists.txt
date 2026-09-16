@@ -10,6 +10,7 @@ add_executable(splat_core_tests
   sorting/SpatialOrderTest.cpp
   sorting/FrustumSortTest.cpp
   lod/LodTreeTest.cpp
+  lod/LodFileTest.cpp
   lod/LodSorterTest.cpp
   io/MappedFileTest.cpp
   loading/SplatWorldLoaderTest.cpp

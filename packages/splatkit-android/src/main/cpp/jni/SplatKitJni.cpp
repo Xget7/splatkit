@@ -278,17 +278,25 @@ SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat 
   if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
 }
 
-// Fills out[0..6]: fps, frame ms, gpu ms, sort ms, splat count, walking (0/1), motion (0/1).
+// Legacy out[0..6] is unchanged; [7..10] adds drawn/compute/nonempty/hardware counts.
 SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
+  constexpr jsize kExtendedStatsFloats = 11;
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;
   const splatkit::Stats s = engine->stats();
-  const float values[kStatsFloats] = {s.fps,
-                                      s.frameMillis,
-                                      s.gpuMillis,
-                                      s.sortMillis,
-                                      static_cast<float>(s.splatCount),
-                                      s.walking ? 1.0f : 0.0f,
-                                      s.motion ? 1.0f : 0.0f};
-  env->SetFloatArrayRegion(out, 0, kStatsFloats, values);
+  // Float transport represents every integer through 2^24 exactly; larger counts can round.
+  const float values[kExtendedStatsFloats] = {s.fps,
+                                              s.frameMillis,
+                                              s.gpuMillis,
+                                              s.sortMillis,
+                                              static_cast<float>(s.splatCount),
+                                              s.walking ? 1.0f : 0.0f,
+                                              s.motion ? 1.0f : 0.0f,
+                                              static_cast<float>(s.drawnSplatCount),
+                                              static_cast<float>(s.computeTileCount),
+                                              static_cast<float>(s.nonemptyComputeTileCount),
+                                              static_cast<float>(s.hardwareTileCount)};
+  const jsize count =
+      env->GetArrayLength(out) >= kExtendedStatsFloats ? kExtendedStatsFloats : kStatsFloats;
+  env->SetFloatArrayRegion(out, 0, count, values);
 }

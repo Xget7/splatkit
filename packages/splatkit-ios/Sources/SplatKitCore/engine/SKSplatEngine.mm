@@ -24,6 +24,7 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
 
 // BGRA rows, top down, to a PNG file. Colours are written as they were presented.
 bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, uint32_t height) {
+  if (width == 0 || height == 0 || bgra.size() != size_t{width} * height * 4) return false;
   CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
   CGDataProviderRef provider =
       CGDataProviderCreateWithData(nullptr, bgra.data(), bgra.size(), nullptr);
@@ -52,6 +53,8 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
 @implementation SKSplatEngine {
   splatkit::MetalSplatRenderer* _renderer;  // owned by the engine
   std::unique_ptr<splatkit::SplatEngine> _engine;
+  bool _awaitingWorldFrame;
+  uint32_t _worldFrameSplatCount;
 }
 
 + (nullable instancetype)create {
@@ -70,7 +73,12 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
   _engine->setEventSink([weakSelf](splatkit::SplatEngine::Event event, const std::string& message,
                                    uint32_t splatCount) {
     SKSplatEngine* strongSelf = weakSelf;
-    if (strongSelf == nil || strongSelf.eventHandler == nil) return;
+    if (strongSelf == nil) return;
+    if (event == splatkit::SplatEngine::Event::worldReady) {
+      strongSelf->_awaitingWorldFrame = true;
+      strongSelf->_worldFrameSplatCount = splatCount;
+    }
+    if (strongSelf.eventHandler == nil) return;
     strongSelf.eventHandler(static_cast<SKSplatEvent>(event), @(message.c_str()), splatCount);
   });
   return self;
@@ -86,6 +94,12 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
 
 - (void)render:(int64_t)frameTimeNanos {
   _engine->render(frameTimeNanos);
+  // Read an atomic completion flag, never wait for the GPU on the render thread.
+  if (_awaitingWorldFrame && _renderer->hasCompletedWorldFrame()) {
+    _awaitingWorldFrame = false;
+    if (self.eventHandler)
+      self.eventHandler(SKSplatEventWorldFrameReady, @"", _worldFrameSplatCount);
+  }
 }
 
 - (void)loadWorldFile:(NSString*)path {
@@ -116,7 +130,17 @@ bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, 
 
 - (SKSplatStats)stats {
   const splatkit::Stats s = _engine->stats();
-  return {s.fps, s.frameMillis, s.gpuMillis, s.sortMillis, s.splatCount, s.walking, s.motion};
+  return {s.fps,
+          s.frameMillis,
+          s.gpuMillis,
+          s.sortMillis,
+          s.splatCount,
+          s.walking,
+          s.motion,
+          s.drawnSplatCount,
+          s.computeTileCount,
+          s.nonemptyComputeTileCount,
+          s.hardwareTileCount};
 }
 
 - (NSString*)gpuDescription {

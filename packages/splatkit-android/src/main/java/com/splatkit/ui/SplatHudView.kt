@@ -61,9 +61,9 @@ class SplatHudView @JvmOverloads constructor(
         }
         text = String.format(
             Locale.US,
-            "%s\n%s\nsort %5.1f ms\n%,d splats  %s, %s",
+            "%s\n%s\nsort %5.1f ms\n%,d drawn / %,d loaded\n%s, %s",
             view.gpuDescription, frame, stats.sortMillis,
-            stats.splatCount, mode, input,
+            stats.drawnSplatCount, stats.loadedSplatCount, mode, input,
         )
     }
 }

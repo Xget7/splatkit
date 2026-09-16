@@ -1,5 +1,8 @@
 import Foundation
 import QuartzCore
+#if canImport(SplatKitCore)
+import SplatKitCore
+#endif
 
 /// Owns the native engine and drives it from a dedicated thread, one frame per display
 /// link tick, like the Android render thread.
@@ -177,7 +180,9 @@ final class RenderThread {
     func setLinearBlending(_ linear: Bool) { post { [self] in engine?.setLinearBlending(linear) } }
     func setSplatBudget(_ budget: Int) { post { [self] in engine?.setSplatBudget(Int32(budget)) } }
     func setResidencyBudget(_ splats: Int) { post { [self] in engine?.setResidencyBudget(Int32(splats)) } }
-    func setMaxShDegree(_ degree: Int) { post { [self] in engine?.setMaxShDegree(Int32(degree)) } }
+    // This setting controls decoding as well as GPU upload, so apply it before a following
+    // load can begin on the loader queue.
+    func setMaxShDegree(_ degree: Int) { sync { [self] in engine?.setMaxShDegree(Int32(degree)) } }
     func setShDegree(_ degree: Int) { post { [self] in engine?.setShDegree(Int32(degree)) } }
     func startBenchmark(_ seconds: Float) { post { [self] in engine?.startBenchmark(seconds) } }
 

@@ -25,6 +25,10 @@ void StatsPublisher::onFrame(int64_t frameTimeNanos, bool rendered,
   gpuMillis_.store(static_cast<float>(s.gpuMillis), kRelaxed);
   sortMillis_.store(static_cast<float>(s.sortMillis), kRelaxed);
   splats_.store(s.sourceSplats, kRelaxed);
+  drawnSplats_.store(s.drawn, kRelaxed);
+  computeTiles_.store(s.computeTiles, kRelaxed);
+  nonemptyComputeTiles_.store(s.nonemptyComputeTiles, kRelaxed);
+  hardwareTiles_.store(s.hardwareTiles, kRelaxed);
   walking_.store(s.walking, kRelaxed);
   motion_.store(s.motion, kRelaxed);
 
@@ -59,6 +63,10 @@ Stats StatsPublisher::stats() const {
   s.gpuMillis = gpuMillis_.load(kRelaxed);
   s.sortMillis = sortMillis_.load(kRelaxed);
   s.splatCount = splats_.load(kRelaxed);
+  s.drawnSplatCount = drawnSplats_.load(kRelaxed);
+  s.computeTileCount = computeTiles_.load(kRelaxed);
+  s.nonemptyComputeTileCount = nonemptyComputeTiles_.load(kRelaxed);
+  s.hardwareTileCount = hardwareTiles_.load(kRelaxed);
   s.walking = walking_.load(kRelaxed);
   s.motion = motion_.load(kRelaxed);
   return s;

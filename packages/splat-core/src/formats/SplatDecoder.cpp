@@ -18,6 +18,7 @@ Result<SplatCloud> decodeSplatFile(const std::uint8_t* data, std::size_t size,
     case SplatFormat::spz: {
       SpzDecodeOptions spz;
       spz.sourceFrame = options.sourceFrame;
+      spz.maxShDegree = options.maxShDegree;
       spz.maxDecodedBytes = options.maxDecodedBytes;
       return decodeSpz(data, size, spz);
     }

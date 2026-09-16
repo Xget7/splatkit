@@ -18,6 +18,10 @@ struct Stats {
   uint32_t splatCount = 0;
   bool walking = false;
   bool motion = false;
+  uint32_t drawnSplatCount = 0;   // last completed visibility/order result, not source count
+  uint32_t computeTileCount = 0;  // includes background-only screen tiles
+  uint32_t nonemptyComputeTileCount = 0;
+  uint32_t hardwareTileCount = 0;
 };
 
 // Position in the world's frame (meters) and yaw and pitch in radians, yaw about the up
@@ -48,6 +52,9 @@ class StatsPublisher {
     uint32_t gpuSplats = 0;     // records on the GPU, more than the file with a tree
     bool walking = false;
     bool motion = false;
+    uint32_t computeTiles = 0;
+    uint32_t nonemptyComputeTiles = 0;
+    uint32_t hardwareTiles = 0;
   };
 
   // Once per vsync, drawn or not. `sample` is called when the window closes.
@@ -68,6 +75,10 @@ class StatsPublisher {
   std::atomic<float> gpuMillis_{0};
   std::atomic<float> sortMillis_{0};
   std::atomic<uint32_t> splats_{0};
+  std::atomic<uint32_t> drawnSplats_{0};
+  std::atomic<uint32_t> computeTiles_{0};
+  std::atomic<uint32_t> nonemptyComputeTiles_{0};
+  std::atomic<uint32_t> hardwareTiles_{0};
   std::atomic<bool> walking_{false};
   std::atomic<bool> motion_{false};
   std::atomic<float> pose_[5]{};

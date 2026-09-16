@@ -33,11 +33,11 @@ _Avoid_: URI (that is the wire format of a source), download
 One presented image. The engine draws a frame only when something changed.
 
 **Sort**:
-Ordering the splats back to front from the camera, on the CPU, so blending is correct.
+Ordering splats by camera depth in the direction required by compositing.
 _Avoid_: depth sort, z-order
 
 **Cull**:
-Dropping the sorted splats outside the camera's frustum, widened by a margin, before drawing.
+Rejecting splats outside the view or below the configured visibility threshold.
 
 **Render scale**:
 The size of the render target relative to the surface, 0.1 to 2. Below 1 the frame is upscaled, above 1 supersampled.
@@ -48,7 +48,7 @@ A named quality setting (low, medium, high, ultra) that fixes the render scale, 
 _Avoid_: mode, profile, level
 
 **Splat budget**:
-The most splats drawn in one frame; 0 means every splat. What turns the level of detail on.
+Selection capacity; zero disables reduction.
 _Avoid_: limit, cap, max splats
 
 ### Level of detail
@@ -57,17 +57,20 @@ _Avoid_: limit, cap, max splats
 One entry of the in-memory hierarchy over a cloud: a leaf is a splat of the file, an interior node is one splat standing in for its children.
 
 **Tree**:
-The hierarchy of nodes built over one cloud at load time (ADR 0010). Only a world that is one file has a tree; a tiled world carries its levels instead (ADR 0015).
+Offline/load-time hierarchy.
 _Avoid_: LOD, octree (a tree of nodes is not an octree of tiles)
 
 **Selection**:
-The set of nodes drawn this frame: the biggest on screen first, until each covers about a pixel or the splat budget is spent.
+Covering cut; capacity≠quality.
 
 ### Scale
 
 **Tile**:
 A cube of the world at one level, stored as its own spz file, with its splats in spatial order.
 _Avoid_: chunk, cell, block, node (a node is inside a cloud, a tile is a cloud)
+
+**Screen tile**:
+A rectangular group of image pixels composited together; unrelated to a world's streaming tiles.
 
 **Level**:
 How coarse a tile is: level 0 is the file's splats, each level up stands in for the eight tiles below it with fewer, larger splats. Made offline, never on the phone.

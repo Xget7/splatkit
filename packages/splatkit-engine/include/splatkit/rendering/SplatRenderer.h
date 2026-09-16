@@ -5,6 +5,7 @@
 #include <string>
 
 #include "splat/formats/SplatCloud.h"
+#include "splat/lod/LodTree.h"
 #include "splat/math/Mat4.h"
 #include "splat/math/Vec3.h"
 
@@ -20,6 +21,14 @@ struct Extent {
 struct GpuWorldInfo {
   uint32_t count = 0;
   int shDegree = 0;
+};
+
+// Screen-tile ownership from the last completed hybrid frame. All zero when
+// unavailable. Compute includes background tiles; nonemptyCompute excludes them.
+struct ScreenTileStats {
+  uint32_t compute = 0;
+  uint32_t nonemptyCompute = 0;
+  uint32_t hardware = 0;
 };
 
 // What the engine needs from a platform's graphics API: a surface it can draw the
@@ -52,6 +61,9 @@ class SplatRenderer {
   // Uploads a world and draws it from now on. Fails, keeping the previous world, when
   // the upload does.
   virtual bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) = 0;
+  // Optional native GPU hierarchy selection. Unsupported renderers retain CPU LOD.
+  virtual bool selectsLodOnGpu() const { return false; }
+  virtual bool uploadLodWorld(const splat::LodTree&, int, uint32_t) { return false; }
   // Replaces the world with an empty slab of `capacity` records for a tiled world;
   // tiles land in it through `uploadTile`.
   virtual bool createSlab(uint32_t capacity, int shDegree) = 0;
@@ -68,7 +80,11 @@ class SplatRenderer {
   // ranges to draw in every frame instead of an order.
   virtual bool sortsOnGpu() const { return false; }
 
+  enum class OrderSource { cpu, gpu };
+
   struct Frame {
+    // Explicit even for an empty frame: a null range pointer is not a CPU fallback.
+    OrderSource orderSource = OrderSource::cpu;
     // A new draw order for the world, copied in before the draw; nullptr keeps the last.
     const uint32_t* order = nullptr;
     uint32_t orderCount = 0;
@@ -89,10 +105,14 @@ class SplatRenderer {
   // GPU time of the most recently completed frame, from timestamps at both ends of it.
   // Zero until the first frame completes or if unsupported.
   virtual double lastGpuMillis() const = 0;
-  // GPU time of the last visibility pass, when the renderer sorts on the GPU.
+  // GPU times of completed sort and visibility passes; zero when unavailable.
   virtual double lastSortMillis() const { return 0; }
+  virtual double lastCullMillis() const { return 0; }
   // Splats the last frame drew, when the renderer sorts on the GPU.
   virtual uint32_t lastDrawCount() const { return 0; }
+  virtual uint32_t lastSelectedCount() const { return 0; }
+  virtual double lastSelectMillis() const { return 0; }
+  virtual ScreenTileStats lastScreenTileStats() const { return {}; }
   // GPU name and API version, for a HUD.
   virtual const std::string& deviceDescription() const = 0;
 };

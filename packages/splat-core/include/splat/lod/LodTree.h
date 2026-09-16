@@ -28,11 +28,29 @@ struct LodNode {
 };
 static_assert(sizeof(LodNode) == 24, "LodNode is packed for the selection walk");
 
+// Interior-only traversal record. Leaves are emitted in packets, not evaluated as nodes.
+// Bounds enclose descendant supports. Error is a conservative merge-disagreement heuristic
+// in world units, not a certified image-space error bound.
+struct LodCluster {
+  float center[3]{}, radius = 0;
+  float extent[3]{}, error = 0;
+  float colorVariance = 0, opacity = 0;
+  uint32_t node = 0, childStart = 0, childCount = 0, leafStart = 0;
+  uint32_t leafCount = 0, subtreeLeaves = 0;
+};
+static_assert(sizeof(LodCluster) == 64);
+
+struct LodSelectionData {
+  std::vector<LodCluster> clusters;
+  std::vector<uint32_t> leaves;
+};
+
 struct LodTree {
   // Every node, root first, then level by level; the leaves keep their attributes.
   SplatCloud nodes;
   std::vector<LodNode> layout;
   std::size_t leafCount = 0;
+  LodSelectionData selection;
 
   std::size_t nodeCount() const { return layout.size(); }
 };
@@ -41,10 +59,16 @@ struct LodBuildOptions {
   // Ratio between the cell sizes of consecutive levels. 1.5 merges gently: most
   // interior nodes have 2 to 4 children and the tree is about 1.5 times the leaves.
   float base = 1.5f;
+  // Offline octree: 1..10 spatial subdivisions (clamped); 0 keeps the legacy grid.
+  // Original splats sit below the finest occupied cells. Singleton chains collapse.
+  uint32_t octreeDepth = 0;
 };
 
 // Builds the tree. The cloud is consumed: its splats become the leaves.
 LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options = {});
+
+// Offline metadata construction; requires a validated hierarchy. Does not alter splats.
+LodSelectionData buildLodSelectionData(const LodTree& tree);
 
 // Where the budget should go. Nodes within `fullCosine` of the forward direction count
 // at their screen size; from there to 90 degrees the weight falls linearly to

@@ -36,26 +36,39 @@ bool carriesSh(const splat::SplatCloud& cloud, int degree) {
 
 std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree) {
   const std::size_t n = cloud.count();
+  std::vector<uint32_t> packed(n * shStride(degree), 0);
+  packShRange(cloud, degree, 0, n, packed.data());
+  return packed;
+}
+
+void packShRange(const splat::SplatCloud& cloud, int degree, size_t offset, size_t count,
+                 uint32_t* out) {
+  const size_t n = cloud.count();
   const std::size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
   const auto coefficients = static_cast<std::size_t>((degree + 1) * (degree + 1) - 1);
   const std::size_t halves = coefficients * 3;
   const std::size_t stride = shStride(degree);
-  std::vector<uint32_t> packed(n * stride, 0);
-  for (std::size_t i = 0; i < n; ++i) {
-    const float* src = &cloud.sh[i * sourceCoefficients * 3];
+  for (std::size_t i = 0; i < count; ++i) {
+    std::fill_n(out + i * stride, stride, 0u);
+    const float* src = &cloud.sh[(offset + i) * sourceCoefficients * 3];
     for (std::size_t h = 0; h < halves; ++h) {
       const uint32_t half = splat::toHalf(src[h]);
-      packed[i * stride + h / 2] |= half << ((h & 1) * 16);
+      out[i * stride + h / 2] |= half << ((h & 1) * 16);
     }
   }
-  return packed;
 }
 
 std::vector<GpuSplat> packSplats(const splat::SplatCloud& cloud) {
   const std::size_t n = cloud.count();
   std::vector<GpuSplat> packed(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    GpuSplat& g = packed[i];
+  packSplatRange(cloud, 0, n, packed.data());
+  return packed;
+}
+
+void packSplatRange(const splat::SplatCloud& cloud, size_t offset, size_t count, GpuSplat* out) {
+  for (std::size_t k = 0; k < count; ++k) {
+    const size_t i = offset + k;
+    GpuSplat& g = out[k];
     std::memcpy(g.position, &cloud.positions[i * 3], sizeof(g.position));
     const float alpha = cloud.alphas[i];
     g.rgba8 =
@@ -67,7 +80,6 @@ std::vector<GpuSplat> packSplats(const splat::SplatCloud& cloud) {
     g.cov[2] = packHalf2(c[4], c[5]);
     if (alpha <= 1.0f) g.lodAlpha = 0;
   }
-  return packed;
 }
 
 }  // namespace splatkit

@@ -23,13 +23,14 @@ class WalkCamera {
   void setCollider(std::unique_ptr<splat::Collider> collider);
   bool hasCollider() const { return collider_ != nullptr; }
 
-  // Touch: radians. Pitch is clamped and ignored while motion is on.
+  // Touch: radians. Yaw/pitch poses clamp pitch; look-at poses turn in screen axes.
+  // Pitch input is ignored while motion is on.
   void look(float deltaYaw, float deltaPitch);
   // Absolute orientation in radians, for reproducible captures and benchmarks.
   void setOrientation(float yaw, float pitch);
   // Scripted paths: from `position`, look at `target` with `up` at the top of the frame.
   // Any roll goes; the view stays continuous through the poles yaw and pitch cannot pass.
-  // The next `look`, `setOrientation` or attitude update takes the view back.
+  // Touch retains this basis with motion off; setOrientation restores yaw/pitch mode.
   void setLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up);
   float yaw() const { return yaw_; }
   float pitch() const { return pitch_; }
@@ -62,7 +63,7 @@ class WalkCamera {
   float velocityRight_ = 0;
   bool motion_ = false;
   splat::Mat4 attitude_ = splat::Mat4::identity();
-  bool scripted_ = false;  // rotation() is scriptedRotation_ until yaw or pitch move
+  bool scripted_ = false;  // rotation() uses the full look-at basis, including touch turns
   splat::Mat4 scriptedRotation_ = splat::Mat4::identity();
   splat::Mat4 referenceToWorld_;
 };

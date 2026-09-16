@@ -104,9 +104,9 @@ class SplatEngine {
     residency_.store(static_cast<uint32_t>(std::clamp(splats, kMinResidency, kMaxResidency)));
   }
 
-  // Highest spherical harmonics degree uploaded with the next world, 0 to 3. Degree 3
-  // adds 92 bytes per splat; 0 keeps the base colour only. Any thread.
-  void setMaxShDegree(int degree) { maxShDegree_ = std::clamp(degree, 0, kMaxShDegree); }
+  // Highest spherical harmonics degree decoded and uploaded with the next world, 0 to 3.
+  // Degree 3 adds 92 bytes per splat on the GPU; 0 keeps the base colour only. Any thread.
+  void setMaxShDegree(int degree);
 
   // Spherical harmonics degree drawn, 0 to 3, capped by what the loaded world carries.
   // Takes effect on the next frame: a quality change never needs a reload. Render thread.

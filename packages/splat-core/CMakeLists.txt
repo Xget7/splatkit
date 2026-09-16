@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SPLAT_CORE_BUILD_TESTS "Build splat_core unit tests" ${PROJECT_IS_TOP_LEVEL})
-option(SPLAT_CORE_BUILD_TOOLS "Build the ply2spz and splat-tile tools" ${PROJECT_IS_TOP_LEVEL})
+option(SPLAT_CORE_BUILD_TOOLS "Build ply2spz, splat-tile and splat_lod_build" ${PROJECT_IS_TOP_LEVEL})
 # "thread" or "address" (address implies undefined). Off by default; CI runs both.
 set(SPLAT_CORE_SANITIZE "" CACHE STRING "Sanitizer for splat_core and its tests")
 
@@ -35,6 +35,8 @@ add_library(splat_core STATIC
   src/sorting/WorkerPool.cpp
   src/math/SymmetricEigen.cpp
   src/lod/LodTree.cpp
+  src/lod/LodSelection.cpp
+  src/lod/LodFile.cpp
   src/io/MappedFile.cpp
   src/loading/SplatWorldLoader.cpp
   src/sorting/VisibilityPlanner.cpp

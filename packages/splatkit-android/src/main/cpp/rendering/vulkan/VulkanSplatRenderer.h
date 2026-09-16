@@ -12,6 +12,7 @@
 #include "rendering/vulkan/SplatPipeline.h"
 #include "rendering/vulkan/Swapchain.h"
 #include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/VulkanFrameCompute.h"
 #include "splat/formats/SplatCloud.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -51,6 +52,9 @@ class VulkanSplatRenderer final : public SplatRenderer {
 
   // Uploads once the GPU is done with the previous world. Needs `ready()`.
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
+  bool selectsLodOnGpu() const override;
+  bool uploadLodWorld(const splat::LodTree& tree, int maxShDegree, uint32_t budget) override;
+  bool sortsOnGpu() const override { return compute_ != nullptr; }
   bool createSlab(uint32_t capacity, int shDegree) override;
   // A frame in flight that still names those records may draw a mix of old and new for
   // one frame.
@@ -60,6 +64,11 @@ class VulkanSplatRenderer final : public SplatRenderer {
   // The world, or the debug triangle without one.
   bool draw(const Frame& frame) override;
   double lastGpuMillis() const override { return frameLoop_.lastGpuMillis(); }
+  double lastSortMillis() const override { return compute_ ? compute_->stats().sortMillis : 0; }
+  double lastCullMillis() const override { return compute_ ? compute_->stats().cullMillis : 0; }
+  double lastSelectMillis() const override { return compute_ ? compute_->stats().selectMillis : 0; }
+  uint32_t lastDrawCount() const override { return compute_ ? compute_->stats().drawn : 0; }
+  uint32_t lastSelectedCount() const override { return compute_ ? compute_->stats().selected : 0; }
   const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
@@ -83,6 +92,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   std::unique_ptr<SplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<GpuWorld> world_;
+  std::unique_ptr<VulkanFrameCompute> compute_;
   float renderScale_ = 1.0f;
   bool linearBlending_ = false;
   bool vsync_ = true;

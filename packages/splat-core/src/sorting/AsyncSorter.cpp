@@ -24,10 +24,16 @@ AsyncSorter::~AsyncSorter() {
 }
 
 void AsyncSorter::request(Vec3 from) {
-  {
-    const std::lock_guard<std::mutex> lock(mutex_);
-    pending_ = Request{from, std::nullopt, LodSettings{}};
+  const std::lock_guard<std::mutex> lock(mutex_);
+
+  if (sortedFrom_) {
+    const float dx = from.x - sortedFrom_->x;
+    const float dy = from.y - sortedFrom_->y;
+    const float dz = from.z - sortedFrom_->z;
+    if ((dx * dx + dy * dy + dz * dz) < 0.000001f) return;
   }
+
+  pending_ = Request{from, std::nullopt, LodSettings{}};
   wake_.notify_one();
 }
 
@@ -47,7 +53,9 @@ std::optional<AsyncSorter::Result> AsyncSorter::take() {
 }
 
 void AsyncSorter::run() {
-  std::vector<uint32_t> order;
+  std::vector<uint32_t> candidateIndices;
+  std::vector<uint32_t> visibleIndices;
+
   for (;;) {
     Request request;
     {
@@ -57,51 +65,52 @@ void AsyncSorter::run() {
       request = *pending_;
       pending_.reset();
     }
+
     using Clock = std::chrono::steady_clock;
     auto millisBetween = [](Clock::time_point a, Clock::time_point b) {
       return std::chrono::duration<double, std::milli>(b - a).count();
     };
+
     const auto start = Clock::now();
     const bool useLod = tree_ && request.lod.budget > 0;
-    const bool lodChanged = request.lod.budget != sortedLod_.budget ||
-                            request.lod.pixelScaleLimit != sortedLod_.pixelScaleLimit;
-    const bool moved = !sortedFrom_ || sortedFrom_->x != request.from.x ||
-                       sortedFrom_->y != request.from.y || sortedFrom_->z != request.from.z;
-    const bool turned = useLod && dot(normalize(request.lod.view.forward), sortedForward_) <
-                                      request.lod.reselectCosine;
-    if (moved || lodChanged || turned) {
-      if (useLod) {
-        selectLodNodes(*tree_, request.from, request.lod.view, request.lod.budget,
-                       request.lod.pixelScaleLimit, fullOrder_);
-        sortedForward_ = normalize(request.lod.view.forward);
-        lastSelectMillis_ = millisBetween(start, Clock::now());
-        lastSelected_ = fullOrder_.size();
-        const auto sortStart = Clock::now();
-        sorter_.sortSubset(request.from, fullOrder_);
-        lastSortMillis_ = millisBetween(sortStart, Clock::now());
-      } else {
-        sorter_.sort(request.from, fullOrder_);
-        lastSortMillis_ = millisBetween(start, Clock::now());
-        lastSelectMillis_ = 0;
-        lastSelected_ = fullOrder_.size();
-      }
-      sortedFrom_ = request.from;
-      sortedLod_ = request.lod;
-    }
-    const auto sorted = Clock::now();
-    if (request.frustum) {
-      sorter_.cull(fullOrder_, *request.frustum, order);
+
+    if (useLod) {
+      selectLodNodes(*tree_, request.from, request.lod.view, request.lod.budget,
+                     request.lod.pixelScaleLimit, candidateIndices);
     } else {
-      order = fullOrder_;
+      const std::size_t totalCount = sorter_.count();
+      if (candidateIndices.size() != totalCount) {
+        candidateIndices.resize(totalCount);
+        for (std::size_t i = 0; i < totalCount; ++i) {
+          candidateIndices[i] = static_cast<uint32_t>(i);
+        }
+      }
     }
-    const auto culled = Clock::now();
+    const auto selectEnd = Clock::now();
+    lastSelectMillis_ = millisBetween(start, selectEnd);
+    lastSelected_ = candidateIndices.size();
+
+    const auto cullStart = Clock::now();
+    if (request.frustum) {
+      sorter_.cull(candidateIndices, *request.frustum, visibleIndices);
+    } else {
+      visibleIndices = candidateIndices;
+    }
+    const auto cullEnd = Clock::now();
+    const double cullMillis = millisBetween(cullStart, cullEnd);
+
+    const auto sortStart = Clock::now();
+    sorter_.sortSubset(request.from, visibleIndices);
+    const auto sortEnd = Clock::now();
+    lastSortMillis_ = millisBetween(sortStart, sortEnd);
+
     const std::lock_guard<std::mutex> lock(mutex_);
-    // An untaken result is stale now; its buffer becomes the next result's scratch.
     std::vector<uint32_t> recycled =
         finished_ ? std::move(finished_->order) : std::vector<uint32_t>();
-    finished_ = Result{std::move(order), lastSortMillis_, millisBetween(sorted, culled),
-                       lastSelectMillis_, lastSelected_};
-    order = std::move(recycled);
+    finished_ = Result{std::move(visibleIndices), lastSortMillis_, cullMillis, lastSelectMillis_,
+                       lastSelected_};
+
+    visibleIndices = std::move(recycled);
   }
 }
 

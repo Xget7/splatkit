@@ -29,6 +29,16 @@ void WalkCamera::setCollider(std::unique_ptr<splat::Collider> collider) {
 }
 
 void WalkCamera::look(float deltaYaw, float deltaPitch) {
+  if (scripted_ && !motion_) {
+    // A look-at pose can carry roll or pass a pole. Keep that basis when touch
+    // takes over, rotating about the screen's up/right instead of snapping to Y-up.
+    scriptedRotation_ = scriptedRotation_ * splat::Mat4::rotation(deltaYaw, {0, 1, 0}) *
+                        splat::Mat4::rotation(deltaPitch, {1, 0, 0});
+    const auto forward = splat::normalize(scriptedRotation_.transformDirection({0, 0, -1}));
+    yaw_ = std::atan2(-forward.x, -forward.z);
+    pitch_ = std::asin(std::clamp(forward.y, -1.0f, 1.0f));
+    return;
+  }
   scripted_ = false;
   yaw_ += deltaYaw;
   if (!motion_) pitch_ = std::clamp(pitch_ + deltaPitch, -kMaxPitch, kMaxPitch);

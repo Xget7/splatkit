@@ -9,6 +9,7 @@
 #include "rendering/vulkan/FrameLoop.h"
 #include "rendering/vulkan/GpuBuffer.h"
 #include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/VulkanShaderTypes.h"
 #include "splat/core/Result.h"
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"
@@ -16,19 +17,6 @@
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
-
-// std140 layout of the Camera uniform block. The splat record is GpuSplat, the std430
-// layout the vertex shader reads.
-struct CameraUniform {
-  splat::Mat4 view;
-  splat::Mat4 proj;
-  float focal[2];
-  float tanHalfFov[2];
-  float screenSize[2];
-  uint32_t outputLinear;
-  uint32_t pad;
-  float cameraPosition[4];
-};
 
 // The world on the GPU: splats plus the draw order the sorter writes.
 struct GpuWorld {
@@ -60,16 +48,25 @@ class SplatPipeline {
 
   // Converts a decoded cloud to the GPU layout and uploads it (blocking). Spherical
   // harmonics above `maxShDegree` are dropped: degree 3 costs 92 bytes per splat.
-  std::unique_ptr<GpuWorld> uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) const;
+  std::unique_ptr<GpuWorld> uploadWorld(const splat::SplatCloud& cloud, int maxShDegree,
+                                        bool cpuOrder = true) const;
   // An empty world of `capacity` records at `shDegree`, the slab the tiles of a tiled
   // world land in; nothing is drawn until an order names records that were uploaded.
-  std::unique_ptr<GpuWorld> createSlab(uint32_t capacity, int shDegree) const;
+  std::unique_ptr<GpuWorld> createSlab(uint32_t capacity, int shDegree, bool cpuOrder = true) const;
   // Converts and uploads a tile into records [offset, offset + count) of a slab
   // (blocking). Harmonics above the slab's degree are dropped, missing ones are zero.
   static bool uploadTile(const GpuWorld& slab, uint32_t offset, const splat::SplatCloud& cloud);
 
   // Points the descriptor set of every frame slot at this world's buffers.
   void bindWorld(const GpuWorld& world);
+
+  // After the frame-slot fence, before compute/draw. Borrowed uniform stays valid until
+  // this pipeline is destroyed; order must cover capacity uint32s and remain alive.
+  VkBuffer updateCamera(uint32_t frameSlot, const splat::Mat4& view, const splat::Mat4& proj,
+                        const splat::Vec3& cameraPosition, VkExtent2D extent);
+  void bindOrder(uint32_t frameSlot, VkBuffer order, uint32_t capacity);
+  void drawIndirect(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, int shDegree,
+                    VkBuffer arguments);
 
   // Records the copy of a new draw order into the world. Must be called outside a render
   // pass, before `draw` in the same command buffer. `order` has `count` entries, at most

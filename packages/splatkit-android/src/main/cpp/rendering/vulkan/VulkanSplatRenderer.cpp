@@ -1,8 +1,11 @@
 #include "rendering/vulkan/VulkanSplatRenderer.h"
 
 #include <algorithm>
+#include <limits>
 
 #include <vulkan/vulkan_android.h>
+
+#include "rendering/vulkan/RadixSort.h"
 
 #include "splatkit/Log.h"
 
@@ -91,21 +94,57 @@ std::optional<GpuWorldInfo> VulkanSplatRenderer::world() const {
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
-  if (!splats_) return false;
-  auto world = splats_->uploadWorld(cloud, maxShDegree);
+  if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
+  ctx_.waitIdle();
+  auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
+  // No unsafe giant hardware fallback if GPU allocation/capabilities are insufficient.
+  if (!compute && cloud.count() > 3000000) {
+    LOGE("large world requires GPU visibility/sort or an offline LOD file: %s",
+         compute.error().message.c_str());
+    return false;
+  }
+  auto world = splats_->uploadWorld(cloud, maxShDegree, !compute);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
+  compute_ = compute ? std::move(compute.value()) : nullptr;
+  splats_->bindWorld(*world_);
+  return true;
+}
+
+bool VulkanSplatRenderer::selectsLodOnGpu() const {
+  return VisibilityPass::queryCapabilities(ctx_).supported &&
+         RadixSort::queryCapabilities(ctx_).supported;
+}
+
+bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
+                                         uint32_t budget) {
+  if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
+  ctx_.waitIdle();
+  auto compute =
+      VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
+  if (!compute) {
+    LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
+    return false;
+  }
+  auto world = splats_->uploadWorld(tree.nodes, maxShDegree, false);
+  if (!world) return false;
+  world_ = std::move(world);
+  compute_ = std::move(compute.value());
   splats_->bindWorld(*world_);
   return true;
 }
 
 bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   if (!splats_) return false;
-  auto world = splats_->createSlab(capacity, shDegree);
+  ctx_.waitIdle();
+  auto compute = VulkanFrameCompute::create(ctx_, capacity);
+  if (!compute && capacity > 3000000) return false;
+  auto world = splats_->createSlab(capacity, shDegree, !compute);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
+  compute_ = compute ? std::move(compute.value()) : nullptr;
   splats_->bindWorld(*world_);
   return true;
 }
@@ -130,7 +169,16 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const VkExtent2D extent{size.width, size.height};
   const uint32_t slot = frameLoop_.currentSlot();
   // Outside the render pass: transfers are not allowed inside one.
-  if (world_ && frame.order != nullptr) {
+  std::optional<VulkanFrameCompute::Draw> gpuDraw;
+  if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
+    const VkBuffer camera =
+        splats_->updateCamera(slot, frame.view, frame.proj, frame.cameraPosition, extent);
+    gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
+    if (gpuDraw)
+      splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
+    else
+      LOGE("GPU frame encode failed; submitting clear frame to preserve fence lifecycle");
+  } else if (world_ && !compute_ && frame.order != nullptr) {
     splats_->updateOrder(cmd, slot, *world_, frame.order, frame.orderCount);
   }
 
@@ -156,9 +204,13 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   if (world_) {
-    splats_->draw(cmd, slot, *world_, std::min(frame.drawCount, world_->count),
-                  std::min(frame.shDegree, world_->shDegree), frame.view, frame.proj,
-                  frame.cameraPosition, extent);
+    if (gpuDraw) {
+      splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
+    } else if (!compute_ && frame.orderSource == OrderSource::cpu) {
+      splats_->draw(cmd, slot, *world_, std::min(frame.drawCount, world_->count),
+                    std::min(frame.shDegree, world_->shDegree), frame.view, frame.proj,
+                    frame.cameraPosition, extent);
+    }
   } else {
     triangle_->draw(cmd);
   }

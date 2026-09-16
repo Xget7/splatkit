@@ -70,7 +70,8 @@ cmake -S "$engine" -B "$build/engine" "${toolchain[@]}" \
   -DSPLATKIT_ENGINE_BUILD_TESTS=ON > /dev/null
 
 echo "configure splatkit-android"
-cmake -S "$android" -B "$build/android" "${toolchain[@]}" > /dev/null
+cmake -S "$android" -B "$build/android" "${toolchain[@]}" \
+  -DSPLATKIT_ANDROID_BUILD_TESTS=ON > /dev/null
 # The splat pipeline includes the generated shader headers.
 cmake --build "$build/android" --target splatkit_shaders_generate > /dev/null
 

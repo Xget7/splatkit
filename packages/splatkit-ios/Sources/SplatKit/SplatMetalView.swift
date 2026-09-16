@@ -1,5 +1,8 @@
 import QuartzCore
 import UIKit
+#if canImport(SplatKitCore)
+import SplatKitCore
+#endif
 
 /// Where the camera is and where it looks: position in the world's frame in meters, yaw
 /// about the up axis and pitch, both in radians. Pitch is clamped to 85 degrees. Read it
@@ -28,6 +31,17 @@ public struct SplatStats {
     public var gpuMillis: Float = 0
     public var sortMillis: Float = 0
     public var splatCount: Int = 0
+    /// Splats in the loaded source world; not GPU residency for a streamed world.
+    public var loadedSplatCount: Int { splatCount }
+    /// Last completed visibility/order result, refreshed twice a second without a GPU wait.
+    /// This counts submitted splats, not splats contributing a visible pixel after occlusion.
+    public var drawnSplatCount: Int = 0
+    /// Screen tiles completed by compute, including background-only tiles.
+    /// All tile counts are zero when hybrid diagnostics are unavailable.
+    public var computeTileCount: Int = 0
+    /// Compute tiles whose candidate list contains at least one splat.
+    public var nonemptyComputeTileCount: Int = 0
+    public var hardwareTileCount: Int = 0
     public var walking = false
     public var motion = false
 
@@ -36,8 +50,12 @@ public struct SplatStats {
 
 /// Loading outcomes, delivered on the main thread.
 public protocol SplatViewDelegate: AnyObject {
-    /// The world is uploaded and drawing.
+    /// The world is uploaded; its first GPU frame may still be pending.
     func splatView(_ view: SplatMetalView, worldReady splatCount: Int)
+    /// First successful GPU frame of this uploaded world has completed. Suitable for
+    /// dismissing a loading cover or starting a tour. Requires resume(), even while
+    /// covered. Not a guarantee that streamed tiles are resident or LOD detail is exact.
+    func splatView(_ view: SplatMetalView, worldFrameReady splatCount: Int)
     /// The file was not a readable world, or the GPU refused it; the previous world stays.
     func splatView(_ view: SplatMetalView, worldFailed message: String)
     /// Walk mode is on.
@@ -47,6 +65,7 @@ public protocol SplatViewDelegate: AnyObject {
 
 public extension SplatViewDelegate {
     func splatView(_ view: SplatMetalView, worldReady splatCount: Int) {}
+    func splatView(_ view: SplatMetalView, worldFrameReady splatCount: Int) {}
     func splatView(_ view: SplatMetalView, worldFailed message: String) {}
     func splatViewColliderReady(_ view: SplatMetalView) {}
     func splatView(_ view: SplatMetalView, colliderFailed message: String) {}
@@ -74,6 +93,10 @@ public final class SplatMetalView: UIView {
     public var lookSensitivity: Float = 0.004
     /// Meters per point dragged with two fingers.
     public var walkSensitivity: Float = 0.01
+    /// Whether a one-finger drag is allowed to move the camera. Scripted tours can disable it.
+    public var touchLookEnabled = true
+    /// Whether the double-tap gesture can toggle motion input.
+    public var motionToggleEnabled = true
 
     public weak var delegate: SplatViewDelegate?
 
@@ -94,6 +117,7 @@ public final class SplatMetalView: UIView {
             guard let self, let delegate = self.delegate else { return }
             switch event {
             case .worldReady: delegate.splatView(self, worldReady: Int(count))
+            case .worldFrameReady: delegate.splatView(self, worldFrameReady: Int(count))
             case .worldFailed: delegate.splatView(self, worldFailed: message)
             case .colliderReady: delegate.splatViewColliderReady(self)
             case .colliderFailed: delegate.splatView(self, colliderFailed: message)
@@ -196,8 +220,8 @@ public final class SplatMetalView: UIView {
         }
     }
 
-    /// Highest spherical harmonics degree kept in GPU memory from the file, 0 to 3,
-    /// applied to worlds loaded after it is set.
+    /// Highest spherical harmonics degree decoded and kept in GPU memory from the file, 0 to 3,
+    /// applied to worlds loaded after it is set. The source file remains complete.
     public var maxShDegree = 3 {
         didSet {
             maxShDegree = min(max(maxShDegree, 0), 3)
@@ -232,6 +256,10 @@ public final class SplatMetalView: UIView {
         stats.gpuMillis = s.gpuMillis
         stats.sortMillis = s.sortMillis
         stats.splatCount = Int(s.splatCount)
+        stats.drawnSplatCount = Int(s.drawnSplatCount)
+        stats.computeTileCount = Int(s.computeTileCount)
+        stats.nonemptyComputeTileCount = Int(s.nonemptyComputeTileCount)
+        stats.hardwareTileCount = Int(s.hardwareTileCount)
         stats.walking = s.walking.boolValue
         stats.motion = s.motion.boolValue
         return stats
@@ -321,6 +349,10 @@ public final class SplatMetalView: UIView {
     // Gestures.
 
     @objc private func onLook(_ g: UIPanGestureRecognizer) {
+        guard touchLookEnabled else {
+            g.setTranslation(.zero, in: self)
+            return
+        }
         let d = g.translation(in: self)
         renderThread.look(-Float(d.x) * lookSensitivity, -Float(d.y) * lookSensitivity)
         g.setTranslation(.zero, in: self)
@@ -333,6 +365,7 @@ public final class SplatMetalView: UIView {
     }
 
     @objc private func onDoubleTap() {
+        guard motionToggleEnabled else { return }
         setMotionEnabled(!motionEnabled)
     }
 }

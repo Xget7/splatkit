@@ -1,166 +1,150 @@
 #include "rendering/MetalVisibility.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
-#include "splatkit/Log.h"
+#include "rendering/MetalCompute.h"
 
 namespace splatkit {
-namespace {
 
-id<MTLComputePipelineState> pipeline(id<MTLDevice> device, id<MTLLibrary> library, const char* name,
-                                     MTLFunctionConstantValues* constants = nil) {
-  NSError* functionError = nil;
-  id<MTLFunction> function = constants == nil ? [library newFunctionWithName:@(name)]
-                                              : [library newFunctionWithName:@(name)
-                                                              constantValues:constants
-                                                                       error:&functionError];
-  if (function == nil) {
-    LOGE("kernel %s missing: %s", name,
-         functionError == nil ? "" : functionError.localizedDescription.UTF8String);
-    return nil;
-  }
-  NSError* error = nil;
-  id<MTLComputePipelineState> state = [device newComputePipelineStateWithFunction:function
-                                                                            error:&error];
-  if (state == nil) LOGE("kernel %s: %s", name, error.localizedDescription.UTF8String);
-  return state;
-}
-
-id<MTLBuffer> buffer(id<MTLDevice> device, size_t bytes) {
-  return [device newBufferWithLength:std::max<size_t>(bytes, 16)
-                             options:MTLResourceStorageModeShared];
-}
-
-}  // namespace
-
-bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library) {
+bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library, bool experiment,
+                             float minPixelRadius, MetalRadixSort::KeyBits depthBits) {
+  if (!std::isfinite(minPixelRadius) || minPixelRadius < 0.0f) return false;
   device_ = device;
+  depthBits_ = depthBits;
+  const bool quantized = depthBits_ == MetalRadixSort::KeyBits::Low16;
+  storage_ = experiment ? MTLResourceStorageModePrivate : MTLResourceStorageModeShared;
   bool ok = true;
   for (int degree = 0; degree < kShDegrees; ++degree) {
     MTLFunctionConstantValues* constants = [MTLFunctionConstantValues new];
     uint32_t value = static_cast<uint32_t>(degree);
     [constants setConstantValue:&value type:MTLDataTypeUInt atIndex:0];
-    visibility_[static_cast<size_t>(degree)] = pipeline(device, library, "visibility", constants);
+    [constants setConstantValue:&experiment type:MTLDataTypeBool atIndex:1];
+    [constants setConstantValue:&minPixelRadius type:MTLDataTypeFloat atIndex:2];
+    [constants setConstantValue:&quantized type:MTLDataTypeBool atIndex:4];
+    bool indexed = false;
+    [constants setConstantValue:&indexed type:MTLDataTypeBool atIndex:3];
+    visibility_[static_cast<size_t>(degree)] =
+        metal::pipeline(device, library, "visibility", constants);
+    indexed = true;
+    [constants setConstantValue:&indexed type:MTLDataTypeBool atIndex:3];
+    indexedVisibility_[static_cast<size_t>(degree)] =
+        metal::pipeline(device, library, "visibility", constants);
+    ok = ok && indexedVisibility_[static_cast<size_t>(degree)] != nil;
     ok = ok && visibility_[static_cast<size_t>(degree)] != nil;
+    const auto pipeline = visibility_[static_cast<size_t>(degree)];
+    ok = ok && pipeline.threadExecutionWidth == 32 &&
+         pipeline.maxTotalThreadsPerThreadgroup >= kThreads;
   }
-  prepare_ = pipeline(device, library, "prepareSort");
-  histogram_ = pipeline(device, library, "radixHistogram");
-  scan_ = pipeline(device, library, "radixScan");
-  scatter_ = pipeline(device, library, "radixScatter");
-  totals_ = buffer(device, kBins * sizeof(uint32_t));
+  prepareDraw_ = metal::pipeline(device, library, "prepareDrawArguments");
   for (uint32_t slot = 0; slot < kSlots; ++slot) {
-    count_[slot] = buffer(device, sizeof(uint32_t));
-    dispatch_[slot] = buffer(device, 4 * sizeof(uint32_t));
-    drawArguments_[slot] = buffer(device, kDrawBatches * kDrawArgumentBytes);
-    ranges_[slot] = buffer(device, size_t{kMaxRanges} * 2 * sizeof(uint32_t));
-    rangeStarts_[slot] = buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
+    count_[slot] = metal::buffer(device, sizeof(uint32_t), storage_);
+    countReadback_[slot] = experiment ? metal::buffer(device, sizeof(uint32_t)) : count_[slot];
+    drawArguments_[slot] = metal::buffer(device, (kDrawBatches + 1) * kDrawArgumentBytes, storage_);
+    ranges_[slot] = metal::buffer(device, size_t{kMaxRanges} * sizeof(SplatRenderer::Range));
+    rangeStarts_[slot] = metal::buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
+    ok = ok && count_[slot] != nil && countReadback_[slot] != nil && drawArguments_[slot] != nil &&
+         ranges_[slot] != nil && rangeStarts_[slot] != nil;
   }
-  return ok && prepare_ != nil && histogram_ != nil && scan_ != nil && scatter_ != nil;
+  return ok && prepareDraw_ != nil && sort_.create(device, library, storage_);
 }
 
-bool MetalVisibility::reserve(uint32_t capacity) {
-  if (capacity <= capacity_) return true;
-  const uint32_t blocks = (capacity + kBlock - 1) / kBlock;
-  for (auto& k : keys_) k = buffer(device_, size_t{capacity} * sizeof(uint32_t));
-  for (auto& v : values_) v = buffer(device_, size_t{capacity} * sizeof(uint32_t));
-  histogram_buffer_ = buffer(device_, size_t{blocks} * kBins * sizeof(uint32_t));
-  projected_ = buffer(device_, size_t{capacity} * kProjectedBytes);
-  if (keys_[0] == nil || keys_[1] == nil || values_[0] == nil || values_[1] == nil ||
-      histogram_buffer_ == nil || projected_ == nil) {
+bool MetalVisibility::reserve(uint32_t capacity, uint32_t activeCapacity) {
+  const uint32_t sourceCapacity = capacity;
+  if (activeCapacity > 0) capacity = std::min(capacity, activeCapacity);
+  capacity = std::max(capacity, 1u);
+  if (capacity <= capacity_) {
+    sourceCapacity_ = sourceCapacity;
+    indexedOnly_ = activeCapacity > 0 && activeCapacity < sourceCapacity;
+    return true;
+  }
+  id<MTLBuffer> projected =
+      metal::buffer(device_, size_t{capacity} * sizeof(ProjectedSplat), storage_);
+  if (projected == nil || !sort_.reserve(capacity)) {
     LOGE("visibility buffers for %u splats failed", capacity);
-    capacity_ = 0;
     return false;
   }
+  projected_ = projected;
   capacity_ = capacity;
+  sourceCapacity_ = sourceCapacity;
+  indexedOnly_ = activeCapacity > 0 && activeCapacity < sourceCapacity;
   return true;
 }
 
-void MetalVisibility::encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms,
+bool MetalVisibility::encode(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms,
                              id<MTLBuffer> splats, id<MTLBuffer> sh, int shDegree,
-                             const SplatRenderer::Range* ranges, uint32_t rangeCount) {
-  rangeCount = std::min(rangeCount, kMaxRanges);
-  starts_.resize(size_t{rangeCount} + 1);
+                             const SplatRenderer::Range* ranges, uint32_t rangeCount,
+                             id<MTLBuffer> indices, id<MTLBuffer> activeCount) {
+  const bool indexed = indices != nil;
+  if (indexedOnly_ && !indexed) return false;
+  if (indexed != (activeCount != nil)) return false;
+  if (slot >= kSlots || rangeCount > kMaxRanges || capacity_ == 0 ||
+      (rangeCount > 0 && ranges == nullptr))
+    return false;
+  // Validate before writing slot inputs, so a rejected request cannot corrupt them.
   uint32_t total = 0;
-  auto* rangeOut = static_cast<uint32_t*>(ranges_[slot].contents);
   for (uint32_t i = 0; i < rangeCount; ++i) {
-    starts_[i] = total;
-    total += std::min(ranges[i].count, capacity_ - std::min(ranges[i].offset, capacity_));
-    rangeOut[i * 2] = ranges[i].offset;
-    rangeOut[i * 2 + 1] = ranges[i].count;
+    const auto& range = ranges[i];
+    if (range.offset > sourceCapacity_ || range.count > sourceCapacity_ - range.offset ||
+        range.count > capacity_ - total)
+      return false;
+    total += range.count;
   }
-  starts_[rangeCount] = total;
-  std::memcpy(rangeStarts_[slot].contents, starts_.data(), starts_.size() * sizeof(uint32_t));
-  *static_cast<uint32_t*>(count_[slot].contents) = 0;
+  auto* starts = static_cast<uint32_t*>(rangeStarts_[slot].contents);
+  starts[0] = 0;
+  for (uint32_t i = 0; i < rangeCount; ++i) starts[i + 1] = starts[i] + ranges[i].count;
+  if (rangeCount > 0) {
+    std::memcpy(ranges_[slot].contents, ranges, size_t{rangeCount} * sizeof(*ranges));
+  }
+  // Queue-ordered reset also works for GPU-private counters, without a CPU fence.
+  id<MTLBlitCommandEncoder> reset = [cmd blitCommandEncoder];
+  [reset fillBuffer:count_[slot] range:NSMakeRange(0, sizeof(uint32_t)) value:0];
+  [reset endEncoding];
 
   id<MTLComputeCommandEncoder> cull = [cmd computeCommandEncoder];
+  cull.label = @"Splat visibility and projection";
   const int degree = std::clamp(shDegree, 0, kShDegrees - 1);
-  [cull setComputePipelineState:visibility_[static_cast<size_t>(degree)]];
+  [cull setComputePipelineState:(indexed ? indexedVisibility_
+                                         : visibility_)[static_cast<size_t>(degree)]];
   [cull setBuffer:uniforms offset:0 atIndex:0];
   [cull setBuffer:splats offset:0 atIndex:1];
   [cull setBuffer:ranges_[slot] offset:0 atIndex:2];
   [cull setBuffer:rangeStarts_[slot] offset:0 atIndex:3];
   [cull setBytes:&rangeCount length:sizeof(rangeCount) atIndex:4];
-  [cull setBuffer:keys_[0] offset:0 atIndex:5];
-  [cull setBuffer:values_[0] offset:0 atIndex:6];
+  [cull setBuffer:sort_.keys() offset:0 atIndex:5];
+  [cull setBuffer:sort_.values() offset:0 atIndex:6];
   [cull setBuffer:count_[slot] offset:0 atIndex:7];
   [cull setBuffer:sh offset:0 atIndex:8];
   [cull setBuffer:projected_ offset:0 atIndex:9];
-  const NSUInteger groups = (std::max(total, 1u) + kThreads - 1) / kThreads;
+  if (indexed) {
+    [cull setBuffer:indices offset:0 atIndex:10];
+    [cull setBuffer:activeCount offset:0 atIndex:11];
+    total = capacity_;
+  }
+  const NSUInteger groups = (size_t{std::max(total, 1u)} + kThreads - 1) / kThreads;
   [cull dispatchThreadgroups:MTLSizeMake(groups, 1, 1)
        threadsPerThreadgroup:MTLSizeMake(kThreads, 1, 1)];
   [cull endEncoding];
 
-  encodeSort(cmd, slot);
-}
-
-void MetalVisibility::encodeSort(id<MTLCommandBuffer> cmd, uint32_t slot) {
-  id<MTLBuffer> count = count_[slot];
-  id<MTLBuffer> dispatch = dispatch_[slot];
-  id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-  [enc setComputePipelineState:prepare_];
-  [enc setBuffer:count offset:0 atIndex:0];
-  [enc setBuffer:dispatch offset:0 atIndex:1];
-  [enc setBuffer:drawArguments_[slot] offset:0 atIndex:2];
-  [enc dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
-
-  const MTLSize threads = MTLSizeMake(kThreads, 1, 1);
-  for (uint32_t pass = 0; pass < kPasses; ++pass) {
-    const uint32_t shift = pass * kDigitBits;
-    const uint32_t in = pass & 1u;
-    const uint32_t out = in ^ 1u;
-
-    [enc setComputePipelineState:histogram_];
-    [enc setBuffer:keys_[in] offset:0 atIndex:0];
-    [enc setBuffer:count offset:0 atIndex:1];
-    [enc setBuffer:dispatch offset:0 atIndex:2];
-    [enc setBytes:&shift length:sizeof(shift) atIndex:3];
-    [enc setBuffer:histogram_buffer_ offset:0 atIndex:4];
-    [enc dispatchThreadgroupsWithIndirectBuffer:dispatch
-                           indirectBufferOffset:0
-                          threadsPerThreadgroup:threads];
-
-    [enc setComputePipelineState:scan_];
-    [enc setBuffer:dispatch offset:0 atIndex:0];
-    [enc setBuffer:histogram_buffer_ offset:0 atIndex:1];
-    [enc setBuffer:totals_ offset:0 atIndex:2];
-    [enc dispatchThreadgroups:MTLSizeMake(kBins, 1, 1) threadsPerThreadgroup:threads];
-
-    [enc setComputePipelineState:scatter_];
-    [enc setBuffer:keys_[in] offset:0 atIndex:0];
-    [enc setBuffer:values_[in] offset:0 atIndex:1];
-    [enc setBuffer:keys_[out] offset:0 atIndex:2];
-    [enc setBuffer:values_[out] offset:0 atIndex:3];
-    [enc setBuffer:count offset:0 atIndex:4];
-    [enc setBuffer:dispatch offset:0 atIndex:5];
-    [enc setBytes:&shift length:sizeof(shift) atIndex:6];
-    [enc setBuffer:histogram_buffer_ offset:0 atIndex:7];
-    [enc setBuffer:totals_ offset:0 atIndex:8];
-    [enc dispatchThreadgroupsWithIndirectBuffer:dispatch
-                           indirectBufferOffset:0
-                          threadsPerThreadgroup:threads];
+  sort_.encode(cmd, count_[slot], depthBits_);
+  id<MTLComputeCommandEncoder> draw = [cmd computeCommandEncoder];
+  draw.label = @"Splat indirect draw arguments";
+  [draw setComputePipelineState:prepareDraw_];
+  [draw setBuffer:count_[slot] offset:0 atIndex:0];
+  [draw setBuffer:drawArguments_[slot] offset:0 atIndex:1];
+  [draw dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+  [draw endEncoding];
+  if (countReadback_[slot] != count_[slot]) {
+    id<MTLBlitCommandEncoder> readback = [cmd blitCommandEncoder];
+    [readback copyFromBuffer:count_[slot]
+                sourceOffset:0
+                    toBuffer:countReadback_[slot]
+           destinationOffset:0
+                        size:sizeof(uint32_t)];
+    [readback endEncoding];
   }
-  [enc endEncoding];
+  return true;
 }
 
 }  // namespace splatkit

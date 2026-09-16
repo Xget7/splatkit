@@ -12,11 +12,15 @@ namespace splat {
 struct SpzDecodeOptions {
   // Frame the file was written in. World Labs does not tag it, so the caller declares it.
   CoordinateFrame sourceFrame = kWorldLabsFrame;
+  // Highest spherical-harmonics degree to materialize in the decoded cloud. The SPZ file is
+  // kept intact; this only drops higher bands from the runtime representation. Mobile callers
+  // can use 0 or 1 to avoid allocating the degree-2/3 coefficients.
+  int maxShDegree = 3;
   // Largest decompressed payload accepted: gzip containers stop inflating at it, NGSP
   // containers are refused from their header. Guards against decompression bombs when
-  // files come from the network. The default fits 2M splats with SH degree 3 (about
-  // 128 MB) with room to spare.
-  std::size_t maxDecodedBytes = 256u * 1024u * 1024u;
+  // files come from the network. The default fits a 10M-splat SH degree 3 world
+  // (about 640 MB of packed data) with room to spare.
+  std::size_t maxDecodedBytes = 768u * 1024u * 1024u;
 };
 
 // Decodes an SPZ container (v1 to v4; gzip or zstd) into a SplatCloud in the internal frame.

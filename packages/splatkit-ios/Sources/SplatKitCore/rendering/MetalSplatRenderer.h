@@ -12,7 +12,10 @@
 #include <string>
 #include <vector>
 
+#include "rendering/MetalLOD.h"
+#include "rendering/MetalTileRaster.h"
 #include "rendering/MetalVisibility.h"
+#include "rendering/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -48,11 +51,17 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t generation() const override { return generation_; }
 
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
+  bool selectsLodOnGpu() const override { return gpuSort_; }
+  bool uploadLodWorld(const splat::LodTree& tree, int maxShDegree, uint32_t budget) override;
   bool createSlab(uint32_t capacity, int shDegree) override;
   bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) override;
   std::optional<GpuWorldInfo> world() const override;
 
   bool draw(const Frame& frame) override;
+
+  // Any thread. A successful GPU frame of the current world has finished; uploads
+  // alone and background frames do not qualify. Reset when the world is replaced.
+  bool hasCompletedWorldFrame() const { return !gpuFailed_.load() && completedWorldFrame_.load(); }
 
   // Pixels of a presented frame: BGRA, 8 bits each, rows top down, `width` by `height`.
   using CaptureHandler =
@@ -60,12 +69,24 @@ class MetalSplatRenderer final : public SplatRenderer {
   // Hands the next frame's pixels to `handler`, from the GPU's completion thread. One
   // capture at a time; a request while one is pending replaces it.
   void captureNextFrame(CaptureHandler handler);
-  double lastGpuMillis() const override { return lastGpuMillis_.load(); }
+  double lastGpuMillis() const override { return gpuFailed_.load() ? 0 : lastGpuMillis_.load(); }
   // The cull and the sort run as compute passes on the GPU (MetalVisibility); the engine
   // hands over the ranges to draw and never sorts on the CPU for this renderer.
   bool sortsOnGpu() const override { return gpuSort_; }
-  double lastSortMillis() const override { return lastSortMillis_.load(); }
-  uint32_t lastDrawCount() const override { return lastDrawCount_.load(); }
+  double lastSortMillis() const override { return gpuFailed_.load() ? 0 : lastSortMillis_.load(); }
+  uint32_t lastDrawCount() const override { return gpuFailed_.load() ? 0 : lastDrawCount_.load(); }
+  uint32_t lastSelectedCount() const override {
+    return gpuFailed_.load() ? 0 : lastSelectedCount_.load();
+  }
+  double lastSelectMillis() const override {
+    return gpuFailed_.load() ? 0 : lastSelectMillis_.load();
+  }
+  uint32_t lastLodLimitedCount() const { return lod_ ? lastLodLimitedCount_.load() : 0; }
+  uint32_t lastLodEvaluatedCount() const { return lod_ ? lastLodEvaluatedCount_.load() : 0; }
+  ScreenTileStats lastScreenTileStats() const override {
+    if (gpuFailed_.load()) return {};
+    return {lastComputeTiles_.load(), lastNonemptyComputeTiles_.load(), lastHardwareTiles_.load()};
+  }
   const std::string& deviceDescription() const override { return description_; }
 
   static constexpr int kMaxShDegree = 3;
@@ -81,17 +102,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   MTLPixelFormat targetFormat() const;
   void waitIdle();
 
-  // The world on the GPU: the records, the harmonics, and two order buffers so that a
-  // new order is written while the frame in flight still reads the previous one.
-  struct World {
-    id<MTLBuffer> splats = nil;
-    id<MTLBuffer> sh = nil;
-    std::array<id<MTLBuffer>, 2> orders{};
-    uint32_t current = 0;  // the order buffer the last frame drew from
-    uint32_t count = 0;
-    int shDegree = 0;
-  };
-
   id<MTLDevice> device_ = nil;
   id<MTLCommandQueue> queue_ = nil;
   id<MTLLibrary> library_ = nil;
@@ -104,7 +114,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLRenderPipelineState> backgroundPipeline_ = nil;
   id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
   id<MTLDepthStencilState> maskDepth_ = nil;   // always write
-  id<MTLTexture> depth_ = nil;                 // memoryless, the size of the colour target
+  id<MTLTexture> depth_ = nil;                 // GPU-private, the size of the colour target
   bool createDepth(NSUInteger width, NSUInteger height);
   MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
   std::array<id<MTLBuffer>, kFramesInFlight> uniforms_{};
@@ -113,17 +123,32 @@ class MetalSplatRenderer final : public SplatRenderer {
   CAMetalLayer* layer_ = nil;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  id<MTLTexture> target_ = nil;  // only when renderScale_ != 1
-  std::unique_ptr<World> world_;
+  id<MTLTexture> target_ = nil;  // scaled rendering or half-float GPU compositing
+  std::unique_ptr<MetalWorld> world_;
   float renderScale_ = 1.0f;
   bool linearBlending_ = false;
   uint32_t generation_ = 0;
   uint64_t frame_ = 0;
   std::atomic<double> lastGpuMillis_{0};
+  std::atomic<bool> completedWorldFrame_{false};
   MetalVisibility visibility_;
+  std::unique_ptr<MetalLOD> lod_;
+  std::array<id<MTLBuffer>, kFramesInFlight> lodReadback_{};
+  std::atomic<uint32_t> lastSelectedCount_{0};
+  std::atomic<uint32_t> lastLodLimitedCount_{0}, lastLodEvaluatedCount_{0};
+  std::atomic<double> lastSelectMillis_{0};
+  float minPixelRadius_ = 0.5f;
+  MetalRadixSort::KeyBits depthBits_ = MetalRadixSort::KeyBits::Full32;
+  MetalTileRaster tileRaster_;
+  bool computeRaster_ = false;
+  // A GPU error latches this renderer off. Never repeatedly resubmit failed work.
+  std::atomic<bool> gpuFailed_{false};
   bool gpuSort_ = false;
   std::atomic<double> lastSortMillis_{0};
   std::atomic<uint32_t> lastDrawCount_{0};
+  std::atomic<uint32_t> lastComputeTiles_{0};
+  std::atomic<uint32_t> lastNonemptyComputeTiles_{0};
+  std::atomic<uint32_t> lastHardwareTiles_{0};
   CaptureHandler capture_;
   std::string description_;
 };

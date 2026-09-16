@@ -30,6 +30,10 @@ typedef struct {
   uint32_t splatCount;
   BOOL walking;
   BOOL motion;
+  uint32_t drawnSplatCount;
+  uint32_t computeTileCount;
+  uint32_t nonemptyComputeTileCount;
+  uint32_t hardwareTileCount;
 } SKSplatStats;
 
 typedef NS_ENUM(NSInteger, SKSplatEvent) {
@@ -37,6 +41,8 @@ typedef NS_ENUM(NSInteger, SKSplatEvent) {
   SKSplatEventWorldFailed = 1,
   SKSplatEventColliderReady = 2,
   SKSplatEventColliderFailed = 3,
+  /// First successful GPU frame after this world's upload, not merely upload completion.
+  SKSplatEventWorldFrameReady = 4,
 };
 
 /// The native engine behind one view: the shared C++ engine over the Metal renderer.

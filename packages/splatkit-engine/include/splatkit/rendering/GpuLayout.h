@@ -34,5 +34,9 @@ std::vector<uint32_t> packSh(const splat::SplatCloud& cloud, int degree);
 
 // Every splat of the cloud in the GPU layout.
 std::vector<GpuSplat> packSplats(const splat::SplatCloud& cloud);
+// Bounded staging for large resident worlds. Caller validates the range and capacity.
+void packSplatRange(const splat::SplatCloud& cloud, size_t offset, size_t count, GpuSplat* out);
+void packShRange(const splat::SplatCloud& cloud, int degree, size_t offset, size_t count,
+                 uint32_t* out);
 
 }  // namespace splatkit
