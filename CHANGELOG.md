@@ -4,7 +4,7 @@ Notable changes to the SplatKit Android SDK, the shared C++ engine and this repo
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); alphas may break APIs.
 iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGELOG.md) and React Native changes in the [React Native changelog](packages/react-native-splatkit/CHANGELOG.md).
 
-## Unreleased
+## [0.1.0-alpha07] - 2026-09-16
 
 ### Added
 
@@ -78,6 +78,7 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 - First Maven Central publication of the Vulkan SDK.
 
+[0.1.0-alpha07]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha07
 [0.1.0-alpha06]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha06
 [0.1.0-alpha05]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha05
 [0.1.0-alpha04]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha04

@@ -7,12 +7,12 @@ An arm64 emulator can test functionality; it is not a phone performance measurem
 
 ## Install
 
-Maven Central `0.1.0-alpha06` is the Adreno-corrected GPU pipeline; alpha05 corrupts Adreno sorting and alpha04 orders on the CPU.
-Render policy, `onWorldFrameReady`, the budgeted `loadWorld` and 16 KB alignment are unreleased source; see the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit-android/releases).
+Maven Central `0.1.0-alpha07` adds the render policy, `onWorldFrameReady`, the budgeted `loadWorld` and 16 KB alignment; see the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit-android/releases).
+Avoid alpha05, which corrupts Adreno sorting.
 
 ```kotlin
 dependencies {
-    implementation("io.github.xget7:splatkit-android:0.1.0-alpha06")
+    implementation("io.github.xget7:splatkit-android:0.1.0-alpha07")
 }
 ```
 

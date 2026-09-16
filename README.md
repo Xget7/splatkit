@@ -9,8 +9,8 @@ Experimental alpha: APIs and quality/performance tradeoffs are still evolving.
 
 Android: API 29+, Vulkan 1.1, arm64-v8a.
 The GPU path additionally checks subgroup and memory limits.
-Maven Central has `io.github.xget7:splatkit-android:0.1.0-alpha06`, the Adreno-corrected GPU pipeline; see the [Android releases](https://github.com/Xget7/splatkit-android/releases).
-The render policy, `onWorldFrameReady` and 16 KB alignment are unreleased; to build current source:
+Maven Central has `io.github.xget7:splatkit-android:0.1.0-alpha07`, with the render policy, `onWorldFrameReady` and 16 KB alignment; see the [Android releases](https://github.com/Xget7/splatkit-android/releases).
+To build current source:
 
 ```sh
 cd apps/android-dev
