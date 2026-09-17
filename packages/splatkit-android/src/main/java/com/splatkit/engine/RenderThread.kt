@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
 import com.splatkit.CameraPose
+import com.splatkit.CharacterSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
@@ -137,6 +138,14 @@ internal class RenderThread {
     fun walk(forward: Float, right: Float) = post { engine?.walk(forward, right) }
     fun setVelocity(forward: Float, right: Float) = post { engine?.setVelocity(forward, right) }
     fun setAttitude(rowMajor: FloatArray) = post { engine?.setAttitude(rowMajor) }
+
+    /** Waits: the caller learns whether the settings were walkable. */
+    fun setCharacter(settings: CharacterSettings): Boolean {
+        var accepted = false
+        runBlockingOnThread { accepted = engine?.setCharacter(settings) ?: false }
+        return accepted
+    }
+
     fun setMotionEnabled(enabled: Boolean) = post { engine?.setMotionEnabled(enabled) }
 
     // Quality settings.

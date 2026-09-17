@@ -225,6 +225,17 @@ SPLATKIT_JNI(void, nativeSetVelocity)
   if (auto* engine = toEngine(handle)) engine->setVelocity(forward, right);
 }
 
+SPLATKIT_JNI(jboolean, nativeSetCharacter)
+(JNIEnv*, jobject, jlong handle, jfloat eyeHeight, jfloat bodyRadius, jfloat stepHeight) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return JNI_FALSE;
+  splat::CharacterSettings character = engine->character();
+  character.eyeHeight = eyeHeight;
+  character.bodyRadius = bodyRadius;
+  character.stepHeight = stepHeight;
+  return engine->setCharacter(character) ? JNI_TRUE : JNI_FALSE;
+}
+
 // `rowMajor` is the 3x3 device to reference rotation as Android hands it out.
 SPLATKIT_JNI(void, nativeSetAttitude)(JNIEnv* env, jobject, jlong handle, jfloatArray rowMajor) {
   auto* engine = toEngine(handle);
