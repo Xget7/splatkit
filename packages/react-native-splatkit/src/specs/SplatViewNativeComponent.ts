@@ -1,5 +1,5 @@
 import type {CodegenTypes, HostComponent, ViewProps} from 'react-native';
-import {codegenNativeComponent} from 'react-native';
+import {codegenNativeComponent, codegenNativeCommands} from 'react-native';
 
 // Keep these wire records local: Codegen does not resolve arbitrary imported aliases.
 type NativeWorldRequest = Readonly<{
@@ -8,6 +8,37 @@ type NativeWorldRequest = Readonly<{
   maxShDegree: CodegenTypes.Int32;
   lodCapacitySplats: CodegenTypes.Int32;
   residencyCapacitySplats: CodegenTypes.Int32;
+}>;
+
+/** Immutable collider transaction, the walk-mode counterpart of a world request. */
+type NativeColliderRequest = Readonly<{
+  /** Unique for each replacement; empty releases walk mode. */
+  requestId: string;
+  /** Absolute, readable local path to a collider GLB. */
+  filePath: string;
+}>;
+
+type NativeColliderEvent = Readonly<{
+  requestId: string;
+  phase: 'ready' | 'failed';
+  errorCode: string;
+  message: string;
+}>;
+
+/** The walker's shape in walk mode, in meters. Zero eyeHeight means the native default. */
+type NativeCharacter = Readonly<{
+  eyeHeight: CodegenTypes.Double;
+  bodyRadius: CodegenTypes.Double;
+  stepHeight: CodegenTypes.Double;
+}>;
+
+/** Where the camera is and where it looks: meters and radians, in the world's frame. */
+type NativeCameraPoseEvent = Readonly<{
+  x: CodegenTypes.Double;
+  y: CodegenTypes.Double;
+  z: CodegenTypes.Double;
+  yaw: CodegenTypes.Double;
+  pitch: CodegenTypes.Double;
 }>;
 
 type NativeWorldEvent = Readonly<{
@@ -80,6 +111,8 @@ type NativeCapabilitiesEvent = Readonly<{
   supportsSubgroups: boolean;
   maxTextureDimension: CodegenTypes.Int32;
   policyRaster: boolean;
+  /** Raster strategies native applies: bit 0 hardware, bit 1 computeTile, bit 2 hybrid. */
+  policyRasterMask: CodegenTypes.Int32;
   policyTileSize: boolean;
   policyLodErrorPixels: boolean;
   policyAlphaThreshold: boolean;
@@ -92,17 +125,70 @@ type NativeCapabilitiesEvent = Readonly<{
 
 export interface NativeProps extends ViewProps {
   world?: NativeWorldRequest;
+  /** Enables walk mode when it is ready; an empty requestId releases it. */
+  collider?: NativeColliderRequest;
+  /** The walker's shape, applied at once and to a collider loaded later. */
+  character?: NativeCharacter;
   paused?: CodegenTypes.WithDefault<boolean, false>;
   renderScale?: CodegenTypes.WithDefault<CodegenTypes.Double, 1>;
   shDegree?: CodegenTypes.WithDefault<CodegenTypes.Int32, 3>;
+  /** Blend in linear light instead of the encoded space the training used. */
+  linearBlending?: CodegenTypes.WithDefault<boolean, false>;
+  /** CPU fallback's angular culling margin in degrees; the GPU path uses projected bounds. */
+  cullMarginDegrees?: CodegenTypes.WithDefault<CodegenTypes.Double, 10>;
+  /** Drives the camera with the gyroscope. Ignored where the sensor is missing. */
+  motionEnabled?: CodegenTypes.WithDefault<boolean, false>;
+  /** Whether a drag on the view turns the camera. Off when the host looks with its own control. */
+  touchLookEnabled?: CodegenTypes.WithDefault<boolean, true>;
+  /** Radians per point dragged to look. */
+  lookSensitivity?: CodegenTypes.WithDefault<CodegenTypes.Double, 0.004>;
+  /** Seconds between onCameraPose events; 0, the default, never sends one. */
+  cameraPoseInterval?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
   /** The resolved renderer policy; native re-validates and reports the effective one. */
   policy?: NativeRenderPolicy;
   onWorldEvent?: CodegenTypes.DirectEventHandler<NativeWorldEvent>;
   /** Adapter must throttle snapshots to at most 2 Hz; no per-frame JS callbacks. */
   onStats?: CodegenTypes.DirectEventHandler<NativeStatsEvent>;
+  onColliderEvent?: CodegenTypes.DirectEventHandler<NativeColliderEvent>;
+  /** Throttled to cameraPoseInterval, and sent only when the pose changed. */
+  onCameraPose?: CodegenTypes.DirectEventHandler<NativeCameraPoseEvent>;
   onPolicyEvent?: CodegenTypes.DirectEventHandler<NativePolicyEvent>;
   /** Emitted once per engine, which each world load creates, before its first policy event. */
   onCapabilities?: CodegenTypes.DirectEventHandler<NativeCapabilitiesEvent>;
 }
 
-export default codegenNativeComponent<NativeProps>('SplatKitView') as HostComponent<NativeProps>;
+type ComponentType = HostComponent<NativeProps>;
+
+/**
+ * Imperative navigation, for the host's own controls: a joystick or a look pad drives the
+ * camera at touch rate without a React commit per frame.
+ */
+export interface NativeCommands {
+  /** Meters per second until called again with zeros. Forward is where the camera looks. */
+  setWalkVelocity: (
+    viewRef: React.ComponentRef<ComponentType>,
+    forward: CodegenTypes.Double,
+    right: CodegenTypes.Double,
+  ) => void;
+  /** Radians. Pitch is clamped, and ignored while the gyroscope drives the view. */
+  look: (
+    viewRef: React.ComponentRef<ComponentType>,
+    deltaYaw: CodegenTypes.Double,
+    deltaPitch: CodegenTypes.Double,
+  ) => void;
+  /** Teleports; while walking the camera settles on the floor under the new point. */
+  setCameraPose: (
+    viewRef: React.ComponentRef<ComponentType>,
+    x: CodegenTypes.Double,
+    y: CodegenTypes.Double,
+    z: CodegenTypes.Double,
+    yaw: CodegenTypes.Double,
+    pitch: CodegenTypes.Double,
+  ) => void;
+}
+
+export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
+  supportedCommands: ['setWalkVelocity', 'look', 'setCameraPose'],
+});
+
+export default codegenNativeComponent<NativeProps>('SplatKitView') as ComponentType;

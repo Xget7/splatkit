@@ -69,3 +69,15 @@ test('unavailable is null, while a measured zero remains zero', () => {
   assert.equal(optionalTimingMillis(true, 15), 15);
   for (const value of [NaN, Infinity, -1]) assert.equal(optionalTimingMillis(true, value), null);
 });
+
+test('collider requests and character settings are validated before they reach native', () => {
+  const {validateColliderRequest, validateCharacter} = require('../build/contracts.js');
+  validateColliderRequest({requestId: 'c1', filePath: '/tmp/room.glb'});
+  assert.throws(() => validateColliderRequest({requestId: ' ', filePath: '/tmp/room.glb'}), TypeError);
+  assert.throws(() => validateColliderRequest({requestId: 'c1', filePath: 'https://x/room.glb'}), TypeError);
+  validateCharacter({eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35});
+  assert.throws(() => validateCharacter({eyeHeight: 0, bodyRadius: 0.35, stepHeight: 0.35}), RangeError);
+  // A body wider than the walker is tall, or a step it could never reach, is not a walker.
+  assert.throws(() => validateCharacter({eyeHeight: 1.5, bodyRadius: 2, stepHeight: 0.35}), RangeError);
+  assert.throws(() => validateCharacter({eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 1.5}), RangeError);
+});

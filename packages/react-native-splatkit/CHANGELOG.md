@@ -18,6 +18,12 @@ This release replaces the previous `react-native-splatkit` binding, which bound 
 - Standalone build wiring for installing outside the SplatKit repository: the Android module applies the `com.facebook.react` Gradle plugin for autolinking and Codegen and depends on `io.github.xget7:splatkit-android` from Maven Central by default, and `SplatKitReactNative.podspec` vendors a `SplatKitCore.xcframework` fetched and checksum-verified at `npm prepack`.
 - `peerDependencies` on `react` and `react-native` 0.87, and a `publish.yml` workflow that publishes a `v*` tag to npm.
 - One-finger look and two-finger walk on iOS, matching the Android SDK view's touch input.
+- `policyRasterMask` in `onCapabilities` and `rasterStrategies` in the native policy support, so `computeTile` on iOS reports a fallback instead of an applied raster.
+
+### Changed
+
+- Every preset rasterizes in hardware; `high` and `balanced` requested hybrid tiles and `highEnd` compute tiles.
+  `withPerformance({raster: 'hybrid'})` opts into iOS screen tiles, which only help where many large translucent splats overlap.
 
 ### Fixed
 

@@ -1,6 +1,7 @@
 package com.splatkit.reactnative
 
 import com.facebook.react.bridge.ReadableMap
+import com.splatkit.CharacterSettings
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.ViewManagerDelegate
@@ -30,6 +31,38 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
             view.invalidRequest(error.message ?: "Malformed world request")
         }
     }
+    override fun setLinearBlending(view: SplatKitView, value: Boolean) = view.setLinearBlending(value)
+    override fun setCullMarginDegrees(view: SplatKitView, value: Double) = view.setCullMarginDegrees(value)
+    override fun setMotionEnabled(view: SplatKitView, value: Boolean) = view.setMotionEnabled(value)
+    override fun setTouchLookEnabled(view: SplatKitView, value: Boolean) = view.setTouchLookEnabled(value)
+    override fun setLookSensitivity(view: SplatKitView, value: Double) = view.setLookSensitivity(value)
+    override fun setCameraPoseInterval(view: SplatKitView, value: Double) = view.setCameraPoseInterval(value)
+    override fun setCollider(view: SplatKitView, value: ReadableMap?) {
+        if (value == null) { view.setCollider(null); return }
+        try {
+            view.setCollider(ColliderRequest(
+                value.getString("requestId") ?: "", value.getString("filePath") ?: ""))
+        } catch (error: RuntimeException) {
+            view.invalidCollider(error.message ?: "Malformed collider request")
+        }
+    }
+    override fun setCharacter(view: SplatKitView, value: ReadableMap?) {
+        if (value == null) { view.setCharacter(null); return }
+        try {
+            view.setCharacter(CharacterSettings(
+                value.getDouble("eyeHeight").toFloat(), value.getDouble("bodyRadius").toFloat(),
+                value.getDouble("stepHeight").toFloat()))
+        } catch (error: RuntimeException) {
+            view.setCharacter(null)
+        }
+    }
+    override fun setWalkVelocity(view: SplatKitView, forward: Double, right: Double) =
+        view.walk(forward, right)
+    override fun look(view: SplatKitView, deltaYaw: Double, deltaPitch: Double) =
+        view.look(deltaYaw, deltaPitch)
+    override fun setCameraPose(
+        view: SplatKitView, x: Double, y: Double, z: Double, yaw: Double, pitch: Double,
+    ) = view.teleport(x, y, z, yaw, pitch)
     override fun setPolicy(view: SplatKitView, value: ReadableMap?) {
         if (value == null) { view.setPolicy(null); return }
         try {
@@ -49,6 +82,8 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
         "topStats" to mapOf("registrationName" to "onStats"),
         "topPolicyEvent" to mapOf("registrationName" to "onPolicyEvent"),
         "topCapabilities" to mapOf("registrationName" to "onCapabilities"),
+        "topColliderEvent" to mapOf("registrationName" to "onColliderEvent"),
+        "topCameraPose" to mapOf("registrationName" to "onCameraPose"),
     )
     override fun onDropViewInstance(view: SplatKitView) { view.dispose(); super.onDropViewInstance(view) }
 }
