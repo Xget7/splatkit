@@ -6,8 +6,16 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ## Unreleased
 
+### Added
+
+- `RenderPolicySupport::rasterMask` in the shared engine, listing the raster strategies a backend builds.
+- `RenderPolicy::lodSplatLimit` in the shared engine: a live cap on selected hierarchy splats, 0 for the loaded capacity.
+- `buildCollider` in splat-core makes a walk-mode collider from a world's splats, a port of PlayCanvas splat-transform's collision voxel passes, with `encodeGlb` and `tools/splat_collider` to write it as a `.glb`.
+- Shared engine stats count frames the display showed when a renderer reports presentation times, with a 95th percentile frame time, a 1% low and dropped frames; Metal reports them, Vulkan still counts submitted frames.
+
 ### Changed
 
+- Walk mode refuses steps onto a floor more than 0.35 m higher, looking 0.25 m ahead, so it climbs stairs and steps over door tracks but no longer climbs counters, chairs or tables whose top the hip probe passes over, and slides along them when walked into at an angle.
 - The [React Native example](apps/react-native/README.md) replaces the React Native dev app: a template React Native 0.87.1 app that installs `@splatkit/react-native` from npm and runs on Android and iOS.
 
 ## [0.1.0-alpha07] - 2026-09-16

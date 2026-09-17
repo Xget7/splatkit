@@ -28,7 +28,7 @@ Use the native view, forward lifecycle and load worlds asynchronously; see each 
 | Offline `.lodsplat` and GPU hierarchical selection | Yes | Yes |
 | 16-bit quantized depth / two radix passes | Per-view policy approximation | Per-view policy approximation |
 | SH degrees 0–3, walk/fly, touch, motion, loaded/drawn stats | Yes | Yes |
-| Hybrid compute screen tiles | Experimental | Not implemented |
+| Hybrid compute screen tiles | Experimental per-view opt-in, for dense close-up scenes | Not implemented |
 | Per-view render policy and capabilities | Yes | Yes |
 | React Native policy prop and events | iPhone 17 Pro validated | Mi 9 validated |
 
