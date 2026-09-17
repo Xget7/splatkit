@@ -4,6 +4,12 @@ Notable changes to the SplatKit Android SDK, the shared C++ engine and this repo
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); alphas may break APIs.
 iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGELOG.md) and React Native changes in the [React Native changelog](packages/react-native-splatkit/CHANGELOG.md).
 
+## Unreleased
+
+### Changed
+
+- The [React Native example](apps/react-native/README.md) replaces the React Native dev app: a template React Native 0.87.1 app that installs `@splatkit/react-native` from npm and runs on Android and iOS.
+
 ## [0.1.0-alpha07] - 2026-09-16
 
 ### Added
@@ -17,7 +23,7 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 - Shared engine: `resolveRenderPolicy`, `SplatEngine::setRenderPolicy` and a capability query on `SplatRenderer`.
 - Benchmarks log 30-second windows and final p99 frame and GPU times; `TimingSummary` reports p99.
 - `scripts/benchmark_report.py` for sustained-run reports and `scripts/compare_captures.py` for matched-image comparisons.
-- The [React Native dev app](apps/react-native-dev/README.md), which mounts the Fabric package on Android.
+- The React Native dev app, which mounts the Fabric package on Android.
 
 ### Changed
 

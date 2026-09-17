@@ -54,7 +54,7 @@ npm ci
 npm run check                # TypeScript, contract tests and Fabric Codegen
 ```
 
-Adapter changes also need the Android adapter host tests in its [README](packages/react-native-splatkit/android/README.md) and a run of the [RN dev app](apps/react-native-dev/README.md) on a device.
+Adapter changes also need the Android adapter host tests in its [README](packages/react-native-splatkit/android/README.md) and a run of the [React Native example](apps/react-native/README.md) on a device.
 Check build wiring changes in a fresh React Native app outside this repository, installing the `npm pack` tarball.
 `prepack` fetches and checksum-verifies the iOS `SplatKitCore.xcframework`; `SPLATKIT_IOS_XCFRAMEWORK_PATH` substitutes a local `scripts/package-ios.sh` build.
 
@@ -92,7 +92,7 @@ The script configures both packages for the Android target and lints tests and t
 Its Kotlin has four packages: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope, and `com.splatkit.ui` the optional HUD and joystick views.
 `packages/splatkit-ios` owns everything Metal and iOS: `MetalSplatRenderer` implements the interface over a `CAMetalLayer`, `SKSplatEngine` is the Objective-C boundary to Swift, and `Sources/SplatKit` is the Swift layer (render thread, motion, `SplatMetalView`).
 `packages/react-native-splatkit` is the Fabric package: the builder, contracts and Codegen spec in `src`, a Kotlin adapter over `SplatSurfaceView` in `android` and an Objective-C++ adapter over `SKSplatEngine` in `ios`.
-`apps/` holds one dev app per host: `android-dev`, `ios-dev` and `react-native-dev`.
+`apps/` holds the `android-dev` and `ios-dev` dev apps and the `react-native` example, which installs the published package.
 The engine does not know what is hosting it.
 
 ## Names

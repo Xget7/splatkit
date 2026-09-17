@@ -8,7 +8,7 @@ It depends on `io.github.xget7:splatkit-android:0.1.0-alpha07`, or on `project('
 Host tests, from the SplatKit repository root after `npm ci` in the package:
 
 ```sh
-apps/react-native-dev/android/gradlew -p packages/react-native-splatkit/android/verification :adapter:compileDebugKotlin :adapter:testDebugUnitTest
+apps/react-native/android/gradlew -p packages/react-native-splatkit/android/verification :adapter:compileDebugKotlin :adapter:testDebugUnitTest
 ```
 
 The verification build has no `:app` to seed plugin Codegen, so it runs `scripts/codegen-android.cjs` instead; see `android/verification/build.gradle`.

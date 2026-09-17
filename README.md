@@ -30,10 +30,10 @@ Use the native view, forward lifecycle and load worlds asynchronously; see each 
 | SH degrees 0–3, walk/fly, touch, motion, loaded/drawn stats | Yes | Yes |
 | Hybrid compute screen tiles | Experimental | Not implemented |
 | Per-view render policy and capabilities | Yes | Yes |
-| React Native policy prop and events | Adapter compiles | Mi 9 validated in the RN dev app |
+| React Native policy prop and events | iPhone 17 Pro validated | Mi 9 validated |
 
-The [React Native package](packages/react-native-splatkit/README.md), published as source to [react-native-splatkit](https://github.com/Xget7/react-native-splatkit), drives both adapters through one policy prop.
-It builds only inside this repository for now; standalone packaging and iOS device execution remain pending.
+React Native: `npm install @splatkit/react-native`, published from [react-native-splatkit](https://github.com/Xget7/react-native-splatkit); the [example app](apps/react-native/README.md) starts from zero.
+One policy prop drives both adapters.
 
 `splat-core` owns formats, hierarchy and navigation; `splatkit-engine` owns orchestration; each native SDK owns its GPU resources and view lifecycle.
 CPU loading/preprocessing and a bounded compatibility ordering path remain.
@@ -56,6 +56,6 @@ There is no universal 10M/30/60 FPS or lossless guarantee.
 
 Use the [agent harness](docs/AGENT_HARNESS.md), [validation gates](docs/VALIDATION.md) and [build guide](CONTRIBUTING.md).
 Include device/driver, world, settings and logs with performance reports.
-Next acceptance work: Mali and more Adreno devices, lifecycle stress, reference-image comparisons and iOS device runs of the React Native adapter, then Vulkan hybrid tiles and standalone React Native packaging.
+Next acceptance work: Mali and more Adreno devices, lifecycle stress, reference-image comparisons, then Vulkan hybrid tiles.
 
 [MIT license](LICENSE) · [Third-party licenses](THIRD_PARTY_LICENSES.txt).

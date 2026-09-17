@@ -18,6 +18,7 @@ Android autolinks through the app's `com.facebook.react` Gradle plugin, which al
 iOS vendors `SplatKitCore.xcframework` from the matching `splatkit-ios` release, checksum-verified when the npm package is packed.
 Set `SPLATKIT_IOS_XCFRAMEWORK_PATH` to a local framework build before `npm pack` to test unreleased SDK changes.
 iOS 26 terminates apps that skip the UIScene lifecycle, so hosts built from the React Native 0.87 template need a scene delegate.
+The [example app](https://github.com/Xget7/splatkit-android/tree/main/apps/react-native) lists every change from the template, starting from zero.
 
 ## Use
 
