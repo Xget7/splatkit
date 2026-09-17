@@ -16,6 +16,10 @@ class MainActivity : ReactActivity() {
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
         override fun getLaunchOptions(): Bundle =
-            Bundle().apply { putString("worldPath", File(getExternalFilesDir(null), "world.spz").path) }
+            Bundle().apply {
+              val files = getExternalFilesDir(null)
+              putString("worldPath", File(files, "world.spz").path)
+              putString("colliderPath", File(files, "collider.glb").path)
+            }
       }
 }

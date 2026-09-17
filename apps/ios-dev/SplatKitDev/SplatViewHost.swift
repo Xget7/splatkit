@@ -15,6 +15,14 @@ final class SplatSession: ObservableObject {
     @Published var gpu = ""
     @Published var scenePrepared = false
     @Published var loadingFailed = false
+    /// The last 30 seconds of frame rate, sampled with the stats.
+    @Published var fpsHistory: [Float] = []
+    @Published var quality: QualityTier? {
+        didSet { quality?.apply(to: view) }
+    }
+    @Published var shot: CameraShot = .orbit {
+        didSet { orbit?.setShot(shot) }
+    }
     private var timer: Timer?
     private var delegateBox: Delegate?
     private let monitorResources: Bool
@@ -46,6 +54,9 @@ final class SplatSession: ObservableObject {
             policy.subpixelThreshold = radius
         }
         if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
+        if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
+        if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }
+        if args.bool("tile-raster") ?? false { policy.raster = 2 }
         view.renderPolicy = policy
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities
@@ -58,7 +69,12 @@ final class SplatSession: ObservableObject {
         if monitorResources {
             memoryWarningObserver = NotificationCenter.default.addObserver(
                 forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
-            ) { [weak self] _ in self?.stopRun("memory-warning") }
+            ) { [weak self] _ in
+                // Loading a large world warns at its transient peak and then settles, so a
+                // warning only samples now; the footprint and headroom limits decide.
+                NSLog("SplatMemoryWarning: sampling resources")
+                self?.sampleResources()
+            }
         }
     }
 
@@ -81,11 +97,19 @@ final class SplatSession: ObservableObject {
         stopPolling()
     }
 
+    /// A prepared scene showed no frame in the last window: the engine skips redraws while
+    /// nothing moves, and the render loop, which publishes the stats, is still running.
+    var isIdle: Bool { scenePrepared && stats.fps == 0 }
+
     func startPolling() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.stats = self.view.readStats()
+            if self.scenePrepared && !self.isIdle {
+                self.fpsHistory.append(self.stats.fps)
+                if self.fpsHistory.count > 60 { self.fpsHistory.removeFirst(self.fpsHistory.count - 60) }
+            }
             self.motion = self.view.isMotionEnabled
             if self.monitorResources { self.sampleResources() }
         }
@@ -132,6 +156,30 @@ final class SplatSession: ObservableObject {
         status = "paused: \(reason)"
         UIApplication.shared.isIdleTimerDisabled = false
         NSLog("SplatRunStopped: reason=%@", reason)
+    }
+
+    var resolutionText: String {
+        let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
+        let width = Int((view.bounds.width * scale * CGFloat(view.renderScale)).rounded())
+        let height = Int((view.bounds.height * scale * CGFloat(view.renderScale)).rounded())
+        return "\(width)×\(height)"
+    }
+
+    var pipelineText: String {
+        let policy = view.renderPolicy
+        let sh = min(view.shDegree, view.maxShDegree)
+        let limit = policy.lodSplatLimit == 0 ? "all" : String(format: "%.1fM", Double(policy.lodSplatLimit) / 1_000_000)
+        return "SH\(sh) \(policy.sortDepth)b \(limit)"
+    }
+
+    var thermalText: String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: "Nominal"
+        case .fair: "Fair"
+        case .serious: "Serious"
+        case .critical: "Critical"
+        @unknown default: "Unknown"
+        }
     }
 
     private final class Delegate: SplatViewDelegate {

@@ -10,7 +10,7 @@
     "start": "react-native start"
   },
   "dependencies": {
-    "@splatkit/react-native": "0.1.0-alpha.1",
+    "@splatkit/react-native": "file:../../packages/react-native-splatkit",
     "react": "19.2.3",
     "react-native": "0.87.1",
     "react-native-safe-area-context": "^5.5.2"
