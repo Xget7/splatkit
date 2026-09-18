@@ -54,6 +54,9 @@ const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
 const WORLD_REQUEST = 'world';
 const COLLIDER_REQUEST = 'collider';
 
+/** Clears the HUD's preset row, which sits 34pt up and stands about 26pt tall. */
+const STATUS_LIFT = 72;
+
 /**
  * The example opens at the sharpest preset: a phone renders a scene this size comfortably,
  * and anything coarser leaves distant geometry visibly soft. The picker moves it down.
@@ -218,12 +221,12 @@ function Splat({ worldPath, colliderPath }: Props) {
         </View>
       )}
       {status !== null && (
-        <Text
+        <View
           pointerEvents="none"
-          style={[styles.status, { bottom: insets.bottom + 12 }]}
+          style={[styles.statusCard, { bottom: insets.bottom + STATUS_LIFT }]}
         >
-          {status}
-        </Text>
+          <Text style={styles.status}>{status}</Text>
+        </View>
       )}
     </View>
   );
@@ -238,15 +241,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 28,
   },
-  status: {
+  statusCard: {
     position: 'absolute',
     left: 16,
     right: 16,
-    color: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(17, 17, 20, 0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  status: {
+    color: 'rgba(255, 255, 255, 0.92)',
     fontSize: 13,
+    lineHeight: 17,
     textAlign: 'center',
-    textShadowColor: 'black',
-    textShadowRadius: 4,
   },
 });
 
