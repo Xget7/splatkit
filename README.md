@@ -32,7 +32,7 @@ Use the native view, forward lifecycle and load worlds asynchronously; see each 
 | Per-view render policy and capabilities | Yes | Yes |
 | React Native policy prop and events | iPhone 17 Pro validated | Mi 9 validated |
 
-React Native: `npm install @splatkit/react-native`, published from [react-native-splatkit](https://github.com/Xget7/react-native-splatkit); the [example app](apps/react-native/README.md) starts from zero.
+React Native: `npm install @splatkit/react-native@next`, published from [react-native-splatkit](https://github.com/Xget7/react-native-splatkit); the [example app](apps/react-native/README.md) starts from zero.
 One policy prop drives both adapters.
 
 `splat-core` owns formats, hierarchy and navigation; `splatkit-engine` owns orchestration; each native SDK owns its GPU resources and view lifecycle.

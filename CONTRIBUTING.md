@@ -58,11 +58,10 @@ Adapter changes also need the Android adapter host tests in its [README](package
 Check build wiring changes in a fresh React Native app outside this repository, installing the `npm pack` tarball.
 `prepack` fetches and checksum-verifies the iOS `SplatKitCore.xcframework`; `SPLATKIT_IOS_XCFRAMEWORK_PATH` substitutes a local `scripts/package-ios.sh` build.
 
-## Publish the React Native package
+## Release
 
-Release `splatkit-android` and `splatkit-ios` first, then match the Android version in `android/build.gradle` and `scripts/ios-xcframework.json`.
-Export with `scripts/export-ios-source.py --platform react-native` and push to [react-native-splatkit](https://github.com/Xget7/react-native-splatkit).
-A `v<package.json version>` tag there runs `.github/workflows/publish.yml`, which needs the `NPM_TOKEN` secret and publishes prereleases under the `next` dist-tag.
+Bumping a version is the release: merge it to `main` and the workflows publish, tag and mirror on their own.
+[docs/RELEASING.md](docs/RELEASING.md) has the whole flow, including the one part still done by hand, building the iOS XCFramework on a Mac.
 
 ## Lint the C++
 
