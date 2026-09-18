@@ -43,9 +43,13 @@ Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk thr
 | React Native | `0.87.x` (peer dependency `~0.87.1`) |
 | React | `^19.2.3` |
 | Architecture | New Architecture (Fabric). `SplatKitView` has no legacy bridge fallback. |
-| iOS | 17.0+, Xcode with CocoaPods |
+| iOS | 17.0+, Apple GPU family 7 (A14/M1 or newer), Xcode with CocoaPods |
 | Android | API 29+, Vulkan 1.1, `arm64-v8a` only |
 | Node | `^22.13.0`, `^24.3.0` or `>=26.0.0` |
+
+Run it on a physical device.
+The renderer's shaders use SIMD prefix reductions, which the iOS Simulator does not implement, so it reports `Metal is unavailable on this device` and loads nothing.
+Emulators are not a supported target on either platform.
 
 ## Installation
 
