@@ -17,7 +17,6 @@ import {
 } from 'react-native-safe-area-context';
 import {
   ColliderPhase,
-  DeviceCapabilities,
   PolicyPhase,
   QualityPreset,
   SplatKitBuilder,
@@ -25,6 +24,7 @@ import {
   SplatKitView,
   SplatKitViewProps,
   WorldPhase,
+  conservativeCapabilities,
   nativeCapabilitiesFromEvent,
   optionalTimingMillis,
   toNativePolicyProp,
@@ -41,24 +41,6 @@ type EventOf<
     | 'onPolicyEvent'
     | 'onColliderEvent',
 > = Parameters<NonNullable<SplatKitViewProps[K]>>[0];
-
-/**
- * The limits the first world request is built against, before the engine has reported its
- * own in onCapabilities. These are what the shipping engines report, so the first load is
- * usually also the last; a device that turns out to allow less has its world rebuilt under
- * the corrected budget, and one that allows more has it raised.
- */
-const INITIAL_CAPABILITIES: DeviceCapabilities = {
-  limits: {
-    maxLodCapacitySplats: 4_000_000,
-    minResidencyCapacitySplats: 100_000,
-    maxResidencyCapacitySplats: 32_000_000,
-  },
-  supportsComputeTiles: false,
-  supportsHiZOcclusion: false,
-  supportsSubgroups: false,
-  maxTextureDimension: 4096,
-};
 
 /** The first policy revision; each capabilities report and preset change takes the next. */
 const FIRST_REVISION = 1;
@@ -103,9 +85,10 @@ function App(props: Props) {
 function Splat({ worldPath, colliderPath }: Props) {
   const insets = useSafeAreaInsets();
   const view = useRef<React.ComponentRef<typeof SplatKitView>>(null);
-  // Every new configuration needs a new policy revision.
+  // Every new configuration needs a new policy revision. The engine reports its own limits in onCapabilities, which only arrive once it exists:
+  // the first world request is built against the limits every adapter accepts.
   const [capabilities, setCapabilities] = useState({
-    value: INITIAL_CAPABILITIES,
+    value: conservativeCapabilities,
     revision: FIRST_REVISION,
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);

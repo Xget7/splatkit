@@ -58,6 +58,27 @@ export type DeviceCapabilities = Readonly<{
   policy?: NativePolicySupport;
 }>;
 
+/**
+ * What to build the first world request against, before an engine has reported its own.
+ *
+ * Capabilities arrive with the engine a world load creates, so the first request has to be
+ * built against a guess, and a guess above what the adapter accepts is rejected outright:
+ * no engine, no capabilities, and a host with no way to learn what it got wrong. These are
+ * the narrowest limits any shipped backend reports, so every adapter accepts a request
+ * built against them. Rebuild on `onCapabilities` to reach the limits the device really has.
+ */
+export const conservativeCapabilities: DeviceCapabilities = Object.freeze({
+  limits: Object.freeze({
+    maxLodCapacitySplats: 2_200_000,
+    minResidencyCapacitySplats: 100_000,
+    maxResidencyCapacitySplats: 8_000_000,
+  }),
+  supportsComputeTiles: false,
+  supportsHiZOcclusion: false,
+  supportsSubgroups: false,
+  maxTextureDimension: 4096,
+});
+
 /** The policy as it crosses the Fabric boundary; enum values are the numbers native uses. */
 export type NativeRenderPolicy = Readonly<{
   revision: number;

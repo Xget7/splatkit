@@ -39,3 +39,23 @@ test('Android adapter exposes navigation as props, commands and collider events'
   // Commands reach the SDK view directly, with no React commit per frame.
   assert.match(view, /fun walk\(forward: Double, right: Double\) \{\s*nativeView\?\.setWalkVelocity/);
 });
+
+// A request built against limits the adapter refuses is rejected before any engine exists, so
+// no capabilities event follows and the host cannot learn what it got wrong: the first guess
+// has to be one every adapter accepts.
+test('conservativeCapabilities fit the ranges the Android adapter accepts', () => {
+  const kotlin = fs.readFileSync(
+    path.join(root, 'android/src/main/java/com/splatkit/reactnative/WorldSession.kt'), 'utf8');
+  const number = text => Number(text.replace(/_/g, ''));
+  const lod = kotlin.match(/lodCapacitySplats in (\d[\d_]*)\.\.(\d[\d_]*)/);
+  const residency = kotlin.match(/residencyCapacitySplats in (\d[\d_]*)\.\.(\d[\d_]*)/);
+  assert.ok(lod && residency, 'WorldSession must state both accepted ranges');
+
+  const {limits} = require('../build/performance.js').conservativeCapabilities;
+  assert.ok(limits.maxLodCapacitySplats <= number(lod[2]),
+    `maxLodCapacitySplats ${limits.maxLodCapacitySplats} exceeds the adapter's ${lod[2]}`);
+  assert.ok(limits.minResidencyCapacitySplats >= number(residency[1]),
+    'minResidencyCapacitySplats falls below the adapter minimum');
+  assert.ok(limits.maxResidencyCapacitySplats <= number(residency[2]),
+    'maxResidencyCapacitySplats exceeds the adapter maximum');
+});
