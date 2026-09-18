@@ -1,28 +1,57 @@
 name: release
 
-# Publishing runs from a tag so the released bytes come from a commit that exists.
-# Tag with the version in build.gradle.kts, e.g. `git tag v0.1.0-alpha01 && git push --tags`;
-# the deployment is released on Central without a portal step.
+# The version in packages/splatkit-android/build.gradle.kts is the release trigger: a merge to
+# main that changes it publishes the new version to Maven Central and tags the commit. Maven
+# Central takes ten minutes or more to appear on repo1, so the decision is made from the diff
+# rather than by asking the registry what exists, which would race with its own mirror.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: state
+        name: Decide whether the version changed
+        run: |
+          coordinates() {
+            git show "$1:packages/splatkit-android/build.gradle.kts" 2>/dev/null \
+              | sed -n 's/.*coordinates(.*"splatkit-android", "\([^"]*\)").*/\1/p'
+          }
+          version=$(coordinates HEAD)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          elif [ "$version" = "$(coordinates HEAD^)" ]; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "splatkit-android stays at $version; nothing to release."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-java@v4
+        if: steps.state.outputs.new == 'true'
         with:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        if: steps.state.outputs.new == 'true'
         with:
           packages: "platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006 cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.state.outputs.new == 'true'
 
       - name: Upload the release to Maven Central
+        if: steps.state.outputs.new == 'true'
         working-directory: apps/android-dev
         run: ./gradlew :splatkit:publishToMavenCentral --no-daemon
         env:
@@ -30,3 +59,18 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
+      - name: Tag the release commit
+        if: steps.state.outputs.new == 'true'
+        run: |
+          if git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION already tagged."
+            exit 0
+          fi
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --title "SplatKit Android $VERSION" --generate-notes \
+            $(case "$VERSION" in *alpha*|*beta*|*rc*) echo --prerelease ;; esac)
+        env:
+          VERSION: ${{ steps.state.outputs.version }}
+          GH_TOKEN: ${{ github.token }}

@@ -6,7 +6,7 @@ Once the collider is ready a thumb stick appears; it is this app's own control, 
 The SDK draws no walking UI of its own.
 
 Inside this monorepo the app installs [`@splatkit/react-native`](../../packages/react-native-splatkit/README.md) from `../../packages`, and builds the Android SDK from source, so the example always exercises the current API.
-Outside it, `npm install @splatkit/react-native` is the only change.
+Outside it, `npm install @splatkit/react-native@next` is the only change.
 
 Linking the package rather than unpacking it costs the example one extra piece of Metro config, in [`metro.config.js`](metro.config.js).
 The package keeps React and React Native as devDependencies, so from the linked directory Metro resolves them to the package's own `node_modules` and the bundle ends up with two copies of each.
@@ -19,7 +19,7 @@ An app that installs the package from npm needs none of this.
 ```sh
 npx @react-native-community/cli@latest init MyApp --version 0.87.1
 cd MyApp
-npm install @splatkit/react-native
+npm install @splatkit/react-native@next
 ```
 
 Then match what this app changes from the template:
@@ -33,7 +33,7 @@ Then match what this app changes from the template:
 
 ## Run this app
 
-Needs Node 22.11 or newer, the Android SDK with NDK, Xcode 26 and CocoaPods.
+Needs Node 22.13 or newer, the Android SDK with NDK, Xcode 26 and CocoaPods.
 Worlds are `.spz`, `.ply` or `.lodsplat` files and are not committed.
 
 ```sh

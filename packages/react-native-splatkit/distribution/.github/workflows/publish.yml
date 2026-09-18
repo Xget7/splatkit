@@ -1,16 +1,20 @@
 name: publish
 
-# Publishing runs from a tag so the released bytes come from a commit that exists. Tag with the
-# version in package.json, e.g. `git tag v0.1.0-alpha.1 && git push --tags`.
+# The version in package.json is the release trigger: a merge to main that names a version npm
+# does not have yet publishes it, and a merge that does not is a no-op. That keeps the released
+# bytes tied to a commit on main without anyone hand-tagging, and makes the release reviewable as
+# an ordinary pull request. This repository is generated from the SplatKit monorepo, so the bump
+# lands here through the mirror workflow there.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -20,11 +24,57 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: npm
       - run: npm ci
-      # Prereleases go to the next dist-tag, so `npm install` keeps resolving the latest stable version.
-      - run: |
+
+      - id: state
+        name: Decide whether this version is new
+        run: |
           version=$(node -p "require('./package.json').version")
-          test "v$version" = "$GITHUB_REF_NAME"
-          case "$version" in *-*) tag=next ;; *) tag=latest ;; esac
+          name=$(node -p "require('./package.json').name")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "$name@$version is already published; nothing to release."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Prereleases go to the next dist-tag so a later stable release owns `latest` by default.
+      - name: Publish to npm
+        if: steps.state.outputs.new == 'true'
+        run: |
+          case "$VERSION" in *-*) tag=next ;; *) tag=latest ;; esac
           npm publish --provenance --tag "$tag"
         env:
+          VERSION: ${{ steps.state.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Until a stable release exists there is nothing for `latest` to mean, and leaving it on an
+      # older prerelease makes plain `npm install` hand out a build no README describes. This runs
+      # on every push so a tag left behind by an earlier release is corrected without a new version.
+      - name: Point latest at the newest release while all of them are prereleases
+        run: |
+          current=$(npm view "$NAME" dist-tags.latest 2>/dev/null || true)
+          if [ "$current" = "$VERSION" ]; then exit 0; fi
+          case "$current" in
+            "" | *-*)
+              npm dist-tag add "$NAME@$VERSION" latest
+              echo "latest: ${current:-none} -> $VERSION"
+              ;;
+            *) echo "latest is the stable $current; leaving it alone." ;;
+          esac
+        env:
+          NAME: ${{ steps.state.outputs.name }}
+          VERSION: ${{ steps.state.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag the release commit
+        if: steps.state.outputs.new == 'true'
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
+            $(case "$VERSION" in *-*) echo --prerelease ;; esac)
+        env:
+          VERSION: ${{ steps.state.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
