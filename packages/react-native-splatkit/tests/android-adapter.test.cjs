@@ -59,3 +59,15 @@ test('conservativeCapabilities fit the ranges the Android adapter accepts', () =
   assert.ok(limits.maxResidencyCapacitySplats <= number(residency[2]),
     'maxResidencyCapacitySplats exceeds the adapter maximum');
 });
+
+// The adapter reported every timing as unavailable, so a HUD on Android could never show a
+// frame rate or a GPU time even while the engine was measuring both.
+test('Android adapter reports the timings the SDK measures', () => {
+  const kotlin = fs.readFileSync(
+    path.join(root, 'android/src/main/java/com/splatkit/reactnative/SplatKitView.kt'), 'utf8');
+  for (const field of ['frame', 'gpu', 'sort']) {
+    assert.match(kotlin, new RegExp(`putDouble\\("${field}Millis", stats\\.${field}Millis`));
+    assert.match(kotlin,
+      new RegExp(`putBoolean\\("${field}TimingAvailable", stats\\.${field}Millis > 0f\\)`));
+  }
+});

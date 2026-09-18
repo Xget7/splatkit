@@ -307,10 +307,15 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
                     putString("requestId", world.requestId)
                     putDouble("loadedSplats", stats.loadedSplatCount.toDouble())
                     putDouble("drawnSplats", stats.drawnSplatCount.toDouble())
-                    // The SDK does not expose timing validity bits. Do not infer availability from zero.
-                    putDouble("frameMillis", 0.0); putBoolean("frameTimingAvailable", false)
-                    putDouble("gpuMillis", 0.0); putBoolean("gpuTimingAvailable", false)
-                    putDouble("sortMillis", 0.0); putBoolean("sortTimingAvailable", false)
+                    // Zero is the SDK's own "not measured": the GPU and sort times are zero
+                    // without timestamp queries, and the frame time is zero while nothing
+                    // redraws. A host reads those as no measurement, which is what they are.
+                    putDouble("frameMillis", stats.frameMillis.toDouble())
+                    putBoolean("frameTimingAvailable", stats.frameMillis > 0f)
+                    putDouble("gpuMillis", stats.gpuMillis.toDouble())
+                    putBoolean("gpuTimingAvailable", stats.gpuMillis > 0f)
+                    putDouble("sortMillis", stats.sortMillis.toDouble())
+                    putBoolean("sortTimingAvailable", stats.sortMillis > 0f)
                 })
             }
             main.postDelayed(this, 500)
