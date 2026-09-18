@@ -1,5 +1,5 @@
 {
   "_comment": "The splatkit-ios release scripts/fetch-ios-xcframework.cjs downloads at npm prepack. Update after cutting a new splatkit-ios release; sha256 comes from swift package compute-checksum (scripts/package-ios.sh), which is also the SPM checksum.",
-  "version": "0.1.0-alpha.3",
-  "sha256": "2258de61db98721528a805bdfefbc6b764aada311bda6149b3abcf98d5194906"
+  "version": "0.1.0-alpha.4",
+  "sha256": "7b92ec52cbcd1f42bfc6ab31d16befd4b8134ee1c7f0a71b26789a4cbcf4f5c5"
 }
