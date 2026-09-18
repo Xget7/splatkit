@@ -12,6 +12,10 @@ import kotlin.math.min
 /**
  * A thumb stick: a base ring with a knob that follows the finger and snaps back on release.
  * Reports a direction in [-1, 1] on each axis, y positive upwards, through [onMove].
+ *
+ * Optional, and nothing in the SDK uses it: a host that wants walking lays this over its
+ * [com.splatkit.SplatSurfaceView] and feeds `setWalkVelocity(y * speed, x * speed)`. A host
+ * with its own controls ignores this class entirely.
  */
 class JoystickView @JvmOverloads constructor(
     context: Context,

@@ -19,9 +19,23 @@ const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const spec = schema.modules.SplatKitView?.components?.SplatKitView;
 assert.ok(spec, 'Codegen must discover SplatKitView');
 assert.deepEqual(spec.props.map(prop => prop.name).sort(),
-  ['paused', 'policy', 'renderScale', 'shDegree', 'world']);
+  ['cameraPoseInterval', 'character', 'collider', 'cullMarginDegrees', 'linearBlending',
+    'lookSensitivity', 'motionEnabled', 'paused', 'policy', 'renderScale', 'shDegree',
+    'touchLookEnabled', 'world']);
 assert.deepEqual(spec.events.map(event => event.name).sort(),
-  ['onCapabilities', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
+  ['onCameraPose', 'onCapabilities', 'onColliderEvent', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
+assert.deepEqual(spec.commands.map(command => command.name).sort(),
+  ['look', 'setCameraPose', 'setWalkVelocity']);
+assert.deepEqual(spec.commands.find(command => command.name === 'setWalkVelocity')
+  .typeAnnotation.params.map(param => [param.name, param.typeAnnotation.type]),
+  [['forward', 'DoubleTypeAnnotation'], ['right', 'DoubleTypeAnnotation']]);
+const collider = spec.props.find(prop => prop.name === 'collider').typeAnnotation.properties;
+assert.deepEqual(collider.map(prop => prop.name).sort(), ['filePath', 'requestId']);
+const character = spec.props.find(prop => prop.name === 'character').typeAnnotation.properties;
+assert.deepEqual(character.map(prop => prop.name).sort(),
+  ['bodyRadius', 'eyeHeight', 'stepHeight']);
+const pose = spec.events.find(event => event.name === 'onCameraPose').typeAnnotation.argument.properties;
+assert.deepEqual(pose.map(prop => prop.name).sort(), ['pitch', 'x', 'y', 'yaw', 'z']);
 const world = spec.props.find(prop => prop.name === 'world').typeAnnotation.properties;
 assert.deepEqual(world.map(prop => prop.name).sort(),
   ['filePath', 'lodCapacitySplats', 'maxShDegree', 'requestId', 'residencyCapacitySplats']);

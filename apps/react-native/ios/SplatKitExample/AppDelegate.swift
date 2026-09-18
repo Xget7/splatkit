@@ -41,7 +41,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     factory.startReactNative(
       withModuleName: "SplatKitExample",
       in: window,
-      initialProperties: ["worldPath": documents.appendingPathComponent("world.spz").path],
+      initialProperties: [
+        "worldPath": documents.appendingPathComponent("world.spz").path,
+        "colliderPath": documents.appendingPathComponent("collider.glb").path,
+      ],
       launchOptions: nil
     )
   }

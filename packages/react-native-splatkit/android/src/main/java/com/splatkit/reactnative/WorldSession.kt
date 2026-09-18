@@ -20,6 +20,15 @@ internal data class WorldRequest(
     }
 }
 
+internal data class ColliderRequest(val requestId: String, val filePath: String) {
+    fun validate() {
+        require(requestId.isNotBlank()) { "requestId must be nonempty" }
+        require(filePath.startsWith('/') && !filePath.startsWith("//") &&
+            !filePath.contains('\u0000') && filePath != "/") { "filePath must be an absolute local file" }
+        require(File(filePath).isFile && File(filePath).canRead()) { "filePath must name a readable file" }
+    }
+}
+
 /** One engine per transaction. Tokens suppress callbacks queued before replacement/release. */
 internal class WorldSession {
     var generation = 0L

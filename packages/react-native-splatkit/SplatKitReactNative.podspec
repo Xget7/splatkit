@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'SplatKitReactNative'
-  s.version = '0.1.0-alpha.1'
+  s.version = '0.1.0-alpha.2'
   s.summary = 'Fabric view adapter for SplatKit native renderers'
   s.homepage = 'https://github.com/Xget7/react-native-splatkit'
   s.license = { :type => 'MIT' }

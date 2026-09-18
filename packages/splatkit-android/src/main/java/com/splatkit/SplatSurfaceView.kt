@@ -1,6 +1,8 @@
 package com.splatkit
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
@@ -36,8 +38,11 @@ internal fun dispatchSplatEvent(
  * surface lifecycle: the engine gets the surface when Android creates it and gives it
  * back, synchronously, before Android destroys it.
  *
- * Gestures: one finger drags the view (yaw, and pitch when the gyroscope is off);
- * two fingers walk (up is forward, sideways strafes); a double tap toggles the gyroscope.
+ * Gestures: a finger drags the view to look (yaw, and pitch when the gyroscope is off)
+ * and a double tap toggles the gyroscope; both can be turned off. The view ships no
+ * walking control: the host draws its own, wherever it likes, and drives [setWalkVelocity]
+ * or [walk] from it. [com.splatkit.ui.JoystickView] is one such control, for a host that
+ * wants a ready-made one.
  */
 class SplatSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -48,21 +53,60 @@ class SplatSurfaceView @JvmOverloads constructor(
     private val motion = MotionInput(context, renderThread.renderHandler) { renderThread.setAttitude(it) }
     private val touch = TouchInput(object : TouchInput.Listener {
         override fun onLook(deltaYaw: Float, deltaPitch: Float) = renderThread.look(deltaYaw, deltaPitch)
-        override fun onWalk(forward: Float, right: Float) = renderThread.walk(forward, right)
-        override fun onDoubleTap() = setMotionEnabled(!motionEnabled)
+        override fun onDoubleTap() {
+            if (motionToggleEnabled) setMotionEnabled(!motionEnabled)
+        }
     })
     private var motionEnabled = false
     private var resumed = false
+    private val poseHandler = Handler(Looper.getMainLooper())
+    private var lastPose: CameraPose? = null
+    private val reportPose = object : Runnable {
+        override fun run() {
+            val pose = cameraPose
+            if (pose != lastPose) {
+                lastPose = pose
+                cameraPoseListener?.invoke(pose)
+            }
+            poseHandler.postDelayed(this, cameraPoseIntervalMillis)
+        }
+    }
 
     /** Radians per pixel dragged. */
     var lookSensitivity: Float
         get() = touch.lookSensitivity
         set(value) { touch.lookSensitivity = value }
 
-    /** Meters per pixel dragged with two fingers. */
-    var walkSensitivity: Float
-        get() = touch.walkSensitivity
-        set(value) { touch.walkSensitivity = value }
+    /**
+     * Whether a drag on the view is allowed to turn the camera. A host that drives looking
+     * from its own control, and scripted tours, turn it off.
+     */
+    var touchLookEnabled: Boolean
+        get() = touch.lookEnabled
+        set(value) {
+            touch.lookEnabled = value
+            if (!value) touch.letGo()
+        }
+
+    /** Whether the double tap can toggle the gyroscope. */
+    var motionToggleEnabled = true
+
+    /**
+     * Where the camera is, on the main thread, at most this often in milliseconds, and only
+     * when it differs from the pose last delivered. Zero, the default, never reports.
+     */
+    var cameraPoseIntervalMillis: Long = 0
+        set(value) {
+            field = value.coerceAtLeast(0)
+            startPoseReports()
+        }
+
+    /** Called with each pose [cameraPoseIntervalMillis] asks for. */
+    var cameraPoseListener: ((CameraPose) -> Unit)? = null
+        set(value) {
+            field = value
+            startPoseReports()
+        }
 
     init {
         holder.addCallback(this)
@@ -224,8 +268,38 @@ class SplatSurfaceView @JvmOverloads constructor(
             renderThread.setMaxShDegree(field)
         }
 
-    /** Walks continuously at the given speed in meters per second until called again with zeros. */
+    /**
+     * Walks continuously at the given speed in meters per second until called again with
+     * zeros: what a joystick or a keyboard drives. Forward is where the camera looks,
+     * flattened onto the floor while walking; right strafes.
+     */
     fun setWalkVelocity(forward: Float, right: Float) = renderThread.setVelocity(forward, right)
+
+    /**
+     * One step, in meters, for a host that integrates movement itself. The collider stops
+     * it at walls and the floor carries it, exactly as a velocity would.
+     */
+    fun walk(forward: Float, right: Float) = renderThread.walk(forward, right)
+
+    /**
+     * Turns the camera by these radians: what a look pad or a mouse drives. Pitch is
+     * clamped, and ignored while the gyroscope drives the view.
+     */
+    fun look(deltaYaw: Float, deltaPitch: Float) = renderThread.look(deltaYaw, deltaPitch)
+
+    /**
+     * The walker's shape in walk mode, applied at once and to a collider loaded later.
+     * False when a value is not a walkable one, and then the previous settings stay.
+     */
+    fun setCharacter(settings: CharacterSettings): Boolean {
+        val accepted = renderThread.setCharacter(settings)
+        if (accepted) character = settings
+        return accepted
+    }
+
+    /** The walker's shape in effect. */
+    var character = CharacterSettings()
+        private set
 
     /**
      * Runs a reproducible capture: the gyroscope goes off, the camera takes a fixed pose
@@ -275,18 +349,28 @@ class SplatSurfaceView @JvmOverloads constructor(
         motion.displayRotation = display?.rotation ?: 0
         renderThread.resume()
         if (motionEnabled) motion.start()
+        startPoseReports()
     }
 
     fun pause() {
         resumed = false
         motion.stop()
         renderThread.pause()
+        poseHandler.removeCallbacks(reportPose)
     }
 
     fun release() {
         motion.stop()
+        poseHandler.removeCallbacks(reportPose)
         holder.removeCallback(this)
         renderThread.release()
+    }
+
+    private fun startPoseReports() {
+        poseHandler.removeCallbacks(reportPose)
+        if (resumed && cameraPoseIntervalMillis > 0 && cameraPoseListener != null) {
+            poseHandler.postDelayed(reportPose, cameraPoseIntervalMillis)
+        }
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {

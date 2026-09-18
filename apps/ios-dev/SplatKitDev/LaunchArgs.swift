@@ -7,9 +7,9 @@ import Foundation
 /// `--linear`, `--gyro <0|1>`, `--pose x,y,z,yaw,pitch`, `--walk <m/s>`,
 /// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png).
 /// The default world is kitchen_500k.spz. ISS stays in Documents; use --world iss_10M.spz.
-/// ISS orbits at a constant 45 m radius and 4 degrees/s; --radius, --speed and --start override it.
-/// Its long X axis stays horizontal in screen space, without changing the orbit plane.
-/// --orbit-horizontal 0 restores the previous vertical framing for benchmark comparisons.
+/// ISS runs a camera shot (--shot overview|orbit|detail|flyby|tour, default orbit) with +Y up.
+/// The orbit shot circles at 135 m and 5 degrees/s from azimuth 20; --radius (at least 100),
+/// --speed and --start override it.
 /// Its starting pose is prepared during loading; motion starts only after the first
 /// successful GPU frame. Loading stays covered while the renderer prepares that frame.
 /// --orbit 0, --pose, --walk or --benchmark disable the automatic orbit and enable touch look.
@@ -21,17 +21,24 @@ import Foundation
 /// --depth-key-bits <16|32> selects linear camera-depth quantization and two radix
 /// passes (16), or the unchanged four-pass ordering (32, default). Restart to change.
 /// Quantization can change transparency ordering within a bin; no splats are removed.
-/// --tile-raster 1 selects bounded hybrid 16x16 compute compositing, with T <= 0.0001.
+/// --lod-error-pixels <px> sets the hierarchy refinement threshold (default 1; lower draws more).
+/// --lod-splat-limit <n> caps the splats a frame selects, 0 for the loaded budget; detail thins evenly.
+/// --tile-raster 1 sets the view's raster policy to hybrid: bounded 16x16 compute compositing,
+/// with T <= 0.0001. It helps only where many large splats overlap; ISS orbits run slower.
 /// Hardware fallback retains its existing 254/255 opacity coverage mask.
 /// Dense tiles (>512 candidates) and tiles touched by large footprints (>16 tiles)
 /// use hardware completion, never truncated lists. Scratch is capped at 128 MiB.
+/// --quality <ultra|high|balanced|fast> picks the starting level (default high) unless --scale,
+/// --shdraw, --depth-key-bits or --min-pixel-radius set the renderer directly.
+/// --shot <overview|orbit|detail|flyby|tour> picks the ISS camera shot (default orbit).
+/// --hud 0 hides the stats card and quality picker, for screen recordings.
 /// --keep-awake 1 disables idle screen locking only while this dev view is active.
 /// --resource-monitor 1 logs process footprint, remaining process allowance, Metal
 /// allocation and thermal state at 2 Hz, and pauses on memory/thermal pressure.
 /// --memory-limit-mib <MiB> lowers its conservative 2800 MiB process-footprint guard.
 /// --run-seconds <seconds> enables monitoring and pauses that long after the first world frame.
 /// These dev-only guards stop future frames, not allocations or GPU work in flight.
-/// Default 0 retains hardware rasterization. A GPU error stops submission until renderer recreation.
+/// A GPU error stops submission until renderer recreation.
 struct LaunchArgs {
     let values: [String: String]
 

@@ -11,6 +11,8 @@ import com.facebook.react.common.LifecycleState
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.Event
+import com.splatkit.CameraPose
+import com.splatkit.CharacterSettings
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
 import com.splatkit.SplatSurfaceView
@@ -36,10 +38,22 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     private var paused = false
     private var renderScale = 1.0
     private var shDegree = 3
+    private var linearBlending = false
+    private var cullMarginDegrees = 10.0
     private var displayChanged = false
     // The last valid host policy, applied to the current engine and every engine built after.
     private var policy: RevisionedPolicy? = null
     private var policyChanged = false
+    private var collider: ColliderRequest? = null
+    private var pendingCollider: ColliderRequest? = null
+    private var colliderChanged = false
+    private var character: CharacterSettings? = null
+    private var characterChanged = false
+    private var motionEnabled = false
+    private var touchLookEnabled = true
+    private var lookSensitivity = 0.004
+    private var cameraPoseIntervalMillis = 0L
+    private var navigationChanged = false
 
     init { reactContext.addLifecycleEventListener(this) }
 
@@ -59,6 +73,54 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
 
     internal fun invalidRequest(message: String) = emitWorld("", "failed", 0, "INVALID_REQUEST", message)
 
+    internal fun setCollider(value: ColliderRequest?) {
+        if (dropped) return
+        if (value != null && value != collider) {
+            try {
+                value.validate()
+            } catch (error: IllegalArgumentException) {
+                emitCollider(value.requestId, "failed", "INVALID_REQUEST", error.message.orEmpty())
+                return
+            }
+        }
+        pendingCollider = value
+        colliderChanged = value != collider
+    }
+
+    internal fun invalidCollider(message: String) = emitCollider("", "failed", "INVALID_REQUEST", message)
+
+    internal fun setCharacter(value: CharacterSettings?) {
+        if (dropped || value == character) return
+        character = value
+        characterChanged = value != null
+    }
+
+    fun setMotionEnabled(value: Boolean) { motionEnabled = value; navigationChanged = true }
+    fun setTouchLookEnabled(value: Boolean) { touchLookEnabled = value; navigationChanged = true }
+    fun setLookSensitivity(value: Double) {
+        require(value.isFinite() && value > 0) { "lookSensitivity must be finite and positive" }
+        lookSensitivity = value
+        navigationChanged = true
+    }
+    fun setCameraPoseInterval(seconds: Double) {
+        require(seconds.isFinite() && seconds >= 0) { "cameraPoseInterval must be finite and not negative" }
+        cameraPoseIntervalMillis = (seconds * 1000).toLong()
+        navigationChanged = true
+    }
+
+    fun walk(forward: Double, right: Double) {
+        nativeView?.setWalkVelocity(forward.toFloat(), right.toFloat())
+    }
+
+    fun look(deltaYaw: Double, deltaPitch: Double) {
+        nativeView?.look(deltaYaw.toFloat(), deltaPitch.toFloat())
+    }
+
+    fun teleport(x: Double, y: Double, z: Double, yaw: Double, pitch: Double) {
+        nativeView?.cameraPose =
+            CameraPose(x.toFloat(), y.toFloat(), z.toFloat(), yaw.toFloat(), pitch.toFloat())
+    }
+
     fun setPaused(value: Boolean) { paused = value; updateRunning() }
     fun setRenderScale(value: Double) {
         require(value.isFinite() && value in 0.1..2.0) { "renderScale must be in 0.1..2" }
@@ -68,6 +130,12 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     fun setShDegree(value: Int) {
         require(value in 0..3) { "shDegree must be in 0..3" }
         shDegree = value
+        displayChanged = true
+    }
+    fun setLinearBlending(value: Boolean) { linearBlending = value; displayChanged = true }
+    fun setCullMarginDegrees(value: Double) {
+        require(value.isFinite() && value in 0.0..80.0) { "cullMarginDegrees must be in 0..80" }
+        cullMarginDegrees = value
         displayChanged = true
     }
 
@@ -102,12 +170,42 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         }
         if (displayChanged) {
             displayChanged = false
-            nativeView?.let {
-                it.renderScale = renderScale.toFloat()
-                it.shDegree = shDegree
-            }
+            nativeView?.let(::applyDisplay)
         }
         if (policyChanged) nativeView?.takeIf { it.isAvailable }?.let(::applyPolicy)
+        if (navigationChanged) {
+            navigationChanged = false
+            nativeView?.let(::applyNavigation)
+        }
+        if (characterChanged) {
+            characterChanged = false
+            character?.let { nativeView?.setCharacter(it) }
+        }
+        if (colliderChanged) {
+            colliderChanged = false
+            collider = pendingCollider
+            loadCollider()
+        }
+    }
+
+    private fun applyDisplay(view: SplatSurfaceView) {
+        view.renderScale = renderScale.toFloat()
+        view.shDegree = shDegree
+        view.linearBlending = linearBlending
+        view.cullMarginDegrees = cullMarginDegrees.toFloat()
+    }
+
+    private fun applyNavigation(view: SplatSurfaceView) {
+        view.setMotionEnabled(motionEnabled)
+        view.touchLookEnabled = touchLookEnabled
+        view.lookSensitivity = lookSensitivity.toFloat()
+        view.cameraPoseIntervalMillis = cameraPoseIntervalMillis
+    }
+
+    private fun loadCollider() {
+        val view = nativeView ?: return
+        val request = collider ?: return
+        view.loadCollider(File(request.filePath))
     }
 
     private fun applyPolicy(view: SplatSurfaceView) {
@@ -126,8 +224,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         val token = session.generation
         val view = SplatSurfaceView(reactContext)
         nativeView = view
-        view.renderScale = renderScale.toFloat()
-        view.shDegree = shDegree
+        applyDisplay(view)
         view.listener = object : SplatSurfaceView.Listener {
             private fun outcome(phase: String, count: Int = 0, message: String = "") {
                 if (dropped || !session.accept(token, phase)) return
@@ -136,6 +233,25 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             override fun onWorldReady(splatCount: Int) = outcome("uploaded", splatCount)
             override fun onWorldFrameReady(splatCount: Int) = outcome("frameReady", splatCount)
             override fun onWorldFailed(message: String) = outcome("failed", message = message)
+            override fun onColliderReady() {
+                if (!dropped && token == session.generation) {
+                    emitCollider(collider?.requestId.orEmpty(), "ready", "", "")
+                }
+            }
+            override fun onColliderFailed(message: String) {
+                if (!dropped && token == session.generation) {
+                    emitCollider(collider?.requestId.orEmpty(), "failed", "COLLIDER_LOAD_FAILED", message)
+                }
+            }
+        }
+        view.cameraPoseListener = { pose ->
+            if (!dropped && token == session.generation) {
+                emit("topCameraPose", Arguments.createMap().apply {
+                    putDouble("x", pose.x.toDouble()); putDouble("y", pose.y.toDouble())
+                    putDouble("z", pose.z.toDouble()); putDouble("yaw", pose.yaw.toDouble())
+                    putDouble("pitch", pose.pitch.toDouble())
+                })
+            }
         }
         addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         // Fabric lays this view out, but not native children added after mount: a later world's
@@ -149,7 +265,13 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         emitCapabilities(view)
         // Queued on the render thread ahead of the load, so the decode observes the policy.
         applyPolicy(view)
+        applyNavigation(view)
+        navigationChanged = false
+        character?.let(view::setCharacter)
+        characterChanged = false
         view.loadWorld(File(world.filePath), world.maxShDegree, world.lodCapacitySplats, world.residencyCapacitySplats)
+        // This engine is new, so walk mode has to be rebuilt on it.
+        loadCollider()
         updateRunning()
     }
 
@@ -158,6 +280,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         main.removeCallbacks(statsTick)
         nativeView?.let {
             it.listener = null
+            it.cameraPoseListener = null
             // Remove first so SurfaceHolder detaches before the render thread shuts down.
             removeView(it)
             it.release()
@@ -184,10 +307,15 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
                     putString("requestId", world.requestId)
                     putDouble("loadedSplats", stats.loadedSplatCount.toDouble())
                     putDouble("drawnSplats", stats.drawnSplatCount.toDouble())
-                    // The SDK does not expose timing validity bits. Do not infer availability from zero.
-                    putDouble("frameMillis", 0.0); putBoolean("frameTimingAvailable", false)
-                    putDouble("gpuMillis", 0.0); putBoolean("gpuTimingAvailable", false)
-                    putDouble("sortMillis", 0.0); putBoolean("sortTimingAvailable", false)
+                    // Zero is the SDK's own "not measured": the GPU and sort times are zero
+                    // without timestamp queries, and the frame time is zero while nothing
+                    // redraws. A host reads those as no measurement, which is what they are.
+                    putDouble("frameMillis", stats.frameMillis.toDouble())
+                    putBoolean("frameTimingAvailable", stats.frameMillis > 0f)
+                    putDouble("gpuMillis", stats.gpuMillis.toDouble())
+                    putBoolean("gpuTimingAvailable", stats.gpuMillis > 0f)
+                    putDouble("sortMillis", stats.sortMillis.toDouble())
+                    putBoolean("sortTimingAvailable", stats.sortMillis > 0f)
                 })
             }
             main.postDelayed(this, 500)
@@ -198,6 +326,13 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         emit("topWorldEvent", Arguments.createMap().apply {
             putString("requestId", id); putString("phase", phase)
             putDouble("loadedSplats", count.toDouble()); putString("errorCode", code); putString("message", message)
+        })
+    }
+
+    private fun emitCollider(id: String, phase: String, code: String, message: String) {
+        emit("topColliderEvent", Arguments.createMap().apply {
+            putString("requestId", id); putString("phase", phase)
+            putString("errorCode", code); putString("message", message)
         })
     }
 
@@ -213,6 +348,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             putBoolean("supportsSubgroups", caps.supportsSubgroups)
             putInt("maxTextureDimension", caps.maxTextureDimension)
             putBoolean("policyRaster", caps.policy.raster)
+            // Vulkan applies no raster choice; the Kotlin support type has no strategy mask yet.
+            putInt("policyRasterMask", if (caps.policy.raster) 0b111 else 0)
             putBoolean("policyTileSize", caps.policy.tileSize)
             putBoolean("policyLodErrorPixels", caps.policy.lodErrorPixels)
             putBoolean("policyAlphaThreshold", caps.policy.alphaThreshold)
@@ -265,5 +402,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         request = null
         pendingRequest = null
         policy = null
+        collider = null
+        pendingCollider = null
+        character = null
     }
 }

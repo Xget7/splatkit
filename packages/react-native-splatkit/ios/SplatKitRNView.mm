@@ -1,4 +1,5 @@
 #import "SplatKitRNView.h"
+#import <CoreMotion/CoreMotion.h>
 #import <QuartzCore/CADisplayLink.h>
 
 #include <atomic>
@@ -6,15 +7,15 @@
 /// Stable failure codes shared with the Android adapter, so hosts can branch on them.
 static NSString *const kErrorInvalidRequest = @"INVALID_REQUEST";
 static NSString *const kErrorWorldLoadFailed = @"WORLD_LOAD_FAILED";
+static NSString *const kErrorColliderLoadFailed = @"COLLIDER_LOAD_FAILED";
 static NSString *const kErrorGpuUnavailable = @"GPU_UNAVAILABLE";
 static NSString *const kErrorInvalidPolicy = @"INVALID_POLICY";
 static NSString *const kErrorPolicyPreparationFailed = @"POLICY_PREPARATION_FAILED";
 
 /// Stats snapshots leave the render thread at most twice a second.
 static const CFTimeInterval kStatsInterval = 0.5;
-/// SplatMetalView's and the Android view's touch sensitivities: radians and meters per point dragged.
-static const float kLookSensitivity = 0.004f;
-static const float kWalkSensitivity = 0.01f;
+/// SplatMetalView's touch sensitivity: radians per point dragged.
+static const CGFloat kLookSensitivity = 0.004;
 
 @class _SplatKitRNLinkProxy;
 
@@ -25,6 +26,11 @@ static const float kWalkSensitivity = 0.01f;
 @property(nonatomic, getter=isAttached) BOOL attached;
 @property(nonatomic, getter=isAppActive) BOOL appActive;
 @property(nonatomic) CFTimeInterval lastStatsAt;
+@property(nonatomic) CFTimeInterval lastPoseAt;
+@property(nonatomic, strong, nullable) CMMotionManager *motionManager;
+@property(nonatomic, strong, nullable) NSOperationQueue *motionQueue;
+@property(nonatomic, copy, nullable) NSString *colliderRequestId;
+@property(nonatomic, copy, nullable) NSString *colliderPath;
 - (void)draw:(CADisplayLink *)link;
 @end
 
@@ -51,6 +57,10 @@ static const float kWalkSensitivity = 0.01f;
   SKRenderPolicy _requestedPolicy;
   NSInteger _policyRevision;
   BOOL _hasPolicy;
+  SKCharacterSettings _character;
+  BOOL _hasCharacter;
+  SKCameraPose _lastPose;
+  BOOL _hasLastPose;
 }
 
 + (Class)layerClass { return CAMetalLayer.class; }
@@ -62,18 +72,17 @@ static const float kWalkSensitivity = 0.01f;
     self.appActive = YES;
     self.renderScale = 1;
     self.shDegree = 3;
+    self.cullMarginDegrees = 10;
+    self.touchLookEnabled = YES;
+    self.lookSensitivity = kLookSensitivity;
     _generation = 0;
     _loaderQueue = dispatch_queue_create("com.splatkit.rn.loader", DISPATCH_QUEUE_SERIAL);
     self.linkProxy = [[_SplatKitRNLinkProxy alloc] init];
     self.linkProxy.target = self;
-    // One finger looks around and two fingers walk, like the SDK views.
+    // Looking is the only touch the view handles; walking comes from the host's own control.
     UIPanGestureRecognizer *look = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onLook:)];
     look.maximumNumberOfTouches = 1;
     [self addGestureRecognizer:look];
-    UIPanGestureRecognizer *walk = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(onWalk:)];
-    walk.minimumNumberOfTouches = 2;
-    walk.maximumNumberOfTouches = 2;
-    [self addGestureRecognizer:walk];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self selector:@selector(appDidEnterBackground)
                    name:UIApplicationDidEnterBackgroundNotification object:nil];
@@ -105,19 +114,109 @@ static const float kWalkSensitivity = 0.01f;
   [_engine setShDegree:(int)_shDegree];
 }
 
-// MARK: - Gestures
-
-// The engine renders on the main thread here, so gestures drive it directly.
-- (void)onLook:(UIPanGestureRecognizer *)gesture {
-  const CGPoint d = [gesture translationInView:self];
-  [_engine lookWithDeltaYaw:-(float)d.x * kLookSensitivity deltaPitch:-(float)d.y * kLookSensitivity];
-  [gesture setTranslation:CGPointZero inView:self];
+- (void)setLinearBlending:(BOOL)value {
+  _linearBlending = value;
+  [_engine setLinearBlending:value];
 }
 
-- (void)onWalk:(UIPanGestureRecognizer *)gesture {
+- (void)setCullMarginDegrees:(CGFloat)value {
+  _cullMarginDegrees = MIN(MAX(value, 0), 80);
+  [_engine setCullMargin:(float)_cullMarginDegrees];
+}
+
+// MARK: - Navigation
+
+// The engine renders on the main thread here, so input drives it directly.
+- (void)onLook:(UIPanGestureRecognizer *)gesture {
   const CGPoint d = [gesture translationInView:self];
-  [_engine walkForward:-(float)d.y * kWalkSensitivity right:(float)d.x * kWalkSensitivity];
   [gesture setTranslation:CGPointZero inView:self];
+  if (!self.touchLookEnabled) return;
+  [_engine lookWithDeltaYaw:-(float)(d.x * self.lookSensitivity)
+                 deltaPitch:-(float)(d.y * self.lookSensitivity)];
+}
+
+- (void)setWalkVelocityForward:(float)forward right:(float)right {
+  [_engine setVelocityForward:forward right:right];
+}
+
+- (void)lookWithDeltaYaw:(float)deltaYaw deltaPitch:(float)deltaPitch {
+  [_engine lookWithDeltaYaw:deltaYaw deltaPitch:deltaPitch];
+}
+
+- (void)setPose:(SKCameraPose)pose {
+  _engine.cameraPose = pose;
+}
+
+- (BOOL)setCharacter:(SKCharacterSettings)character {
+  _character = character;
+  _hasCharacter = YES;
+  return _engine == nil ? YES : [_engine setCharacter:character];
+}
+
+// MARK: - Motion
+
+- (void)setMotionEnabled:(BOOL)enabled {
+  _motionEnabled = enabled;
+  [_engine setMotionEnabled:enabled];
+  if (enabled) {
+    [self startMotion];
+  } else {
+    [self stopMotion];
+  }
+}
+
+- (void)startMotion {
+  if (!self.motionEnabled || !self.isAttached || !self.isAppActive) return;
+  if (self.motionManager == nil) {
+    self.motionManager = [[CMMotionManager alloc] init];
+    self.motionManager.deviceMotionUpdateInterval = 1.0 / 60.0;
+    self.motionQueue = [[NSOperationQueue alloc] init];
+    self.motionQueue.name = @"com.splatkit.rn.motion";
+    self.motionQueue.maxConcurrentOperationCount = 1;
+  }
+  CMMotionManager *manager = self.motionManager;
+  if (!manager.isDeviceMotionAvailable || manager.isDeviceMotionActive) return;
+  __weak SplatKitRNView *weakSelf = self;
+  [manager startDeviceMotionUpdatesUsingReferenceFrame:CMAttitudeReferenceFrameXArbitraryCorrectedZVertical
+                                               toQueue:self.motionQueue
+                                           withHandler:^(CMDeviceMotion *motion, NSError *error) {
+    if (motion == nil) return;
+    const CMRotationMatrix m = motion.attitude.rotationMatrix;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      SplatKitRNView *view = weakSelf;
+      if (view == nil || !view.motionEnabled) return;
+      [view applyAttitude:m];
+    });
+  }];
+}
+
+- (void)stopMotion {
+  [self.motionManager stopDeviceMotionUpdates];
+}
+
+/// CMRotationMatrix maps reference to device; the engine wants its transpose, with the
+/// device axes turned so "x right, y up on screen" holds in the interface orientation.
+- (void)applyAttitude:(CMRotationMatrix)m {
+  const float x[3] = {(float)m.m11, (float)m.m12, (float)m.m13};
+  const float y[3] = {(float)m.m21, (float)m.m22, (float)m.m23};
+  const float z[3] = {(float)m.m31, (float)m.m32, (float)m.m33};
+  float right[3], up[3];
+  switch (self.window.windowScene.interfaceOrientation) {
+    case UIInterfaceOrientationLandscapeRight:
+      for (int i = 0; i < 3; i++) { right[i] = y[i]; up[i] = -x[i]; }
+      break;
+    case UIInterfaceOrientationLandscapeLeft:
+      for (int i = 0; i < 3; i++) { right[i] = -y[i]; up[i] = x[i]; }
+      break;
+    case UIInterfaceOrientationPortraitUpsideDown:
+      for (int i = 0; i < 3; i++) { right[i] = -x[i]; up[i] = -y[i]; }
+      break;
+    default:
+      for (int i = 0; i < 3; i++) { right[i] = x[i]; up[i] = y[i]; }
+      break;
+  }
+  const float rowMajor[9] = {right[0], up[0], z[0], right[1], up[1], z[1], right[2], up[2], z[2]};
+  [_engine setAttitude:rowMajor];
 }
 
 // MARK: - Policy and capabilities
@@ -177,6 +276,7 @@ static const float kWalkSensitivity = 0.01f;
     @"supportsSubgroups": @(caps.supportsSubgroups),
     @"maxTextureDimension": @(caps.maxTextureDimension),
     @"policyRaster": @(caps.policy.raster),
+    @"policyRasterMask": @(caps.policy.raster ? (caps.policy.rasterMask != 0 ? caps.policy.rasterMask : 7u) : 0u),
     @"policyTileSize": @(caps.policy.tileSize),
     @"policyLodErrorPixels": @(caps.policy.lodErrorPixels),
     @"policyAlphaThreshold": @(caps.policy.alphaThreshold),
@@ -194,6 +294,7 @@ static const float kWalkSensitivity = 0.01f;
     self.attached = YES;
     [self startDisplayLink];
     [self attachLayer];
+    [self startMotion];
   } else {
     [self detach];
   }
@@ -236,31 +337,39 @@ static const float kWalkSensitivity = 0.01f;
 - (void)appDidEnterBackground {
   self.appActive = NO;
   [self updateDisplayLink];
+  [self stopMotion];
 }
 
 - (void)appWillEnterForeground {
   self.appActive = YES;
   [self updateDisplayLink];
+  [self startMotion];
 }
 
 - (void)detach {
   self.attached = NO;
   [self stopDisplayLink];
+  [self stopMotion];
   [_engine setLayer:nil];
 }
 
 - (void)dispose {
   [self stopDisplayLink];
+  [self stopMotion];
   _generation.fetch_add(1, std::memory_order_acq_rel);
   [_engine setLayer:nil];
   _engine = nil;
   self.requestId = nil;
+  _hasLastPose = NO;
 }
 
 - (void)recycle {
   [self dispose];
   _hasPolicy = NO;
   _policyRevision = 0;
+  _hasCharacter = NO;
+  self.colliderPath = nil;
+  self.colliderRequestId = nil;
 }
 
 // MARK: - Loading
@@ -293,6 +402,10 @@ static const float kWalkSensitivity = 0.01f;
   [engine setResidencyBudget:(int)MAX(residencyCapacity, 1)];
   [engine setRenderScale:(float)self.renderScale];
   [engine setShDegree:(int)self.shDegree];
+  [engine setLinearBlending:self.linearBlending];
+  [engine setCullMargin:(float)self.cullMarginDegrees];
+  [engine setMotionEnabled:self.motionEnabled];
+  if (_hasCharacter) [engine setCharacter:_character];
   // Report the new engine's capabilities once, then apply the host policy to it before the
   // decode is enqueued. Same order as the Android adapter.
   [self emitCapabilities];
@@ -318,6 +431,44 @@ static const float kWalkSensitivity = 0.01f;
     if (generation != view->_generation.load(std::memory_order_acquire)) return;
     [engine loadWorldFile:path];
   });
+
+  // The world's engine is new, so walk mode has to be rebuilt on it.
+  if (self.colliderPath.length > 0) [self enqueueColliderOnGeneration:generation];
+}
+
+- (void)loadCollider:(NSString *)path requestId:(NSString *)requestId {
+  if (requestId.length == 0 || path.length == 0) {
+    self.colliderPath = nil;
+    self.colliderRequestId = nil;
+    return;
+  }
+  if (![self isLocalPath:path]) {
+    [self emitCollider:requestId phase:@"failed" code:kErrorInvalidRequest
+               message:@"invalid collider request"];
+    return;
+  }
+  self.colliderPath = [path copy];
+  self.colliderRequestId = [requestId copy];
+  if (_engine == nil) return;
+  [self enqueueColliderOnGeneration:_generation.load(std::memory_order_acquire)];
+}
+
+- (void)enqueueColliderOnGeneration:(uint64_t)generation {
+  SKSplatEngine *engine = _engine;
+  NSString *path = self.colliderPath;
+  if (engine == nil || path.length == 0) return;
+  __weak SplatKitRNView *weakSelf = self;
+  dispatch_async(_loaderQueue, ^{
+    SplatKitRNView *view = weakSelf;
+    if (view == nil) return;
+    if (generation != view->_generation.load(std::memory_order_acquire)) return;
+    [engine loadColliderFile:path];
+  });
+}
+
+- (BOOL)isLocalPath:(NSString *)path {
+  return [path hasPrefix:@"/"] && ![path hasPrefix:@"//"] && ![path isEqualToString:@"/"] &&
+      [path rangeOfString:@"\0"].location == NSNotFound;
 }
 
 - (BOOL)validateRequestId:(NSString *)requestId path:(NSString *)path maxShDegree:(NSInteger)maxShDegree {
@@ -333,12 +484,25 @@ static const float kWalkSensitivity = 0.01f;
 
 - (void)deliverWorldEvent:(SKSplatEvent)event message:(NSString *)message count:(uint32_t)count
     requestId:(NSString *)requestId {
+  if (event == SKSplatEventColliderReady || event == SKSplatEventColliderFailed) {
+    const BOOL ready = event == SKSplatEventColliderReady;
+    [self emitCollider:self.colliderRequestId phase:ready ? @"ready" : @"failed"
+                  code:ready ? @"" : kErrorColliderLoadFailed message:message];
+    return;
+  }
   if (self.worldEvent == nil) return;
   NSString *phase = event == SKSplatEventWorldReady ? @"uploaded"
       : event == SKSplatEventWorldFrameReady ? @"frameReady" : @"failed";
   NSString *code = event == SKSplatEventWorldFailed ? kErrorWorldLoadFailed : @"";
   self.worldEvent(@{@"requestId": requestId, @"phase": phase, @"loadedSplats": @(count),
                     @"errorCode": code, @"message": message ?: @""});
+}
+
+- (void)emitCollider:(NSString *)requestId phase:(NSString *)phase code:(NSString *)code
+             message:(NSString *)message {
+  if (self.colliderEvent == nil) return;
+  self.colliderEvent(@{@"requestId": requestId ?: @"", @"phase": phase, @"errorCode": code,
+                       @"message": message ?: @""});
 }
 
 - (void)emitWorld:(NSString *)requestId phase:(NSString *)phase count:(uint32_t)count
@@ -352,8 +516,19 @@ static const float kWalkSensitivity = 0.01f;
   SKSplatEngine *engine = _engine;
   if (engine == nil) return;
   [engine render:(int64_t)(link.timestamp * 1000000000.0)];
-  if (self.statsEvent == nil) return;
   const CFTimeInterval now = CACurrentMediaTime();
+  if (self.cameraPoseEvent != nil && self.cameraPoseInterval > 0 &&
+      now - self.lastPoseAt >= self.cameraPoseInterval) {
+    self.lastPoseAt = now;
+    const SKCameraPose pose = engine.cameraPose;
+    if (!_hasLastPose || memcmp(&pose, &_lastPose, sizeof(pose)) != 0) {
+      _lastPose = pose;
+      _hasLastPose = YES;
+      self.cameraPoseEvent(@{@"x": @(pose.x), @"y": @(pose.y), @"z": @(pose.z),
+                             @"yaw": @(pose.yaw), @"pitch": @(pose.pitch)});
+    }
+  }
+  if (self.statsEvent == nil) return;
   if (now - self.lastStatsAt < kStatsInterval) return;
   self.lastStatsAt = now;
   SKSplatStats stats = engine.stats;

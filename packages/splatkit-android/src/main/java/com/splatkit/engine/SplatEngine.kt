@@ -3,6 +3,7 @@ package com.splatkit.engine
 import android.util.Log
 import android.view.Surface
 import com.splatkit.CameraPose
+import com.splatkit.CharacterSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
 import com.splatkit.SplatStats
@@ -100,6 +101,10 @@ internal class SplatEngine {
     fun look(deltaYaw: Float, deltaPitch: Float) = nativeLook(handle, deltaYaw, deltaPitch)
     fun walk(forward: Float, right: Float) = nativeWalk(handle, forward, right)
     fun setVelocity(forward: Float, right: Float) = nativeSetVelocity(handle, forward, right)
+    /** False when a value is not a walkable one; the previous settings stay. */
+    fun setCharacter(settings: CharacterSettings): Boolean =
+        nativeSetCharacter(handle, settings.eyeHeight, settings.bodyRadius, settings.stepHeight)
+
     fun setAttitude(rowMajor: FloatArray) = nativeSetAttitude(handle, rowMajor)
     fun setMotionEnabled(enabled: Boolean) = nativeSetMotionEnabled(handle, enabled)
 
@@ -183,6 +188,12 @@ internal class SplatEngine {
     private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
     /** Fills [out] (at least [POSE_FLOATS]) with x, y, z, yaw, pitch. */
     private external fun nativeCameraPose(handle: Long, out: FloatArray)
+    private external fun nativeSetCharacter(
+        handle: Long,
+        eyeHeight: Float,
+        bodyRadius: Float,
+        stepHeight: Float,
+    ): Boolean
     private external fun nativeLook(handle: Long, deltaYaw: Float, deltaPitch: Float)
     private external fun nativeWalk(handle: Long, forward: Float, right: Float)
     private external fun nativeSetVelocity(handle: Long, forward: Float, right: Float)

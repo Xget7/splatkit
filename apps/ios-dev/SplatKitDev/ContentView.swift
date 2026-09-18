@@ -22,18 +22,23 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("splat.preparing")
             }
-            hud
-//            VStack {
-//                Spacer()
-//                HStack(alignment: .bottom) {
-//                    Joystick { forward, right in
-//                        session.view.setWalkVelocity(forward: forward * walkSpeed, right: right * walkSpeed)
-//                    }
-//                    Spacer()
-//                    controls
-//                }
-//                .padding(24)
-//            }
+            if session.scenePrepared && (args.bool("hud") ?? true) {
+                overlay
+            }
+            // The SDK ships no walking control; this is the app's own, over the SDK's view.
+            if session.walking {
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom) {
+                        Joystick { forward, right in
+                            session.view.setWalkVelocity(forward: forward * walkSpeed, right: right * walkSpeed)
+                        }
+                        Spacer()
+                        controls
+                    }
+                    .padding(24)
+                }
+            }
         }
         .onAppear(perform: start)
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -47,32 +52,26 @@ struct ContentView: View {
         }
     }
 
-    private var hud: some View {
-        let s = session.stats
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(session.gpu)
-            Text(session.status)
-            Text(String(format: "%.0f fps  frame %.1f ms  gpu %.1f ms  sort %.0f ms", s.fps, s.frameMillis, s.gpuMillis, s.sortMillis))
-            Text("\(s.loadedSplatCount) loaded  \(s.drawnSplatCount) drawn")
-            if s.computeTileCount + s.hardwareTileCount > 0 {
-                Text("tiles \(s.computeTileCount) compute / \(s.hardwareTileCount) hardware")
-                    .accessibilityIdentifier("splat.tiles")
-                Text("compute: \(s.nonemptyComputeTileCount) with splats")
-            } else {
-                Text("tiles: unavailable")
-                    .accessibilityIdentifier("splat.tiles")
+    private var shotSelection: Binding<CameraShot?> {
+        Binding(get: { session.shot }, set: { if let shot = $0 { session.shot = shot } })
+    }
+
+    private var overlay: some View {
+        VStack(alignment: .leading) {
+            RenderStatsCard(session: session)
+            Spacer()
+            VStack(spacing: 6) {
+                if session.orbit != nil {
+                    CapsulePicker(items: CameraShot.allCases, selection: shotSelection) { $0.title }
+                }
+                CapsulePicker(items: QualityTier.allCases, selection: $session.quality) { $0.title }
             }
-            Text("\(s.walking ? "walk" : "fly")  \(s.motion ? "gyro" : "touch")")
-            if !captureMessage.isEmpty { Text(captureMessage) }
+            .frame(maxWidth: .infinity)
         }
-        .font(.system(size: 12, weight: .medium, design: .monospaced))
-        .foregroundColor(.white)
-        .padding(8)
-        .background(Color.black.opacity(0.4))
-        .cornerRadius(6)
-        .padding(.top, 54)
-        .padding(.leading, 12)
-        .allowsHitTesting(false)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .transition(.opacity)
     }
 
     private var controls: some View {
@@ -103,6 +102,11 @@ struct ContentView: View {
         view.motionToggleEnabled = !issMap
         view.maxShDegree = args.int("sh") ?? 1
         if let v = args.int("shdraw") { view.shDegree = v }
+        // Explicit renderer switches win; otherwise start at a quality level, High by default.
+        let customQuality = ["scale", "shdraw", "depth-key-bits", "min-pixel-radius", "lod-error-pixels", "lod-splat-limit"].contains(where: args.has)
+        if !customQuality {
+            session.quality = args.string("quality").flatMap(QualityTier.init(rawValue:)) ?? .high
+        }
         if let v = args.int("budget") { view.splatBudget = v }
         if let v = args.int("residency") { view.residencyBudget = v }
         if let v = args.float("margin") { view.cullMarginDegrees = v }
@@ -121,11 +125,9 @@ struct ContentView: View {
            let url = LaunchArgs.resolve(collider) {
             view.loadCollider(file: url)
         }
-        // A 45 m radius gives a closer inspection view without changing the field of view.
+        // Broadside to the truss, far enough to clear the solar arrays.
         if issMap {
-            view.lookAt(from: SIMD3<Float>(0, -2, 43),
-                        target: SIMD3<Float>(0, -2, -2),
-                        up: (args.bool("orbit-horizontal") ?? true) ? SIMD3<Float>(0, 1, 0) : SIMD3<Float>(1, 0, 0))
+            view.lookAt(from: SIMD3<Float>(0, 35, 128), target: SIMD3<Float>(0, -2, -2), up: SIMD3<Float>(0, 1, 0))
         } else {
             view.cameraPose = CameraPose(x: 0, y: 0, z: 0, yaw: 0, pitch: 0)
         }
@@ -143,11 +145,12 @@ struct ContentView: View {
         session.motion = view.isMotionEnabled
         if orbitEnabled {
             var settings = OrbitPath.Settings(pivot: SIMD3<Float>(0, -2, -2))
-            settings.horizontal = args.bool("orbit-horizontal") ?? true
             if let radius = args.float("radius"), radius.isFinite, radius > 0 { settings.radius = radius }
             if let speed = args.float("speed"), speed.isFinite { settings.degreesPerSecond = speed }
             if let start = args.float("start"), start.isFinite { settings.startDegrees = start }
-            let orbit = OrbitPath(view: view, settings: settings)
+            let shot = args.string("shot").flatMap(CameraShot.init(rawValue:)) ?? .orbit
+            session.shot = shot
+            let orbit = OrbitPath(view: view, settings: settings, shot: shot)
             session.orbit = orbit
         }
         if let v = args.float("walk") { view.setWalkVelocity(forward: v, right: 0) }

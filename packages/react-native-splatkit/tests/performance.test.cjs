@@ -194,13 +194,13 @@ test('classifies only operations represented by the Fabric contract', () => {
   assert.equal(classifyPolicyChange(policy, {...policy, lodBudgetSplats: 1_000_000}),
     'worldReload');
   // Renderer policy fields travel in the versioned policy prop, not a world reload.
-  assert.equal(classifyPolicyChange(policy, {...policy, raster: 'hardware'}),
+  assert.equal(classifyPolicyChange(policy, {...policy, raster: 'hybrid'}),
     'nativePropUpdate');
   assert.equal(classifyPolicyChange(policy, {...policy, sortDepth: 32}), 'nativePropUpdate');
   assert.equal(classifyPolicyChange(policy, {...policy, targetFps: 60}), 'unavailable');
 });
 
-const nativeCapabilities = nativeCapabilitiesFromEvent({
+const nativeCapabilitiesEvent = Object.freeze({
   maxLodCapacitySplats: 2_200_000,
   minResidencyCapacitySplats: 100_000,
   maxResidencyCapacitySplats: 8_000_000,
@@ -209,6 +209,7 @@ const nativeCapabilities = nativeCapabilitiesFromEvent({
   supportsSubgroups: true,
   maxTextureDimension: 16_384,
   policyRaster: false,
+  policyRasterMask: 0,
   policyTileSize: false,
   policyLodErrorPixels: false,
   policyAlphaThreshold: false,
@@ -218,6 +219,7 @@ const nativeCapabilities = nativeCapabilitiesFromEvent({
   policyEnableEarlyTermination: false,
   policySortDepth: true,
 });
+const nativeCapabilities = nativeCapabilitiesFromEvent(nativeCapabilitiesEvent);
 
 test('native capabilities resolve the requested policy against what the adapter accepts', () => {
   const config = new SplatKitBuilder().withWorld(world).withPerformance({
@@ -239,6 +241,28 @@ test('native capabilities resolve the requested policy against what the adapter 
     assert(config.performance.diagnostics.some(diagnostic =>
       diagnostic.option === option && diagnostic.code === 'native-option-fallback'));
   }
+});
+
+test('every preset rasterizes in hardware; hybrid tiles are an explicit choice', () => {
+  for (const preset of ['highEnd', 'high', 'balanced', 'performance']) {
+    const config = build(builder => builder.withPreset(preset));
+    assert.equal(config.performance.requested.raster, 'hardware', preset);
+    assert(!config.performance.diagnostics.some(item => item.option === 'raster'), preset);
+  }
+});
+
+test('a raster mask applies only the strategies native builds', () => {
+  const metal = nativeCapabilitiesFromEvent({...nativeCapabilitiesEvent, policyRaster: true,
+    policyRasterMask: 0b101});
+  assert.deepEqual(metal.policy.rasterStrategies, ['hardware', 'hybrid']);
+  const hybrid = new SplatKitBuilder().withWorld(world).withPerformance({raster: 'hybrid'})
+    .build(metal);
+  assert.equal(hybrid.performance.effective.raster, 'hybrid');
+  const computeTile = new SplatKitBuilder().withWorld(world)
+    .withPerformance({raster: 'computeTile'}).build(metal);
+  assert.equal(computeTile.performance.effective.raster, null);
+  assert(computeTile.performance.diagnostics.some(item =>
+    item.option === 'raster' && item.code === 'native-option-fallback'));
 });
 
 test('builds the versioned native policy prop from the requested values', () => {

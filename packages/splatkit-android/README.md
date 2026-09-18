@@ -7,12 +7,13 @@ An arm64 emulator can test functionality; it is not a phone performance measurem
 
 ## Install
 
-Maven Central `0.1.0-alpha07` adds the render policy, `onWorldFrameReady`, the budgeted `loadWorld` and 16 KB alignment; see the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit-android/releases).
+Maven Central `0.1.0-alpha08` hands walking to the host: the view looks only, and `walkVelocity`, the character settings and the collider come from the app.
+See the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit-android/releases).
 Avoid alpha05, which corrupts Adreno sorting.
 
 ```kotlin
 dependencies {
-    implementation("io.github.xget7:splatkit-android:0.1.0-alpha07")
+    implementation("io.github.xget7:splatkit-android:0.1.0-alpha08")
 }
 ```
 
@@ -71,8 +72,12 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `residencyBudget` | Resident splats for subsequent streamed worlds, separate from LOD selection. |
 | `cullMarginDegrees` | CPU fallback's angular margin; GPU visibility uses current-camera projected bounds. |
 | `linearBlending` | Optional linear-light blend; not the default trained-space compositing. |
-| `setMotionEnabled`, `setWalkVelocity` | Gyroscope and continuous forward/right velocity. |
-| `lookSensitivity`, `walkSensitivity` | Gesture tuning. |
+| `setMotionEnabled`, `setWalkVelocity`, `walk` | Gyroscope, continuous forward/right velocity in meters per second, and a single step in meters. |
+| `look(deltaYaw, deltaPitch)` | Turns the camera by radians, for a look pad or mouse. |
+| `touchLookEnabled`, `lookSensitivity` | Whether a one-finger drag turns the camera, and radians per pixel dragged. |
+| `motionToggleEnabled` | Whether a double tap toggles the gyroscope. |
+| `setCharacter(CharacterSettings)`, `character` | The walker's shape in walk mode: `eyeHeight`, `bodyRadius`, `stepHeight`. |
+| `cameraPoseIntervalMillis`, `cameraPoseListener` | Milliseconds between pose callbacks, and the callback itself; 0, the default, never reports. |
 | `isAvailable`, `gpuDescription` | Renderer availability and driver description. |
 | `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. Only `sortDepth` and `subpixelThreshold` apply, with GPU visibility; other fields fall back with a warning each. |
 | `readStats()` | FPS, frame/GPU/sort ms, loaded/drawn and screen-tile counts. Drawn counts and GPU ms describe the newest frame the GPU finished, also while nothing redraws, and are current when `onWorldFrameReady` fires. |

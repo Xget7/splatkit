@@ -2,14 +2,41 @@ import type {RenderOptions, SHDegree, SplatLimits, WorldRequest} from './contrac
 import {validateRenderOptions, validateWorldRequest} from './contracts';
 import type {NativeProps} from './specs/SplatViewNativeComponent';
 
-export type RasterStrategy = 'hardware' | 'computeTile' | 'hybrid';
+/**
+ * `hardware` is the default and the fastest choice for most scenes. `hybrid` composites screen
+ * tiles in compute and suits close-up views where many large translucent splats overlap each
+ * pixel; on distant or sparse scenes it adds GPU work and lowers the frame rate. It is
+ * experimental and iOS-only today. `computeTile` is not implemented by any adapter yet.
+ */
+export const RasterStrategy = {
+  hardware: 'hardware',
+  computeTile: 'computeTile',
+  hybrid: 'hybrid',
+} as const;
+export type RasterStrategy = (typeof RasterStrategy)[keyof typeof RasterStrategy];
+
 export type SortDepth = 16 | 32;
-export type PerformanceMode = 'auto' | 'manual';
-export type QualityPreset = 'highEnd' | 'high' | 'balanced' | 'performance';
+
+export const PerformanceMode = { auto: 'auto', manual: 'manual' } as const;
+export type PerformanceMode = (typeof PerformanceMode)[keyof typeof PerformanceMode];
+
+/** Ordered by decreasing detail; `build` resolves each against the device's own limits. */
+export const QualityPreset = {
+  highEnd: 'highEnd',
+  high: 'high',
+  balanced: 'balanced',
+  performance: 'performance',
+} as const;
+export type QualityPreset = (typeof QualityPreset)[keyof typeof QualityPreset];
+export const qualityPresets: readonly QualityPreset[] = Object.freeze([
+  QualityPreset.highEnd, QualityPreset.high, QualityPreset.balanced, QualityPreset.performance,
+]);
 
 /** Which policy fields one native adapter applies; the rest fall back natively. */
 export type NativePolicySupport = Readonly<{
   raster: boolean;
+  /** The strategies native applies when `raster` is true. */
+  rasterStrategies: readonly RasterStrategy[];
   tileSize: boolean;
   lodErrorPixels: boolean;
   alphaThreshold: boolean;
@@ -30,6 +57,27 @@ export type DeviceCapabilities = Readonly<{
   /** The native adapter's policy acceptance. Absent means it is unknown yet. */
   policy?: NativePolicySupport;
 }>;
+
+/**
+ * What to build the first world request against, before an engine has reported its own.
+ *
+ * Capabilities arrive with the engine a world load creates, so the first request has to be
+ * built against a guess, and a guess above what the adapter accepts is rejected outright:
+ * no engine, no capabilities, and a host with no way to learn what it got wrong. These are
+ * the narrowest limits any shipped backend reports, so every adapter accepts a request
+ * built against them. Rebuild on `onCapabilities` to reach the limits the device really has.
+ */
+export const conservativeCapabilities: DeviceCapabilities = Object.freeze({
+  limits: Object.freeze({
+    maxLodCapacitySplats: 2_200_000,
+    minResidencyCapacitySplats: 100_000,
+    maxResidencyCapacitySplats: 8_000_000,
+  }),
+  supportsComputeTiles: false,
+  supportsHiZOcclusion: false,
+  supportsSubgroups: false,
+  maxTextureDimension: 4096,
+});
 
 /** The policy as it crosses the Fabric boundary; enum values are the numbers native uses. */
 export type NativeRenderPolicy = Readonly<{
@@ -55,6 +103,7 @@ export type NativeCapabilitiesEvent = Readonly<{
   supportsSubgroups: boolean;
   maxTextureDimension: number;
   policyRaster: boolean;
+  policyRasterMask: number;
   policyTileSize: boolean;
   policyLodErrorPixels: boolean;
   policyAlphaThreshold: boolean;
@@ -133,7 +182,25 @@ export type SplatKitConfiguration = Readonly<{
   performance: PerformanceResolution;
 }>;
 
-export type PolicyChangeKind = 'none' | 'nativePropUpdate' | 'worldReload' | 'unavailable';
+/** What applying a changed policy costs. Compare against these, not the strings. */
+export const PolicyChangeKind = {
+  none: 'none',
+  /** New Fabric props reach the live engine; nothing reloads. */
+  nativePropUpdate: 'nativePropUpdate',
+  /** A load-time budget moved: only a fresh world request picks it up. */
+  worldReload: 'worldReload',
+  unavailable: 'unavailable',
+} as const;
+export type PolicyChangeKind = (typeof PolicyChangeKind)[keyof typeof PolicyChangeKind];
+
+/** What one policy application reported. */
+export const PolicyPhase = {
+  applied: 'applied',
+  /** A field fell back; the message joins the reasons. */
+  warning: 'warning',
+  rejected: 'rejected',
+} as const;
+export type PolicyPhase = (typeof PolicyPhase)[keyof typeof PolicyPhase];
 
 const loadKeys = new Set<keyof PerformancePolicy>([
   'lodBudgetSplats', 'residencyCapacitySplats',
@@ -154,12 +221,12 @@ export function classifyPolicyChange(
   let propUpdate = false;
   for (const key of Object.keys(previous) as (keyof PerformancePolicy)[]) {
     if (previous[key] === next[key] || key === 'mode' || key === 'preset') continue;
-    if (loadKeys.has(key)) return 'worldReload';
+    if (loadKeys.has(key)) return PolicyChangeKind.worldReload;
     if (propKeys.has(key)) propUpdate = true;
     else unavailable = true;
   }
-  if (propUpdate) return 'nativePropUpdate';
-  return unavailable ? 'unavailable' : 'none';
+  if (propUpdate) return PolicyChangeKind.nativePropUpdate;
+  return unavailable ? PolicyChangeKind.unavailable : PolicyChangeKind.none;
 }
 
 /** Converts resolved values to the complete current Fabric prop surface. */
@@ -214,6 +281,8 @@ export function nativeCapabilitiesFromEvent(event: NativeCapabilitiesEvent): Dev
     maxTextureDimension: event.maxTextureDimension,
     policy: Object.freeze({
       raster: event.policyRaster,
+      rasterStrategies: Object.freeze((Object.keys(rasterWire) as RasterStrategy[])
+        .filter(strategy => (event.policyRasterMask & (1 << rasterWire[strategy])) !== 0)),
       tileSize: event.policyTileSize,
       lodErrorPixels: event.policyLodErrorPixels,
       alphaThreshold: event.policyAlphaThreshold,
@@ -234,18 +303,20 @@ const nativeDefaults = {
 } as const;
 
 type PresetValues = Omit<PerformancePolicy, 'mode' | 'preset'>;
+// Every preset rasterizes in hardware; screen tiles only pay off on some scenes, so they are
+// an explicit withPerformance({raster: 'hybrid'}) choice.
 const presets: Readonly<Record<QualityPreset, PresetValues>> = {
-  highEnd: {raster: 'computeTile', tileSize: 16, lodErrorPixels: 0.75,
+  highEnd: {raster: 'hardware', tileSize: 16, lodErrorPixels: 0.75,
     lodBudgetSplats: 4_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.35,
     enableFrustumCulling: true, enableHiZOcclusion: true, enableEarlyTermination: true,
     sortDepth: 32, renderScale: 1.25, shDegree: 3,
     residencyCapacitySplats: 4_000_000, targetFps: null},
-  high: {raster: 'hybrid', tileSize: 16, lodErrorPixels: 1,
+  high: {raster: 'hardware', tileSize: 16, lodErrorPixels: 1,
     lodBudgetSplats: 3_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.5,
     enableFrustumCulling: true, enableHiZOcclusion: true, enableEarlyTermination: true,
     sortDepth: 32, renderScale: 1, shDegree: 3,
     residencyCapacitySplats: 3_000_000, targetFps: null},
-  balanced: {raster: 'hybrid', tileSize: 16, lodErrorPixels: 1.25,
+  balanced: {raster: 'hardware', tileSize: 16, lodErrorPixels: 1.25,
     lodBudgetSplats: 2_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.65,
     enableFrustumCulling: true, enableHiZOcclusion: false, enableEarlyTermination: true,
     sortDepth: 16, renderScale: 0.85, shDegree: 2,
@@ -412,7 +483,10 @@ export class SplatKitBuilder {
       const fields = effectiveFields as Record<(typeof policyPropKeys)[number],
         PerformancePolicy[keyof PerformancePolicy] | null>;
       for (const option of policyPropKeys) {
-        if (support[option]) fields[option] = requested[option];
+        const applied = option === 'raster'
+          ? support.raster && support.rasterStrategies.includes(requested.raster)
+          : support[option];
+        if (applied) fields[option] = requested[option];
         else if (requested[option] !== nativeDefaults[option]) {
           warn('native-option-fallback', option, requested[option], null,
             `${option} fell back to the native default; read onPolicyEvent for the applied value`);

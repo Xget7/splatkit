@@ -1,6 +1,23 @@
-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+pluginManagement {
+    includeBuild("../node_modules/@react-native/gradle-plugin")
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    // Building the SplatKit Android SDK from source below brings its own plugins in too.
+    plugins { id('com.vanniktech.maven.publish') version '0.34.0' }
+}
 plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'com.splatkit.example'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
+
+// This example lives in the SplatKit monorepo, so it builds the Android SDK from source
+// instead of the Maven release; @splatkit/react-native picks up :splatkit when it exists.
+def splatkitAndroid = file('../../../packages/splatkit-android')
+if (splatkitAndroid.isDirectory()) {
+    include ':splatkit'
+    project(':splatkit').projectDir = splatkitAndroid
+}
