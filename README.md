@@ -19,7 +19,7 @@ cd apps/android-dev
 ./gradlew :splatkit:assembleRelease :splatkit:testDebugUnitTest
 ```
 
-iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-alpha.4`.
+iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-alpha.5`.
 Use the native view, forward lifecycle and load worlds asynchronously; see each SDK's README for examples.
 
 ## Implemented scope

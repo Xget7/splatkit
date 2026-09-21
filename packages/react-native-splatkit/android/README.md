@@ -3,7 +3,7 @@
 `SplatKitPackage` registers `SplatKitView` through the generated Codegen delegate.
 The module needs compileSdk 36 or the app's `rootProject.ext` value, minSdk 29, Java 17 and arm64-v8a.
 It applies `com.facebook.react`, so the consuming app autolinks it and runs its Codegen.
-It depends on `io.github.xget7:splatkit-android:0.1.0-alpha08`, or on `project(':splatkit')` when the build defines one, as in the SplatKit repository.
+It depends on `io.github.xget7:splatkit-android:0.1.0-alpha09`, or on `project(':splatkit')` when the build defines one, as in the SplatKit repository.
 
 Host tests, from the SplatKit repository root after `npm ci` in the package:
 

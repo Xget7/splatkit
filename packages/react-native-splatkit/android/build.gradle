@@ -29,7 +29,7 @@ android {
 // :splatkit Gradle project when this module builds inside that repository (the RN dev app
 // and this package's own verification harness). Kept in one place, so bumping the release
 // this package targets only means changing this line.
-def splatkitAndroidVersion = '0.1.0-alpha08'
+def splatkitAndroidVersion = '0.1.0-alpha09'
 
 dependencies {
     // Version resolution comes from the React Native Gradle plugin applied above; a
