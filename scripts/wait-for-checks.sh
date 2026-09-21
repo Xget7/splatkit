@@ -9,6 +9,9 @@ set -euo pipefail
 : "${GITHUB_REPOSITORY:?}" "${GITHUB_SHA:?}" "${WAIT_WORKFLOWS:?}"
 
 deadline=$(( SECONDS + ${WAIT_TIMEOUT_SECONDS:-2400} ))
+# A run that does not exist yet returns an empty result, not an API error. Repeated API
+# errors mean the token or the workflow name is wrong, so fail rather than hang.
+api_errors=0
 while :; do
   pending=""
   for workflow in $WAIT_WORKFLOWS; do
@@ -21,6 +24,13 @@ while :; do
     case "$status $conclusion" in
       "completed success") ;;
       completed\ *) echo "::error::$workflow concluded $conclusion on $GITHUB_SHA"; exit 1 ;;
+      unknown\ *)
+        api_errors=$(( api_errors + 1 ))
+        if [ "$api_errors" -ge 8 ]; then
+          echo "::error::cannot read workflow runs; check the token's actions:read permission and the workflow names."
+          exit 1
+        fi
+        pending="$pending $workflow(unreadable)" ;;
       *) pending="$pending $workflow($status)" ;;
     esac
   done
