@@ -46,13 +46,13 @@ dependencies {
 // publishing machine (ORG_GRADLE_PROJECT_mavenCentralUsername, mavenCentralPassword,
 // signingInMemoryKey, signingInMemoryKeyPassword); local builds need none of it.
 mavenPublishing {
-    coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha08")
+    coordinates("io.github.xget7", "splatkit-android", "0.1.0-alpha09")
     publishToMavenCentral(automaticRelease = true)
     if (project.findProperty("signingInMemoryKey") != null) signAllPublications()
     pom {
         name.set("SplatKit Android")
         description.set("Native Android Gaussian splatting SDK: Vulkan GPU visibility, radix sorting, hierarchical LOD, spherical harmonics, and walk navigation with colliders.")
-        url.set("https://github.com/Xget7/splatkit-android")
+        url.set("https://github.com/Xget7/splatkit")
         licenses {
             license {
                 name.set("MIT")
@@ -62,15 +62,15 @@ mavenPublishing {
         developers {
             developer {
                 id.set("xget7")
-                name.set("Juan Tupa")
+                name.set("Juan Ignacio Andrade")
                 email.set("juanieltupa@gmail.com")
                 url.set("https://github.com/Xget7")
             }
         }
         scm {
-            url.set("https://github.com/Xget7/splatkit-android")
-            connection.set("scm:git:https://github.com/Xget7/splatkit-android.git")
-            developerConnection.set("scm:git:ssh://git@github.com/Xget7/splatkit-android.git")
+            url.set("https://github.com/Xget7/splatkit")
+            connection.set("scm:git:https://github.com/Xget7/splatkit.git")
+            developerConnection.set("scm:git:ssh://git@github.com/Xget7/splatkit.git")
         }
     }
 }

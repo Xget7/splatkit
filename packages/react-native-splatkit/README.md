@@ -8,6 +8,8 @@ Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk thr
 [![platform: iOS | Android](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)](#requirements)
 [![architecture: Fabric](https://img.shields.io/badge/architecture-Fabric-blueviolet.svg)](#requirements)
 
+![Walking a Gaussian splat capture in the example app](https://raw.githubusercontent.com/Xget7/splatkit/main/docs/media/example-walk.gif)
+
 > **Experimental alpha.**
 > The API changes before 1.0, and every release so far is a prerelease published under the `next` dist-tag.
 > Verified on physical devices only: an iPhone 17 Pro and a Xiaomi Mi 9 (Adreno 640).
@@ -40,12 +42,15 @@ Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk thr
 
 | | Minimum |
 | --- | --- |
-| React Native | `0.87.x` (peer dependency `~0.87.1`) |
+| React Native | `0.87` or newer (peer dependency `>=0.87.0 <0.89.0`; only 0.87.1 is validated) |
 | React | `^19.2.3` |
 | Architecture | New Architecture (Fabric). `SplatKitView` has no legacy bridge fallback. |
 | iOS | 17.0+, Apple GPU family 7 (A14/M1 or newer), Xcode with CocoaPods |
 | Android | API 29+, Vulkan 1.1, `arm64-v8a` only |
 | Node | `^22.13.0`, `^24.3.0` or `>=26.0.0` |
+
+React Native 0.87 is the minimum.
+The adapter is Fabric-only and relies on the 0.87 template's iOS 26 scene lifecycle, and only 0.87.1 is validated; older releases fail to resolve the peer dependency or to build.
 
 Run it on a physical device.
 The renderer's shaders use SIMD prefix reductions, which the iOS Simulator does not implement, so it reports `Metal is unavailable on this device` and loads nothing.
@@ -62,7 +67,7 @@ The `@next` tag is required while the package is in alpha.
 
 **iOS.**
 The podspec vendors `SplatKitCore.xcframework`, which is fetched and checksum-verified when the package is packed, so there is nothing to build.
-iOS 26 terminates apps that skip the UIScene lifecycle, so a React Native 0.87 template app needs a scene delegate; the [example app](https://github.com/Xget7/splatkit-android/tree/main/apps/react-native) has one.
+iOS 26 terminates apps that skip the UIScene lifecycle, so a React Native 0.87 template app needs a scene delegate; the [example app](https://github.com/Xget7/splatkit/tree/main/apps/react-native) has one.
 
 **Android.**
 The module autolinks through the app's `com.facebook.react` Gradle plugin, which also runs Fabric Codegen, and pulls `io.github.xget7:splatkit-android` from Maven Central.
@@ -118,7 +123,7 @@ A request an adapter rejects is refused before any engine exists, so no capabili
 ## Loading a world
 
 `filePath` must be an absolute, readable local path, never a URL, a `require()` asset or a content URI.
-Supported formats are `.spz`, `.ply`, `.lodsplat` and tiled worlds that stream progressively.
+Supported formats are `.spz`, `.ply` and `.lodsplat`.
 
 `world` is a transaction, not a setting.
 Native reloads when `requestId` changes and ignores every other edit to the object, so changing a load-time budget means changing the id too.
@@ -142,7 +147,7 @@ Restart the app after copying a new world.
 ## Navigation
 
 The SDK ships no navigation UI.
-`SplatKitView` handles a one-finger drag to look and a double tap to toggle the gyroscope; every other control is yours to draw.
+`SplatKitView` handles a one-finger drag to look; every other control is yours to draw.
 
 1. Load a collider mesh through the `collider` prop, `{requestId, filePath}`, pointing at an absolute path to a collider GLB.
 2. Show your controls when `onColliderEvent` reports `ColliderPhase.ready`. `ColliderPhase.failed` carries `errorCode` and `message`.
@@ -160,7 +165,7 @@ const WALK_SPEED = 1.4; // meters per second at full deflection
 const RADIUS = 62;
 const clamp = (value: number) => Math.max(-1, Math.min(1, value));
 
-export function WalkableScene(props: {colliderPath: string}) {
+export function WalkableScene(props: {worldPath: string; colliderPath: string}) {
   const view = useRef<React.ComponentRef<typeof SplatKitView>>(null);
   const [walking, setWalking] = useState(false);
 
@@ -193,6 +198,7 @@ export function WalkableScene(props: {colliderPath: string}) {
     <>
       <SplatKitView
         ref={view}
+        world={{requestId: 'world', filePath: props.worldPath}}
         collider={{requestId: 'floor', filePath: props.colliderPath}}
         character={{eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35}}
         onColliderEvent={onColliderEvent}
@@ -394,12 +400,12 @@ The Vulkan backend reports submitted frames rather than presented ones, and neit
 
 ## Example app
 
-[`apps/react-native`](https://github.com/Xget7/splatkit-android/tree/main/apps/react-native) is a React Native 0.87.1 app from the community template that installs this package, draws a thumb stick and a stats and quality HUD, and walks a 6M splat capture.
+[`apps/react-native`](https://github.com/Xget7/splatkit/tree/main/apps/react-native) is a React Native 0.87.1 app from the community template that installs this package, draws a thumb stick and a stats and quality HUD, and walks a 6M splat capture.
 Its README lists every change a fresh template needs.
 
 ## Related
 
-- [splatkit-android](https://github.com/Xget7/splatkit-android), the Vulkan SDK and the shared C++ engine.
+- [splatkit](https://github.com/Xget7/splatkit), the Vulkan and Metal SDKs and the shared C++ engine.
 - [splatkit-ios](https://github.com/Xget7/splatkit-ios), the Metal SDK.
 
 ## Contributing

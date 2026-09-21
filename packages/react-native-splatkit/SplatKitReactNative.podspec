@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary = 'Fabric view adapter for SplatKit native renderers'
   s.homepage = 'https://github.com/Xget7/react-native-splatkit'
   s.license = { :type => 'MIT' }
-  s.author = { 'SplatKit' => 'opensource@splatkit.dev' }
+  s.author = { 'SplatKit' => 'juanieltupa@gmail.com' }
   s.platforms = { :ios => '17.0' }
   s.source = { :git => 'https://github.com/Xget7/react-native-splatkit.git', :tag => "v#{s.version}" }
   s.source_files = 'ios/**/*.{h,mm}'

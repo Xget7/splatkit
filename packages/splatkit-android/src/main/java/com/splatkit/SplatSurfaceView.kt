@@ -38,11 +38,10 @@ internal fun dispatchSplatEvent(
  * surface lifecycle: the engine gets the surface when Android creates it and gives it
  * back, synchronously, before Android destroys it.
  *
- * Gestures: a finger drags the view to look (yaw, and pitch when the gyroscope is off)
- * and a double tap toggles the gyroscope; both can be turned off. The view ships no
- * walking control: the host draws its own, wherever it likes, and drives [setWalkVelocity]
- * or [walk] from it. [com.splatkit.ui.JoystickView] is one such control, for a host that
- * wants a ready-made one.
+ * Gestures: a finger drags the view to look (yaw, and pitch when the gyroscope is off),
+ * and that can be turned off. The view ships no walking control: the host draws its own,
+ * wherever it likes, and drives [setWalkVelocity] or [walk] from it.
+ * [com.splatkit.ui.JoystickView] is one such control, for a host that wants a ready-made one.
  */
 class SplatSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -53,9 +52,6 @@ class SplatSurfaceView @JvmOverloads constructor(
     private val motion = MotionInput(context, renderThread.renderHandler) { renderThread.setAttitude(it) }
     private val touch = TouchInput(object : TouchInput.Listener {
         override fun onLook(deltaYaw: Float, deltaPitch: Float) = renderThread.look(deltaYaw, deltaPitch)
-        override fun onDoubleTap() {
-            if (motionToggleEnabled) setMotionEnabled(!motionEnabled)
-        }
     })
     private var motionEnabled = false
     private var resumed = false
@@ -87,9 +83,6 @@ class SplatSurfaceView @JvmOverloads constructor(
             touch.lookEnabled = value
             if (!value) touch.letGo()
         }
-
-    /** Whether the double tap can toggle the gyroscope. */
-    var motionToggleEnabled = true
 
     /**
      * Where the camera is, on the main thread, at most this often in milliseconds, and only

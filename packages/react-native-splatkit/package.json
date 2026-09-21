@@ -7,6 +7,14 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "react-native": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "react-native": "./src/index.ts",
+      "default": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "publishConfig": { "access": "public" },
   "codegenConfig": {
     "name": "SplatKitSpec",
@@ -26,7 +34,7 @@
   "engines": { "node": "^22.13.0 || ^24.3.0 || >=26.0.0" },
   "peerDependencies": {
     "react": "^19.2.3",
-    "react-native": "~0.87.1"
+    "react-native": ">=0.87.0 <0.89.0"
   },
   "devDependencies": {
     "@react-native/codegen": "0.87.1",

@@ -13,6 +13,7 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +39,15 @@ jobs:
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The test workflows run alongside this one on the same push; publishing to Maven
+      # Central is irreversible, so wait for them rather than shipping a broken commit.
+      - name: Wait for the tests on this commit
+        if: steps.state.outputs.new == 'true'
+        run: scripts/wait-for-checks.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml rn-contract.yml
+
       - uses: actions/setup-java@v4
         if: steps.state.outputs.new == 'true'
         with:
@@ -49,6 +59,24 @@ jobs:
           packages: "platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006 cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         if: steps.state.outputs.new == 'true'
+
+      # Without this a missing secret fails deep inside Gradle with an opaque error.
+      - name: Check the release secrets exist
+        if: steps.state.outputs.new == 'true'
+        run: |
+          missing=0
+          for secret in MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD SIGNING_KEY SIGNING_KEY_PASSWORD; do
+            if [ -z "${!secret}" ]; then
+              echo "::error::$secret is not set; release.yml cannot publish."
+              missing=1
+            fi
+          done
+          exit $missing
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
       - name: Upload the release to Maven Central
         if: steps.state.outputs.new == 'true'
@@ -69,8 +97,9 @@ jobs:
           fi
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          gh release create "v$VERSION" --title "SplatKit Android $VERSION" --generate-notes \
-            $(case "$VERSION" in *alpha*|*beta*|*rc*) echo --prerelease ;; esac)
+          # Not --prerelease: every pre-1.0 release is an alpha, and marking them prerelease
+          # left the releases page advertising an older version as Latest.
+          gh release create "v$VERSION" --title "SplatKit Android $VERSION" --generate-notes
         env:
           VERSION: ${{ steps.state.outputs.version }}
           GH_TOKEN: ${{ github.token }}

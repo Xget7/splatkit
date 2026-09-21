@@ -1,15 +1,17 @@
 # SplatKit
 
-Native Gaussian splatting SDKs for Android/Vulkan and iOS/Metal, sharing a C++17 engine.
+Native Gaussian splatting SDKs for iOS/Metal, Android/Vulkan and React Native, sharing a C++17 engine.
 Experimental alpha: APIs and quality/performance tradeoffs are still evolving.
 
 [Android API](packages/splatkit-android/README.md) · [iOS / SwiftPM](https://github.com/Xget7/splatkit-ios) · [React Native](packages/react-native-splatkit/README.md) · [Agent harness](docs/AGENT_HARNESS.md) · [Changelog](CHANGELOG.md)
+
+![Walking a Gaussian splat capture in the React Native example](docs/media/example-walk.gif)
 
 ## Use
 
 Android: API 29+, Vulkan 1.1, arm64-v8a.
 The GPU path additionally checks subgroup and memory limits.
-Maven Central has `io.github.xget7:splatkit-android:0.1.0-alpha08`, with host-driven walking, the render policy and `onWorldFrameReady`; see the [Android releases](https://github.com/Xget7/splatkit-android/releases).
+Maven Central has `io.github.xget7:splatkit-android:0.1.0-alpha09`, with host-driven walking, the render policy and `onWorldFrameReady`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
 To build current source:
 
 ```sh

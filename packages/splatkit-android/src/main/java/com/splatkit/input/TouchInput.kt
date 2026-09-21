@@ -3,8 +3,8 @@ package com.splatkit.input
 import android.view.MotionEvent
 
 /**
- * The view's own gestures, and the only touches the SDK handles itself: a finger drags to
- * look (yaw, and pitch when the gyroscope is off), and a double tap toggles the gyroscope.
+ * The view's own gesture, and the only touch the SDK handles itself: a finger drags to
+ * look (yaw, and pitch when the gyroscope is off).
  * Pixels become radians through [lookSensitivity].
  *
  * Walking comes from the host through `setWalkVelocity` or `walk`, so its own controls, on
@@ -13,7 +13,6 @@ import android.view.MotionEvent
 internal class TouchInput(private val listener: Listener) {
     interface Listener {
         fun onLook(deltaYaw: Float, deltaPitch: Float)
-        fun onDoubleTap()
     }
 
     /** Radians per pixel dragged. */
@@ -27,16 +26,10 @@ internal class TouchInput(private val listener: Listener) {
     private var pointerId = MotionEvent.INVALID_POINTER_ID
     private var lastX = 0f
     private var lastY = 0f
-    private var lastTapTime = 0L
 
     fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                val now = event.eventTime
-                if (now - lastTapTime < DOUBLE_TAP_MILLIS) listener.onDoubleTap()
-                lastTapTime = now
-                grab(event, 0)
-            }
+            MotionEvent.ACTION_DOWN -> grab(event, 0)
             MotionEvent.ACTION_MOVE -> {
                 val index = event.findPointerIndex(pointerId)
                 if (index >= 0) {
@@ -65,9 +58,5 @@ internal class TouchInput(private val listener: Listener) {
         pointerId = event.getPointerId(index)
         lastX = event.getX(index)
         lastY = event.getY(index)
-    }
-
-    private companion object {
-        const val DOUBLE_TAP_MILLIS = 300L
     }
 }

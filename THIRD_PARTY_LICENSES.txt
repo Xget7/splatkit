@@ -4,7 +4,7 @@ are allowed, and none of them imposes a copyleft obligation on the code that
 links against this library. zstd is offered under BSD-3-Clause or GPLv2 at the
 recipient's choice; SplatKit takes it under BSD-3-Clause, reproduced below.
 
-SplatKit itself is MIT, Copyright (c) 2026 Juan Tupa.
+SplatKit itself is MIT, Copyright (c) 2026 Juan Ignacio Andrade.
 
 ============================================================================
 spz (Niantic Labs)

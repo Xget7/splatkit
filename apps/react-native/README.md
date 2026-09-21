@@ -1,7 +1,7 @@
 # SplatKit React Native example
 
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
-Drag anywhere to look around, and double tap to toggle the gyroscope.
+Drag anywhere to look around.
 Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
 The SDK draws no walking UI of its own.
 

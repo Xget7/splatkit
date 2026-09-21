@@ -99,7 +99,6 @@ struct ContentView: View {
         // Change framing with camera distance, not render resolution or field of view.
         view.renderScale = args.float("scale") ?? 1
         view.touchLookEnabled = !orbitEnabled
-        view.motionToggleEnabled = !issMap
         view.maxShDegree = args.int("sh") ?? 1
         if let v = args.int("shdraw") { view.shDegree = v }
         // Explicit renderer switches win; otherwise start at a quality level, High by default.

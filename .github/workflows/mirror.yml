@@ -14,6 +14,9 @@ on:
 jobs:
   mirror:
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +30,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # The test workflows run alongside this one on the same push; do not mirror a commit
+      # the tests have not passed.
+      - name: Wait for the tests on this commit
+        run: scripts/wait-for-checks.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml rn-contract.yml
 
       # Without this the failure is an opaque git authentication error four steps later.
       - name: Check the mirror token exists
