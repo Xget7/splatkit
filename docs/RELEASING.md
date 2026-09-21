@@ -44,13 +44,16 @@ Then, in one pull request:
 2. Set the same version and checksum in `packages/react-native-splatkit/scripts/ios-xcframework.json`, which the npm package fetches at `prepack`.
 3. Update the version named in `README.md` and in both iOS READMEs.
 
-Merge it, then create the release the URL now points at:
+Merge it and wait for `mirror.yml`, then create the release the URL now points at.
+Swift Package Manager reads `Package.swift` at the tag, so tagging before the mirror lands the new checksum points the release at its own predecessor.
 
 ```sh
-gh release create v0.1.0-alphaN -R Xget7/splatkit-ios --prerelease \
+gh release create v0.1.0-alphaN -R Xget7/splatkit-ios \
   --title "SplatKit iOS 0.1.0 alpha N" --notes "..." \
   build/ios-distribution/package.*/SplatKitCore.xcframework.zip
 ```
+
+Not `--prerelease`, for the reason `release.yml` gives for the Android artifact: every pre-1.0 release is an alpha, and marking them all prerelease leaves the releases page with no Latest at all.
 
 Create the iOS release before any npm publish that pins it: `npm prepack` downloads the XCFramework and verifies the checksum, so a missing release fails the publish.
 
