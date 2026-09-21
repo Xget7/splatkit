@@ -73,8 +73,10 @@ jobs:
         run: |
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
-            $(case "$VERSION" in *-*) echo --prerelease ;; esac)
+          # Not --prerelease, for the reason release.yml gives for the Android artifact: every
+          # pre-1.0 release is an alpha, and marking them all prerelease leaves the releases page
+          # with no Latest at all.
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes
         env:
           VERSION: ${{ steps.state.outputs.version }}
           GH_TOKEN: ${{ github.token }}

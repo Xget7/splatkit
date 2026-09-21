@@ -6,17 +6,60 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ## Unreleased
 
+### Fixed
+
+- The React Native mirror's `publish.yml` no longer passes `--prerelease`, so `react-native-splatkit` shows a Latest release the way the Android and iOS repositories already do.
+- The React Native example builds without warnings on either platform.
+  Its `Info.plist` no longer declares an empty `NSLocationWhenInUseUsageDescription`, which the app never used and App Store validation rejects, and `MainActivity` uses the `DefaultReactActivityDelegate` constructor React Native 0.87 has not deprecated.
+
+## [0.1.0-alpha09] - 2026-09-21
+
+### Added
+
+- The notices bundled into the Android artifact name splat-transform (PlayCanvas), whose collision voxel passes `splat-core`'s collider builder ports, and carry its MIT licence.
+
+### Changed
+
+- A version bump is the release trigger.
+  Landing a change to the Maven coordinate in `packages/splatkit-android/build.gradle.kts` on `main` publishes to Maven Central, tags the commit and opens the GitHub release; nobody cuts a tag by hand.
+  `docs/RELEASING.md` describes all three artifacts and the order they have to be cut in.
+- Android releases are no longer marked prerelease.
+  Every pre-1.0 release is an alpha, and marking them all prerelease left the releases page with no Latest at all.
+
+### Fixed
+
+- The copyright holder in `LICENSE` and in the notices bundled into the Android artifact reads Juan Ignacio Andrade.
+- `mirror.yml` names a missing `MIRROR_TOKEN` instead of failing four steps later with an opaque git authentication error, and waits for the test workflows on the same commit before it mirrors.
+- The release gate fails fast when it cannot read workflow runs, instead of treating a run it could not read as a pass.
+- `scripts/package-ios.sh` is executable, so the invocation `docs/RELEASING.md` documents runs.
+
+### Removed
+
+- `SplatSurfaceView.motionToggleEnabled` and the double tap that toggled the gyroscope.
+  A host that wants the gesture recognises it on its own view and calls `setMotionEnabled`, which keeps the touches the SDK claims down to the single drag it documents.
+
+## [0.1.0-alpha08] - 2026-09-18
+
 ### Added
 
 - `RenderPolicySupport::rasterMask` in the shared engine, listing the raster strategies a backend builds.
 - `RenderPolicy::lodSplatLimit` in the shared engine: a live cap on selected hierarchy splats, 0 for the loaded capacity.
 - `buildCollider` in splat-core makes a walk-mode collider from a world's splats, a port of PlayCanvas splat-transform's collision voxel passes, with `encodeGlb` and `tools/splat_collider` to write it as a `.glb`.
 - Shared engine stats count frames the display showed when a renderer reports presentation times, with a 95th percentile frame time, a 1% low and dropped frames; Metal reports them, Vulkan still counts submitted frames.
+- `SplatSurfaceView.walk`, `setCharacter`, `character` and the `CharacterSettings` type, so the host drives walking and shapes the walker.
+- `SplatSurfaceView.cameraPoseIntervalMillis` and `cameraPoseListener`, which report where the camera ended up at most that often and only while it moves.
+- `SplatSurfaceView.touchLookEnabled` and `motionToggleEnabled`, for a host that draws its own look control.
 
 ### Changed
 
 - Walk mode refuses steps onto a floor more than 0.35 m higher, looking 0.25 m ahead, so it climbs stairs and steps over door tracks but no longer climbs counters, chairs or tables whose top the hip probe passes over, and slides along them when walked into at an angle.
+- The view handles one drag to look and nothing else; walking comes from the host.
+  A second finger no longer walks, so the host's own controls keep every touch the look drag does not.
 - The [React Native example](apps/react-native/README.md) replaces the React Native dev app: a template React Native 0.87.1 app that installs `@splatkit/react-native` from npm and runs on Android and iOS.
+
+### Removed
+
+- `SplatSurfaceView.walkSensitivity`, which configured the two-finger walk gesture that is gone.
 
 ## [0.1.0-alpha07] - 2026-09-16
 
@@ -92,9 +135,11 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 - First Maven Central publication of the Vulkan SDK.
 
-[0.1.0-alpha07]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha07
-[0.1.0-alpha06]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha06
-[0.1.0-alpha05]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha05
-[0.1.0-alpha04]: https://github.com/Xget7/splatkit-android/releases/tag/v0.1.0-alpha04
-[0.1.0-alpha03]: https://github.com/Xget7/splatkit-android/tree/v0.1.0-alpha03
-[0.1.0-alpha02]: https://github.com/Xget7/splatkit-android/tree/v0.1.0-alpha02
+[0.1.0-alpha09]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha09
+[0.1.0-alpha08]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha08
+[0.1.0-alpha07]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha07
+[0.1.0-alpha06]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha06
+[0.1.0-alpha05]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha05
+[0.1.0-alpha04]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha04
+[0.1.0-alpha03]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha03
+[0.1.0-alpha02]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha02
