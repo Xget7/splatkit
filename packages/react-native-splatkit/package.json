@@ -1,6 +1,6 @@
 {
   "name": "@splatkit/react-native",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "SplatKit Fabric view with native Metal and Vulkan adapters",
   "repository": { "type": "git", "url": "https://github.com/Xget7/react-native-splatkit.git" },
   "license": "MIT",
