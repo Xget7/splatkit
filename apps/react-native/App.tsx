@@ -70,7 +70,7 @@ const STATUS_LIFT = 72;
  * scene has to name its author wherever it is shown.
  */
 const WORLD_CREDIT: string | null =
-  'Les Tanins by Stéphane Agullo  ·  CC BY 4.0  ·  colours adjusted';
+  'Les Tanins by Stéphane Agullo  |  CC BY 4.0  |  colours adjusted';
 
 const MILLIS_PER_SECOND = 1000;
 

@@ -3,7 +3,14 @@
 Native Gaussian splatting SDKs for iOS/Metal, Android/Vulkan and React Native, sharing a C++17 engine.
 Experimental alpha: APIs and quality/performance tradeoffs are still evolving.
 
-[Android API](packages/splatkit-android/README.md) · [iOS / SwiftPM](https://github.com/Xget7/splatkit-ios) · [React Native](packages/react-native-splatkit/README.md) · [Agent harness](docs/AGENT_HARNESS.md) · [Changelog](CHANGELOG.md)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.xget7/splatkit-android?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.xget7/splatkit-android)
+[![SwiftPM](https://img.shields.io/github/v/release/Xget7/splatkit-ios?include_prereleases&label=SwiftPM)](https://github.com/Xget7/splatkit-ios/releases)
+[![npm](https://img.shields.io/npm/v/@splatkit/react-native/latest?label=npm)](https://www.npmjs.com/package/@splatkit/react-native)
+[![license: MIT](https://img.shields.io/github/license/Xget7/splatkit)](LICENSE)
+[![android](https://img.shields.io/github/actions/workflow/status/Xget7/splatkit/android.yml?branch=main&label=android)](https://github.com/Xget7/splatkit/actions/workflows/android.yml)
+[![ios](https://img.shields.io/github/actions/workflow/status/Xget7/splatkit/ios.yml?branch=main&label=ios)](https://github.com/Xget7/splatkit/actions/workflows/ios.yml)
+
+[Android API](packages/splatkit-android/README.md) | [iOS / SwiftPM](https://github.com/Xget7/splatkit-ios) | [React Native](packages/react-native-splatkit/README.md) | [Agent harness](docs/AGENT_HARNESS.md) | [Changelog](CHANGELOG.md)
 
 ![Walking a Gaussian splat capture in the React Native example](docs/media/example-walk.gif)
 
@@ -52,7 +59,7 @@ Overflow fails closed; source residency depends on driver buffer limits and avai
 LOD parents, subpixel culling and depth quantization can change the image.
 There is no universal 10M/30/60 FPS or lossless guarantee.
 
-[Backend contracts/evidence](packages/splatkit-android/docs/VULKAN.md) · [Parity gates](docs/VALIDATION.md#remaining-parity-gates) · [Historical device measurements](docs/BENCHMARKS.md)
+[Backend contracts/evidence](packages/splatkit-android/docs/VULKAN.md) | [Parity gates](docs/VALIDATION.md#remaining-parity-gates) | [Historical device measurements](docs/BENCHMARKS.md)
 
 ## Contribute
 
@@ -60,4 +67,4 @@ Use the [agent harness](docs/AGENT_HARNESS.md), [validation gates](docs/VALIDATI
 Include device/driver, world, settings and logs with performance reports.
 Next acceptance work: Mali and more Adreno devices, lifecycle stress, reference-image comparisons, then Vulkan hybrid tiles.
 
-[MIT license](LICENSE) · [Third-party licenses](THIRD_PARTY_LICENSES.txt).
+[MIT license](LICENSE) and [third-party licenses](THIRD_PARTY_LICENSES.txt).

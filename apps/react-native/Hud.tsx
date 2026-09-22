@@ -57,7 +57,7 @@ const GRAPH_MAX_FPS = 60;
 const GRAPH_GUIDES: readonly number[] = Object.freeze([60, 30]);
 
 const MILLIS_PER_SECOND = 1000;
-const SEPARATOR = '  ·  ';
+const SEPARATOR = '  |  ';
 
 function compact(value: number): string {
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;

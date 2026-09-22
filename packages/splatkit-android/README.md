@@ -97,8 +97,8 @@ Parents and subpixel rejection are approximate.
 There is no universal 10M or 30/60 FPS guarantee.
 Hybrid compute screen tiles remain Metal-only.
 
-[Architecture, limits and evidence](docs/VULKAN.md) ·
-[Agent harness](../../docs/AGENT_HARNESS.md) ·
+[Architecture, limits and evidence](docs/VULKAN.md) |
+[Agent harness](../../docs/AGENT_HARNESS.md) |
 [iOS SDK](https://github.com/Xget7/splatkit-ios)
 
 ```sh
