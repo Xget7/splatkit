@@ -61,6 +61,19 @@ There is no universal 10M/30/60 FPS or lossless guarantee.
 
 [Backend contracts/evidence](packages/splatkit-android/docs/VULKAN.md) | [Parity gates](docs/VALIDATION.md#remaining-parity-gates) | [Historical device measurements](docs/BENCHMARKS.md)
 
+## Support the project
+
+SplatKit is still experimental. The most useful ways to help are:
+
+- Test the SDK on a physical Android (preferred).
+- Report bugs with reproduction steps, device and GPU details, OS version,
+ world format and size, render settings, and relevant logs.
+- Share feedback about the native and React Native APIs.
+- Improve documentation, examples, tests, or implementation.
+
+Current testing gaps include Mali GPUs, additional Adreno devices, lifecycle
+stress testing, and Metal/Vulkan visual comparisons.
+ 
 ## Contribute
 
 Use the [agent harness](docs/AGENT_HARNESS.md), [validation gates](docs/VALIDATION.md) and [build guide](CONTRIBUTING.md).
