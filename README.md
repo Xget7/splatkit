@@ -29,6 +29,15 @@ cd apps/android-dev
 iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-alpha.5`.
 Use the native view, forward lifecycle and load worlds asynchronously; see each SDK's README for examples.
 
+Worlds are `.spz` or `.lodsplat`, prepared on a computer.
+World Labs Marble exports load as they are; any Gaussian splat PLY goes through one command:
+
+```sh
+scripts/prepare-world.sh scene.ply out/ --collider   # --lod for scenes of several million splats
+```
+
+[Preparing a world](packages/react-native-splatkit/README.md#preparing-a-world) explains each flag and its cost.
+
 ## Implemented scope
 
 | Capability | Metal | Vulkan |
