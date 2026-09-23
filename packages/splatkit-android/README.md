@@ -53,7 +53,7 @@ Loads decode asynchronously; ready/failure callbacks run on the main thread.
 Keep the view resumed while waiting; completion does not prove visible pixels, presentation scanout or full streamed detail.
 Use `loadCollider(File)` for optional GLB walk collision; otherwise the camera flies.
 SPZ v2–v4 and offline `.lodsplat` worlds are supported, and `loadTiledWorld` streams a `splat-tile` tileset.
-PLY needs offline conversion with `ply2spz`.
+A PLY is converted offline by [`scripts/prepare-world.sh`](../../scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 Compose can host the view through `AndroidView`; forward the same lifecycle.
 The [React Native package](../react-native-splatkit/README.md) maps its `policy` prop to `applyRenderPolicy`.
 
