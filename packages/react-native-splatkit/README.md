@@ -19,6 +19,7 @@ Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk thr
 - [Why](#why)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Preparing a world](#preparing-a-world)
 - [Quick start](#quick-start)
 - [Loading a world](#loading-a-world)
 - [Navigation](#navigation)
@@ -73,6 +74,32 @@ iOS 26 terminates apps that skip the UIScene lifecycle, so a React Native 0.87 t
 The module autolinks through the app's `com.facebook.react` Gradle plugin, which also runs Fabric Codegen, and pulls `io.github.xget7:splatkit-android` from Maven Central.
 Set `minSdkVersion = 29` and `reactNativeArchitectures=arm64-v8a` in the host app.
 
+## Preparing a world
+
+The view reads `.spz` and `.lodsplat` files, never `.ply`, so a scene is prepared on your computer before it reaches the phone.
+
+- **[World Labs Marble](https://docs.worldlabs.ai/marble/export/specs#gaussian-splats) exports** are ready as they are: the SPZ is the world and the collider GLB makes it walkable.
+- **Any Gaussian splat PLY**, from SuperSplat, Polycam or a 3DGS training run, goes through `scripts/prepare-world.sh` in the SplatKit repository:
+
+```sh
+git clone https://github.com/Xget7/splatkit && cd splatkit
+scripts/prepare-world.sh ~/scene.ply out/ --collider
+```
+
+It needs CMake 3.22 or newer and a C++17 compiler; Xcode's is enough.
+The first run builds the conversion tools, and every run ends by printing which file goes in `world.filePath` and which in `collider.filePath`.
+
+| Flag | Writes | Use it for |
+| --- | --- | --- |
+| none | `out/scene.spz` | Every scene; this is the world. |
+| `--collider` | `out/scene.collider.glb` | Walking. It assumes a space to walk through, not a lone object. |
+| `--lod` | `out/scene.lodsplat`, which becomes the world | Scenes of several million splats: the level-of-detail tree is built here instead of on the phone at load time. |
+| `--sh N` | | Keeping spherical harmonics up to degree N, 0 to 3. Each degree dropped makes smaller files and uses less GPU memory. |
+
+On an iPhone 17 Pro, the example app was killed for memory while loading a 12M-splat SPZ at SH2; the same scene prepared with `--lod --sh 1` loaded in about 3 seconds.
+A `.lodsplat` is uncompressed, so it is many times the SPZ: 1.25 GB against 214 MB for that scene.
+The script's header and the [splat-core tools](https://github.com/Xget7/splatkit/tree/main/packages/splat-core#converting-a-ply) cover the remaining options.
+
 ## Quick start
 
 ```tsx
@@ -123,7 +150,7 @@ A request an adapter rejects is refused before any engine exists, so no capabili
 ## Loading a world
 
 `filePath` must be an absolute, readable local path, never a URL, a `require()` asset or a content URI.
-Supported formats are `.spz`, `.ply` and `.lodsplat`.
+Supported formats are `.spz` and `.lodsplat`; [Preparing a world](#preparing-a-world) turns a PLY into them.
 
 `world` is a transaction, not a setting.
 Native reloads when `requestId` changes and ignores every other edit to the object, so changing a load-time budget means changing the id too.
