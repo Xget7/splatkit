@@ -34,7 +34,7 @@ Then match what this app changes from the template:
 ## Run this app
 
 Needs Node 22.13 or newer, the Android SDK with NDK, Xcode 26 and CocoaPods.
-Worlds are `.spz`, `.ply` or `.lodsplat` files and are not committed.
+Worlds are `.spz` or `.lodsplat` files and are not committed; [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) turns a PLY into them.
 
 ```sh
 npm ci
