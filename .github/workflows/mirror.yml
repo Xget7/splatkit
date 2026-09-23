@@ -11,6 +11,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Back-to-back pushes would otherwise race: a run that clones a mirror after a newer run pushed
+# it would overwrite it with an older tree. Runs go one at a time, and a newer push replaces the
+# queued one, so each mirror always ends at the newest commit.
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
 jobs:
   mirror:
     runs-on: ubuntu-24.04
