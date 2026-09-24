@@ -92,13 +92,14 @@ struct ContentView: View {
         let defaultWorld = "kitchen_500k.spz"
         let requestedMap = (args.string("tileset") ?? args.string("world") ?? defaultWorld).lowercased()
         let issMap = requestedMap.contains("iss")
+        let sdkOrbitEnabled = args.float("sdk-orbit-speed").map { $0.isFinite && $0 > 0 } ?? false
         let orbitEnabled = issMap && (args.bool("orbit") ?? true)
-            && !args.has("pose") && !args.has("benchmark") && !args.has("walk")
+            && !args.has("pose") && !args.has("benchmark") && !args.has("walk") && !sdkOrbitEnabled
         session.orbit?.end()
         session.orbit = nil
         // Change framing with camera distance, not render resolution or field of view.
         view.renderScale = args.float("scale") ?? 1
-        view.touchLookEnabled = !orbitEnabled
+        view.touchLookEnabled = !orbitEnabled && !sdkOrbitEnabled
         view.maxShDegree = args.int("sh") ?? 1
         if let v = args.int("shdraw") { view.shDegree = v }
         // Explicit renderer switches win; otherwise start at a quality level, High by default.
@@ -136,7 +137,7 @@ struct ContentView: View {
                 view.cameraPose = CameraPose(x: p[0], y: p[1], z: p[2], yaw: p.count > 3 ? p[3] : 0, pitch: p.count > 4 ? p[4] : 0)
             }
         }
-        if issMap {
+        if issMap || sdkOrbitEnabled {
             view.setMotionEnabled(false)
         } else {
             view.setMotionEnabled(args.bool("gyro") ?? false)

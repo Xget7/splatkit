@@ -28,6 +28,11 @@ final class SplatSession: ObservableObject {
     private let monitorResources: Bool
     private let memoryLimitBytes: UInt64
     private let runSeconds: Double?
+    private let sdkOrbitSpeed: Float?
+    private let sdkOrbitDolly: Float?
+    private var sdkOrbitStartedAt: TimeInterval?
+    private var sdkOrbitFps: [Float] = []
+    private var sdkOrbitGpuMillis: [Float] = []
     private let resourceDevice: MTLDevice?
     private var memoryWarningObserver: NSObjectProtocol?
     private var firstLoadedTime: TimeInterval?
@@ -39,6 +44,8 @@ final class SplatSession: ObservableObject {
     init() {
         let args = LaunchArgs()
         runSeconds = args.float("run-seconds").flatMap { $0.isFinite && $0 > 0 ? Double($0) : nil }
+        sdkOrbitSpeed = args.float("sdk-orbit-speed").flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        sdkOrbitDolly = args.float("sdk-orbit-dolly").flatMap { $0.isFinite ? $0 : nil }
         monitorResources = (args.bool("resource-monitor") ?? false) || runSeconds != nil
         // A test guard, not a claim about the device's Jetsam limit or total free RAM.
         let limitMiB = min(max(args.int("memory-limit-mib") ?? 2800, 256), 2800)
@@ -106,6 +113,7 @@ final class SplatSession: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.stats = self.view.readStats()
+            self.sampleSDKOrbit()
             if self.scenePrepared && !self.isIdle {
                 self.fpsHistory.append(self.stats.fps)
                 if self.fpsHistory.count > 60 { self.fpsHistory.removeFirst(self.fpsHistory.count - 60) }
@@ -118,6 +126,26 @@ final class SplatSession: ObservableObject {
     func stopPolling() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func sampleSDKOrbit() {
+        guard let started = sdkOrbitStartedAt, let speed = sdkOrbitSpeed else { return }
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        let duration = 360.0 / Double(speed)
+        if elapsed > 1 && elapsed <= duration {
+            sdkOrbitFps.append(stats.fps)
+            sdkOrbitGpuMillis.append(stats.gpuMillis)
+            NSLog("SplatSDKOrbitSample: elapsed=%.2f fps=%.2f gpuMs=%.2f drawn=%ld",
+                  elapsed, stats.fps, stats.gpuMillis, stats.drawnSplatCount)
+        }
+        if elapsed >= duration + 1 {
+            let fps = sdkOrbitFps.reduce(0, +) / Float(max(sdkOrbitFps.count, 1))
+            let gpu = sdkOrbitGpuMillis.reduce(0, +) / Float(max(sdkOrbitGpuMillis.count, 1))
+            NSLog("SplatSDKOrbitComplete: duration=%.2f samples=%ld meanFps=%.2f meanGpuMs=%.2f",
+                  duration, sdkOrbitFps.count, fps, gpu)
+            sdkOrbitStartedAt = nil
+            stopRun("orbit-complete")
+        }
     }
 
     /// Dev-only observation at 2 Hz. Rendering and LOD selection remain entirely on GPU.
@@ -153,6 +181,7 @@ final class SplatSession: ObservableObject {
         resumed = false
         orbit?.end()
         view.pause()
+        stopPolling()
         status = "paused: \(reason)"
         UIApplication.shared.isIdleTimerDisabled = false
         NSLog("SplatRunStopped: reason=%@", reason)
@@ -202,6 +231,15 @@ final class SplatSession: ObservableObject {
             if session.resumed {
                 session.orbit?.begin()
                 NSLog("SplatPreparation: interaction-ready orbit=%d", session.orbit == nil ? 0 : 1)
+            }
+            if let speed = session.sdkOrbitSpeed {
+                if let dolly = session.sdkOrbitDolly {
+                    NSLog("SplatSDKOrbit: dolly=%.2f accepted=%d", dolly,
+                          view.dolly(deltaRadius: dolly) ? 1 : 0)
+                }
+                let accepted = view.animateOrbit(degrees: 360, degreesPerSecond: speed)
+                NSLog("SplatSDKOrbit: accepted=%d degrees=360 speed=%.2f", accepted ? 1 : 0, speed)
+                if accepted { session.sdkOrbitStartedAt = ProcessInfo.processInfo.systemUptime }
             }
         }
 

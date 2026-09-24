@@ -6,6 +6,8 @@ import Foundation
 /// `--scale <f>`, `--sh <n>`, `--shdraw <n>`, `--budget <n>`, `--margin <deg>`,
 /// `--linear`, `--gyro <0|1>`, `--pose x,y,z,yaw,pitch`, `--walk <m/s>`,
 /// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png).
+/// `--sdk-orbit-speed <degrees/s>` runs one 360-degree engine orbit after the first frame;
+/// `--sdk-orbit-dolly <metres>` adjusts its radius first (negative moves closer).
 /// The default world is kitchen_500k.spz. ISS stays in Documents; use --world iss_10M.spz.
 /// ISS runs a camera shot (--shot overview|orbit|detail|flyby|tour, default orbit) with +Y up.
 /// The orbit shot circles at 135 m and 5 degrees/s from azimuth 20; --radius (at least 100),
