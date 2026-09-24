@@ -168,6 +168,8 @@ function Splat({ worldPath, colliderPath }: Props) {
   const [status, setStatus] = useState<string | null>('Loading world');
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
+  const [orbitRequested, setOrbitRequested] = useState(false);
+  const [closerRequested, setCloserRequested] = useState(false);
   // A loaded collider puts the engine in walk mode, where every pose settles onto the floor
   // and fights a scripted route. The route flies collider-free; taking control loads it.
   const [control, setControl] = useState(false);
@@ -314,6 +316,23 @@ function Splat({ worldPath, colliderPath }: Props) {
     return () => cancelAnimationFrame(frame);
   }, [flying]);
 
+  useEffect(() => {
+    if (!orbitRequested) return;
+    const target = view.current;
+    if (target) {
+      SplatKitCommands.dolly(target, -0.8);
+      SplatKitCommands.animateOrbit(target, 360, 12, false);
+    }
+    setOrbitRequested(false);
+  }, [orbitRequested]);
+
+  useEffect(() => {
+    if (!closerRequested) return;
+    const target = view.current;
+    if (target) SplatKitCommands.dolly(target, -0.3);
+    setCloserRequested(false);
+  }, [closerRequested]);
+
   // Straight to the native view, so the stick moves the camera with no React commit.
   const onStick = useCallback((forward: number, right: number) => {
     const target = view.current;
@@ -369,6 +388,24 @@ function Splat({ worldPath, colliderPath }: Props) {
             <Text style={styles.flyText}>
               {flying ? 'Stop' : 'Fly route'}
             </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setFlying(false);
+              setOrbitRequested(true);
+            }}
+            style={styles.fly}
+          >
+            <Text style={styles.flyText}>Orbit 360°</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setFlying(false);
+              setCloserRequested(true);
+            }}
+            style={styles.fly}
+          >
+            <Text style={styles.flyText}>Closer</Text>
           </Pressable>
           <Pressable
             onPress={() => {
