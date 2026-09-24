@@ -65,6 +65,10 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `loadWorld(file, maxShDegree, splatBudget, residencyBudget)` | Applies these load options on the render thread before this file's decode. |
 | `loadTiledWorld(tileset)` | Streams a tiled world from its `tileset.json` within `residencyBudget`. |
 | `cameraPose` | Read/set position in meters and yaw/pitch in radians. |
+| `lookAt(from, target, up)` | Teleport facing a target with an explicit up vector. |
+| `setAnchor`, `orbit`, `dolly` | Orbit a world point in temporary fly mode; angles are radians and distance is metres. |
+| `focus(x, y)` | Pick an anchor through normalized view coordinates against the collider; false keeps the previous anchor. |
+| `animateOrbit(degrees, degreesPerSecond, easeInOut)` | Run a finite engine-driven orbit and idle again when it finishes. |
 | `applyQuality(RenderQuality)` | Apply preset; individual properties can override it. |
 | `renderScale` | Render-target scale, 0.1–2; changing it changes image quality. |
 | `shDegree`, `maxShDegree` | Draw/load SH cap, 0–3. Set the load cap before loading. |

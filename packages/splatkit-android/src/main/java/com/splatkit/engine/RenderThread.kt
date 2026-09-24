@@ -8,6 +8,7 @@ import android.view.Choreographer
 import android.view.Surface
 import com.splatkit.CameraPose
 import com.splatkit.CharacterSettings
+import com.splatkit.WorldPoint
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
@@ -131,6 +132,24 @@ internal class RenderThread {
 
     fun setCameraPose(pose: CameraPose) = post { engine?.setCameraPose(pose) }
 
+    fun lookAt(from: WorldPoint, target: WorldPoint, up: WorldPoint) =
+        post { engine?.lookAt(from, target, up) }
+
+    fun setAnchor(point: WorldPoint) = post { engine?.setAnchor(point) }
+
+    fun orbit(deltaAzimuth: Float, deltaElevation: Float): Boolean = booleanOnRenderThread {
+        engine?.orbit(deltaAzimuth, deltaElevation) ?: false
+    }
+
+    fun dolly(deltaRadius: Float): Boolean = booleanOnRenderThread {
+        engine?.dolly(deltaRadius) ?: false
+    }
+
+    fun focus(x: Float, y: Float): Boolean = booleanOnRenderThread { engine?.focus(x, y) ?: false }
+
+    fun animateOrbit(degrees: Float, degreesPerSecond: Float, easeInOut: Boolean): Boolean =
+        booleanOnRenderThread { engine?.animateOrbit(degrees, degreesPerSecond, easeInOut) ?: false }
+
     /** The pose as of the last frame, or null before the engine exists. Any thread. */
     fun cameraPose(): CameraPose? = engine?.cameraPose()
 
@@ -214,6 +233,12 @@ internal class RenderThread {
         if (!done.await(5, TimeUnit.SECONDS)) {
             Log.e(TAG, "render thread did not respond within 5 s")
         }
+    }
+
+    private fun booleanOnRenderThread(block: () -> Boolean): Boolean {
+        var result = false
+        runBlockingOnThread { result = block() }
+        return result
     }
 
     private companion object {

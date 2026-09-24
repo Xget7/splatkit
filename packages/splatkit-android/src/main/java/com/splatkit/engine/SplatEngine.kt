@@ -7,6 +7,7 @@ import com.splatkit.CharacterSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
 import com.splatkit.SplatStats
+import com.splatkit.WorldPoint
 import com.splatkit.SPLAT_STATS_FLOATS
 import com.splatkit.CAPABILITY_FIELDS
 import com.splatkit.RENDER_POLICY_FIELDS
@@ -90,6 +91,17 @@ internal class SplatEngine {
 
     fun setCameraPose(pose: CameraPose) =
         nativeSetCameraPose(handle, pose.x, pose.y, pose.z, pose.yaw, pose.pitch)
+
+    fun lookAt(from: WorldPoint, target: WorldPoint, up: WorldPoint) = nativeSetCameraLookAt(
+        handle, from.x, from.y, from.z, target.x, target.y, target.z, up.x, up.y, up.z)
+
+    fun setAnchor(point: WorldPoint) = nativeSetAnchor(handle, point.x, point.y, point.z)
+    fun orbit(deltaAzimuth: Float, deltaElevation: Float): Boolean =
+        nativeOrbit(handle, deltaAzimuth, deltaElevation)
+    fun dolly(deltaRadius: Float): Boolean = nativeDolly(handle, deltaRadius)
+    fun focus(x: Float, y: Float): Boolean = nativeFocus(handle, x, y)
+    fun animateOrbit(degrees: Float, degreesPerSecond: Float, easeInOut: Boolean): Boolean =
+        nativeStartOrbitAnimation(handle, degrees, degreesPerSecond, easeInOut)
 
     /** The pose as of the last frame, or null once destroyed. Any thread. */
     fun cameraPose(): CameraPose? = synchronized(this) {
@@ -186,6 +198,28 @@ internal class SplatEngine {
     private external fun nativeLoadTiledWorldFile(handle: Long, path: String)
     private external fun nativeLoadColliderFile(handle: Long, path: String)
     private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
+    private external fun nativeSetCameraLookAt(
+        handle: Long,
+        fromX: Float,
+        fromY: Float,
+        fromZ: Float,
+        targetX: Float,
+        targetY: Float,
+        targetZ: Float,
+        upX: Float,
+        upY: Float,
+        upZ: Float,
+    )
+    private external fun nativeSetAnchor(handle: Long, x: Float, y: Float, z: Float)
+    private external fun nativeOrbit(handle: Long, deltaAzimuth: Float, deltaElevation: Float): Boolean
+    private external fun nativeDolly(handle: Long, deltaRadius: Float): Boolean
+    private external fun nativeFocus(handle: Long, x: Float, y: Float): Boolean
+    private external fun nativeStartOrbitAnimation(
+        handle: Long,
+        degrees: Float,
+        degreesPerSecond: Float,
+        easeInOut: Boolean,
+    ): Boolean
     /** Fills [out] (at least [POSE_FLOATS]) with x, y, z, yaw, pitch. */
     private external fun nativeCameraPose(handle: Long, out: FloatArray)
     private external fun nativeSetCharacter(

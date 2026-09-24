@@ -57,7 +57,8 @@ Host callbacks may remain display-paced even when presentation vsync is disabled
 | Native LOD, visibility, radix, indirect draw | Implemented | Implemented |
 | Source and completed draw counts | Public stats | Public stats |
 | First successful GPU world-frame callback | Public delegate | Public `onWorldFrameReady` listener |
-| Scripted look-at with explicit up vector | Public API | Shared engine only |
+| Scripted look-at with explicit up vector | Public API | Public API |
+| Orbit: anchor, dolly, focus, animated turn | Public API; scripted 360 on a physical iPhone | Public API |
 | PNG capture | Public API | No SDK capture API |
 | Quality presets | Individual properties | `RenderQuality` presets |
 | Experimental hybrid screen tiles | Implemented | Missing |

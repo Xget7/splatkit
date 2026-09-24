@@ -203,6 +203,44 @@ SPLATKIT_JNI(void, nativeSetCameraPose)
   if (auto* engine = toEngine(handle)) engine->setCameraPose({x, y, z, yaw, pitch});
 }
 
+SPLATKIT_JNI(void, nativeSetCameraLookAt)
+(JNIEnv*, jobject, jlong handle, jfloat fromX, jfloat fromY, jfloat fromZ, jfloat targetX,
+ jfloat targetY, jfloat targetZ, jfloat upX, jfloat upY, jfloat upZ) {
+  if (auto* engine = toEngine(handle)) {
+    engine->setCameraLookAt({fromX, fromY, fromZ}, {targetX, targetY, targetZ}, {upX, upY, upZ});
+  }
+}
+
+SPLATKIT_JNI(void, nativeSetAnchor)
+(JNIEnv*, jobject, jlong handle, jfloat x, jfloat y, jfloat z) {
+  if (auto* engine = toEngine(handle)) engine->setCameraAnchor({x, y, z});
+}
+
+SPLATKIT_JNI(jboolean, nativeOrbit)
+(JNIEnv*, jobject, jlong handle, jfloat deltaAzimuth, jfloat deltaElevation) {
+  auto* engine = toEngine(handle);
+  return engine != nullptr && engine->orbit(deltaAzimuth, deltaElevation) ? JNI_TRUE : JNI_FALSE;
+}
+
+SPLATKIT_JNI(jboolean, nativeDolly)(JNIEnv*, jobject, jlong handle, jfloat deltaRadius) {
+  auto* engine = toEngine(handle);
+  return engine != nullptr && engine->dolly(deltaRadius) ? JNI_TRUE : JNI_FALSE;
+}
+
+SPLATKIT_JNI(jboolean, nativeFocus)(JNIEnv*, jobject, jlong handle, jfloat x, jfloat y) {
+  auto* engine = toEngine(handle);
+  return engine != nullptr && engine->focus(x, y) ? JNI_TRUE : JNI_FALSE;
+}
+
+SPLATKIT_JNI(jboolean, nativeStartOrbitAnimation)
+(JNIEnv*, jobject, jlong handle, jfloat degrees, jfloat degreesPerSecond, jboolean easeInOut) {
+  auto* engine = toEngine(handle);
+  return engine != nullptr &&
+                 engine->startOrbitAnimation(degrees, degreesPerSecond, easeInOut == JNI_TRUE)
+             ? JNI_TRUE
+             : JNI_FALSE;
+}
+
 // Fills out[0..4]: x, y, z, yaw, pitch.
 SPLATKIT_JNI(void, nativeCameraPose)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);

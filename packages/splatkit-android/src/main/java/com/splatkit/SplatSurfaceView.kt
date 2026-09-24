@@ -163,6 +163,36 @@ class SplatSurfaceView @JvmOverloads constructor(
         get() = renderThread.cameraPose() ?: CameraPose(0f, 0f, 0f)
         set(value) = renderThread.setCameraPose(value)
 
+    /** Teleports to [from] and faces [target], keeping [up] at the top of the view. */
+    fun lookAt(from: WorldPoint, target: WorldPoint, up: WorldPoint) =
+        renderThread.lookAt(from, target, up)
+
+    /** Starts orbiting [point] from the current camera pose. Orbit is a temporary fly mode. */
+    fun setAnchor(point: WorldPoint) = renderThread.setAnchor(point)
+
+    /** Orbits around the anchor by radians. False until an anchor is available. */
+    fun orbit(deltaAzimuth: Float, deltaElevation: Float): Boolean =
+        renderThread.orbit(deltaAzimuth, deltaElevation)
+
+    /** Changes the orbit radius in metres. Positive values move away from the anchor. */
+    fun dolly(deltaRadius: Float): Boolean = renderThread.dolly(deltaRadius)
+
+    /**
+     * Picks an anchor through normalized view coordinates. A miss returns false and keeps
+     * the current anchor. A collider must be loaded.
+     */
+    fun focus(x: Float, y: Float): Boolean = renderThread.focus(x, y)
+
+    /**
+     * Runs a finite azimuth turn in degrees at the average degrees per second. The engine
+     * keeps drawing while it moves and idles when it finishes.
+     */
+    fun animateOrbit(
+        degrees: Float,
+        degreesPerSecond: Float,
+        easeInOut: Boolean = false,
+    ): Boolean = renderThread.animateOrbit(degrees, degreesPerSecond, easeInOut)
+
     /**
      * Applies a [RenderQuality] preset by setting [renderScale], [shDegree],
      * [splatBudget], [linearBlending] and [cullMarginDegrees] from it. Set any of them
