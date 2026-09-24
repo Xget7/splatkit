@@ -16,6 +16,7 @@ import com.splatkit.CharacterSettings
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
 import com.splatkit.SplatSurfaceView
+import com.splatkit.WorldPoint
 import java.io.File
 
 internal class SplatKitEvent(surfaceId: Int, tag: Int, private val name: String, private val data: WritableMap) :
@@ -119,6 +120,49 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     fun teleport(x: Double, y: Double, z: Double, yaw: Double, pitch: Double) {
         nativeView?.cameraPose =
             CameraPose(x.toFloat(), y.toFloat(), z.toFloat(), yaw.toFloat(), pitch.toFloat())
+    }
+
+    private fun finite(vararg values: Double) = values.all { it.isFinite() && it.toFloat().isFinite() }
+
+    fun lookAt(
+        x: Double, y: Double, z: Double,
+        targetX: Double, targetY: Double, targetZ: Double,
+        upX: Double, upY: Double, upZ: Double,
+    ) {
+        if (!finite(x, y, z, targetX, targetY, targetZ, upX, upY, upZ)) return
+        nativeView?.lookAt(
+            WorldPoint(x.toFloat(), y.toFloat(), z.toFloat()),
+            WorldPoint(targetX.toFloat(), targetY.toFloat(), targetZ.toFloat()),
+            WorldPoint(upX.toFloat(), upY.toFloat(), upZ.toFloat()),
+        )
+    }
+
+    fun setAnchor(x: Double, y: Double, z: Double) {
+        if (finite(x, y, z)) nativeView?.setAnchor(WorldPoint(x.toFloat(), y.toFloat(), z.toFloat()))
+    }
+
+    fun orbit(deltaAzimuth: Double, deltaElevation: Double) {
+        if (finite(deltaAzimuth, deltaElevation)) {
+            nativeView?.orbit(deltaAzimuth.toFloat(), deltaElevation.toFloat())
+        }
+    }
+
+    fun dolly(deltaRadius: Double) {
+        if (finite(deltaRadius)) nativeView?.dolly(deltaRadius.toFloat())
+    }
+
+    fun focus(requestId: String, x: Double, y: Double) {
+        val hit = finite(x, y) && (nativeView?.focus(x.toFloat(), y.toFloat()) == true)
+        emit("topFocusResult", Arguments.createMap().apply {
+            putString("requestId", requestId)
+            putBoolean("hit", hit)
+        })
+    }
+
+    fun animateOrbit(degrees: Double, degreesPerSecond: Double, easeInOut: Boolean) {
+        if (finite(degrees, degreesPerSecond)) {
+            nativeView?.animateOrbit(degrees.toFloat(), degreesPerSecond.toFloat(), easeInOut)
+        }
     }
 
     fun setPaused(value: Boolean) { paused = value; updateRunning() }

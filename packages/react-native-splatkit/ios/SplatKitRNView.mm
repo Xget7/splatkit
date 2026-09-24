@@ -3,6 +3,7 @@
 #import <QuartzCore/CADisplayLink.h>
 
 #include <atomic>
+#include <cmath>
 
 /// Stable failure codes shared with the Android adapter, so hosts can branch on them.
 static NSString *const kErrorInvalidRequest = @"INVALID_REQUEST";
@@ -145,6 +146,41 @@ static const CGFloat kLookSensitivity = 0.004;
 
 - (void)setPose:(SKCameraPose)pose {
   _engine.cameraPose = pose;
+}
+
+- (void)lookAtFrom:(SKVec3)position target:(SKVec3)target up:(SKVec3)up {
+  if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
+      !std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z) ||
+      !std::isfinite(up.x) || !std::isfinite(up.y) || !std::isfinite(up.z)) return;
+  [_engine lookAtFrom:position target:target up:up];
+}
+
+- (void)setAnchor:(SKVec3)point {
+  if (std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z)) {
+    [_engine setAnchor:point];
+  }
+}
+
+- (void)orbitWithDeltaAzimuth:(float)deltaAzimuth deltaElevation:(float)deltaElevation {
+  if (std::isfinite(deltaAzimuth) && std::isfinite(deltaElevation)) {
+    [_engine orbitWithDeltaAzimuth:deltaAzimuth deltaElevation:deltaElevation];
+  }
+}
+
+- (void)dolly:(float)deltaRadius {
+  if (std::isfinite(deltaRadius)) [_engine dolly:deltaRadius];
+}
+
+- (void)focusRequestId:(NSString *)requestId x:(float)x y:(float)y {
+  const BOOL hit = std::isfinite(x) && std::isfinite(y) && [_engine focusX:x y:y];
+  if (self.focusResultEvent != nil) self.focusResultEvent(@{@"requestId": requestId, @"hit": @(hit)});
+}
+
+- (void)animateOrbitDegrees:(float)degrees degreesPerSecond:(float)degreesPerSecond
+              easeInOut:(BOOL)easeInOut {
+  if (std::isfinite(degrees) && std::isfinite(degreesPerSecond)) {
+    [_engine startOrbitAnimationDegrees:degrees degreesPerSecond:degreesPerSecond easeInOut:easeInOut];
+  }
 }
 
 - (BOOL)setCharacter:(SKCharacterSettings)character {

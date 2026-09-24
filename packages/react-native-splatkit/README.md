@@ -333,6 +333,7 @@ Extends the standard `ViewProps`.
 | `onColliderEvent` | `{requestId, phase: ColliderPhase, errorCode, message}`. |
 | `onStats` | `{requestId, loadedSplats, drawnSplats, frameMillis, gpuMillis, sortMillis}` with a `*TimingAvailable` flag beside each timing. Throttled to 2 Hz. |
 | `onCameraPose` | `{x, y, z, yaw, pitch}` in the world's frame, throttled to `cameraPoseInterval` and sent only when the pose changed. |
+| `onFocusResult` | `{requestId, hit}` for each `focus` command. A miss keeps the previous anchor. |
 | `onPolicyEvent` | `{revision, phase: PolicyPhase, errorCode, message}` plus every effective policy field. |
 | `onCapabilities` | The adapter's limits, GPU feature support and applied policy fields. Once per engine. |
 
@@ -347,6 +348,16 @@ Each takes the view ref first and returns nothing.
 | `setWalkVelocity` | `(ref, forward, right)` | Meters per second, held until called again. Forward is where the camera looks. Needs walk mode ready. |
 | `look` | `(ref, deltaYaw, deltaPitch)` | Radians. Pitch is clamped, and this is ignored while the gyroscope drives the view. |
 | `setCameraPose` | `(ref, x, y, z, yaw, pitch)` | Teleports. While walking, the camera settles onto the floor under the new point. |
+| `lookAt` | `(ref, x, y, z, targetX, targetY, targetZ, upX, upY, upZ)` | Points the camera from a world-space position at a target. |
+| `setAnchor` | `(ref, x, y, z)` | Sets a world-space orbit center from the current camera position. |
+| `orbit` | `(ref, deltaAzimuth, deltaElevation)` | Turns around the anchor in radians. |
+| `dolly` | `(ref, deltaRadius)` | Changes orbit radius in meters; positive moves away. |
+| `focus` | `(ref, requestId, x, y)` | Picks an anchor at view coordinates in `[0, 1]` against a loaded collider and reports `onFocusResult`. |
+| `animateOrbit` | `(ref, degrees, degreesPerSecond, easeInOut)` | Starts a finite turn around the anchor. |
+
+Loading a world sets a default anchor from its bounds; `setAnchor` or a successful `focus` replaces it.
+Orbit takes temporary control of the camera from walk mode; walking input resumes it.
+The view returns no command values, so use `onFocusResult` to distinguish a focus hit from a miss.
 
 ### Constants
 

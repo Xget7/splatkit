@@ -63,6 +63,21 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
     override fun setCameraPose(
         view: SplatKitView, x: Double, y: Double, z: Double, yaw: Double, pitch: Double,
     ) = view.teleport(x, y, z, yaw, pitch)
+    override fun lookAt(
+        view: SplatKitView, x: Double, y: Double, z: Double,
+        targetX: Double, targetY: Double, targetZ: Double,
+        upX: Double, upY: Double, upZ: Double,
+    ) = view.lookAt(x, y, z, targetX, targetY, targetZ, upX, upY, upZ)
+    override fun setAnchor(view: SplatKitView, x: Double, y: Double, z: Double) =
+        view.setAnchor(x, y, z)
+    override fun orbit(view: SplatKitView, deltaAzimuth: Double, deltaElevation: Double) =
+        view.orbit(deltaAzimuth, deltaElevation)
+    override fun dolly(view: SplatKitView, deltaRadius: Double) = view.dolly(deltaRadius)
+    override fun focus(view: SplatKitView, requestId: String, x: Double, y: Double) =
+        view.focus(requestId, x, y)
+    override fun animateOrbit(
+        view: SplatKitView, degrees: Double, degreesPerSecond: Double, easeInOut: Boolean,
+    ) = view.animateOrbit(degrees, degreesPerSecond, easeInOut)
     override fun setPolicy(view: SplatKitView, value: ReadableMap?) {
         if (value == null) { view.setPolicy(null); return }
         try {
@@ -84,6 +99,7 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
         "topCapabilities" to mapOf("registrationName" to "onCapabilities"),
         "topColliderEvent" to mapOf("registrationName" to "onColliderEvent"),
         "topCameraPose" to mapOf("registrationName" to "onCameraPose"),
+        "topFocusResult" to mapOf("registrationName" to "onFocusResult"),
     )
     override fun onDropViewInstance(view: SplatKitView) { view.dispose(); super.onDropViewInstance(view) }
 }

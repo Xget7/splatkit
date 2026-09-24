@@ -29,6 +29,7 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock capabilitiesEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock colliderEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraPoseEvent;
+@property(nonatomic, copy, nullable) SplatKitRNEventBlock focusResultEvent;
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId maxShDegree:(NSInteger)maxShDegree
  lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity;
 /// Loads a collider GLB and enables walk mode when it is ready. An empty path releases it.
@@ -39,6 +40,13 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 - (void)setWalkVelocityForward:(float)forward right:(float)right;
 - (void)lookWithDeltaYaw:(float)deltaYaw deltaPitch:(float)deltaPitch;
 - (void)setPose:(SKCameraPose)pose;
+- (void)lookAtFrom:(SKVec3)position target:(SKVec3)target up:(SKVec3)up;
+- (void)setAnchor:(SKVec3)point;
+- (void)orbitWithDeltaAzimuth:(float)deltaAzimuth deltaElevation:(float)deltaElevation;
+- (void)dolly:(float)deltaRadius;
+- (void)focusRequestId:(NSString *)requestId x:(float)x y:(float)y;
+- (void)animateOrbitDegrees:(float)degrees degreesPerSecond:(float)degreesPerSecond
+              easeInOut:(BOOL)easeInOut;
 /// Remembers the host policy without applying it; a revision of 0 or less forgets it. Every
 /// engine a later `loadWorld:` creates applies the remembered policy before decoding.
 - (void)setPolicy:(SKRenderPolicy)policy revision:(NSInteger)revision;

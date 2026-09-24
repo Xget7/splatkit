@@ -104,6 +104,13 @@ using namespace facebook::react;
     value.pitch = [event[@"pitch"] doubleValue];
     emitter->onCameraPose(value);
   };
+  _splatView.focusResultEvent = ^(NSDictionary *event) {
+    if (!emitter) return;
+    SplatKitViewEventEmitter::OnFocusResult value;
+    value.requestId = [event[@"requestId"] UTF8String];
+    value.hit = [event[@"hit"] boolValue];
+    emitter->onFocusResult(value);
+  };
   _splatView.capabilitiesEvent = ^(NSDictionary *event) {
     if (!emitter) return;
     SplatKitViewEventEmitter::OnCapabilities value;
@@ -213,6 +220,23 @@ using namespace facebook::react;
     pose.x = [args[0] floatValue]; pose.y = [args[1] floatValue]; pose.z = [args[2] floatValue];
     pose.yaw = [args[3] floatValue]; pose.pitch = [args[4] floatValue];
     [_splatView setPose:pose];
+  } else if ([commandName isEqualToString:@"lookAt"] && args.count == 9) {
+    SKVec3 position = {[args[0] floatValue], [args[1] floatValue], [args[2] floatValue]};
+    SKVec3 target = {[args[3] floatValue], [args[4] floatValue], [args[5] floatValue]};
+    SKVec3 up = {[args[6] floatValue], [args[7] floatValue], [args[8] floatValue]};
+    [_splatView lookAtFrom:position target:target up:up];
+  } else if ([commandName isEqualToString:@"setAnchor"] && args.count == 3) {
+    SKVec3 point = {[args[0] floatValue], [args[1] floatValue], [args[2] floatValue]};
+    [_splatView setAnchor:point];
+  } else if ([commandName isEqualToString:@"orbit"] && args.count == 2) {
+    [_splatView orbitWithDeltaAzimuth:[args[0] floatValue] deltaElevation:[args[1] floatValue]];
+  } else if ([commandName isEqualToString:@"dolly"] && args.count == 1) {
+    [_splatView dolly:[args[0] floatValue]];
+  } else if ([commandName isEqualToString:@"focus"] && args.count == 3) {
+    [_splatView focusRequestId:args[0] x:[args[1] floatValue] y:[args[2] floatValue]];
+  } else if ([commandName isEqualToString:@"animateOrbit"] && args.count == 3) {
+    [_splatView animateOrbitDegrees:[args[0] floatValue] degreesPerSecond:[args[1] floatValue]
+                        easeInOut:[args[2] boolValue]];
   }
 }
 
@@ -227,6 +251,7 @@ using namespace facebook::react;
   _splatView.capabilitiesEvent = nil;
   _splatView.colliderEvent = nil;
   _splatView.cameraPoseEvent = nil;
+  _splatView.focusResultEvent = nil;
   // A recycled view serves another component next; keep no engine, world or policy.
   [_splatView recycle];
 }
@@ -237,6 +262,7 @@ using namespace facebook::react;
   _splatView.capabilitiesEvent = nil;
   _splatView.colliderEvent = nil;
   _splatView.cameraPoseEvent = nil;
+  _splatView.focusResultEvent = nil;
   [_splatView dispose];
   [super invalidate];
 }

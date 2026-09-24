@@ -23,9 +23,10 @@ assert.deepEqual(spec.props.map(prop => prop.name).sort(),
     'lookSensitivity', 'motionEnabled', 'paused', 'policy', 'renderScale', 'shDegree',
     'touchLookEnabled', 'world']);
 assert.deepEqual(spec.events.map(event => event.name).sort(),
-  ['onCameraPose', 'onCapabilities', 'onColliderEvent', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
+  ['onCameraPose', 'onCapabilities', 'onColliderEvent', 'onFocusResult', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
 assert.deepEqual(spec.commands.map(command => command.name).sort(),
-  ['look', 'setCameraPose', 'setWalkVelocity']);
+  ['animateOrbit', 'dolly', 'focus', 'look', 'lookAt', 'orbit', 'setAnchor',
+    'setCameraPose', 'setWalkVelocity']);
 assert.deepEqual(spec.commands.find(command => command.name === 'setWalkVelocity')
   .typeAnnotation.params.map(param => [param.name, param.typeAnnotation.type]),
   [['forward', 'DoubleTypeAnnotation'], ['right', 'DoubleTypeAnnotation']]);
@@ -36,6 +37,8 @@ assert.deepEqual(character.map(prop => prop.name).sort(),
   ['bodyRadius', 'eyeHeight', 'stepHeight']);
 const pose = spec.events.find(event => event.name === 'onCameraPose').typeAnnotation.argument.properties;
 assert.deepEqual(pose.map(prop => prop.name).sort(), ['pitch', 'x', 'y', 'yaw', 'z']);
+const focus = spec.events.find(event => event.name === 'onFocusResult').typeAnnotation.argument.properties;
+assert.deepEqual(focus.map(prop => prop.name).sort(), ['hit', 'requestId']);
 const world = spec.props.find(prop => prop.name === 'world').typeAnnotation.properties;
 assert.deepEqual(world.map(prop => prop.name).sort(),
   ['filePath', 'lodCapacitySplats', 'maxShDegree', 'requestId', 'residencyCapacitySplats']);

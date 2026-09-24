@@ -41,6 +41,11 @@ type NativeCameraPoseEvent = Readonly<{
   pitch: CodegenTypes.Double;
 }>;
 
+type NativeFocusResult = Readonly<{
+  requestId: string;
+  hit: boolean;
+}>;
+
 type NativeWorldEvent = Readonly<{
   requestId: string;
   phase: 'uploaded' | 'frameReady' | 'failed';
@@ -152,6 +157,8 @@ export interface NativeProps extends ViewProps {
   onColliderEvent?: CodegenTypes.DirectEventHandler<NativeColliderEvent>;
   /** Throttled to cameraPoseInterval, and sent only when the pose changed. */
   onCameraPose?: CodegenTypes.DirectEventHandler<NativeCameraPoseEvent>;
+  /** One result per focus command; a miss leaves the current anchor unchanged. */
+  onFocusResult?: CodegenTypes.DirectEventHandler<NativeFocusResult>;
   onPolicyEvent?: CodegenTypes.DirectEventHandler<NativePolicyEvent>;
   /** Emitted once per engine, which each world load creates, before its first policy event. */
   onCapabilities?: CodegenTypes.DirectEventHandler<NativeCapabilitiesEvent>;
@@ -185,10 +192,40 @@ export interface NativeCommands {
     yaw: CodegenTypes.Double,
     pitch: CodegenTypes.Double,
   ) => void;
+  /** World-space position, target and up vector. */
+  lookAt: (
+    viewRef: React.ComponentRef<ComponentType>,
+    x: CodegenTypes.Double, y: CodegenTypes.Double, z: CodegenTypes.Double,
+    targetX: CodegenTypes.Double, targetY: CodegenTypes.Double, targetZ: CodegenTypes.Double,
+    upX: CodegenTypes.Double, upY: CodegenTypes.Double, upZ: CodegenTypes.Double,
+  ) => void;
+  /** Start orbiting a world-space point from the current camera position. */
+  setAnchor: (
+    viewRef: React.ComponentRef<ComponentType>,
+    x: CodegenTypes.Double, y: CodegenTypes.Double, z: CodegenTypes.Double,
+  ) => void;
+  /** Orbit by radians; an anchor must first be set or focused. */
+  orbit: (
+    viewRef: React.ComponentRef<ComponentType>,
+    deltaAzimuth: CodegenTypes.Double, deltaElevation: CodegenTypes.Double,
+  ) => void;
+  /** Change orbit radius in meters; positive moves away from the anchor. */
+  dolly: (viewRef: React.ComponentRef<ComponentType>, deltaRadius: CodegenTypes.Double) => void;
+  /** Pick an anchor using normalized view coordinates; result arrives in onFocusResult. */
+  focus: (
+    viewRef: React.ComponentRef<ComponentType>,
+    requestId: string, x: CodegenTypes.Double, y: CodegenTypes.Double,
+  ) => void;
+  /** Turn a finite number of degrees at the average speed in degrees per second. */
+  animateOrbit: (
+    viewRef: React.ComponentRef<ComponentType>,
+    degrees: CodegenTypes.Double, degreesPerSecond: CodegenTypes.Double, easeInOut: boolean,
+  ) => void;
 }
 
 export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
-  supportedCommands: ['setWalkVelocity', 'look', 'setCameraPose'],
+  supportedCommands: ['setWalkVelocity', 'look', 'setCameraPose', 'lookAt', 'setAnchor',
+    'orbit', 'dolly', 'focus', 'animateOrbit'],
 });
 
 export default codegenNativeComponent<NativeProps>('SplatKitView') as ComponentType;
