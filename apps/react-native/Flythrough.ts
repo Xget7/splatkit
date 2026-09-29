@@ -66,10 +66,15 @@ function distance(a: Waypoint, b: Waypoint): number {
 }
 
 /** Cumulative arc length at each waypoint, so the camera moves at a constant speed. */
-const lengths: readonly number[] = ROUTE.reduce<number[]>((all, point, index) => {
-  all.push(index === 0 ? 0 : all[index - 1] + distance(ROUTE[index - 1], point));
-  return all;
-}, []);
+const lengths: readonly number[] = ROUTE.reduce<number[]>(
+  (all, point, index) => {
+    all.push(
+      index === 0 ? 0 : all[index - 1] + distance(ROUTE[index - 1], point),
+    );
+    return all;
+  },
+  [],
+);
 
 export const ROUTE_LENGTH = lengths[lengths.length - 1];
 
@@ -80,19 +85,37 @@ export const ROUTE_SECONDS = ROUTE_LENGTH / FLY_SPEED + EASE_SECONDS * 2;
  * Catmull-Rom keeps the path smooth through the waypoints rather than cornering at each
  * one, which is what a hand-flown camera looks like and what a benchmark should sample.
  */
-function spline(a: Waypoint, b: Waypoint, c: Waypoint, d: Waypoint, t: number): Waypoint {
+function spline(
+  a: Waypoint,
+  b: Waypoint,
+  c: Waypoint,
+  d: Waypoint,
+  t: number,
+): Waypoint {
+  'worklet';
   const t2 = t * t;
   const t3 = t2 * t;
-  const axis = (p: Waypoint, q: Waypoint, r: Waypoint, s: Waypoint, key: keyof Waypoint) =>
+  const axis = (
+    p: Waypoint,
+    q: Waypoint,
+    r: Waypoint,
+    s: Waypoint,
+    key: keyof Waypoint,
+  ) =>
     0.5 *
     (2 * q[key] +
       (-p[key] + r[key]) * t +
       (2 * p[key] - 5 * q[key] + 4 * r[key] - s[key]) * t2 +
       (-p[key] + 3 * q[key] - 3 * r[key] + s[key]) * t3);
-  return { x: axis(a, b, c, d, 'x'), y: axis(a, b, c, d, 'y'), z: axis(a, b, c, d, 'z') };
+  return {
+    x: axis(a, b, c, d, 'x'),
+    y: axis(a, b, c, d, 'y'),
+    z: axis(a, b, c, d, 'z'),
+  };
 }
 
 function at(travelled: number): Waypoint {
+  'worklet';
   const clamped = Math.max(0, Math.min(ROUTE_LENGTH, travelled));
   let segment = 0;
   while (segment < lengths.length - 2 && lengths[segment + 1] < clamped) {
@@ -100,11 +123,19 @@ function at(travelled: number): Waypoint {
   }
   const span = lengths[segment + 1] - lengths[segment];
   const t = span > 0 ? (clamped - lengths[segment]) / span : 0;
-  const index = (i: number) => ROUTE[Math.max(0, Math.min(ROUTE.length - 1, i))];
-  return spline(index(segment - 1), index(segment), index(segment + 1), index(segment + 2), t);
+  const index = (i: number) =>
+    ROUTE[Math.max(0, Math.min(ROUTE.length - 1, i))];
+  return spline(
+    index(segment - 1),
+    index(segment),
+    index(segment + 1),
+    index(segment + 2),
+    t,
+  );
 }
 
 function heading(travelled: number): { yaw: number; pitch: number } {
+  'worklet';
   // A central difference, so the ends of the route still have a heading: one side clamps
   // to the endpoint and the other supplies the direction.
   const ahead = at(travelled + HEADING_SPAN);
@@ -113,10 +144,14 @@ function heading(travelled: number): { yaw: number; pitch: number } {
   const dy = ahead.y - behind.y;
   const dz = ahead.z - behind.z;
   const flat = Math.hypot(dx, dz);
-  return { yaw: Math.atan2(dx, dz), pitch: flat > 0 ? Math.atan2(dy, flat) : 0 };
+  return {
+    yaw: Math.atan2(dx, dz),
+    pitch: flat > 0 ? Math.atan2(dy, flat) : 0,
+  };
 }
 
 function smoothstep(t: number): number {
+  'worklet';
   const u = Math.max(0, Math.min(1, t));
   return u * u * (3 - 2 * u);
 }
@@ -128,6 +163,7 @@ function smoothstep(t: number): number {
  * is a look around the room rather than a cut.
  */
 export function poseAt(seconds: number): Pose {
+  'worklet';
   const period = ROUTE_SECONDS * 2;
   const phase = ((seconds % period) + period) % period;
   const forward = phase < ROUTE_SECONDS;

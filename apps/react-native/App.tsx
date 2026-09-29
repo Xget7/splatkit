@@ -23,6 +23,8 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import {
+  CameraMode,
+  CameraPhase,
   ColliderPhase,
   PolicyPhase,
   QualityPreset,
@@ -34,12 +36,22 @@ import {
   conservativeCapabilities,
   nativeCapabilitiesFromEvent,
   optionalTimingMillis,
+  toNativeCameraProp,
   toNativePolicyProp,
   toNativeViewProps,
 } from '@splatkit/react-native';
+import Animated, {
+  dispatchCommand,
+  useAnimatedRef,
+  useFrameCallback,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Hud, { GRAPH_SAMPLES, RenderSettings, RenderStats } from './Hud';
 import Joystick from './Joystick';
 import { ROUTE_SECONDS, poseAt } from './Flythrough';
+
+const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
 
 type EventOf<
   K extends
@@ -47,7 +59,8 @@ type EventOf<
     | 'onWorldEvent'
     | 'onStats'
     | 'onPolicyEvent'
-    | 'onColliderEvent',
+    | 'onColliderEvent'
+    | 'onCameraEvent',
 > = Parameters<NonNullable<SplatKitViewProps[K]>>[0];
 
 /** The first policy revision; each capabilities report and preset change takes the next. */
@@ -157,7 +170,7 @@ function App(props: Props) {
 
 function Splat({ worldPath, colliderPath }: Props) {
   const insets = useSafeAreaInsets();
-  const view = useRef<React.ComponentRef<typeof SplatKitView>>(null);
+  const view = useAnimatedRef<React.ComponentRef<typeof SplatKitView>>();
   // Every new configuration needs a new policy revision. The engine reports its own limits in onCapabilities, which only arrive once it exists:
   // the first world request is built against the limits every adapter accepts.
   const [capabilities, setCapabilities] = useState({
@@ -168,7 +181,8 @@ function Splat({ worldPath, colliderPath }: Props) {
   const [status, setStatus] = useState<string | null>('Loading world');
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
-  const [orbitRequested, setOrbitRequested] = useState(false);
+  const [camera, setCamera] = useState<SplatKitViewProps['camera']>();
+  const cameraRevision = useRef(0);
   const [closerRequested, setCloserRequested] = useState(false);
   // A loaded collider puts the engine in walk mode, where every pose settles onto the floor
   // and fights a scripted route. The route flies collider-free; taking control loads it.
@@ -250,7 +264,8 @@ function Splat({ worldPath, colliderPath }: Props) {
   const onColliderEvent = useCallback((event: EventOf<'onColliderEvent'>) => {
     const { phase, message } = event.nativeEvent;
     setWalking(phase === ColliderPhase.ready);
-    if (phase === ColliderPhase.failed) setStatus(`Collider failed: ${message}`);
+    if (phase === ColliderPhase.failed)
+      setStatus(`Collider failed: ${message}`);
   }, []);
 
   const onStats = useCallback((event: EventOf<'onStats'>) => {
@@ -286,71 +301,78 @@ function Splat({ worldPath, colliderPath }: Props) {
       console.warn(`SplatKit policy rejected: ${message}`);
   }, []);
 
-  // The route is driven straight from a frame callback: no React state per frame, so the
-  // measurement reflects the renderer rather than the bridge. Any touch hands control back.
-  useEffect(() => {
-    if (!flying) return undefined;
-    let frame = 0;
-    const started = Date.now();
-    const step = () => {
-      const target = view.current;
-      const elapsed = (Date.now() - started) / MILLIS_PER_SECOND;
-      if (elapsed >= FLIGHT_SECONDS) {
-        setFlying(false);
-        return;
-      }
-      if (target) {
-        const pose = poseAt(elapsed);
-        SplatKitCommands.setCameraPose(
-          target,
-          pose.x,
-          pose.y,
-          pose.z,
-          pose.yaw,
-          pose.pitch,
-        );
-      }
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [flying]);
+  const flightRunning = useSharedValue(false);
+  const flightStarted = useSharedValue(-1);
+  const finishFlight = useCallback(() => setFlying(false), []);
+  const flightFrame = useFrameCallback(({ timestamp }) => {
+    if (!flightRunning.value) return;
+    if (flightStarted.value < 0) flightStarted.value = timestamp;
+    const elapsed = (timestamp - flightStarted.value) / MILLIS_PER_SECOND;
+    const pose = poseAt(Math.min(elapsed, FLIGHT_SECONDS));
+    dispatchCommand(view, 'setCameraPose', [
+      pose.x,
+      pose.y,
+      pose.z,
+      pose.yaw,
+      pose.pitch,
+    ]);
+    if (elapsed >= FLIGHT_SECONDS) {
+      flightRunning.value = false;
+      scheduleOnRN(finishFlight);
+    }
+  }, false);
 
   useEffect(() => {
-    if (!orbitRequested) return;
-    const target = view.current;
-    if (target) {
-      SplatKitCommands.dolly(target, -0.8);
-      SplatKitCommands.animateOrbit(target, 360, 12, false);
+    flightStarted.value = -1;
+    flightRunning.value = flying;
+    flightFrame.setActive(flying);
+    return () => {
+      flightRunning.value = false;
+      flightFrame.setActive(false);
+    };
+  }, [flying, flightFrame, flightRunning, flightStarted]);
+
+  useEffect(() => {
+    setFlying(false);
+  }, [world?.requestId]);
+
+  const onCameraEvent = useCallback((event: EventOf<'onCameraEvent'>) => {
+    if (event.nativeEvent.phase === CameraPhase.rejected) {
+      setStatus(`Camera rejected: ${event.nativeEvent.message}`);
     }
-    setOrbitRequested(false);
-  }, [orbitRequested]);
+  }, []);
 
   useEffect(() => {
     if (!closerRequested) return;
     const target = view.current;
     if (target) SplatKitCommands.dolly(target, -0.3);
     setCloserRequested(false);
-  }, [closerRequested]);
+  }, [closerRequested, view]);
 
   // Straight to the native view, so the stick moves the camera with no React commit.
-  const onStick = useCallback((forward: number, right: number) => {
-    const target = view.current;
-    if (target)
-      SplatKitCommands.setWalkVelocity(
-        target,
-        forward * WALK_SPEED,
-        right * WALK_SPEED,
-      );
-  }, []);
+  const onStick = useCallback(
+    (forward: number, right: number) => {
+      const target = view.current;
+      if (target)
+        SplatKitCommands.setWalkVelocity(
+          target,
+          forward * WALK_SPEED,
+          right * WALK_SPEED,
+        );
+    },
+    [view],
+  );
 
   return (
     <View style={styles.container}>
-      <SplatKitView
+      <AnimatedSplatKitView
         ref={view}
         style={StyleSheet.absoluteFill}
         {...toNativeViewProps(configuration)}
         world={world}
+        camera={camera}
+        onCameraEvent={onCameraEvent}
+        onTouchStart={() => setFlying(false)}
         collider={
           control
             ? { requestId: COLLIDER_REQUEST, filePath: colliderPath }
@@ -385,18 +407,26 @@ function Splat({ worldPath, colliderPath }: Props) {
             onPress={() => setFlying(current => !current)}
             style={styles.fly}
           >
-            <Text style={styles.flyText}>
-              {flying ? 'Stop' : 'Fly route'}
-            </Text>
+            <Text style={styles.flyText}>{flying ? 'Stop' : 'Fly route'}</Text>
           </Pressable>
           <Pressable
             onPress={() => {
               setFlying(false);
-              setOrbitRequested(true);
+              setCamera(
+                toNativeCameraProp({
+                  revision: ++cameraRevision.current,
+                  mode: CameraMode.orbit,
+                  anchor: { x: -6, y: 2, z: 3 },
+                  radius: 4,
+                  azimuth: 0,
+                  elevation: 0.2,
+                  orbitRadiansPerSecond: Math.PI / 15,
+                }),
+              );
             }}
             style={styles.fly}
           >
-            <Text style={styles.flyText}>Orbit 360°</Text>
+            <Text style={styles.flyText}>Orbit</Text>
           </Pressable>
           <Pressable
             onPress={() => {
@@ -410,6 +440,12 @@ function Splat({ worldPath, colliderPath }: Props) {
           <Pressable
             onPress={() => {
               setFlying(false);
+              setCamera(
+                toNativeCameraProp({
+                  revision: ++cameraRevision.current,
+                  mode: CameraMode.firstPerson,
+                }),
+              );
               setControl(true);
             }}
             style={styles.fly}

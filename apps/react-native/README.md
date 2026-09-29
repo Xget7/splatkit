@@ -3,7 +3,10 @@
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
 Drag anywhere to look around.
 Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
-After loading, `Orbit 360°` moves closer and runs a finite turn around the world's bounds center; `Closer` moves in another 0.3 m.
+After loading, `Orbit` applies a revisioned camera transaction around an example anchor; `Closer` moves in another 0.3 m.
+The anchor and flythrough route are specific to the example world; adapt them for your own world.
+`Fly route` calculates and dispatches camera poses on the UI thread through Reanimated, with no JS callback per frame.
+Reanimated and Worklets are dependencies of this app only.
 The SDK draws no walking UI of its own.
 
 Inside this monorepo the app installs [`@splatkit/react-native`](../../packages/react-native-splatkit/README.md) from `../../packages`, and builds the Android SDK from source, so the example always exercises the current API.
@@ -63,3 +66,11 @@ xcrun devicectl device copy to --device <device-id> --domain-type appDataContain
 Restart the app after copying a world.
 The collider is optional: without one the world still renders and looks around, and the thumb stick stays hidden.
 The status line shows the load, drawn splats and GPU time, or why the world failed to load.
+
+## Camera verification
+
+On a loaded world, compare `Fly route` with and without a deliberate JS-thread stall in a debug build.
+For example, schedule `setTimeout(() => { const end = Date.now() + 3000; while (Date.now() < end) {} }, 1000)` from the debugger.
+Record camera motion during the stall, not just renderer FPS; a static frame does not prove command delivery.
+Also check Orbit, Closer, touch interruption, world replacement, and return to Walk.
+Report device, build, world, and frame timings; simulator results do not establish physical GPU performance.
