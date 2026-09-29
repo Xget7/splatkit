@@ -12,8 +12,9 @@ on:
   workflow_dispatch:
 
 # Back-to-back pushes would otherwise race: a run that clones a mirror after a newer run pushed
-# it would overwrite it with an older tree. Runs go one at a time, and a newer push replaces the
-# queued one, so each mirror always ends at the newest commit.
+# it would overwrite it with an older tree. Runs go one at a time and a newer push replaces the
+# queued one, but push events can reach the queue out of order, so the surviving run may belong
+# to an older commit. Each run therefore exports the tip of main, not the commit that queued it.
 concurrency:
   group: mirror
   cancel-in-progress: false
@@ -34,17 +35,22 @@ jobs:
             repository: Xget7/react-native-splatkit
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Record the commit being mirrored
+        run: echo "MIRROR_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       # The test workflows run alongside this one on the same push; do not mirror a commit
       # the tests have not passed.
-      - name: Wait for the tests on this commit
+      - name: Wait for the tests on the mirrored commit
         run: scripts/wait-for-checks.sh
         env:
           GH_TOKEN: ${{ github.token }}
           WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml rn-contract.yml
+          WAIT_SHA: ${{ env.MIRROR_SHA }}
 
       # Without this the failure is an opaque git authentication error four steps later.
       - name: Check the mirror token exists
@@ -81,8 +87,8 @@ jobs:
             echo "No change to mirror."
             exit 0
           fi
-          git commit -m "$(git -C "$GITHUB_WORKSPACE" log -1 --format=%s "$GITHUB_SHA")" \
-            -m "Generated from ${GITHUB_REPOSITORY}@${GITHUB_SHA}."
+          git commit -m "$(git -C "$GITHUB_WORKSPACE" log -1 --format=%s "$MIRROR_SHA")" \
+            -m "Generated from ${GITHUB_REPOSITORY}@${MIRROR_SHA}."
           git push
         env:
           MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
