@@ -7,6 +7,9 @@ import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
 import com.splatkit.CameraPose
+import com.splatkit.CameraRequest
+import com.splatkit.CameraResolution
+import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
 import com.splatkit.WorldPoint
 import com.splatkit.DeviceCapabilities
@@ -36,6 +39,8 @@ internal class RenderThread {
     // Written on the render thread, read by the any-thread getters (stats, camera pose).
     @Volatile private var engine: SplatEngine? = null
     private var rendering = false
+    private var worldReady = false
+    private val pendingCamera = ArrayDeque<Pair<CameraRequest, ((CameraResolution) -> Unit)?>>()
 
     /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
     val gpuDescription: String
@@ -58,6 +63,12 @@ internal class RenderThread {
         gpuDescription = engine?.gpuDescription() ?: ""
         isAvailable = engine?.isValid == true
         engine?.onEvent = { event, message, splatCount ->
+            if (event == SplatEngine.Event.WORLD_READY) {
+                // Upload emits WORLD_READY inside render(). Apply before that render
+                // continues to its first camera sample and world frame.
+                if (Looper.myLooper() == thread.looper) markWorldReady()
+                else handler.post { markWorldReady() }
+            }
             mainHandler.post { onEvent?.invoke(event, message, splatCount) }
         }
     }
@@ -120,6 +131,7 @@ internal class RenderThread {
     fun loadCollider(glbBytes: ByteArray) = decode { it.loadCollider(glbBytes) }
     fun loadWorldFile(path: String) = decode { it.loadWorldFile(path) }
     fun loadWorldFile(path: String, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) = post {
+        worldReady = false
         engine?.setMaxShDegree(maxShDegree)
         engine?.setSplatBudget(splatBudget)
         engine?.setResidencyBudget(residencyBudget)
@@ -152,6 +164,32 @@ internal class RenderThread {
 
     /** The pose as of the last frame, or null before the engine exists. Any thread. */
     fun cameraPose(): CameraPose? = engine?.cameraPose()
+
+    /** A request before load waits for world framing, then applies before the next frame. */
+    fun applyCameraRequest(request: CameraRequest, completion: ((CameraResolution) -> Unit)? = null) = post {
+        pendingCamera.addLast(request to completion)
+        applyPendingCamera()
+    }
+
+    private fun applyPendingCamera() {
+        if (!worldReady) return
+        while (pendingCamera.isNotEmpty()) {
+            val (request, completion) = pendingCamera.removeFirst()
+            val resolution = engine?.applyCameraRequest(request) ?: return
+            if (completion != null) mainHandler.post { completion(resolution) }
+        }
+    }
+
+    private fun markWorldReady() {
+        worldReady = true
+        applyPendingCamera()
+    }
+
+    fun cameraState(): CameraState? {
+        var snapshot: CameraState? = null
+        runBlockingOnThread { snapshot = engine?.cameraState() }
+        return snapshot
+    }
 
     fun look(deltaYaw: Float, deltaPitch: Float) = post { engine?.look(deltaYaw, deltaPitch) }
     fun walk(forward: Float, right: Float) = post { engine?.walk(forward, right) }

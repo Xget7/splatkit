@@ -163,6 +163,12 @@ class SplatSurfaceView @JvmOverloads constructor(
         get() = renderThread.cameraPose() ?: CameraPose(0f, 0f, 0f)
         set(value) = renderThread.setCameraPose(value)
 
+    /** Applies a complete camera request after world framing, with one outcome on the main thread. */
+    fun applyCameraRequest(request: CameraRequest, completion: ((CameraResolution) -> Unit)? = null) =
+        renderThread.applyCameraRequest(request, completion)
+
+    val cameraState: CameraState? get() = renderThread.cameraState()
+
     /** Teleports to [from] and faces [target], keeping [up] at the top of the view. */
     fun lookAt(from: WorldPoint, target: WorldPoint, up: WorldPoint) =
         renderThread.lookAt(from, target, up)

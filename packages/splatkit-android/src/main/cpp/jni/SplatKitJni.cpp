@@ -22,6 +22,9 @@
 namespace {
 
 constexpr jsize kPoseFloats = 5;
+constexpr jsize kCameraRequestFields = 8;
+constexpr jsize kCameraStateFields = 9;
+constexpr jsize kCameraResolutionFields = kCameraStateFields + 1;
 constexpr jsize kStatsFloats = 7;
 constexpr jsize kAttitudeFloats = 9;
 
@@ -248,6 +251,56 @@ SPLATKIT_JNI(void, nativeCameraPose)(JNIEnv* env, jobject, jlong handle, jfloatA
   const splatkit::CameraPose p = engine->cameraPose();
   const float values[kPoseFloats] = {p.x, p.y, p.z, p.yaw, p.pitch};
   env->SetFloatArrayRegion(out, 0, kPoseFloats, values);
+}
+
+// State: mode, anchor xyz, radius, azimuth, elevation, angular rate, hasAnchor.
+namespace {
+void cameraStateToDoubles(const splatkit::CameraState& state, double* out) {
+  out[0] = static_cast<double>(static_cast<int>(state.mode));
+  out[1] = state.anchor.x;
+  out[2] = state.anchor.y;
+  out[3] = state.anchor.z;
+  out[4] = state.radius;
+  out[5] = state.azimuth;
+  out[6] = state.elevation;
+  out[7] = state.orbitRadiansPerSecond;
+  out[8] = state.hasAnchor ? 1.0 : 0.0;
+}
+}  // namespace
+
+SPLATKIT_JNI(void, nativeCameraState)(JNIEnv* env, jobject, jlong handle, jdoubleArray out) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kCameraStateFields) return;
+  double values[kCameraStateFields]{};
+  cameraStateToDoubles(engine->cameraState(), values);
+  env->SetDoubleArrayRegion(out, 0, kCameraStateFields, values);
+}
+
+// Applies once, then returns accepted plus a snapshot of the effective state atomically.
+SPLATKIT_JNI(jstring, nativeApplyCameraRequest)
+(JNIEnv* env, jobject, jlong handle, jdoubleArray requested, jdoubleArray out) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr || requested == nullptr || out == nullptr ||
+      env->GetArrayLength(requested) < kCameraRequestFields ||
+      env->GetArrayLength(out) < kCameraResolutionFields) {
+    return env->NewStringUTF("SplatKit camera request unavailable");
+  }
+  double input[kCameraRequestFields]{};
+  env->GetDoubleArrayRegion(requested, 0, kCameraRequestFields, input);
+  splatkit::CameraRequest request;
+  request.mode = static_cast<splatkit::CameraMode>(static_cast<int>(input[0]));
+  request.anchor = {static_cast<float>(input[1]), static_cast<float>(input[2]),
+                    static_cast<float>(input[3])};
+  request.radius = static_cast<float>(input[4]);
+  request.azimuth = static_cast<float>(input[5]);
+  request.elevation = static_cast<float>(input[6]);
+  request.orbitRadiansPerSecond = static_cast<float>(input[7]);
+  const auto resolution = engine->applyCameraRequest(request);
+  double values[kCameraResolutionFields]{};
+  values[0] = resolution.accepted ? 1.0 : 0.0;
+  cameraStateToDoubles(resolution.effective, values + 1);
+  env->SetDoubleArrayRegion(out, 0, kCameraResolutionFields, values);
+  return env->NewStringUTF(resolution.error.c_str());
 }
 
 SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, jlong handle, jfloat deltaYaw, jfloat deltaPitch) {

@@ -3,6 +3,10 @@ package com.splatkit.engine
 import android.util.Log
 import android.view.Surface
 import com.splatkit.CameraPose
+import com.splatkit.CameraMode
+import com.splatkit.CameraRequest
+import com.splatkit.CameraResolution
+import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
@@ -35,6 +39,8 @@ internal class SplatEngine {
     private val statsScratch = FloatArray(SPLAT_STATS_FLOATS)
     private val policyScratch = DoubleArray(RENDER_POLICY_FIELDS)
     private val policyResultScratch = DoubleArray(RENDER_POLICY_RESOLUTION_FIELDS)
+    private val cameraScratch = DoubleArray(CAMERA_REQUEST_FIELDS)
+    private val cameraResultScratch = DoubleArray(CAMERA_RESOLUTION_FIELDS)
 
     // Written on the render thread and read from any thread without a native call: the
     // applied policy changes only in applyRenderPolicy, and a device's capabilities never do.
@@ -108,6 +114,30 @@ internal class SplatEngine {
         if (handle == 0L) return null
         nativeCameraPose(handle, poseScratch)
         CameraPose(poseScratch[0], poseScratch[1], poseScratch[2], poseScratch[3], poseScratch[4])
+    }
+
+    /** Applies and snapshots one complete camera request on the render thread. */
+    fun applyCameraRequest(request: CameraRequest): CameraResolution {
+        if (handle == 0L) return CameraResolution(defaultCameraState(), false,
+            "SplatKit engine is unavailable")
+        cameraScratch[0] = request.mode.wire.toDouble()
+        cameraScratch[1] = request.anchor.x.toDouble()
+        cameraScratch[2] = request.anchor.y.toDouble()
+        cameraScratch[3] = request.anchor.z.toDouble()
+        cameraScratch[4] = request.radius.toDouble()
+        cameraScratch[5] = request.azimuth.toDouble()
+        cameraScratch[6] = request.elevation.toDouble()
+        cameraScratch[7] = request.orbitRadiansPerSecond.toDouble()
+        val error = nativeApplyCameraRequest(handle, cameraScratch, cameraResultScratch)
+        val effective = decodeCameraState(cameraResultScratch, 1)
+        return CameraResolution(effective, cameraResultScratch[0] != 0.0, error)
+    }
+
+    /** Live state after any input command. Call only on the render thread. */
+    fun cameraState(): CameraState? {
+        if (handle == 0L) return null
+        nativeCameraState(handle, cameraResultScratch)
+        return decodeCameraState(cameraResultScratch, 0)
     }
 
     fun look(deltaYaw: Float, deltaPitch: Float) = nativeLook(handle, deltaYaw, deltaPitch)
@@ -222,6 +252,8 @@ internal class SplatEngine {
     ): Boolean
     /** Fills [out] (at least [POSE_FLOATS]) with x, y, z, yaw, pitch. */
     private external fun nativeCameraPose(handle: Long, out: FloatArray)
+    private external fun nativeApplyCameraRequest(handle: Long, requested: DoubleArray, out: DoubleArray): String
+    private external fun nativeCameraState(handle: Long, out: DoubleArray)
     private external fun nativeSetCharacter(
         handle: Long,
         eyeHeight: Float,
@@ -256,6 +288,21 @@ internal class SplatEngine {
     private companion object {
         const val TAG = "SplatKit"
         const val POSE_FLOATS = 5
+        const val CAMERA_REQUEST_FIELDS = 8
+        const val CAMERA_RESOLUTION_FIELDS = 10
+
+        fun defaultCameraState() = CameraState(CameraMode.FIRST_PERSON, false,
+            WorldPoint(0f, 0f, 0f), 0f, 0f, 0f, 0f)
+
+        fun decodeCameraState(values: DoubleArray, offset: Int) = CameraState(
+            mode = CameraMode.fromWire(values[offset].toInt()) ?: CameraMode.FIRST_PERSON,
+            hasAnchor = values[offset + 8] != 0.0,
+            anchor = WorldPoint(values[offset + 1].toFloat(), values[offset + 2].toFloat(), values[offset + 3].toFloat()),
+            radius = values[offset + 4].toFloat(),
+            azimuth = values[offset + 5].toFloat(),
+            elevation = values[offset + 6].toFloat(),
+            orbitRadiansPerSecond = values[offset + 7].toFloat(),
+        )
 
         init {
             System.loadLibrary("splatkit")
