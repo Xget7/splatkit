@@ -19,17 +19,31 @@ const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 const spec = schema.modules.SplatKitView?.components?.SplatKitView;
 assert.ok(spec, 'Codegen must discover SplatKitView');
 assert.deepEqual(spec.props.map(prop => prop.name).sort(),
-  ['cameraPoseInterval', 'character', 'collider', 'cullMarginDegrees', 'linearBlending',
+  ['camera', 'cameraPoseInterval', 'character', 'collider', 'cullMarginDegrees', 'linearBlending',
     'lookSensitivity', 'motionEnabled', 'paused', 'policy', 'renderScale', 'shDegree',
     'touchLookEnabled', 'world']);
 assert.deepEqual(spec.events.map(event => event.name).sort(),
-  ['onCameraPose', 'onCapabilities', 'onColliderEvent', 'onFocusResult', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
+  ['onCameraEvent', 'onCameraPose', 'onCapabilities', 'onColliderEvent', 'onFocusResult', 'onPolicyEvent', 'onStats', 'onWorldEvent']);
 assert.deepEqual(spec.commands.map(command => command.name).sort(),
   ['animateOrbit', 'dolly', 'focus', 'look', 'lookAt', 'orbit', 'setAnchor',
     'setCameraPose', 'setWalkVelocity']);
 assert.deepEqual(spec.commands.find(command => command.name === 'setWalkVelocity')
   .typeAnnotation.params.map(param => [param.name, param.typeAnnotation.type]),
   [['forward', 'DoubleTypeAnnotation'], ['right', 'DoubleTypeAnnotation']]);
+const {CameraPhase, toNativeCameraProp, CameraMode} = require('../build/contracts');
+const camera = spec.props.find(prop => prop.name === 'camera').typeAnnotation.properties;
+const cameraFields = Object.keys(toNativeCameraProp({revision: 1, mode: CameraMode.firstPerson})).sort();
+assert.deepEqual(camera.map(prop => prop.name).sort(), cameraFields);
+for (const prop of camera) {
+  assert.equal(prop.typeAnnotation.type, ['revision', 'mode'].includes(prop.name)
+    ? 'Int32TypeAnnotation' : 'DoubleTypeAnnotation');
+}
+const cameraEvent = spec.events.find(event => event.name === 'onCameraEvent').typeAnnotation.argument.properties;
+assert.deepEqual(cameraEvent.map(prop => prop.name).sort(),
+  [...cameraFields, 'hasAnchor', 'phase', 'errorCode', 'message'].sort());
+assert.deepEqual(cameraEvent.find(prop => prop.name === 'phase').typeAnnotation.types.map(type => type.value),
+  Object.values(CameraPhase));
+
 const collider = spec.props.find(prop => prop.name === 'collider').typeAnnotation.properties;
 assert.deepEqual(collider.map(prop => prop.name).sort(), ['filePath', 'requestId']);
 const character = spec.props.find(prop => prop.name === 'character').typeAnnotation.properties;

@@ -88,3 +88,22 @@ test('iOS component view seeds _props with its own default props', () => {
   assert.match(mm, /initWithFrame:[\s\S]*std::make_shared<const SplatKitViewProps>\(\)/);
   assert.match(mm, /initWithFrame:[\s\S]*_props = defaultProps;/);
 });
+
+test('camera commits after world preparation, reports effective state, and clears on recycle', () => {
+  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
+  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  assert.match(mm, /next\.camera\.revision/);
+  assert.match(mm, /onCameraEvent\(value\)/);
+  assert.match(mm, /cameraEvent = nil/);
+  assert.match(native, /revision == _lastCameraRevision/);
+  assert.match(native, /SKSplatEventWorldReady\) \{[\s\S]*applyStoredCamera/);
+  assert.match(native, /if \(NSThread.isMainThread\) deliver\(\)/);
+  assert.match(native, /if \(accepted\) \{\s*_acceptedCamera = request/);
+  assert.match(native, /const SKCameraState effective = _engine.cameraState/);
+  assert.match(native, /recycle \{[\s\S]*_acceptedCameraRevision = 0/);
+  for (const field of ['mode', 'hasAnchor', 'anchorX', 'anchorY', 'anchorZ', 'radius',
+    'azimuth', 'elevation', 'orbitRadiansPerSecond']) {
+    assert.ok(native.includes(`@"${field}"`));
+    assert.ok(mm.includes(`value.${field} =`));
+  }
+});

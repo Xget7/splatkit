@@ -29,6 +29,7 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock capabilitiesEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock colliderEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraPoseEvent;
+@property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock focusResultEvent;
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId maxShDegree:(NSInteger)maxShDegree
  lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity;
@@ -53,6 +54,9 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 /// Applies the remembered policy to the current engine, if both exist, and reports the
 /// outcome under its revision.
 - (void)applyStoredPolicy;
+/// Stores a transaction until props commit and the world has been prepared.
+- (BOOL)setCameraRequest:(SKCameraRequest)request revision:(NSInteger)revision;
+- (void)applyStoredCamera;
 /// Pauses rendering and detaches the layer, keeping the engine and loaded world so the
 /// view can reattach cheaply. Called when the view leaves a window.
 - (void)detach;

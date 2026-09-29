@@ -238,6 +238,68 @@ export function WalkableScene(props: {worldPath: string; colliderPath: string}) 
 
 An empty `collider.requestId` releases walk mode and returns the camera to free look.
 
+### Declarative camera
+
+`camera` is an immutable transaction; use a new positive revision for each change.
+`toNativeCameraProp` validates the public discriminated request and produces Fabric's flat transport.
+
+```tsx
+import {CameraMode, SplatKitView, toNativeCameraProp} from '@splatkit/react-native';
+
+const camera = toNativeCameraProp({
+  revision: 1,
+  mode: CameraMode.orbit,
+  anchor: {x: 0, y: 1, z: 0},
+  radius: 4,
+  azimuth: 0,
+  elevation: 0.2,
+  orbitRadiansPerSecond: 0.2,
+});
+
+<SplatKitView world={world} camera={camera}
+  onCameraEvent={({nativeEvent}) => console.log(nativeEvent)} />;
+```
+
+Distances are metres; angles are radians; the continuous rate is signed radians per second, with zero stopping rotation.
+Native validates atomically and reports `applied` or `rejected`, the revision, and the effective state, including clamped elevation.
+An invalid request preserves the current camera and the last accepted request.
+A request waits for world preparation and is reapplied when the engine is replaced.
+Repeating the current revision or omitting the prop does not reset the camera.
+Commands can move it until a new revision arrives; manual navigation cancels automatic rotation.
+Use `{revision: 2, mode: CameraMode.firstPerson}` to leave orbit at the current pose.
+A collider controls whether first person walks or flies.
+`onCameraEvent` is an application-time snapshot; use `onCameraPose` for throttled observation.
+See [the contracts](src/contracts.ts) for the exact request and event types.
+
+### Worklet camera paths
+
+Reanimated is optional and belongs to the host app; the SDK does not import it.
+Install compatible Reanimated and Worklets versions and configure the [Worklets Babel plugin](https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/getting-started/).
+Wrap the host component so an animated ref can dispatch Fabric commands on the UI thread.
+
+```tsx
+import Animated, {dispatchCommand, useAnimatedRef, useFrameCallback} from 'react-native-reanimated';
+import {SplatKitView} from '@splatkit/react-native';
+
+const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
+
+function CameraPath({world}) {
+  const ref = useAnimatedRef<React.ComponentRef<typeof SplatKitView>>();
+  const frames = useFrameCallback(({timeSinceFirstFrame}) => {
+    const seconds = timeSinceFirstFrame / 1000;
+    dispatchCommand(ref, 'setCameraPose', [Math.sin(seconds), 2, Math.cos(seconds), seconds, 0]);
+  }, false);
+  return <AnimatedSplatKitView ref={ref} world={world}
+    onWorldEvent={({nativeEvent}) => frames.setActive(nativeEvent.phase === 'frameReady')}
+    onTouchStart={() => frames.setActive(false)} />;
+}
+```
+
+Keep every trajectory helper worklet-compatible and stop the callback on world replacement or unmount.
+`setCameraPose` still obeys first-person collider constraints; use a collider-free world for an unconstrained flythrough.
+See the [complete example](../../apps/react-native/App.tsx) and its [trajectory](../../apps/react-native/Flythrough.ts).
+The UI-thread dispatch API is documented by [Reanimated](https://docs.swmansion.com/react-native-reanimated/docs/advanced/dispatchCommand/).
+
 ## Quality and performance
 
 `SplatKitBuilder` resolves what you ask for against what the host and the adapter allow, and returns a `SplatKitConfiguration` carrying `world`, `render` and `performance` (`requested`, `effective`, `diagnostics`).
@@ -323,6 +385,7 @@ Extends the standard `ViewProps`.
 | `motionEnabled` | `boolean` | `false` | Drives the camera from the gyroscope. Ignored where the sensor is missing. |
 | `touchLookEnabled` | `boolean` | `true` | Whether a one-finger drag turns the camera. |
 | `lookSensitivity` | `number` | `0.004` | Radians per point dragged. |
+| `camera` | `toNativeCameraProp(request)` | absent | Revisioned configuration, applied after world preparation. |
 | `cameraPoseInterval` | `number` | `0` | Seconds between `onCameraPose` events. `0` never sends one. |
 
 ### Events
@@ -332,6 +395,7 @@ Extends the standard `ViewProps`.
 | `onWorldEvent` | `{requestId, phase: WorldPhase, loadedSplats, errorCode, message}`. `errorCode` and `message` are set only on `failed`. |
 | `onColliderEvent` | `{requestId, phase: ColliderPhase, errorCode, message}`. |
 | `onStats` | `{requestId, loadedSplats, drawnSplats, frameMillis, gpuMillis, sortMillis}` with a `*TimingAvailable` flag beside each timing. Throttled to 2 Hz. |
+| `onCameraEvent` | Application result and effective camera state, tagged with the requested revision. |
 | `onCameraPose` | `{x, y, z, yaw, pitch}` in the world's frame, throttled to `cameraPoseInterval` and sent only when the pose changed. |
 | `onFocusResult` | `{requestId, hit}` for each `focus` command. A miss keeps the previous anchor. |
 | `onPolicyEvent` | `{revision, phase: PolicyPhase, errorCode, message}` plus every effective policy field. |
@@ -369,6 +433,8 @@ Every enumerated value is a frozen object with a matching type, so there are no 
 | `qualityPresets` | every preset in order, for rendering a picker |
 | `WorldPhase` | `uploaded`, `frameReady`, `failed` |
 | `ColliderPhase` | `ready`, `failed` |
+| `CameraMode` | `firstPerson`, `orbit` |
+| `CameraPhase` | `applied`, `rejected` |
 | `PolicyPhase` | `applied`, `warning`, `rejected` |
 | `RasterStrategy` | `hardware`, `computeTile`, `hybrid` |
 | `PerformanceMode` | `auto`, `manual` |
@@ -411,6 +477,7 @@ Both adapters share these, so a host branches on `errorCode` without checking th
 | `WORLD_LOAD_FAILED` | `onWorldEvent` | The world file could not be decoded or loaded. |
 | `GPU_UNAVAILABLE` | `onWorldEvent` | The GPU backend could not be initialized. |
 | `COLLIDER_LOAD_FAILED` | `onColliderEvent` | The collider GLB could not be loaded. |
+| `INVALID_CAMERA` | `onCameraEvent` | The camera request failed validation; the effective camera is unchanged. |
 | `INVALID_POLICY` | `onPolicyEvent` | The policy failed validation. |
 | `POLICY_PREPARATION_FAILED` | `onPolicyEvent` | The policy was valid but native could not prepare it; the previous one stays. |
 

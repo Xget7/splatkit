@@ -1,4 +1,4 @@
-// SplatKitView is the Codegen host component; build its props with toNativeViewProps and toNativePolicyProp.
+// SplatKitView is the Codegen host component; build its props with toNativeViewProps, toNativePolicyProp and toNativeCameraProp.
 import {Commands} from './specs/SplatViewNativeComponent';
 
 export * from './contracts';

@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## Unreleased
 
+- Add revisioned `camera` requests, `CameraMode`, `toNativeCameraProp`, and `onCameraEvent` with native validation and effective state.
+- Support continuous signed orbit rates and retain accepted camera requests across world replacement.
+- Move the example flythrough to optional host-side Reanimated worklets.
+
+Requires rebuilt native SDKs; update the Android dependency and iOS artifact pin before publishing this package.
+Local verification uses the source Android project and `SPLATKIT_IOS_XCFRAMEWORK_PATH` from `scripts/package-ios.sh`.
+
 ## [0.1.0-alpha.3] - 2026-09-21
 
 The TypeScript surface is unchanged from alpha.2.

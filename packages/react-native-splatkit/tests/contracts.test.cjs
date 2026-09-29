@@ -81,3 +81,60 @@ test('collider requests and character settings are validated before they reach n
   assert.throws(() => validateCharacter({eyeHeight: 1.5, bodyRadius: 2, stepHeight: 0.35}), RangeError);
   assert.throws(() => validateCharacter({eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 1.5}), RangeError);
 });
+
+const {CameraMode, toNativeCameraProp, validateCameraRequest} = require('../build/contracts');
+const orbit = Object.freeze({revision: 1, mode: CameraMode.orbit,
+  anchor: Object.freeze({x: 1, y: 2, z: 3}), radius: 4, azimuth: 0.2,
+  elevation: 0.5, orbitRadiansPerSecond: -0.1});
+
+test('camera requests serialize without mutation and first person has canonical wire fields', () => {
+  assert.deepEqual(toNativeCameraProp(orbit), {revision: 1, mode: 1,
+    anchorX: 1, anchorY: 2, anchorZ: 3, radius: 4, azimuth: 0.2,
+    elevation: 0.5, orbitRadiansPerSecond: -0.1});
+  assert.deepEqual(toNativeCameraProp({revision: 2, mode: CameraMode.firstPerson}), {
+    revision: 2, mode: 0, anchorX: 0, anchorY: 0, anchorZ: 0, radius: 1,
+    azimuth: 0, elevation: 0, orbitRadiansPerSecond: 0});
+  assert.equal(orbit.anchor.x, 1);
+});
+
+test('camera rejects invalid revisions, modes and native float overflow', () => {
+  for (const revision of [0, -1, 1.5, 2 ** 31, NaN, Infinity]) {
+    assert.throws(() => validateCameraRequest({...orbit, revision}), RangeError);
+  }
+  for (const mode of [-1, 2, 'orbit', NaN]) {
+    assert.throws(() => validateCameraRequest({...orbit, mode}), RangeError);
+  }
+  for (const field of ['radius', 'azimuth', 'elevation', 'orbitRadiansPerSecond']) {
+    for (const value of [NaN, Infinity, -Infinity, 1e100, undefined]) {
+      assert.throws(() => validateCameraRequest({...orbit, [field]: value}), RangeError);
+    }
+  }
+  for (const radius of [0, -1, 1e-100]) {
+    assert.throws(() => validateCameraRequest({...orbit, radius}), RangeError);
+  }
+  for (const anchor of [null, undefined, {x: Infinity, y: 0, z: 0}, {x: 0, y: 0}]) {
+    assert.throws(() => validateCameraRequest({...orbit, anchor}));
+  }
+  validateCameraRequest({...orbit, elevation: 10, orbitRadiansPerSecond: 0});
+});
+
+test('camera mode values match the engine and native SDK contracts', t => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const read = file => fs.readFileSync(path.join(__dirname, '../../', file), 'utf8');
+  if (!fs.existsSync(path.join(__dirname, '../../splatkit-engine'))) {
+    t.skip('native source contracts only available in the monorepo');
+    return;
+  }
+  const cpp = read('splatkit-engine/include/splatkit/camera/CameraRequest.h');
+  const kotlin = read('splatkit-android/src/main/java/com/splatkit/CameraRequest.kt');
+  const objc = read('splatkit-ios/Sources/SplatKitCore/include/SplatKit/SKSplatEngine.h');
+  for (const [name, cppName, kotlinName, objcName] of [
+    ['firstPerson', 'FirstPerson', 'FIRST_PERSON', 'SKCameraModeFirstPerson'],
+    ['orbit', 'Orbit', 'ORBIT', 'SKCameraModeOrbit'],
+  ]) {
+    assert.ok(cpp.includes(`${cppName} = ${CameraMode[name]}`));
+    assert.ok(kotlin.includes(`${kotlinName}(${CameraMode[name]})`));
+    assert.ok(objc.includes(`${objcName} = ${CameraMode[name]}`));
+  }
+});

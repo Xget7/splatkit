@@ -86,6 +86,15 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
             view.invalidPolicy(policyPropRevision(value), error.message ?: "Malformed policy")
         }
     }
+    override fun setCamera(view: SplatKitView, value: ReadableMap?) {
+        // Fabric may omit or clear the prop during a later update; neither resets the camera.
+        if (value == null) return
+        try {
+            parseCameraProp(value)?.let(view::setCamera)
+        } catch (error: RuntimeException) {
+            view.invalidCamera(cameraPropRevision(value), error.message ?: "Malformed camera request")
+        }
+    }
     // Fabric sets each changed prop, then ends the transaction here: a world and a policy
     // changed together are applied once, to the engine the new world builds.
     override fun onAfterUpdateTransaction(view: SplatKitView) {
@@ -96,6 +105,7 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
         "topWorldEvent" to mapOf("registrationName" to "onWorldEvent"),
         "topStats" to mapOf("registrationName" to "onStats"),
         "topPolicyEvent" to mapOf("registrationName" to "onPolicyEvent"),
+        "topCameraEvent" to mapOf("registrationName" to "onCameraEvent"),
         "topCapabilities" to mapOf("registrationName" to "onCapabilities"),
         "topColliderEvent" to mapOf("registrationName" to "onColliderEvent"),
         "topCameraPose" to mapOf("registrationName" to "onCameraPose"),

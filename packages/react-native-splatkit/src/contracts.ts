@@ -149,3 +149,85 @@ export function validateRenderOptions(options: RenderOptions): void {
 export function optionalTimingMillis(available: boolean, value: number): number | null {
   return available && Number.isFinite(value) && value >= 0 ? value : null;
 }
+
+/** Stable native camera modes. First person walks when a collider is available. */
+export const CameraMode = {firstPerson: 0, orbit: 1} as const;
+export type CameraMode = (typeof CameraMode)[keyof typeof CameraMode];
+export const CameraPhase = {applied: 'applied', rejected: 'rejected'} as const;
+export type CameraPhase = (typeof CameraPhase)[keyof typeof CameraPhase];
+
+export type WorldPoint = Readonly<{x: number; y: number; z: number}>;
+
+/** Bump revision per change. Commands may move the camera until the next revision. */
+export type CameraRequest = Readonly<{revision: number}> & (
+  | Readonly<{mode: typeof CameraMode.firstPerson}>
+  | Readonly<{
+      mode: typeof CameraMode.orbit;
+      anchor: WorldPoint;
+      radius: number;
+      /** Radians. Native clamps elevation to its supported range. */
+      azimuth: number;
+      elevation: number;
+      /** Signed continuous azimuth rate; zero stops. Separate from animateOrbit. */
+      orbitRadiansPerSecond: number;
+    }>
+);
+
+/** Flat Codegen transport; prefer toNativeCameraProp for constructing it. */
+export type NativeCameraRequest = Readonly<{
+  revision: number;
+  mode: CameraMode;
+  anchorX: number;
+  anchorY: number;
+  anchorZ: number;
+  radius: number;
+  azimuth: number;
+  elevation: number;
+  orbitRadiansPerSecond: number;
+}>;
+
+/** Snapshot at application time, not a per-frame subscription. */
+export type CameraEvent = Omit<NativeCameraRequest, 'mode'> & Readonly<{
+  /** Codegen transports integer modes; compare with CameraMode. */
+  mode: number;
+  hasAnchor: boolean;
+  phase: CameraPhase;
+  errorCode: string;
+  message: string;
+}>;
+
+function cameraNumber(name: string, value: number): void {
+  if (!Number.isFinite(value) || !Number.isFinite(Math.fround(value))) {
+    throw new RangeError(`${name} must be finite and representable by native`);
+  }
+}
+
+/** Structural validation only; native owns transitions and effective limits. */
+export function validateCameraRequest(request: CameraRequest): void {
+  integer('revision', request.revision, 1, 0x7fffffff);
+  if (request.mode === CameraMode.firstPerson) return;
+  if (request.mode !== CameraMode.orbit) throw new RangeError('invalid camera mode');
+  if (!request.anchor || typeof request.anchor !== 'object') {
+    throw new TypeError('anchor must be a world point');
+  }
+  cameraNumber('anchor.x', request.anchor.x);
+  cameraNumber('anchor.y', request.anchor.y);
+  cameraNumber('anchor.z', request.anchor.z);
+  cameraNumber('radius', request.radius);
+  if (Math.fround(request.radius) <= 0) throw new RangeError('radius must be positive');
+  cameraNumber('azimuth', request.azimuth);
+  cameraNumber('elevation', request.elevation);
+  cameraNumber('orbitRadiansPerSecond', request.orbitRadiansPerSecond);
+}
+
+export function toNativeCameraProp(request: CameraRequest): NativeCameraRequest {
+  validateCameraRequest(request);
+  if (request.mode === CameraMode.firstPerson) {
+    return {revision: request.revision, mode: request.mode, anchorX: 0, anchorY: 0,
+      anchorZ: 0, radius: 1, azimuth: 0, elevation: 0, orbitRadiansPerSecond: 0};
+  }
+  return {revision: request.revision, mode: request.mode,
+    anchorX: request.anchor.x, anchorY: request.anchor.y, anchorZ: request.anchor.z,
+    radius: request.radius, azimuth: request.azimuth, elevation: request.elevation,
+    orbitRadiansPerSecond: request.orbitRadiansPerSecond};
+}

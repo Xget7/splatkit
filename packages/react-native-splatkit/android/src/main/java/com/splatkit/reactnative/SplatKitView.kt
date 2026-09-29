@@ -12,6 +12,9 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.Event
 import com.splatkit.CameraPose
+import com.splatkit.CameraMode
+import com.splatkit.CameraResolution
+import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
@@ -45,6 +48,10 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     // The last valid host policy, applied to the current engine and every engine built after.
     private var policy: RevisionedPolicy? = null
     private var policyChanged = false
+    private var cameraRevisionSeen = 0
+    private var cameraPending: RevisionedCamera? = null
+    private var cameraAccepted: RevisionedCamera? = null
+    private var cameraChanged = false
     private var collider: ColliderRequest? = null
     private var pendingCollider: ColliderRequest? = null
     private var colliderChanged = false
@@ -200,6 +207,24 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         emitPolicy(revision, RenderPolicyResolution(current, accepted = false, error = message))
     }
 
+    internal fun setCamera(value: RevisionedCamera) {
+        if (dropped || value.revision == cameraRevisionSeen) return
+        cameraRevisionSeen = value.revision
+        cameraPending = value
+        cameraChanged = true
+    }
+
+    /** A malformed request leaves both the active camera and the retained request intact. */
+    internal fun invalidCamera(revision: Int, message: String) {
+        if (dropped || revision > 0 && revision == cameraRevisionSeen) return
+        if (revision > 0) cameraRevisionSeen = revision
+        emitCamera(revision, CameraResolution(nativeView?.cameraState ?: defaultCameraState(),
+            accepted = false, error = message))
+    }
+
+    private fun defaultCameraState() = CameraState(CameraMode.FIRST_PERSON, false,
+        WorldPoint(0f, 0f, 0f), 0f, 0f, 0f, 0f)
+
     /**
      * Ends one prop transaction: a new world first, since its engine takes the display settings
      * and the policy too; an engine about to be replaced is not reconfigured.
@@ -217,6 +242,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             nativeView?.let(::applyDisplay)
         }
         if (policyChanged) nativeView?.takeIf { it.isAvailable }?.let(::applyPolicy)
+        if (cameraChanged) nativeView?.takeIf { it.isAvailable }?.let { applyCamera(it) }
         if (navigationChanged) {
             navigationChanged = false
             nativeView?.let(::applyNavigation)
@@ -259,6 +285,25 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         view.applyRenderPolicy(requested.policy) { resolution ->
             // A replaced or released engine's outcome no longer describes this view.
             if (!dropped && token == session.generation) emitPolicy(requested.revision, resolution)
+        }
+    }
+
+    private fun applyCamera(view: SplatSurfaceView, replayAccepted: Boolean = false) {
+        cameraChanged = false
+        val token = session.generation
+        val requests = if (replayAccepted) listOfNotNull(cameraAccepted, cameraPending) else
+            listOfNotNull(cameraPending ?: cameraAccepted)
+        requests.distinctBy { it.revision }.forEach { requested ->
+            view.applyCameraRequest(requested.request) { resolution ->
+                if (dropped || token != session.generation) return@applyCameraRequest
+                if (resolution.accepted) {
+                    cameraAccepted = requested
+                    if (cameraPending?.revision == requested.revision) cameraPending = null
+                } else if (cameraPending?.revision == requested.revision) {
+                    cameraPending = null
+                }
+                emitCamera(requested.revision, resolution)
+            }
         }
     }
 
@@ -309,6 +354,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         emitCapabilities(view)
         // Queued on the render thread ahead of the load, so the decode observes the policy.
         applyPolicy(view)
+        applyCamera(view, replayAccepted = true)
         applyNavigation(view)
         navigationChanged = false
         character?.let(view::setCharacter)
@@ -426,6 +472,25 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         })
     }
 
+    private fun emitCamera(revision: Int, resolution: CameraResolution) {
+        val effective = resolution.effective
+        emit("topCameraEvent", Arguments.createMap().apply {
+            putInt("revision", revision)
+            putInt("mode", effective.mode.wire)
+            putDouble("anchorX", effective.anchor.x.toDouble())
+            putDouble("anchorY", effective.anchor.y.toDouble())
+            putDouble("anchorZ", effective.anchor.z.toDouble())
+            putDouble("radius", effective.radius.toDouble())
+            putDouble("azimuth", effective.azimuth.toDouble())
+            putDouble("elevation", effective.elevation.toDouble())
+            putDouble("orbitRadiansPerSecond", effective.orbitRadiansPerSecond.toDouble())
+            putBoolean("hasAnchor", effective.hasAnchor)
+            putString("phase", if (resolution.accepted) "applied" else "rejected")
+            putString("errorCode", if (resolution.accepted) "" else "INVALID_CAMERA")
+            putString("message", resolution.error)
+        })
+    }
+
     private fun emit(name: String, payload: WritableMap) {
         if (dropped) return
         UIManagerHelper.getEventDispatcher(reactContext)?.dispatchEvent(
@@ -446,6 +511,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         request = null
         pendingRequest = null
         policy = null
+        cameraPending = null
+        cameraAccepted = null
         collider = null
         pendingCollider = null
         character = null

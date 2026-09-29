@@ -40,6 +40,22 @@ test('Android adapter exposes navigation as props, commands and collider events'
   assert.match(view, /fun walk\(forward: Double, right: Double\) \{\s*nativeView\?\.setWalkVelocity/);
 });
 
+test('Android camera transaction waits for world readiness and survives replacement', () => {
+  const manager = read('android/src/main/java/com/splatkit/reactnative/SplatKitViewManager.kt');
+  const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
+  const render = read('../splatkit-android/src/main/java/com/splatkit/engine/RenderThread.kt');
+  assert.match(manager, /override fun setCamera\(/);
+  assert.match(manager, /"topCameraEvent" to mapOf\("registrationName" to "onCameraEvent"\)/);
+  assert.match(view, /value\.revision == cameraRevisionSeen/);
+  assert.match(view, /listOfNotNull\(cameraAccepted, cameraPending\)/);
+  assert.match(view, /token != session\.generation/);
+  assert.match(view, /if \(resolution\.accepted\) \{\s*cameraAccepted = requested/);
+  assert.match(view, /applyCamera\(view, replayAccepted = true\)[\s\S]*view\.loadWorld/);
+  assert.match(render, /event == SplatEngine\.Event\.WORLD_READY[\s\S]*applyPendingCamera\(\)/);
+  assert.match(render, /Looper\.myLooper\(\) == thread\.looper\) markWorldReady\(\)/);
+  assert.match(render, /if \(!worldReady\) return/);
+});
+
 // A request built against limits the adapter refuses is rejected before any engine exists, so
 // no capabilities event follows and the host cannot learn what it got wrong: the first guess
 // has to be one every adapter accepts.

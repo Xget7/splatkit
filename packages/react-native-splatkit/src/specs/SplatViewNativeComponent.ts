@@ -41,6 +41,37 @@ type NativeCameraPoseEvent = Readonly<{
   pitch: CodegenTypes.Double;
 }>;
 
+/** One immutable camera transaction; repeated revisions do not restart interaction. */
+type NativeCameraRequest = Readonly<{
+  revision: CodegenTypes.Int32;
+  /** 0 firstPerson, 1 orbit. */
+  mode: CodegenTypes.Int32;
+  anchorX: CodegenTypes.Double;
+  anchorY: CodegenTypes.Double;
+  anchorZ: CodegenTypes.Double;
+  radius: CodegenTypes.Double;
+  azimuth: CodegenTypes.Double;
+  elevation: CodegenTypes.Double;
+  orbitRadiansPerSecond: CodegenTypes.Double;
+}>;
+
+type NativeCameraEvent = Readonly<{
+  revision: CodegenTypes.Int32;
+  /** 0 firstPerson, 1 orbit. */
+  mode: CodegenTypes.Int32;
+  anchorX: CodegenTypes.Double;
+  anchorY: CodegenTypes.Double;
+  anchorZ: CodegenTypes.Double;
+  radius: CodegenTypes.Double;
+  azimuth: CodegenTypes.Double;
+  elevation: CodegenTypes.Double;
+  orbitRadiansPerSecond: CodegenTypes.Double;
+  hasAnchor: boolean;
+  phase: 'applied' | 'rejected';
+  errorCode: string;
+  message: string;
+}>;
+
 type NativeFocusResult = Readonly<{
   requestId: string;
   hit: boolean;
@@ -130,6 +161,9 @@ type NativeCapabilitiesEvent = Readonly<{
 
 export interface NativeProps extends ViewProps {
   world?: NativeWorldRequest;
+  /** Applied after world preparation, and again on engine replacement. Omission keeps state. */
+  camera?: NativeCameraRequest;
+  onCameraEvent?: CodegenTypes.DirectEventHandler<NativeCameraEvent>;
   /** Enables walk mode when it is ready; an empty requestId releases it. */
   collider?: NativeColliderRequest;
   /** The walker's shape, applied at once and to a collider loaded later. */

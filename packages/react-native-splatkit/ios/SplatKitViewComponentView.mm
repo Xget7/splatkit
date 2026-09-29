@@ -16,6 +16,7 @@ using namespace facebook::react;
   BOOL _worldChanged;
   BOOL _policyChanged;
   BOOL _colliderChanged;
+  BOOL _cameraChanged;
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider {
@@ -95,6 +96,26 @@ using namespace facebook::react;
     value.errorCode = [event[@"errorCode"] UTF8String];
     value.message = [event[@"message"] UTF8String];
     emitter->onColliderEvent(value);
+  };
+  _splatView.cameraEvent = ^(NSDictionary *event) {
+    if (!emitter) return;
+    SplatKitViewEventEmitter::OnCameraEvent value;
+    value.revision = [event[@"revision"] intValue];
+    value.mode = [event[@"mode"] intValue];
+    value.hasAnchor = [event[@"hasAnchor"] boolValue];
+    value.phase = [event[@"phase"] isEqualToString:@"applied"]
+        ? SplatKitViewEventEmitter::OnCameraEventPhase::Applied
+        : SplatKitViewEventEmitter::OnCameraEventPhase::Rejected;
+    value.errorCode = [event[@"errorCode"] UTF8String];
+    value.message = [event[@"message"] UTF8String];
+    value.anchorX = [event[@"anchorX"] doubleValue];
+    value.anchorY = [event[@"anchorY"] doubleValue];
+    value.anchorZ = [event[@"anchorZ"] doubleValue];
+    value.radius = [event[@"radius"] doubleValue];
+    value.azimuth = [event[@"azimuth"] doubleValue];
+    value.elevation = [event[@"elevation"] doubleValue];
+    value.orbitRadiansPerSecond = [event[@"orbitRadiansPerSecond"] doubleValue];
+    emitter->onCameraEvent(value);
   };
   _splatView.cameraPoseEvent = ^(NSDictionary *event) {
     if (!emitter) return;
@@ -176,6 +197,18 @@ using namespace facebook::react;
     [_splatView setPolicy:policy revision:next.policy.revision];
     _policyChanged = YES;
   }
+  if ((!previous || next.camera.revision != previous->camera.revision) && next.camera.revision != 0) {
+    SKCameraRequest camera{};
+    camera.mode = next.camera.mode;
+    camera.anchor = {static_cast<float>(next.camera.anchorX),
+                     static_cast<float>(next.camera.anchorY),
+                     static_cast<float>(next.camera.anchorZ)};
+    camera.radius = static_cast<float>(next.camera.radius);
+    camera.azimuth = static_cast<float>(next.camera.azimuth);
+    camera.elevation = static_cast<float>(next.camera.elevation);
+    camera.orbitRadiansPerSecond = static_cast<float>(next.camera.orbitRadiansPerSecond);
+    _cameraChanged = [_splatView setCameraRequest:camera revision:next.camera.revision] || _cameraChanged;
+  }
   if (!previous || next.world.requestId != previous->world.requestId) _worldChanged = YES;
   if (!previous || next.collider.requestId != previous->collider.requestId) _colliderChanged = YES;
 }
@@ -184,6 +217,8 @@ using namespace facebook::react;
   [super finalizeUpdates:updateMask];
   const BOOL worldChanged = _worldChanged, policyChanged = _policyChanged;
   const BOOL colliderChanged = _colliderChanged;
+  const BOOL cameraChanged = _cameraChanged;
+  _cameraChanged = NO;
   _worldChanged = NO;
   _policyChanged = NO;
   _colliderChanged = NO;
@@ -208,6 +243,7 @@ using namespace facebook::react;
     }
   }
   if (policyChanged) [_splatView applyStoredPolicy];
+  if (cameraChanged) [_splatView applyStoredCamera];
 }
 
 - (void)handleCommand:(const NSString *)commandName args:(const NSArray *)args {
@@ -242,6 +278,7 @@ using namespace facebook::react;
 
 - (void)prepareForRecycle {
   [super prepareForRecycle];
+  _cameraChanged = NO;
   _worldChanged = NO;
   _policyChanged = NO;
   _colliderChanged = NO;
@@ -251,6 +288,7 @@ using namespace facebook::react;
   _splatView.capabilitiesEvent = nil;
   _splatView.colliderEvent = nil;
   _splatView.cameraPoseEvent = nil;
+  _splatView.cameraEvent = nil;
   _splatView.focusResultEvent = nil;
   // A recycled view serves another component next; keep no engine, world or policy.
   [_splatView recycle];
@@ -262,6 +300,7 @@ using namespace facebook::react;
   _splatView.capabilitiesEvent = nil;
   _splatView.colliderEvent = nil;
   _splatView.cameraPoseEvent = nil;
+  _splatView.cameraEvent = nil;
   _splatView.focusResultEvent = nil;
   [_splatView dispose];
   [super invalidate];

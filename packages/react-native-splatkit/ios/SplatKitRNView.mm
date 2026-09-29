@@ -62,6 +62,12 @@ static const CGFloat kLookSensitivity = 0.004;
   BOOL _hasCharacter;
   SKCameraPose _lastPose;
   BOOL _hasLastPose;
+  SKCameraRequest _acceptedCamera;
+  NSInteger _acceptedCameraRevision;
+  SKCameraRequest _pendingCamera;
+  NSInteger _pendingCameraRevision;
+  NSInteger _lastCameraRevision;
+  BOOL _cameraWorldReady;
 }
 
 + (Class)layerClass { return CAMetalLayer.class; }
@@ -255,6 +261,43 @@ static const CGFloat kLookSensitivity = 0.004;
   [_engine setAttitude:rowMajor];
 }
 
+// MARK: - Camera transactions
+
+- (BOOL)setCameraRequest:(SKCameraRequest)request revision:(NSInteger)revision {
+  // Zero is Codegen's absent prop. Only a fresh revision changes the request.
+  if (revision == 0 || revision == _lastCameraRevision) return NO;
+  _lastCameraRevision = revision;
+  _pendingCamera = request;
+  _pendingCameraRevision = revision;
+  return YES;
+}
+
+- (void)applyStoredCamera {
+  if (_engine == nil || !_cameraWorldReady) return;
+  const NSInteger revision = _pendingCameraRevision ?: _acceptedCameraRevision;
+  if (revision == 0) return;
+  const SKCameraRequest request = _pendingCameraRevision ? _pendingCamera : _acceptedCamera;
+  _pendingCameraRevision = 0;
+  NSString *reason = nil;
+  const BOOL accepted = revision > 0 && [_engine applyCameraRequest:request reason:&reason];
+  if (accepted) {
+    _acceptedCamera = request;
+    _acceptedCameraRevision = revision;
+  }
+  if (self.cameraEvent == nil) return;
+  const SKCameraState effective = _engine.cameraState;
+  self.cameraEvent(@{
+    @"revision": @(revision), @"phase": accepted ? @"applied" : @"rejected",
+    @"errorCode": accepted ? @"" : @"INVALID_CAMERA",
+    @"message": reason ?: (accepted ? @"" : @"revision must be positive"),
+    @"mode": @(effective.mode), @"hasAnchor": @(effective.hasAnchor),
+    @"anchorX": @(effective.anchor.x), @"anchorY": @(effective.anchor.y),
+    @"anchorZ": @(effective.anchor.z), @"radius": @(effective.radius),
+    @"azimuth": @(effective.azimuth), @"elevation": @(effective.elevation),
+    @"orbitRadiansPerSecond": @(effective.orbitRadiansPerSecond),
+  });
+}
+
 // MARK: - Policy and capabilities
 
 - (void)setPolicy:(SKRenderPolicy)policy revision:(NSInteger)revision {
@@ -395,12 +438,16 @@ static const CGFloat kLookSensitivity = 0.004;
   _generation.fetch_add(1, std::memory_order_acq_rel);
   [_engine setLayer:nil];
   _engine = nil;
+  _cameraWorldReady = NO;
   self.requestId = nil;
   _hasLastPose = NO;
 }
 
 - (void)recycle {
   [self dispose];
+  _acceptedCameraRevision = 0;
+  _pendingCameraRevision = 0;
+  _lastCameraRevision = 0;
   _hasPolicy = NO;
   _policyRevision = 0;
   _hasCharacter = NO;
@@ -453,10 +500,14 @@ static const CGFloat kLookSensitivity = 0.004;
   engine.eventHandler = ^(SKSplatEvent event, NSString *message, uint32_t count) {
     SplatKitRNView *view = weakSelf;
     if (view == nil) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
+    void (^deliver)(void) = ^{
       if (generation != view->_generation.load(std::memory_order_acquire)) return;
       [view deliverWorldEvent:event message:message count:count requestId:requestId];
-    });
+    };
+    // Upload readiness is emitted on the render thread before drawing the first frame.
+    // Apply the pending camera there, so no frame escapes with the default framing.
+    if (NSThread.isMainThread) deliver();
+    else dispatch_async(dispatch_get_main_queue(), deliver);
   };
 
   // Decode off the render thread; the next frame uploads. The serial queue bounds
@@ -525,6 +576,18 @@ static const CGFloat kLookSensitivity = 0.004;
     [self emitCollider:self.colliderRequestId phase:ready ? @"ready" : @"failed"
                   code:ready ? @"" : kErrorColliderLoadFailed message:message];
     return;
+  }
+  if (event == SKSplatEventWorldReady) {
+    _cameraWorldReady = YES;
+    // Restore the accepted configuration before trying a replacement, so rejection
+    // on a fresh engine retains the last accepted configuration too.
+    if (_pendingCameraRevision != 0 && _acceptedCameraRevision > 0) {
+      const NSInteger pendingRevision = _pendingCameraRevision;
+      _pendingCameraRevision = 0;
+      [self applyStoredCamera];
+      _pendingCameraRevision = pendingRevision;
+    }
+    [self applyStoredCamera];
   }
   if (self.worldEvent == nil) return;
   NSString *phase = event == SKSplatEventWorldReady ? @"uploaded"
