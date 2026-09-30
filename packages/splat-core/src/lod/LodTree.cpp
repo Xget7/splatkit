@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <numeric>
-#include <queue>
 #include <utility>
 
 #include "splat/math/SymmetricEigen.h"

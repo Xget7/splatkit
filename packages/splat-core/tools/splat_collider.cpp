@@ -3,7 +3,6 @@
 // is off, and how far wall distances differ at hip height. `--map` writes both floor heights
 // on a 5 cm grid for plotting.
 #include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdio>

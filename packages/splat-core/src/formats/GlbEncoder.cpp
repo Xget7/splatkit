@@ -1,7 +1,6 @@
 #include "splat/formats/GlbEncoder.h"
 
 #include <algorithm>
-#include <cstring>
 #include <limits>
 #include <string>
 
