@@ -22,7 +22,7 @@ bool MetalVisibility::create(id<MTLDevice> device, id<MTLLibrary> library, bool 
   for (uint32_t slot = 0; slot < kSlots; ++slot) {
     count_[slot] = metal::buffer(device, sizeof(uint32_t), storage_);
     countReadback_[slot] = experiment ? metal::buffer(device, sizeof(uint32_t)) : count_[slot];
-    drawArguments_[slot] = metal::buffer(device, (kDrawBatches + 1) * kDrawArgumentBytes, storage_);
+    drawArguments_[slot] = metal::buffer(device, kDrawBatches * kDrawArgumentBytes, storage_);
     ranges_[slot] = metal::buffer(device, size_t{kMaxRanges} * sizeof(SplatRenderer::Range));
     rangeStarts_[slot] = metal::buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
     ok = ok && count_[slot] != nil && countReadback_[slot] != nil && drawArguments_[slot] != nil &&

@@ -341,11 +341,6 @@ TEST(MetalVisibilityExperimentTest, CompactsSimdTailsAndClearsReusedSlots) {
       next += draws[b].instanceCount;
     }
     EXPECT_EQ(next, expected);
-    const auto& whole = draws[MetalVisibility::kDrawBatches];
-    EXPECT_EQ(whole.vertexCount, 4u);
-    EXPECT_EQ(whole.instanceCount, expected);
-    EXPECT_EQ(whole.vertexStart, 0u);
-    EXPECT_EQ(whole.baseInstance, 0u);
   }
 }
 

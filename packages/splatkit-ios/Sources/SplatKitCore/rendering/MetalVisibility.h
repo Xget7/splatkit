@@ -32,7 +32,6 @@ class MetalVisibility {
   // Failure preserves the previous allocation.
   bool reserve(uint32_t capacity, uint32_t activeCapacity = 0);
   uint32_t capacity() const { return capacity_; }
-  MetalRadixSort::KeyBits depthBits() const { return depthBits_; }
   bool tightCulling() const { return tightCulling_; }
 
   // Invalid ranges fail before encoding any work. Empty ranges produce an empty draw.
@@ -57,9 +56,6 @@ class MetalVisibility {
   static constexpr uint32_t kSlots = 2;
   static constexpr uint32_t kDrawBatches = 7;
   static constexpr uint32_t kDrawArgumentBytes = sizeof(MTLDrawPrimitivesIndirectArguments);
-  // The final record describes the whole visible set (baseInstance = 0).
-  // Raster currently consumes the seven partitions to retain saturation masking.
-  static constexpr uint32_t kFullDrawOffset = kDrawBatches * kDrawArgumentBytes;
 
  private:
   static constexpr uint32_t kThreads = 256;
