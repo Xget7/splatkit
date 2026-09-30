@@ -22,13 +22,38 @@ constexpr VkSubgroupFeatureFlags kRequiredSubgroupOperations = VK_SUBGROUP_FEATU
                                                                VK_SUBGROUP_FEATURE_ARITHMETIC_BIT |
                                                                VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
+// visibility.comp binds the camera uniform and seven storage buffers: splats, indices, depth keys,
+// count, status, candidates and the candidate count. prepare_indirect.comp binds the count,
+// the indirect draw arguments and the status.
+constexpr uint32_t kVisibilityStorageBindings = 7;
+constexpr uint32_t kVisibilityBindings = 1 + kVisibilityStorageBindings;
+constexpr uint32_t kPrepareBindings = 3;
+// The bits of the shader's keyMode push constant.
+constexpr uint32_t kKeyLow16 = 1;
+constexpr uint32_t kKeyDescending = 2;
+
+struct PushConstants {
+  uint32_t sourceCount;
+  uint32_t capacity;
+  float minPixelRadius;
+  uint32_t dispatchGroupsX;
+  uint32_t candidateCapacity;
+  uint32_t mode;
+  uint32_t rangeCount;
+  uint32_t keyMode;
+};
+static_assert(sizeof(PushConstants) == 32, "must match the Constants block of visibility.comp");
+
+// The number of candidates a pass reads: a prefix without a capacity reads every source.
+uint32_t candidateBound(const VisibilityPass::Input& input) {
+  return input.mode == VisibilityPass::CandidateMode::prefix && input.candidateCapacity == 0
+             ? input.sourceCount
+             : input.candidateCapacity;
+}
+
 static_assert(sizeof(CameraUniform) == 176, "visibility camera layout must match splat.vert");
 static_assert(sizeof(VkDrawIndirectCommand) == 16,
               "visibility indirect output must match native Vulkan draw arguments");
-
-bool validBuffer(VkBuffer buffer) {
-  return buffer != VK_NULL_HANDLE;
-}
 
 }  // namespace
 
@@ -69,9 +94,11 @@ VisibilityCapabilities VisibilityPass::queryCapabilities(const VulkanContext& ct
              result.maxComputeWorkGroupSizeX < kWorkgroupSize ||
              result.maxComputeWorkGroupCountX == 0 || result.maxComputeWorkGroupCountY == 0) {
     result.reason = "compute workgroup limits are below the visibility workgroup size";
-  } else if (properties.properties.limits.maxPerStageDescriptorStorageBuffers < 7 ||
-             properties.properties.limits.maxDescriptorSetStorageBuffers < 7 ||
-             properties.properties.limits.maxPerStageResources < 8 ||
+  } else if (properties.properties.limits.maxPerStageDescriptorStorageBuffers <
+                 kVisibilityStorageBindings ||
+             properties.properties.limits.maxDescriptorSetStorageBuffers <
+                 kVisibilityStorageBindings ||
+             properties.properties.limits.maxPerStageResources < kVisibilityBindings ||
              properties.properties.limits.maxUniformBufferRange < sizeof(CameraUniform) ||
              result.maxStorageBufferRange < sizeof(GpuSplat)) {
     result.reason = "descriptor or buffer-range limits are below visibility requirements";
@@ -121,34 +148,35 @@ VisibilityPass::~VisibilityPass() {
 
 bool VisibilityPass::createDescriptors() {
   VkDevice device = ctx_.device();
-  VkDescriptorSetLayoutBinding visibilityBindings[8]{};
+  VkDescriptorSetLayoutBinding visibilityBindings[kVisibilityBindings]{};
   visibilityBindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, kComputeShader, nullptr};
-  for (uint32_t binding = 1; binding < 8; ++binding) {
+  for (uint32_t binding = 1; binding < kVisibilityBindings; ++binding) {
     visibilityBindings[binding] = {binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kComputeShader,
                                    nullptr};
   }
   VkDescriptorSetLayoutCreateInfo visibilityInfo{
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  visibilityInfo.bindingCount = 8;
+  visibilityInfo.bindingCount = kVisibilityBindings;
   visibilityInfo.pBindings = visibilityBindings;
   if (vkCreateDescriptorSetLayout(device, &visibilityInfo, nullptr, &visibilitySetLayout_) !=
       VK_SUCCESS)
     return false;
 
-  VkDescriptorSetLayoutBinding prepareBindings[3]{};
-  for (uint32_t binding = 0; binding < 3; ++binding) {
+  VkDescriptorSetLayoutBinding prepareBindings[kPrepareBindings]{};
+  for (uint32_t binding = 0; binding < kPrepareBindings; ++binding) {
     prepareBindings[binding] = {binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kComputeShader,
                                 nullptr};
   }
   VkDescriptorSetLayoutCreateInfo prepareInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  prepareInfo.bindingCount = 3;
+  prepareInfo.bindingCount = kPrepareBindings;
   prepareInfo.pBindings = prepareBindings;
   if (vkCreateDescriptorSetLayout(device, &prepareInfo, nullptr, &prepareSetLayout_) != VK_SUCCESS)
     return false;
 
   VkDescriptorPoolSize sizes[2]{};
   sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlots};
-  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 * kSlots};
+  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+              (kVisibilityStorageBindings + kPrepareBindings) * kSlots};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   poolInfo.maxSets = 2 * kSlots;
   poolInfo.poolSizeCount = 2;
@@ -175,7 +203,7 @@ bool VisibilityPass::createDescriptors() {
 
 bool VisibilityPass::createPipelines() {
   VkDevice device = ctx_.device();
-  const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 32};
+  const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants)};
   VkPipelineLayoutCreateInfo visibilityLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   visibilityLayoutInfo.setLayoutCount = 1;
   visibilityLayoutInfo.pSetLayouts = &visibilitySetLayout_;
@@ -284,8 +312,8 @@ VisibilityPass::Output VisibilityPass::output(uint32_t slot) const {
 
 bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const {
   const Output out = output(slot);
-  if (!validBuffer(input.camera) || !validBuffer(input.splats) || !out.indices || !out.depthKeys ||
-      !out.count || !out.indirect || !out.status)
+  if (!input.camera || !input.splats || !out.indices || !out.depthKeys || !out.count ||
+      !out.indirect || !out.status)
     return false;
   const VkPhysicalDeviceProperties& properties = ctx_.vkbDevice().physical_device.properties;
   const VkDeviceSize uniformAlignment = properties.limits.minUniformBufferOffsetAlignment;
@@ -305,14 +333,12 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
   if (!validRange(input.cameraOffset, sizeof(CameraUniform), input.cameraBytes) ||
       !validRange(input.splatsOffset, sourceBytes, input.splatsBytes))
     return false;
-  const uint32_t bound = input.mode == CandidateMode::prefix && input.candidateCapacity == 0
-                             ? input.sourceCount
-                             : input.candidateCapacity;
+  const uint32_t bound = candidateBound(input);
   VkDescriptorBufferInfo candidateInfo{dummy_->handle(), 0, dummy_->size()};
   VkDescriptorBufferInfo candidateCountInfo{dummy_->handle(), 0, sizeof(uint32_t)};
   if (input.mode != CandidateMode::prefix) {
     const VkDeviceSize bytes = input.mode == CandidateMode::indices
-                                   ? VkDeviceSize{std::max(bound, 1u)} * 4
+                                   ? VkDeviceSize{std::max(bound, 1u)} * sizeof(uint32_t)
                                    : VkDeviceSize{std::max(input.rangeCount, 1u)} * sizeof(Range);
     if (!input.candidates || bytes > capabilities_.maxStorageBufferRange ||
         (storageAlignment && input.candidatesOffset % storageAlignment != 0) ||
@@ -334,10 +360,10 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
   const VkDescriptorBufferInfo count{out.count, 0, sizeof(uint32_t)};
   const VkDescriptorBufferInfo indirect{out.indirect, 0, sizeof(VkDrawIndirectCommand)};
   const VkDescriptorBufferInfo status{out.status, 0, sizeof(uint32_t)};
-  const VkDescriptorBufferInfo visibilityInfos[8] = {
+  const VkDescriptorBufferInfo visibilityInfos[kVisibilityBindings] = {
       camera, splats, indices, depthKeys, count, status, candidateInfo, candidateCountInfo};
-  VkWriteDescriptorSet writes[8]{};
-  for (uint32_t binding = 0; binding < 8; ++binding) {
+  VkWriteDescriptorSet writes[kVisibilityBindings]{};
+  for (uint32_t binding = 0; binding < kVisibilityBindings; ++binding) {
     writes[binding] = {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         nullptr,
@@ -350,16 +376,16 @@ bool VisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const 
         &visibilityInfos[binding],
         nullptr};
   }
-  vkUpdateDescriptorSets(ctx_.device(), 8, writes, 0, nullptr);
+  vkUpdateDescriptorSets(ctx_.device(), kVisibilityBindings, writes, 0, nullptr);
 
-  const VkDescriptorBufferInfo prepareInfos[3] = {count, indirect, status};
-  VkWriteDescriptorSet prepareWrites[3]{};
-  for (uint32_t binding = 0; binding < 3; ++binding) {
+  const VkDescriptorBufferInfo prepareInfos[kPrepareBindings] = {count, indirect, status};
+  VkWriteDescriptorSet prepareWrites[kPrepareBindings]{};
+  for (uint32_t binding = 0; binding < kPrepareBindings; ++binding) {
     prepareWrites[binding] = {
         VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, prepareSets_[slot],     binding, 0, 1,
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,      nullptr, &prepareInfos[binding], nullptr};
   }
-  vkUpdateDescriptorSets(ctx_.device(), 3, prepareWrites, 0, nullptr);
+  vkUpdateDescriptorSets(ctx_.device(), kPrepareBindings, prepareWrites, 0, nullptr);
   return true;
 }
 
@@ -385,9 +411,7 @@ void VisibilityPass::barrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage,
 }
 
 bool VisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
-  const uint32_t bound = input.mode == CandidateMode::prefix && input.candidateCapacity == 0
-                             ? input.sourceCount
-                             : input.candidateCapacity;
+  const uint32_t bound = candidateBound(input);
   if (cmd == VK_NULL_HANDLE || slot >= kSlots || capacity_ == 0 ||
       static_cast<uint32_t>(input.mode) > static_cast<uint32_t>(CandidateMode::ranges) ||
       static_cast<uint32_t>(input.keyBits) > static_cast<uint32_t>(KeyBits::low16) ||
@@ -425,24 +449,15 @@ bool VisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Input& inp
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, visibilityPipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, visibilityLayout_, 0, 1,
                           &visibilitySets_[slot], 0, nullptr);
-  struct PushConstants {
-    uint32_t sourceCount;
-    uint32_t capacity;
-    float minPixelRadius;
-    uint32_t dispatchGroupsX;
-    uint32_t candidateCapacity;
-    uint32_t mode;
-    uint32_t rangeCount;
-    uint32_t keyMode;
-  } push{input.sourceCount,
-         capacity_,
-         minPixelRadius_,
-         groupsX,
-         bound,
-         static_cast<uint32_t>(input.mode),
-         input.rangeCount,
-         (input.keyBits == KeyBits::low16 ? 1u : 0u) |
-             (input.keyOrder == KeyOrder::descending ? 2u : 0u)};
+  const PushConstants push{input.sourceCount,
+                           capacity_,
+                           minPixelRadius_,
+                           groupsX,
+                           bound,
+                           static_cast<uint32_t>(input.mode),
+                           input.rangeCount,
+                           (input.keyBits == KeyBits::low16 ? kKeyLow16 : 0u) |
+                               (input.keyOrder == KeyOrder::descending ? kKeyDescending : 0u)};
   vkCmdPushConstants(cmd, visibilityLayout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
   vkCmdDispatch(cmd, groupsX, groupsY, 1);
   barrier(cmd, kComputeStage, kComputeStage, VK_ACCESS_SHADER_WRITE_BIT,
