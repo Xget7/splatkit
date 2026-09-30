@@ -31,7 +31,7 @@ class SplatStats {
 
 internal const val SPLAT_STATS_FLOATS = 11
 
-/** Mirrors nativeStats: the legacy seven floats stay first, followed by four completed counts. */
+/** Mirrors nativeStats: timings, the loaded count and two flags, then four completed counts. */
 internal fun decodeSplatStats(values: FloatArray, into: SplatStats): SplatStats {
     require(values.size >= SPLAT_STATS_FLOATS) { "Stats payload needs $SPLAT_STATS_FLOATS floats" }
     into.fps = values[0]

@@ -27,7 +27,6 @@ class JoystickView @JvmOverloads constructor(
 
     private var knobX = 0f
     private var knobY = 0f
-    private var active = false
 
     private val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x40FFFFFF
@@ -58,7 +57,6 @@ class JoystickView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                active = true
                 var dx = (event.x - width / 2f) / travel
                 var dy = -(event.y - height / 2f) / travel
                 val length = hypot(dx, dy)
@@ -69,7 +67,6 @@ class JoystickView @JvmOverloads constructor(
                 update(dx, dy)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                active = false
                 update(0f, 0f)
             }
         }

@@ -16,6 +16,14 @@ import java.io.File
 
 private const val TAG = "SplatKit"
 
+private const val MIN_RENDER_SCALE = 0.1f
+private const val MAX_RENDER_SCALE = 2f
+private const val MAX_CULL_MARGIN_DEGREES = 80f
+private const val MAX_SH_DEGREE = 3
+private const val MIN_RESIDENCY_BUDGET = 100_000
+private const val MAX_RESIDENCY_BUDGET = 8_000_000
+private const val DEFAULT_RESIDENCY_BUDGET = 2_000_000
+
 internal fun dispatchSplatEvent(
     listener: SplatSurfaceView.Listener,
     event: SplatEngine.Event,
@@ -140,7 +148,8 @@ class SplatSurfaceView @JvmOverloads constructor(
 
     /** Applies load-time options on the render thread before scheduling this file's decode. */
     fun loadWorld(file: File, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) {
-        require(maxShDegree in 0..3 && splatBudget >= 0 && residencyBudget in 100_000..8_000_000)
+        require(maxShDegree in 0..MAX_SH_DEGREE && splatBudget >= 0 &&
+            residencyBudget in MIN_RESIDENCY_BUDGET..MAX_RESIDENCY_BUDGET)
         renderThread.loadWorldFile(file.absolutePath, maxShDegree, splatBudget, residencyBudget)
     }
 
@@ -222,7 +231,7 @@ class SplatSurfaceView @JvmOverloads constructor(
      */
     var renderScale: Float = 1f
         set(value) {
-            field = value.coerceIn(0.1f, 2f)
+            field = value.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
             renderThread.setRenderScale(field)
         }
 
@@ -232,7 +241,7 @@ class SplatSurfaceView @JvmOverloads constructor(
      */
     var cullMarginDegrees: Float = 10f
         set(value) {
-            field = value.coerceIn(0f, 80f)
+            field = value.coerceIn(0f, MAX_CULL_MARGIN_DEGREES)
             renderThread.setCullMargin(field)
         }
 
@@ -267,9 +276,9 @@ class SplatSurfaceView @JvmOverloads constructor(
      * biggest on screen and evicts what the camera left. Applies to tiled worlds loaded
      * after it is set.
      */
-    var residencyBudget: Int = 2_000_000
+    var residencyBudget: Int = DEFAULT_RESIDENCY_BUDGET
         set(value) {
-            field = value.coerceIn(100_000, 8_000_000)
+            field = value.coerceIn(MIN_RESIDENCY_BUDGET, MAX_RESIDENCY_BUDGET)
             renderThread.setResidencyBudget(field)
         }
 
@@ -281,7 +290,7 @@ class SplatSurfaceView @JvmOverloads constructor(
      */
     var shDegree: Int = 3
         set(value) {
-            field = value.coerceIn(0, 3)
+            field = value.coerceIn(0, MAX_SH_DEGREE)
             renderThread.setShDegree(field)
         }
 
@@ -293,7 +302,7 @@ class SplatSurfaceView @JvmOverloads constructor(
      */
     var maxShDegree: Int = 3
         set(value) {
-            field = value.coerceIn(0, 3)
+            field = value.coerceIn(0, MAX_SH_DEGREE)
             renderThread.setMaxShDegree(field)
         }
 
