@@ -4,7 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SplatStatsTest {
-    @Test fun decodesLegacyPrefixAndAppendedCompletedCounts() {
+    @Test fun decodesTimingsFlagsAndCompletedCounts() {
         val snapshot = SplatStats()
         val result = decodeSplatStats(
             floatArrayOf(60f, 16f, 7f, 3f, 500000f, 1f, 0f, 123f, 40f, 12f, 8f), snapshot

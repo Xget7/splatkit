@@ -9,8 +9,8 @@
 
 namespace splatkit {
 
-// Milestone check pipeline: draws one triangle with no buffers or descriptors.
-// Replaced by the splat pipeline; kept as the smallest possible "is Vulkan alive" test.
+// Draws one triangle with no buffers or descriptors. The renderer shows it while no world is
+// loaded, as the smallest possible "is Vulkan alive" signal.
 class DebugTrianglePipeline {
  public:
   static splat::Result<std::unique_ptr<DebugTrianglePipeline>> create(const VulkanContext& ctx,

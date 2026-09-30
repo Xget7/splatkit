@@ -14,7 +14,7 @@ namespace splatkit {
 
 // The images that go to the screen, plus the render pass and one framebuffer per image.
 // Recreated whenever the surface changes size; destroyed whenever the surface goes away.
-// FIFO (vsync) only: it is the one mode Vulkan guarantees and the one that saves battery.
+// FIFO (vsync) is the default: the one mode Vulkan guarantees and the one that saves battery.
 class Swapchain {
  public:
   // `vsync` false asks for an uncapped present mode (immediate, else mailbox) so that
