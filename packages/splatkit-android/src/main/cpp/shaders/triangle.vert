@@ -1,6 +1,6 @@
 #version 450
 
-// Milestone check: a triangle with no vertex buffers. Positions come from the vertex index.
+// A triangle with no vertex buffers. Positions come from the vertex index.
 layout(location = 0) out vec3 fragColor;
 
 const vec2 positions[3] = vec2[](vec2(0.0, -0.6), vec2(0.6, 0.6), vec2(-0.6, 0.6));

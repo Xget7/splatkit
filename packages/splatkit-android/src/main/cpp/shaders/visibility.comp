@@ -4,8 +4,8 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 
 // This pass is deliberately independent of the radix sort.  It emits only original source
-// indices and positive camera-depth keys; the CPU renderer does not consume these unsorted
-// survivors. Workgroups have 128 invocations; subgroup width is device-reported, not 32.
+// indices and positive camera-depth keys, which the sort orders before the draw. Workgroups
+// have 128 invocations; subgroup width is device-reported, not 32.
 layout(local_size_x = 128) in;
 
 layout(set = 0, binding = 0, std140) uniform Camera {
