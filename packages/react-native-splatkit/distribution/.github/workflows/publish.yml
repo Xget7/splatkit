@@ -23,6 +23,9 @@ jobs:
           node-version: "24.21.0"
           registry-url: "https://registry.npmjs.org"
           cache: npm
+      # Trusted publishing authenticates with the job's OIDC token instead of a secret, and
+      # npm accepts it for dist-tag changes from 11.21.0; Node 24.21.0 bundles 11.19.0.
+      - run: npm install --global npm@11.21.0
       - run: npm ci
 
       - id: state
@@ -47,7 +50,6 @@ jobs:
           npm publish --provenance --tag "$tag"
         env:
           VERSION: ${{ steps.state.outputs.version }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Until a stable release exists there is nothing for `latest` to mean, and leaving it on an
       # older prerelease makes plain `npm install` hand out a build no README describes. This runs
@@ -66,7 +68,6 @@ jobs:
         env:
           NAME: ${{ steps.state.outputs.name }}
           VERSION: ${{ steps.state.outputs.version }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Tag the release commit
         if: steps.state.outputs.new == 'true'

@@ -63,6 +63,9 @@ Create the iOS release before any npm publish that pins it: `npm prepack` downlo
 | --- | --- | --- |
 | `MIRROR_TOKEN` | this repository | `mirror.yml`, to push to both public repositories. A fine-grained token with Contents and Workflows write access to each; the built-in `GITHUB_TOKEN` cannot reach another repository. |
 | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_KEY_PASSWORD` | this repository | `release.yml` |
-| `NPM_TOKEN` | the React Native mirror | `publish.yml` |
+
+npm needs no secret.
+`@splatkit/react-native` names the mirror's `publish.yml` as its trusted publisher, with `npm dist-tag` allowed, so the job authenticates with its own OIDC token.
+Moving the workflow or renaming the file means updating that setting on npmjs.com.
 
 No workflow that runs on a pull request touches any of them, and none uses `pull_request_target`, so a fork's pull request can run the checks but cannot reach a credential.
