@@ -79,8 +79,7 @@ inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device
                          thread Projected& out, bool tightCulling = false,
                          float minPixelRadius = 0.5) {
   float4 rgba = unpackUnorm4x8(s.rgba8);
-  // This is the peak opacity actually sent to rasterization, including LoD's
-  // above-one override. There is no separate opacity multiplier (scale = 1).
+  // Peak opacity sent to rasterization, including LOD's above-one override.
   // exp(-r²/2) <= 1: if the peak fails the fragment cutoff, every pixel fails.
   // Keep equality: the fragment uses <, not <=. Do not cull dark but opaque splats.
   float alpha = s.lodAlpha != 0u ? as_type<float>(s.lodAlpha) : rgba.a;
@@ -93,7 +92,7 @@ inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device
   float bounds = 1.2 * clip.w;
   // Metal's perspective clip depth is [0,w], not OpenGL's [-w,w].
   // For this camera, clip.w = -viewPos.z and near = proj[3][2] / proj[2][2].
-  // Keep the existing centre near/far convention; side planes use footprint bounds below.
+  // The centre is tested against near and far; the sides use the margin or footprint below.
   if (clip.z < 0.0 || clip.z > clip.w ||
       (!tightCulling && (clip.x < -bounds || clip.x > bounds || clip.y < -bounds || clip.y > bounds))) {
     return false;
