@@ -97,7 +97,7 @@ jobs:
           fi
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          # Not --prerelease: every pre-1.0 release is an alpha, and marking them prerelease
+          # Not --prerelease: every pre-1.0 release is a prerelease, and marking them prerelease
           # left the releases page advertising an older version as Latest.
           gh release create "v$VERSION" --title "SplatKit Android $VERSION" --generate-notes
         env:

@@ -48,12 +48,12 @@ Merge it and wait for `mirror.yml`, then create the release the URL now points a
 Swift Package Manager reads `Package.swift` at the tag, so tagging before the mirror lands the new checksum points the release at its own predecessor.
 
 ```sh
-gh release create v0.1.0-alphaN -R Xget7/splatkit-ios \
-  --title "SplatKit iOS 0.1.0 alpha N" --notes "..." \
+gh release create v0.1.0-beta.N -R Xget7/splatkit-ios \
+  --title "SplatKit iOS 0.1.0 beta N" --notes "..." \
   build/ios-distribution/package.*/SplatKitCore.xcframework.zip
 ```
 
-Not `--prerelease`, for the reason `release.yml` gives for the Android artifact: every pre-1.0 release is an alpha, and marking them all prerelease leaves the releases page with no Latest at all.
+Not `--prerelease`, for the reason `release.yml` gives for the Android artifact: every pre-1.0 release is a prerelease, and marking them all prerelease leaves the releases page with no Latest at all.
 
 Create the iOS release before any npm publish that pins it: `npm prepack` downloads the XCFramework and verifies the checksum, so a missing release fails the publish.
 
