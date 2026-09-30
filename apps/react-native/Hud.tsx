@@ -56,7 +56,7 @@ const GRAPH_HEIGHT = 40;
 const GRAPH_MAX_FPS = 60;
 const GRAPH_GUIDES: readonly number[] = Object.freeze([60, 30]);
 
-const MILLIS_PER_SECOND = 1000;
+export const MILLIS_PER_SECOND = 1000;
 const SEPARATOR = '  |  ';
 
 function compact(value: number): string {
@@ -181,7 +181,10 @@ function Panel({ stats, samples, settings }: PanelProps) {
     <View style={styles.panel} pointerEvents="none">
       <View style={styles.header}>
         <Text style={styles.brand}>SPLATKIT</Text>
-        <Text style={styles.backend}>React Native{SEPARATOR}{BACKEND}</Text>
+        <Text style={styles.backend}>
+          React Native{SEPARATOR}
+          {BACKEND}
+        </Text>
       </View>
       <View style={styles.body}>
         <View style={styles.now}>
@@ -248,7 +251,9 @@ function Hud({
               onPress={() => onPreset(value)}
               style={[styles.preset, active && styles.presetActive]}
             >
-              <Text style={[styles.presetText, active && styles.presetTextActive]}>
+              <Text
+                style={[styles.presetText, active && styles.presetTextActive]}
+              >
                 {PRESET_TITLES[value]}
               </Text>
             </Pressable>

@@ -47,7 +47,12 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import Hud, { GRAPH_SAMPLES, RenderSettings, RenderStats } from './Hud';
+import Hud, {
+  GRAPH_SAMPLES,
+  MILLIS_PER_SECOND,
+  RenderSettings,
+  RenderStats,
+} from './Hud';
 import Joystick from './Joystick';
 import { ROUTE_SECONDS, poseAt } from './Flythrough';
 
@@ -80,9 +85,16 @@ const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
 const ORBIT = {
   anchor: { x: -7.25, y: 1.6, z: 5.25 },
   radius: 1.8,
+  azimuth: 0,
   elevation: 0.2,
   radiansPerSecond: Math.PI / 15,
 } as const;
+
+/** The highest spherical harmonics degree the world request keeps. */
+const WORLD_SH_DEGREE = 3;
+
+/** How far one press of Closer dollies toward the orbit anchor, in meters. */
+const CLOSER_DISTANCE = 0.3;
 
 const WORLD_REQUEST = 'world';
 const COLLIDER_REQUEST = 'collider';
@@ -90,14 +102,15 @@ const COLLIDER_REQUEST = 'collider';
 /** Clears the HUD's preset row, which sits 34pt up and stands about 26pt tall. */
 const STATUS_LIFT = 72;
 
+/** The stick sits above the preset row and the credit line. */
+const STICK_LIFT = 84;
+
 /**
  * Shown under the picker. The world is not part of this repository, and a Creative Commons
  * scene has to name its author wherever it is shown.
  */
 const WORLD_CREDIT: string | null =
   'Les Tanins by Stéphane Agullo  |  CC BY 4.0  |  colours adjusted';
-
-const MILLIS_PER_SECOND = 1000;
 
 /**
  * The example opens at the sharpest preset: a phone renders a scene this size comfortably,
@@ -183,8 +196,9 @@ function App(props: Props) {
 function Splat({ worldPath, colliderPath }: Props) {
   const insets = useSafeAreaInsets();
   const view = useAnimatedRef<React.ComponentRef<typeof SplatKitView>>();
-  // Every new configuration needs a new policy revision. The engine reports its own limits in onCapabilities, which only arrive once it exists:
-  // the first world request is built against the limits every adapter accepts.
+  // Every new configuration needs a new policy revision. The engine reports its own limits
+  // in onCapabilities, which only arrive once it exists: the first world request is built
+  // against the limits every adapter accepts.
   const [capabilities, setCapabilities] = useState({
     value: INITIAL_CAPABILITIES,
     revision: FIRST_REVISION,
@@ -195,7 +209,6 @@ function Splat({ worldPath, colliderPath }: Props) {
   const [flying, setFlying] = useState(false);
   const [camera, setCamera] = useState<SplatKitViewProps['camera']>();
   const cameraRevision = useRef(0);
-  const [closerRequested, setCloserRequested] = useState(false);
   // A loaded collider puts the engine in walk mode, where every pose settles onto the floor
   // and fights a scripted route. The route flies collider-free; taking control loads it.
   const [control, setControl] = useState(false);
@@ -208,7 +221,7 @@ function Splat({ worldPath, colliderPath }: Props) {
         .withWorld({
           requestId: WORLD_REQUEST,
           filePath: worldPath,
-          maxShDegree: 3,
+          maxShDegree: WORLD_SH_DEGREE,
         })
         .withPreset(preset)
         .withPerformance({
@@ -354,12 +367,10 @@ function Splat({ worldPath, colliderPath }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!closerRequested) return;
+  const onCloser = useCallback(() => {
     const target = view.current;
-    if (target) SplatKitCommands.dolly(target, -0.3);
-    setCloserRequested(false);
-  }, [closerRequested, view]);
+    if (target) SplatKitCommands.dolly(target, -CLOSER_DISTANCE);
+  }, [view]);
 
   // Straight to the native view, so the stick moves the camera with no React commit.
   const onStick = useCallback(
@@ -409,7 +420,7 @@ function Splat({ worldPath, colliderPath }: Props) {
         bottom={insets.bottom}
       />
       {walking && (
-        <View style={[styles.stick, { bottom: insets.bottom + 84 }]}>
+        <View style={[styles.stick, { bottom: insets.bottom + STICK_LIFT }]}>
           <Joystick onChange={onStick} />
         </View>
       )}
@@ -430,7 +441,7 @@ function Splat({ worldPath, colliderPath }: Props) {
                   mode: CameraMode.orbit,
                   anchor: ORBIT.anchor,
                   radius: ORBIT.radius,
-                  azimuth: 0,
+                  azimuth: ORBIT.azimuth,
                   elevation: ORBIT.elevation,
                   orbitRadiansPerSecond: ORBIT.radiansPerSecond,
                 }),
@@ -443,7 +454,7 @@ function Splat({ worldPath, colliderPath }: Props) {
           <Pressable
             onPress={() => {
               setFlying(false);
-              setCloserRequested(true);
+              onCloser();
             }}
             style={styles.fly}
           >

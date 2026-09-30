@@ -7,9 +7,9 @@
  * keeps the measurement about rendering: no gravity, no step resolution, no input.
  */
 
-export type Waypoint = Readonly<{ x: number; y: number; z: number }>;
+type Waypoint = Readonly<{ x: number; y: number; z: number }>;
 
-export type Pose = Readonly<{
+type Pose = Readonly<{
   x: number;
   y: number;
   z: number;
@@ -18,7 +18,7 @@ export type Pose = Readonly<{
 }>;
 
 /** Metres per second along the route: slow enough to read, fast enough to finish. */
-export const FLY_SPEED = 0.9;
+const FLY_SPEED = 0.9;
 
 /** Seconds spent easing into and out of each end of the route. */
 const EASE_SECONDS = 1.5;
@@ -32,7 +32,7 @@ const HEADING_SPAN = 0.9;
 /** Radians the camera may tilt: a climb reads as a glance up, never a stare at the floor. */
 const MAX_PITCH = 0.3;
 
-export const ROUTE: readonly Waypoint[] = Object.freeze([
+const ROUTE: readonly Waypoint[] = Object.freeze([
   { x: -11.34, y: 1.11, z: 2.17 },
   { x: -10.74, y: 1.11, z: 2.17 },
   { x: -10.14, y: 1.11, z: 2.17 },
@@ -76,7 +76,7 @@ const lengths: readonly number[] = ROUTE.reduce<number[]>(
   [],
 );
 
-export const ROUTE_LENGTH = lengths[lengths.length - 1];
+const ROUTE_LENGTH = lengths[lengths.length - 1];
 
 /** One full pass, plus the ease at each end. */
 export const ROUTE_SECONDS = ROUTE_LENGTH / FLY_SPEED + EASE_SECONDS * 2;
@@ -179,7 +179,7 @@ export function poseAt(seconds: number): Pose {
     (phase - (ROUTE_SECONDS - EASE_SECONDS)) / (EASE_SECONDS * 2),
   );
   const nearTurn = smoothstep(
-    (((phase + EASE_SECONDS) % period) - 0) / (EASE_SECONDS * 2),
+    ((phase + EASE_SECONDS) % period) / (EASE_SECONDS * 2),
   );
   const inNearDwell = phase < EASE_SECONDS || phase >= period - EASE_SECONDS;
   const turn = inNearDwell ? 1 + nearTurn : farTurn;
