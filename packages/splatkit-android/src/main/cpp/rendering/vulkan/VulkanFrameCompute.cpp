@@ -7,18 +7,12 @@
 #include <utility>
 
 #include "rendering/vulkan/RadixSort.h"
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "splatkit/Log.h"
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
 namespace {
-void dependency(VkCommandBuffer cmd, VkPipelineStageFlags source, VkAccessFlags sourceAccess,
-                VkPipelineStageFlags target, VkAccessFlags targetAccess) {
-  VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  barrier.srcAccessMask = sourceAccess;
-  barrier.dstAccessMask = targetAccess;
-  vkCmdPipelineBarrier(cmd, source, target, 0, 1, &barrier, 0, nullptr, 0, nullptr);
-}
 constexpr uint32_t kMaxVisible = 3000000;
 constexpr VkDeviceSize kReadbackBytes = 32;
 }  // namespace
@@ -180,10 +174,10 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
   auto* target = readback_[slot]->handle();
   uint32_t words[8]{0, candidates, 0, 0, 0, 0, 0, 0};
   vkCmdUpdateBuffer(cmd, target, 0, sizeof(words), words);
-  dependency(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-             VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-             VK_PIPELINE_STAGE_TRANSFER_BIT,
-             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
   const auto copy = [&](VkBuffer source, VkDeviceSize from, VkDeviceSize to, VkDeviceSize bytes) {
     const VkBufferCopy region{from, to, bytes};
     vkCmdCopyBuffer(cmd, source, target, 1, &region);
@@ -196,8 +190,8 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
     copy(lod_->output().state, LodSelection::kCountOffset, 4, 4);
     copy(lod_->output().state, LodSelection::kLimitedOffset, 8, 8);
   }
-  dependency(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-             VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
   pending_[slot] = true;
   submission_[slot] = 0;
 }
@@ -217,10 +211,10 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
                                                      : VisibilityPass::KeyBits::full32;
   input.keyOrder = VisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
-  dependency(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-             VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
-             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
   if (queries_[slot]) vkCmdResetQueryPool(cmd, queries_[slot], 0, 4);
   const auto timestamp = [&](uint32_t index) {
     if (queries_[slot])
@@ -252,14 +246,14 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   if (!radix_->encode(cmd, slot, sort)) return std::nullopt;
   timestamp(3);
   // The sorter's checked GPU count is authoritative even if visibility succeeded.
-  dependency(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-             VK_PIPELINE_STAGE_TRANSFER_BIT,
-             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
   const VkBufferCopy countToDraw{0, offsetof(VkDrawIndirectCommand, instanceCount),
                                  sizeof(uint32_t)};
   vkCmdCopyBuffer(cmd, radix_->output(slot).count, visible.indirect, 1, &countToDraw);
-  dependency(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-             VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   copyDiagnostics(cmd, slot, visible, input.candidateCapacity);
   return Draw{radix_->output(slot).values, visible.indirect, capacity_};
 }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "shaders/radix_histogram_comp.h"
 #include "shaders/radix_prepare_comp.h"
 #include "shaders/radix_scan_comp.h"
@@ -15,13 +16,6 @@ constexpr auto kShader = VK_SHADER_STAGE_COMPUTE_BIT;
 constexpr uint32_t kBindings = 10;
 constexpr VkBufferUsageFlags kStorage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-void dependency(VkCommandBuffer cmd, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
-                VkAccessFlags src, VkAccessFlags dst) {
-  VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  barrier.srcAccessMask = src;
-  barrier.dstAccessMask = dst;
-  vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 1, &barrier, 0, nullptr, 0, nullptr);
-}
 }  // namespace
 
 RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
@@ -119,11 +113,8 @@ bool RadixSort::initialize() {
   const size_t sizes[] = {shaders::radix_prepare_comp_size, shaders::radix_histogram_comp_size,
                           shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size};
   for (uint32_t i = 0; i < 4; ++i) {
-    VkShaderModuleCreateInfo moduleInfo{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    moduleInfo.codeSize = sizes[i];
-    moduleInfo.pCode = code[i];
-    VkShaderModule module = VK_NULL_HANDLE;
-    if (vkCreateShaderModule(device, &moduleInfo, nullptr, &module) != VK_SUCCESS) return false;
+    VkShaderModule module = createShaderModule(device, code[i], sizes[i]);
+    if (!module) return false;
     VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
     pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     pipeline.stage.stage = kShader;
@@ -229,9 +220,9 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
     }
     vkUpdateDescriptorSets(ctx_.device(), kBindings, writes, 0, nullptr);
   }
-  dependency(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT, kCompute,
-             VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
-             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
+                kCompute, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
   struct Push {
     uint32_t capacity, shift, maxGroupsX;
   } push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
@@ -246,8 +237,8 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
   bindSet(0);
   vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
   vkCmdDispatch(cmd, 1, 1, 1);
-  dependency(
-      cmd, kCompute, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+  memoryBarrier(
+      cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   const uint32_t passes = input.keyBits == KeyBits::low16 ? 2 : 4;
   for (uint32_t pass = 0; pass < passes; ++pass) {
@@ -256,25 +247,25 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
     bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
     vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
-    dependency(cmd, kCompute, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
-               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
+                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[2]);
     bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
     const uint32_t scanX = std::min(256u, push.maxGroupsX);
     vkCmdDispatch(cmd, scanX, (256 + scanX - 1) / scanX, 1);
-    dependency(cmd, kCompute, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
-               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
+                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[3]);
     bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
     vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
-    dependency(cmd, kCompute, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
-               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
+                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
   }
-  dependency(cmd, kCompute,
-             kCompute | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-             VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
+  memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
+                kCompute | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
   return true;
 }
 }  // namespace splatkit

@@ -6,24 +6,12 @@
 #include <limits>
 #include <vector>
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
-namespace {
-
-VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
-  VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-  info.codeSize = size;
-  info.pCode = code;
-  VkShaderModule module = VK_NULL_HANDLE;
-  vkCreateShaderModule(device, &info, nullptr, &module);
-  return module;
-}
-
-}  // namespace
-
 splat::Result<std::unique_ptr<SplatPipeline>> SplatPipeline::create(const VulkanContext& ctx,
                                                                     VkRenderPass renderPass,
                                                                     bool swapchainIsSrgb) {
@@ -99,8 +87,8 @@ bool SplatPipeline::createDescriptors() {
 
 bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   VkDevice device = ctx_.device();
-  VkShaderModule vert = makeModule(device, shaders::splat_vert, shaders::splat_vert_size);
-  VkShaderModule frag = makeModule(device, shaders::splat_frag, shaders::splat_frag_size);
+  VkShaderModule vert = createShaderModule(device, shaders::splat_vert, shaders::splat_vert_size);
+  VkShaderModule frag = createShaderModule(device, shaders::splat_frag, shaders::splat_frag_size);
   if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) return false;
 
   // constant_id 0 of the vertex shader is the SH degree; each pipeline gets its own.

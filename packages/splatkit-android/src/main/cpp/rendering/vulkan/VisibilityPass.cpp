@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "rendering/vulkan/VulkanShaderTypes.h"
 #include "shaders/prepare_indirect_comp.h"
 #include "shaders/visibility_comp.h"
@@ -24,15 +25,6 @@ constexpr VkSubgroupFeatureFlags kRequiredSubgroupOperations = VK_SUBGROUP_FEATU
 static_assert(sizeof(CameraUniform) == 176, "visibility camera layout must match splat.vert");
 static_assert(sizeof(VkDrawIndirectCommand) == 16,
               "visibility indirect output must match native Vulkan draw arguments");
-
-VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
-  VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-  info.codeSize = size;
-  info.pCode = code;
-  VkShaderModule module = VK_NULL_HANDLE;
-  if (vkCreateShaderModule(device, &info, nullptr, &module) != VK_SUCCESS) return VK_NULL_HANDLE;
-  return module;
-}
 
 bool validBuffer(VkBuffer buffer) {
   return buffer != VK_NULL_HANDLE;
@@ -199,9 +191,9 @@ bool VisibilityPass::createPipelines() {
     return false;
 
   VkShaderModule visibilityModule =
-      makeModule(device, shaders::visibility_comp, shaders::visibility_comp_size);
-  VkShaderModule prepareModule =
-      makeModule(device, shaders::prepare_indirect_comp, shaders::prepare_indirect_comp_size);
+      createShaderModule(device, shaders::visibility_comp, shaders::visibility_comp_size);
+  VkShaderModule prepareModule = createShaderModule(device, shaders::prepare_indirect_comp,
+                                                    shaders::prepare_indirect_comp_size);
   if (!visibilityModule || !prepareModule) {
     if (visibilityModule) vkDestroyShaderModule(device, visibilityModule, nullptr);
     if (prepareModule) vkDestroyShaderModule(device, prepareModule, nullptr);

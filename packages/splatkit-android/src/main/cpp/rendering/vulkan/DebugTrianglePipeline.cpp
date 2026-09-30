@@ -1,29 +1,19 @@
 #include "rendering/vulkan/DebugTrianglePipeline.h"
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "shaders/triangle_frag.h"
 #include "shaders/triangle_vert.h"
 
 namespace splatkit {
-namespace {
-
-VkShaderModule makeModule(VkDevice device, const uint32_t* code, size_t size) {
-  VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-  info.codeSize = size;
-  info.pCode = code;
-  VkShaderModule module = VK_NULL_HANDLE;
-  vkCreateShaderModule(device, &info, nullptr, &module);
-  return module;
-}
-
-}  // namespace
-
 splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::create(
     const VulkanContext& ctx, VkRenderPass renderPass) {
   std::unique_ptr<DebugTrianglePipeline> p(new DebugTrianglePipeline(ctx));
   VkDevice device = ctx.device();
 
-  VkShaderModule vert = makeModule(device, shaders::triangle_vert, shaders::triangle_vert_size);
-  VkShaderModule frag = makeModule(device, shaders::triangle_frag, shaders::triangle_frag_size);
+  VkShaderModule vert =
+      createShaderModule(device, shaders::triangle_vert, shaders::triangle_vert_size);
+  VkShaderModule frag =
+      createShaderModule(device, shaders::triangle_frag, shaders::triangle_frag_size);
   if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "triangle shader modules"};
   }

@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "rendering/vulkan/VulkanShaderTypes.h"
 #include "shaders/lod_selection_comp.h"
 #include "splat/lod/LodFile.h"
@@ -13,13 +14,6 @@ namespace splatkit {
 namespace {
 constexpr uint32_t kThreads = 128;
 constexpr uint32_t kMaxCapacity = 2200000;
-void dependency(VkCommandBuffer cmd, VkPipelineStageFlags source, VkAccessFlags sourceAccess,
-                VkPipelineStageFlags destination, VkAccessFlags destinationAccess) {
-  VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  barrier.srcAccessMask = sourceAccess;
-  barrier.dstAccessMask = destinationAccess;
-  vkCmdPipelineBarrier(cmd, source, destination, 0, 1, &barrier, 0, nullptr, 0, nullptr);
-}
 }  // namespace
 
 splat::Result<std::unique_ptr<LodSelection>> LodSelection::create(const VulkanContext& ctx) {
@@ -82,12 +76,9 @@ bool LodSelection::initialize() {
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
   if (vkCreatePipelineLayout(ctx_.device(), &layout, nullptr, &layout_) != VK_SUCCESS) return false;
-  VkShaderModuleCreateInfo moduleInfo{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-  moduleInfo.codeSize = shaders::lod_selection_comp_size;
-  moduleInfo.pCode = shaders::lod_selection_comp;
-  VkShaderModule module = VK_NULL_HANDLE;
-  if (vkCreateShaderModule(ctx_.device(), &moduleInfo, nullptr, &module) != VK_SUCCESS)
-    return false;
+  VkShaderModule module = createShaderModule(ctx_.device(), shaders::lod_selection_comp,
+                                             shaders::lod_selection_comp_size);
+  if (!module) return false;
   VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   pipeline.layout = layout_;
   pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -201,10 +192,11 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
   }
   vkUpdateDescriptorSets(ctx_.device(), 5, writes, 0, nullptr);
   // Inter-frame WAR/WAW plus upload/host writes, including consumers on previous submissions.
-  dependency(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-             VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
-             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_UNIFORM_READ_BIT);
+  memoryBarrier(
+      cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_UNIFORM_READ_BIT);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &sets_[slot], 0,
                           nullptr);
@@ -216,10 +208,10 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
       vkCmdDispatch(cmd, 1, 1, 1);
     else
       vkCmdDispatchIndirect(cmd, scratch_->handle(), indirectOffset);
-    dependency(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-               VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
-                   VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+    memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                      VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   };
   dispatch(0);
   for (uint32_t round = 0; round < rounds_; ++round) {
@@ -235,11 +227,11 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
     dispatch(9);
   }
   dispatch(10, 44);
-  dependency(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                 VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-                 VK_ACCESS_TRANSFER_READ_BIT);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+                    VK_ACCESS_TRANSFER_READ_BIT);
   return true;
 }
 }  // namespace splatkit
