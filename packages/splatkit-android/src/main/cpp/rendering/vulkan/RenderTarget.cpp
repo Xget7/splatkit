@@ -1,5 +1,6 @@
 #include "rendering/vulkan/RenderTarget.h"
 
+#include "rendering/vulkan/VulkanHelpers.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
@@ -38,37 +39,12 @@ splat::Result<std::unique_ptr<RenderTarget>> RenderTarget::create(const VulkanCo
     return splat::Error{splat::ErrorCode::gpuUnavailable, "render target view"};
   }
 
-  // Same shape as the swapchain pass, ending as a blit source instead of presentable.
-  VkAttachmentDescription color{};
-  color.format = format;
-  color.samples = VK_SAMPLE_COUNT_1_BIT;
-  color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  color.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-  color.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  color.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  const VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-  VkSubpassDescription subpass{};
-  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  subpass.colorAttachmentCount = 1;
-  subpass.pColorAttachments = &colorRef;
-  // The previous frame's blit read this image; the clear must wait for that read.
-  VkSubpassDependency dependency{};
-  dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-  dependency.dstSubpass = 0;
-  dependency.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-  dependency.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  VkRenderPassCreateInfo passInfo{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-  passInfo.attachmentCount = 1;
-  passInfo.pAttachments = &color;
-  passInfo.subpassCount = 1;
-  passInfo.pSubpasses = &subpass;
-  passInfo.dependencyCount = 1;
-  passInfo.pDependencies = &dependency;
-  if (vkCreateRenderPass(device, &passInfo, nullptr, &rt->renderPass_) != VK_SUCCESS) {
+  // Ends as a blit source instead of presentable. The previous frame's blit read this image,
+  // so the clear must wait for that read.
+  rt->renderPass_ =
+      createColorRenderPass(device, format, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+  if (rt->renderPass_ == VK_NULL_HANDLE) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "render target pass"};
   }
 
