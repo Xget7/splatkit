@@ -12,6 +12,10 @@
 namespace splatkit {
 namespace {
 
+// The residency range reported to the adapters.
+constexpr uint32_t kMinResidencyCapacity = 100'000;
+constexpr uint32_t kMaxResidencyCapacity = 8'000'000;
+
 bool isSrgb(VkFormat format) {
   return format == VK_FORMAT_R8G8B8A8_SRGB || format == VK_FORMAT_B8G8R8A8_SRGB;
 }
@@ -81,9 +85,9 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   DeviceCapabilities caps;
   // GpuLOD clamps a hierarchy at 2.2M nodes; the Android adapter caps residency at 8M.
-  caps.limits.maxLodCapacitySplats = 2'200'000;
-  caps.limits.minResidencyCapacitySplats = 100'000;
-  caps.limits.maxResidencyCapacitySplats = 8'000'000;
+  caps.limits.maxLodCapacitySplats = LodSelection::kMaxBudget;
+  caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
+  caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;
   // Vulkan has no screen-tile rasterization and conservative occlusion is unimplemented.
   caps.supportsComputeTiles = false;
   caps.supportsHiZOcclusion = false;
@@ -156,7 +160,7 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
   // No unsafe giant hardware fallback if GPU allocation/capabilities are insufficient.
-  if (!compute && cloud.count() > 3000000) {
+  if (!compute && cloud.count() > VulkanFrameCompute::kMaxVisible) {
     LOGE("large world requires GPU visibility/sort or an offline LOD file: %s",
          compute.error().message.c_str());
     return false;
@@ -201,7 +205,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   if (!splats_) return false;
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, capacity);
-  if (!compute && capacity > 3000000) return false;
+  if (!compute && capacity > VulkanFrameCompute::kMaxVisible) return false;
   auto world = splats_->createSlab(capacity, shDegree, !compute);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight

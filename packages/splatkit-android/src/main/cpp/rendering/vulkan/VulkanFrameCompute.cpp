@@ -13,8 +13,28 @@
 
 namespace splatkit {
 namespace {
-constexpr uint32_t kMaxVisible = 3000000;
-constexpr VkDeviceSize kReadbackBytes = 32;
+static_assert(VulkanFrameCompute::kMaxVisible <= RadixSort::kMaxCapacity,
+              "the sort must hold every visible splat");
+constexpr uint32_t kTimestampCount = 4;
+// Words of the diagnostics readback, in the order collect() reads them. Two are spare.
+enum ReadbackWord : uint32_t {
+  kDrawn,
+  kSelected,
+  kLimited,
+  kEvaluated,
+  kVisibilityStatus,
+  kSortStatus,
+  kReadbackWords = 8
+};
+constexpr VkDeviceSize kReadbackBytes = kReadbackWords * sizeof(uint32_t);
+constexpr VkDeviceSize wordOffset(ReadbackWord word) {
+  return word * sizeof(uint32_t);
+}
+// The sort status rides above the visibility status in one combined word.
+constexpr uint32_t kSortStatusShift = 16;
+static_assert(LodSelection::kEvaluatedOffset == LodSelection::kLimitedOffset + sizeof(uint32_t) &&
+                  kEvaluated == kLimited + 1,
+              "limited and evaluated are copied from the LOD state as one pair");
 }  // namespace
 
 VulkanFrameCompute::VulkanFrameCompute(const VulkanContext& ctx) : ctx_(ctx) {}
@@ -67,7 +87,7 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
     if (timestampBits_) {
       VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
       info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-      info.queryCount = 4;
+      info.queryCount = kTimestampCount;
       if (vkCreateQueryPool(ctx_.device(), &info, nullptr, &queries_[slot]) != VK_SUCCESS)
         return false;
     }
@@ -149,15 +169,15 @@ void VulkanFrameCompute::collect(uint32_t slot) {
   collectedSubmission_ = std::max(collectedSubmission_, submission);
   readback_[slot]->invalidate(0, kReadbackBytes);
   const auto* words = static_cast<const uint32_t*>(readback_[slot]->mapped());
-  stats_.drawn = words[0];
-  stats_.selected = words[1];
-  stats_.limited = words[2];
-  stats_.evaluated = words[3];
-  stats_.status = words[4] | (words[5] << 16);
+  stats_.drawn = words[kDrawn];
+  stats_.selected = words[kSelected];
+  stats_.limited = words[kLimited];
+  stats_.evaluated = words[kEvaluated];
+  stats_.status = words[kVisibilityStatus] | (words[kSortStatus] << kSortStatusShift);
   if (stats_.status) LOGE("Vulkan GPU frame rejected: diagnostic bits 0x%x", stats_.status);
   if (!queries_[slot]) return;
-  uint64_t ticks[4]{};
-  if (vkGetQueryPoolResults(ctx_.device(), queries_[slot], 0, 4, sizeof(ticks), ticks,
+  uint64_t ticks[kTimestampCount]{};
+  if (vkGetQueryPoolResults(ctx_.device(), queries_[slot], 0, kTimestampCount, sizeof(ticks), ticks,
                             sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) != VK_SUCCESS)
     return;
   const uint64_t mask = timestampBits_ >= 64 ? std::numeric_limits<uint64_t>::max()
@@ -172,7 +192,8 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
                                          const VisibilityPass::Output& visible,
                                          uint32_t candidates) {
   auto* target = readback_[slot]->handle();
-  uint32_t words[8]{0, candidates, 0, 0, 0, 0, 0, 0};
+  uint32_t words[kReadbackWords]{};
+  words[kSelected] = candidates;
   vkCmdUpdateBuffer(cmd, target, 0, sizeof(words), words);
   memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
@@ -183,12 +204,13 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
     vkCmdCopyBuffer(cmd, source, target, 1, &region);
   };
   const auto sorted = radix_->output(slot);
-  copy(sorted.count, 0, 0, 4);
-  copy(visible.status, 0, 16, 4);
-  copy(sorted.status, 0, 20, 4);
+  copy(sorted.count, 0, wordOffset(kDrawn), sizeof(uint32_t));
+  copy(visible.status, 0, wordOffset(kVisibilityStatus), sizeof(uint32_t));
+  copy(sorted.status, 0, wordOffset(kSortStatus), sizeof(uint32_t));
   if (lod_) {
-    copy(lod_->output().state, LodSelection::kCountOffset, 4, 4);
-    copy(lod_->output().state, LodSelection::kLimitedOffset, 8, 8);
+    copy(lod_->output().state, LodSelection::kCountOffset, wordOffset(kSelected), sizeof(uint32_t));
+    copy(lod_->output().state, LodSelection::kLimitedOffset, wordOffset(kLimited),
+         2 * sizeof(uint32_t));
   }
   memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
@@ -215,7 +237,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
                 VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
-  if (queries_[slot]) vkCmdResetQueryPool(cmd, queries_[slot], 0, 4);
+  if (queries_[slot]) vkCmdResetQueryPool(cmd, queries_[slot], 0, kTimestampCount);
   const auto timestamp = [&](uint32_t index) {
     if (queries_[slot])
       vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queries_[slot], index);

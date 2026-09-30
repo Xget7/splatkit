@@ -20,9 +20,11 @@ class RadixSort;
 // slot's are read when it is encoded again, or once its submission is known finished.
 class VulkanFrameCompute {
  public:
+  // Most splats one frame can keep, which bounds the visibility output and the sort.
+  static constexpr uint32_t kMaxVisible = VisibilityPass::kMaxCapacity;
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
-      uint32_t budget = 2200000);
+      uint32_t budget = LodSelection::kMaxBudget);
   ~VulkanFrameCompute();
   VulkanFrameCompute(const VulkanFrameCompute&) = delete;
   VulkanFrameCompute& operator=(const VulkanFrameCompute&) = delete;
