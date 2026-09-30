@@ -86,6 +86,8 @@ class SplatPipeline {
   explicit SplatPipeline(const VulkanContext& ctx) : ctx_(ctx) {}
   bool createDescriptors();
   bool createPipelines(VkRenderPass renderPass);
+  // Binds the pipeline for `shDegree`, limited to what the world holds, and the frame's set.
+  void bindDraw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world, int shDegree) const;
 
   const VulkanContext& ctx_;
   bool outputLinear_ = true;
