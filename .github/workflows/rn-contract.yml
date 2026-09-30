@@ -20,3 +20,25 @@ jobs:
           cache-dependency-path: packages/react-native-splatkit/package-lock.json
       - run: npm ci --ignore-scripts
       - run: npm run check
+
+  # npm publishes from the mirror, where the package sits alone: a check that reaches into the
+  # monorepo passes above and fails only at publish. Run it on the tree the mirror receives.
+  mirror-tree:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: packages/react-native-splatkit/package-lock.json
+      - name: Check the exported package
+        run: |
+          directory=$(python3 scripts/export-ios-source.py --platform react-native \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['directory'])")
+          cd "$directory"
+          npm ci --ignore-scripts
+          npm run check
