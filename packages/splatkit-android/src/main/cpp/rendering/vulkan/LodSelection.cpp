@@ -13,6 +13,7 @@ namespace splatkit {
 namespace {
 constexpr uint32_t kThreads = 128;
 constexpr uint32_t kMaxCapacity = 2200000;
+constexpr uint32_t kErrorBuckets = 256;
 void dependency(VkCommandBuffer cmd, VkPipelineStageFlags source, VkAccessFlags sourceAccess,
                 VkPipelineStageFlags destination, VkAccessFlags destinationAccess) {
   VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -31,7 +32,7 @@ splat::Result<std::unique_ptr<LodSelection>> LodSelection::create(const VulkanCo
 }
 
 bool LodSelection::initialize() {
-  static_assert(sizeof(Config) == 52);
+  static_assert(sizeof(Config) == 56);
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
   limits_ = properties.limits;
@@ -43,7 +44,7 @@ bool LodSelection::initialize() {
       !(families[ctx_.queueFamily()].queueFlags & VK_QUEUE_COMPUTE_BIT) ||
       limits_.maxComputeWorkGroupInvocations < kThreads ||
       limits_.maxComputeWorkGroupSize[0] < kThreads ||
-      limits_.maxComputeSharedMemorySize < kThreads * 16 ||
+      limits_.maxComputeSharedMemorySize < kThreads * 16 + kErrorBuckets * 4 ||
       limits_.maxPerStageDescriptorStorageBuffers < 4 ||
       limits_.maxDescriptorSetStorageBuffers < 4 ||
       limits_.maxPerStageDescriptorUniformBuffers < 1 ||
@@ -145,6 +146,7 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
   config.frontier0 = region(frontier);
   config.frontier1 = region(frontier);
   config.packets = region(std::max(packets, size_t{1}) * 4);
+  config.histogram = region(kErrorBuckets);
   const VkDeviceSize clusterBytes = data->clusters.size() * sizeof(splat::LodCluster);
   const VkDeviceSize leafBytes = data->leaves.size() * sizeof(uint32_t);
   const VkDeviceSize scratchBytes = words * sizeof(uint32_t);
@@ -227,6 +229,9 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
     dispatch(2, 64);
     dispatch(3);
     dispatch(4);
+    dispatch(11, 32);
+    dispatch(2, 64);
+    dispatch(3);
     dispatch(5, 32);
     dispatch(6, 64);
     dispatch(3);

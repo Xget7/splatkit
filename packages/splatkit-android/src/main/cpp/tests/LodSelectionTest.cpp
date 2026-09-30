@@ -198,6 +198,26 @@ void tests(const test::VulkanTestContext& gpu) {
           "distance reduces refinement");
   std::puts("PASS appearance SSE and distance");
 
+  splat::LodTree priority;
+  priority.leafCount = 4;
+  // The far cluster comes first in frontier order; the near one covers far more pixels.
+  priority.layout = {{{0, 0, -26}, 30, 1, 2},      {{0, 0, -50}, 0.5f, 3, 2},
+                     {{0, 0, -2}, 0.5f, 5, 2},     {{-0.3f, 0, -50}, 0.1f, 0, 0},
+                     {{0.3f, 0, -50}, 0.1f, 0, 0}, {{-0.3f, 0, -2}, 0.1f, 0, 0},
+                     {{0.3f, 0, -2}, 0.1f, 0, 0}};
+  attributes(priority);
+  for (float& color : priority.nodes.colors) color = 1;
+  for (size_t i = 0; i < priority.nodeCount(); ++i)
+    for (const uint32_t axis : {0u, 3u, 5u}) priority.nodes.covariances[i * 6 + axis] = 0.01f;
+  priority.selection = splat::buildLodSelectionData(priority);
+  // Room for the root split and one of the two cluster splits.
+  require(lod->upload(priority, 3, {0.001f, 4, false}), "priority upload");
+  auto ranked = select(gpu, *lod, camera());
+  require(std::set<uint32_t>(ranked.cut.begin(), ranked.cut.end()) == std::set<uint32_t>{1, 5, 6},
+          "capacity refines the largest screen error first");
+  require(ranked.stats[4] == 1, "the smaller screen error is the denied refinement");
+  std::puts("PASS capacity ranks refinements by screen error");
+
   // 32768 active interior nodes -> 256 workgroup totals -> two scan blocks.
   const auto large = binary(65536);
   for (const uint32_t capacity : {40000u, 65536u}) {
