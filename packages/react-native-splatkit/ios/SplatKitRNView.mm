@@ -12,11 +12,31 @@ static NSString *const kErrorColliderLoadFailed = @"COLLIDER_LOAD_FAILED";
 static NSString *const kErrorGpuUnavailable = @"GPU_UNAVAILABLE";
 static NSString *const kErrorInvalidPolicy = @"INVALID_POLICY";
 static NSString *const kErrorPolicyPreparationFailed = @"POLICY_PREPARATION_FAILED";
+static NSString *const kErrorInvalidCamera = @"INVALID_CAMERA";
+
+/// Event phases, spelled as the JS contracts and the Android adapter spell them.
+static NSString *const kWorldPhaseUploaded = @"uploaded";
+static NSString *const kWorldPhaseFrameReady = @"frameReady";
+static NSString *const kWorldPhaseFailed = @"failed";
+static NSString *const kColliderPhaseReady = @"ready";
+static NSString *const kColliderPhaseFailed = @"failed";
+static NSString *const kCameraPhaseApplied = @"applied";
+static NSString *const kCameraPhaseRejected = @"rejected";
+static NSString *const kPolicyPhaseApplied = @"applied";
+static NSString *const kPolicyPhaseWarning = @"warning";
+static NSString *const kPolicyPhaseRejected = @"rejected";
 
 /// Stats snapshots leave the render thread at most twice a second.
 static const CFTimeInterval kStatsInterval = 0.5;
 /// SplatMetalView's touch sensitivity: radians per point dragged.
 static const CGFloat kLookSensitivity = 0.004;
+
+static const CGFloat kMinRenderScale = 0.1;
+static const CGFloat kMaxRenderScale = 2.0;
+static const NSInteger kMaxShDegree = 3;
+static const CGFloat kMaxCullMarginDegrees = 80;
+/// Hardware, compute tile and hybrid, one bit per raster wire value.
+static const uint32_t kAllRasterStrategiesMask = 0b111;
 
 @class _SplatKitRNLinkProxy;
 
@@ -112,12 +132,12 @@ static const CGFloat kLookSensitivity = 0.004;
 }
 
 - (void)setRenderScale:(CGFloat)value {
-  _renderScale = MIN(MAX(value, 0.1), 2.0);
+  _renderScale = MIN(MAX(value, kMinRenderScale), kMaxRenderScale);
   [_engine setRenderScale:(float)_renderScale];
 }
 
 - (void)setShDegree:(NSInteger)value {
-  _shDegree = MIN(MAX(value, 0), 3);
+  _shDegree = MIN(MAX(value, 0), kMaxShDegree);
   [_engine setShDegree:(int)_shDegree];
 }
 
@@ -127,7 +147,7 @@ static const CGFloat kLookSensitivity = 0.004;
 }
 
 - (void)setCullMarginDegrees:(CGFloat)value {
-  _cullMarginDegrees = MIN(MAX(value, 0), 80);
+  _cullMarginDegrees = MIN(MAX(value, 0), kMaxCullMarginDegrees);
   [_engine setCullMargin:(float)_cullMarginDegrees];
 }
 
@@ -287,8 +307,8 @@ static const CGFloat kLookSensitivity = 0.004;
   if (self.cameraEvent == nil) return;
   const SKCameraState effective = _engine.cameraState;
   self.cameraEvent(@{
-    @"revision": @(revision), @"phase": accepted ? @"applied" : @"rejected",
-    @"errorCode": accepted ? @"" : @"INVALID_CAMERA",
+    @"revision": @(revision), @"phase": accepted ? kCameraPhaseApplied : kCameraPhaseRejected,
+    @"errorCode": accepted ? @"" : kErrorInvalidCamera,
     @"message": reason ?: (accepted ? @"" : @"revision must be positive"),
     @"mode": @(effective.mode), @"hasAnchor": @(effective.hasAnchor),
     @"anchorX": @(effective.anchor.x), @"anchorY": @(effective.anchor.y),
@@ -321,7 +341,8 @@ static const CGFloat kLookSensitivity = 0.004;
   if (self.policyEvent == nil || _engine == nil) return;
   const SKRenderPolicy effective = _engine.renderPolicy;
   const BOOL applied = outcome == SKRenderPolicyOutcomeApplied;
-  NSString *phase = applied ? (warnings.count > 0 ? @"warning" : @"applied") : @"rejected";
+  NSString *phase = applied ? (warnings.count > 0 ? kPolicyPhaseWarning : kPolicyPhaseApplied)
+                            : kPolicyPhaseRejected;
   NSString *code = applied ? @""
       : outcome == SKRenderPolicyOutcomePreparationFailed ? kErrorPolicyPreparationFailed
                                                           : kErrorInvalidPolicy;
@@ -355,7 +376,7 @@ static const CGFloat kLookSensitivity = 0.004;
     @"supportsSubgroups": @(caps.supportsSubgroups),
     @"maxTextureDimension": @(caps.maxTextureDimension),
     @"policyRaster": @(caps.policy.raster),
-    @"policyRasterMask": @(caps.policy.raster ? (caps.policy.rasterMask != 0 ? caps.policy.rasterMask : 7u) : 0u),
+    @"policyRasterMask": @(caps.policy.raster ? (caps.policy.rasterMask != 0 ? caps.policy.rasterMask : kAllRasterStrategiesMask) : 0u),
     @"policyTileSize": @(caps.policy.tileSize),
     @"policyLodErrorPixels": @(caps.policy.lodErrorPixels),
     @"policyAlphaThreshold": @(caps.policy.alphaThreshold),
@@ -460,7 +481,7 @@ static const CGFloat kLookSensitivity = 0.004;
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId maxShDegree:(NSInteger)maxShDegree
  lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity {
   if (![self validateRequestId:requestId path:path maxShDegree:maxShDegree]) {
-    [self emitWorld:requestId phase:@"failed" count:0 code:kErrorInvalidRequest
+    [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
              message:@"invalid world request"];
     return;
   }
@@ -472,7 +493,7 @@ static const CGFloat kLookSensitivity = 0.004;
 
   SKSplatEngine *engine = [SKSplatEngine create];
   if (engine == nil) {
-    [self emitWorld:requestId phase:@"failed" count:0 code:kErrorGpuUnavailable
+    [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorGpuUnavailable
              message:@"Metal is unavailable on this device"];
     return;
   }
@@ -480,7 +501,7 @@ static const CGFloat kLookSensitivity = 0.004;
 
   // Settings are render-thread state; apply them here (the main thread) before the decode
   // is enqueued so this load's decode observes them, matching the engine's ordering rule.
-  [engine setMaxShDegree:(int)MIN(MAX(maxShDegree, 0), 3)];
+  [engine setMaxShDegree:(int)MIN(MAX(maxShDegree, 0), kMaxShDegree)];
   [engine setSplatBudget:(int)MAX(lodCapacity, 0)];
   [engine setResidencyBudget:(int)MAX(residencyCapacity, 1)];
   [engine setRenderScale:(float)self.renderScale];
@@ -530,7 +551,7 @@ static const CGFloat kLookSensitivity = 0.004;
     return;
   }
   if (![self isLocalPath:path]) {
-    [self emitCollider:requestId phase:@"failed" code:kErrorInvalidRequest
+    [self emitCollider:requestId phase:kColliderPhaseFailed code:kErrorInvalidRequest
                message:@"invalid collider request"];
     return;
   }
@@ -561,9 +582,8 @@ static const CGFloat kLookSensitivity = 0.004;
 - (BOOL)validateRequestId:(NSString *)requestId path:(NSString *)path maxShDegree:(NSInteger)maxShDegree {
   if ([requestId stringByTrimmingCharactersInSet:
       NSCharacterSet.whitespaceAndNewlineCharacterSet].length == 0) return NO;
-  if (![path hasPrefix:@"/"] || [path hasPrefix:@"//"] || [path isEqualToString:@"/"] ||
-      [path rangeOfString:@"\0"].location != NSNotFound) return NO;
-  if (maxShDegree < 0 || maxShDegree > 3) return NO;
+  if (![self isLocalPath:path]) return NO;
+  if (maxShDegree < 0 || maxShDegree > kMaxShDegree) return NO;
   return YES;
 }
 
@@ -573,7 +593,7 @@ static const CGFloat kLookSensitivity = 0.004;
     requestId:(NSString *)requestId {
   if (event == SKSplatEventColliderReady || event == SKSplatEventColliderFailed) {
     const BOOL ready = event == SKSplatEventColliderReady;
-    [self emitCollider:self.colliderRequestId phase:ready ? @"ready" : @"failed"
+    [self emitCollider:self.colliderRequestId phase:ready ? kColliderPhaseReady : kColliderPhaseFailed
                   code:ready ? @"" : kErrorColliderLoadFailed message:message];
     return;
   }
@@ -590,8 +610,8 @@ static const CGFloat kLookSensitivity = 0.004;
     [self applyStoredCamera];
   }
   if (self.worldEvent == nil) return;
-  NSString *phase = event == SKSplatEventWorldReady ? @"uploaded"
-      : event == SKSplatEventWorldFrameReady ? @"frameReady" : @"failed";
+  NSString *phase = event == SKSplatEventWorldReady ? kWorldPhaseUploaded
+      : event == SKSplatEventWorldFrameReady ? kWorldPhaseFrameReady : kWorldPhaseFailed;
   NSString *code = event == SKSplatEventWorldFailed ? kErrorWorldLoadFailed : @"";
   self.worldEvent(@{@"requestId": requestId, @"phase": phase, @"loadedSplats": @(count),
                     @"errorCode": code, @"message": message ?: @""});

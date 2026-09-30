@@ -107,3 +107,17 @@ test('camera commits after world preparation, reports effective state, and clear
     assert.ok(mm.includes(`value.${field} =`));
   }
 });
+
+// The phases are spelled in the JS contracts, the codegen spec and each adapter; the native
+// constants are what the adapter sends, so a drifted spelling has to fail here.
+test('iOS wire phase constants spell the values the JS contracts declare', () => {
+  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const {WorldPhase, ColliderPhase, CameraPhase} = require('../build/contracts.js');
+  const {PolicyPhase} = require('../build/performance.js');
+  const spelled = group => [...native.matchAll(new RegExp(`k${group}Phase\\w+ = @"([^"]*)"`, 'g'))]
+    .map(match => match[1]).sort();
+  assert.deepEqual(spelled('World'), Object.values(WorldPhase).sort());
+  assert.deepEqual(spelled('Collider'), Object.values(ColliderPhase).sort());
+  assert.deepEqual(spelled('Camera'), Object.values(CameraPhase).sort());
+  assert.deepEqual(spelled('Policy'), Object.values(PolicyPhase).sort());
+});
