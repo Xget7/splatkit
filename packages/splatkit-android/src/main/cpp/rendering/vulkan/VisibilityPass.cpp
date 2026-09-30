@@ -218,19 +218,15 @@ bool VisibilityPass::createPipelines() {
   if (vkCreatePipelineLayout(device, &prepareLayoutInfo, nullptr, &prepareLayout_) != VK_SUCCESS)
     return false;
 
-  VkShaderModule visibilityModule =
-      createShaderModule(device, shaders::visibility_comp, shaders::visibility_comp_size);
-  VkShaderModule prepareModule = createShaderModule(device, shaders::prepare_indirect_comp,
-                                                    shaders::prepare_indirect_comp_size);
-  if (!visibilityModule || !prepareModule) {
-    if (visibilityModule) vkDestroyShaderModule(device, visibilityModule, nullptr);
-    if (prepareModule) vkDestroyShaderModule(device, prepareModule, nullptr);
-    return false;
-  }
+  const ShaderModule visibilityModule(device, shaders::visibility_comp,
+                                      shaders::visibility_comp_size);
+  const ShaderModule prepareModule(device, shaders::prepare_indirect_comp,
+                                   shaders::prepare_indirect_comp_size);
+  if (!visibilityModule || !prepareModule) return false;
   VkPipelineShaderStageCreateInfo visibilityStage{
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
   visibilityStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  visibilityStage.module = visibilityModule;
+  visibilityStage.module = visibilityModule.get();
   visibilityStage.pName = "main";
   VkComputePipelineCreateInfo visibilityInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   visibilityInfo.stage = visibilityStage;
@@ -240,15 +236,13 @@ bool VisibilityPass::createPipelines() {
 
   VkPipelineShaderStageCreateInfo prepareStage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
   prepareStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  prepareStage.module = prepareModule;
+  prepareStage.module = prepareModule.get();
   prepareStage.pName = "main";
   VkComputePipelineCreateInfo prepareInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   prepareInfo.stage = prepareStage;
   prepareInfo.layout = prepareLayout_;
   const VkResult prepareResult =
       vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &prepareInfo, nullptr, &preparePipeline_);
-  vkDestroyShaderModule(device, visibilityModule, nullptr);
-  vkDestroyShaderModule(device, prepareModule, nullptr);
   return visibilityResult == VK_SUCCESS && prepareResult == VK_SUCCESS;
 }
 

@@ -104,9 +104,9 @@ bool SplatPipeline::createDescriptors() {
 
 bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   VkDevice device = ctx_.device();
-  VkShaderModule vert = createShaderModule(device, shaders::splat_vert, shaders::splat_vert_size);
-  VkShaderModule frag = createShaderModule(device, shaders::splat_frag, shaders::splat_frag_size);
-  if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) return false;
+  const ShaderModule vert(device, shaders::splat_vert, shaders::splat_vert_size);
+  const ShaderModule frag(device, shaders::splat_frag, shaders::splat_frag_size);
+  if (!vert || !frag) return false;
 
   // constant_id 0 of the vertex shader is the SH degree; each pipeline gets its own.
   uint32_t shDegree = 0;
@@ -116,12 +116,12 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  stages[0].module = vert;
+  stages[0].module = vert.get();
   stages[0].pName = "main";
   stages[0].pSpecializationInfo = &specialization;
   stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  stages[1].module = frag;
+  stages[1].module = frag.get();
   stages[1].pName = "main";
 
   // No vertex buffers: everything is fetched from storage buffers by instance index.
@@ -190,8 +190,6 @@ bool SplatPipeline::createPipelines(VkRenderPass renderPass) {
     ok = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr,
                                    &pipelines_[static_cast<size_t>(degree)]) == VK_SUCCESS;
   }
-  vkDestroyShaderModule(device, vert, nullptr);
-  vkDestroyShaderModule(device, frag, nullptr);
   return ok;
 }
 

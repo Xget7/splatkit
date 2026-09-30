@@ -130,17 +130,16 @@ bool RadixSort::initialize() {
   const size_t sizes[] = {shaders::radix_prepare_comp_size, shaders::radix_histogram_comp_size,
                           shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size};
   for (uint32_t i = 0; i < kStageCount; ++i) {
-    VkShaderModule module = createShaderModule(device, code[i], sizes[i]);
+    const ShaderModule module(device, code[i], sizes[i]);
     if (!module) return false;
     VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
     pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     pipeline.stage.stage = kShader;
-    pipeline.stage.module = module;
+    pipeline.stage.module = module.get();
     pipeline.stage.pName = "main";
     pipeline.layout = layout_;
     const auto result =
         vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipelines_[i]);
-    vkDestroyShaderModule(device, module, nullptr);
     if (result != VK_SUCCESS) return false;
   }
   return true;

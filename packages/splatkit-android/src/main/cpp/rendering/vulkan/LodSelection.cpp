@@ -98,18 +98,17 @@ bool LodSelection::initialize() {
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
   if (vkCreatePipelineLayout(ctx_.device(), &layout, nullptr, &layout_) != VK_SUCCESS) return false;
-  VkShaderModule module = createShaderModule(ctx_.device(), shaders::lod_selection_comp,
-                                             shaders::lod_selection_comp_size);
+  const ShaderModule module(ctx_.device(), shaders::lod_selection_comp,
+                            shaders::lod_selection_comp_size);
   if (!module) return false;
   VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   pipeline.layout = layout_;
   pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
   pipeline.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  pipeline.stage.module = module;
+  pipeline.stage.module = module.get();
   pipeline.stage.pName = "main";
   const auto result =
       vkCreateComputePipelines(ctx_.device(), VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipeline_);
-  vkDestroyShaderModule(ctx_.device(), module, nullptr);
   return result == VK_SUCCESS;
 }
 

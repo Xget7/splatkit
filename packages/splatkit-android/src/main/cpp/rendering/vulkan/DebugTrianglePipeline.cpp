@@ -10,22 +10,20 @@ splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::cre
   std::unique_ptr<DebugTrianglePipeline> p(new DebugTrianglePipeline(ctx));
   VkDevice device = ctx.device();
 
-  VkShaderModule vert =
-      createShaderModule(device, shaders::triangle_vert, shaders::triangle_vert_size);
-  VkShaderModule frag =
-      createShaderModule(device, shaders::triangle_frag, shaders::triangle_frag_size);
-  if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE) {
+  const ShaderModule vert(device, shaders::triangle_vert, shaders::triangle_vert_size);
+  const ShaderModule frag(device, shaders::triangle_frag, shaders::triangle_frag_size);
+  if (!vert || !frag) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "triangle shader modules"};
   }
 
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  stages[0].module = vert;
+  stages[0].module = vert.get();
   stages[0].pName = "main";
   stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  stages[1].module = frag;
+  stages[1].module = frag.get();
   stages[1].pName = "main";
 
   // No vertex buffers: positions come from gl_VertexIndex.
@@ -84,8 +82,6 @@ splat::Result<std::unique_ptr<DebugTrianglePipeline>> DebugTrianglePipeline::cre
 
   const VkResult result =
       vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &p->pipeline_);
-  vkDestroyShaderModule(device, vert, nullptr);
-  vkDestroyShaderModule(device, frag, nullptr);
   if (result != VK_SUCCESS) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "triangle pipeline"};
   }
