@@ -2,6 +2,28 @@ package com.splatkit.reactnative
 
 import java.io.File
 
+// What the Vulkan backend accepts, which conservativeCapabilities in performance.ts must fit.
+private const val MAX_LOD_CAPACITY_SPLATS = 2_200_000
+private const val MIN_RESIDENCY_CAPACITY_SPLATS = 100_000
+private const val MAX_RESIDENCY_CAPACITY_SPLATS = 8_000_000
+private const val MAX_SH_DEGREE = 3
+
+/** Stats leave the adapter at most twice a second. */
+internal const val STATS_INTERVAL_MILLIS = 500L
+
+private fun requireRequestId(requestId: String) {
+    require(requestId.isNotBlank()) { "requestId must be nonempty" }
+}
+
+private fun requireLocalPath(filePath: String) {
+    require(filePath.startsWith('/') && !filePath.startsWith("//") &&
+        !filePath.contains('\u0000') && filePath != "/") { "filePath must be an absolute local file" }
+}
+
+private fun requireReadableFile(filePath: String) {
+    require(File(filePath).isFile && File(filePath).canRead()) { "filePath must name a readable file" }
+}
+
 internal data class WorldRequest(
     val requestId: String,
     val filePath: String,
@@ -10,22 +32,24 @@ internal data class WorldRequest(
     val residencyCapacitySplats: Int,
 ) {
     fun validate() {
-        require(requestId.isNotBlank()) { "requestId must be nonempty" }
-        require(filePath.startsWith('/') && !filePath.startsWith("//") &&
-            !filePath.contains('\u0000') && filePath != "/") { "filePath must be an absolute local file" }
-        require(maxShDegree in 0..3) { "maxShDegree must be in 0..3" }
-        require(lodCapacitySplats in 0..2_200_000) { "lodCapacitySplats must be in 0..2200000" }
-        require(residencyCapacitySplats in 100_000..8_000_000) { "residencyCapacitySplats must be in 100000..8000000" }
-        require(File(filePath).isFile && File(filePath).canRead()) { "filePath must name a readable file" }
+        requireRequestId(requestId)
+        requireLocalPath(filePath)
+        require(maxShDegree in 0..MAX_SH_DEGREE) { "maxShDegree must be in 0..$MAX_SH_DEGREE" }
+        require(lodCapacitySplats in 0..MAX_LOD_CAPACITY_SPLATS) {
+            "lodCapacitySplats must be in 0..$MAX_LOD_CAPACITY_SPLATS"
+        }
+        require(residencyCapacitySplats in MIN_RESIDENCY_CAPACITY_SPLATS..MAX_RESIDENCY_CAPACITY_SPLATS) {
+            "residencyCapacitySplats must be in $MIN_RESIDENCY_CAPACITY_SPLATS..$MAX_RESIDENCY_CAPACITY_SPLATS"
+        }
+        requireReadableFile(filePath)
     }
 }
 
 internal data class ColliderRequest(val requestId: String, val filePath: String) {
     fun validate() {
-        require(requestId.isNotBlank()) { "requestId must be nonempty" }
-        require(filePath.startsWith('/') && !filePath.startsWith("//") &&
-            !filePath.contains('\u0000') && filePath != "/") { "filePath must be an absolute local file" }
-        require(File(filePath).isFile && File(filePath).canRead()) { "filePath must name a readable file" }
+        requireRequestId(requestId)
+        requireLocalPath(filePath)
+        requireReadableFile(filePath)
     }
 }
 
@@ -52,15 +76,16 @@ internal class WorldSession {
     fun accept(token: Long, phase: String): Boolean {
         if (token != generation || failed) return false
         return when (phase) {
-            "uploaded" -> if (uploaded) false else { uploaded = true; true }
-            "frameReady" -> if (!uploaded || frameReady) false else { frameReady = true; true }
-            "failed" -> { failed = true; true }
+            WorldPhase.UPLOADED -> if (uploaded) false else { uploaded = true; true }
+            WorldPhase.FRAME_READY -> if (!uploaded || frameReady) false else { frameReady = true; true }
+            WorldPhase.FAILED -> { failed = true; true }
             else -> false
         }
     }
 
     fun sample(nowMillis: Long): Boolean {
-        if (!frameReady || failed || lastStatsAt?.let { nowMillis - it < 500 } == true) return false
+        val tooSoon = lastStatsAt?.let { nowMillis - it < STATS_INTERVAL_MILLIS } == true
+        if (!frameReady || failed || tooSoon) return false
         lastStatsAt = nowMillis
         return true
     }

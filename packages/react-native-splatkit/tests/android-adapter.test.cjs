@@ -11,8 +11,8 @@ test('Android adapter maps the versioned policy prop and its events', () => {
   const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
   assert.match(manager, /override fun setPolicy/);
   assert.match(manager, /parsePolicyProp\(value\)/);
-  assert.match(manager, /"topPolicyEvent" to mapOf\("registrationName" to "onPolicyEvent"\)/);
-  assert.match(manager, /"topCapabilities" to mapOf\("registrationName" to "onCapabilities"\)/);
+  assert.match(manager, /EventType\.POLICY to mapOf\("registrationName" to "onPolicyEvent"\)/);
+  assert.match(manager, /EventType\.CAPABILITIES to mapOf\("registrationName" to "onCapabilities"\)/);
   // Props commit per transaction, so a world and a policy changed together apply once.
   assert.match(manager, /override fun onAfterUpdateTransaction[\s\S]*commitProps\(\)/);
   // The stored policy is applied to each engine a world builds, after capabilities and
@@ -31,8 +31,8 @@ test('Android adapter exposes navigation as props, commands and collider events'
     'setLookSensitivity', 'setCameraPoseInterval', 'setWalkVelocity', 'look', 'setCameraPose']) {
     assert.match(manager, new RegExp(`override fun ${method}\\(`), method);
   }
-  assert.match(manager, /"topColliderEvent" to mapOf\("registrationName" to "onColliderEvent"\)/);
-  assert.match(manager, /"topCameraPose" to mapOf\("registrationName" to "onCameraPose"\)/);
+  assert.match(manager, /EventType\.COLLIDER to mapOf\("registrationName" to "onColliderEvent"\)/);
+  assert.match(manager, /EventType\.CAMERA_POSE to mapOf\("registrationName" to "onCameraPose"\)/);
   // A world builds a new engine, so walk mode is rebuilt on it after the load is queued.
   assert.match(view, /view\.loadWorld\([\s\S]*loadCollider\(\)/);
   assert.match(view, /COLLIDER_LOAD_FAILED/);
@@ -45,7 +45,7 @@ test('Android camera transaction waits for world readiness and survives replacem
   const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
   const render = read('../splatkit-android/src/main/java/com/splatkit/engine/RenderThread.kt');
   assert.match(manager, /override fun setCamera\(/);
-  assert.match(manager, /"topCameraEvent" to mapOf\("registrationName" to "onCameraEvent"\)/);
+  assert.match(manager, /EventType\.CAMERA to mapOf\("registrationName" to "onCameraEvent"\)/);
   assert.match(view, /value\.revision == cameraRevisionSeen/);
   assert.match(view, /listOfNotNull\(cameraAccepted, cameraPending\)/);
   assert.match(view, /token != session\.generation/);
@@ -60,20 +60,37 @@ test('Android camera transaction waits for world readiness and survives replacem
 // no capabilities event follows and the host cannot learn what it got wrong: the first guess
 // has to be one every adapter accepts.
 test('conservativeCapabilities fit the ranges the Android adapter accepts', () => {
-  const kotlin = fs.readFileSync(
-    path.join(root, 'android/src/main/java/com/splatkit/reactnative/WorldSession.kt'), 'utf8');
-  const number = text => Number(text.replace(/_/g, ''));
-  const lod = kotlin.match(/lodCapacitySplats in (\d[\d_]*)\.\.(\d[\d_]*)/);
-  const residency = kotlin.match(/residencyCapacitySplats in (\d[\d_]*)\.\.(\d[\d_]*)/);
-  assert.ok(lod && residency, 'WorldSession must state both accepted ranges');
+  const kotlin = read('android/src/main/java/com/splatkit/reactnative/WorldSession.kt');
+  const constant = name => {
+    const match = kotlin.match(new RegExp(`const val ${name} = (\\d[\\d_]*)`));
+    assert.ok(match, `WorldSession must state ${name}`);
+    return Number(match[1].replace(/_/g, ''));
+  };
 
   const {limits} = require('../build/performance.js').conservativeCapabilities;
-  assert.ok(limits.maxLodCapacitySplats <= number(lod[2]),
-    `maxLodCapacitySplats ${limits.maxLodCapacitySplats} exceeds the adapter's ${lod[2]}`);
-  assert.ok(limits.minResidencyCapacitySplats >= number(residency[1]),
+  assert.ok(limits.maxLodCapacitySplats <= constant('MAX_LOD_CAPACITY_SPLATS'),
+    `maxLodCapacitySplats ${limits.maxLodCapacitySplats} exceeds the adapter's`);
+  assert.ok(limits.minResidencyCapacitySplats >= constant('MIN_RESIDENCY_CAPACITY_SPLATS'),
     'minResidencyCapacitySplats falls below the adapter minimum');
-  assert.ok(limits.maxResidencyCapacitySplats <= number(residency[2]),
+  assert.ok(limits.maxResidencyCapacitySplats <= constant('MAX_RESIDENCY_CAPACITY_SPLATS'),
     'maxResidencyCapacitySplats exceeds the adapter maximum');
+});
+
+// The wire spellings exist in the JS contracts, the codegen spec and each adapter; Kotlin
+// compares against its own constants, so a drifted spelling has to fail here.
+test('Android wire constants spell the values the JS contracts declare', () => {
+  const kotlin = read('android/src/main/java/com/splatkit/reactnative/Wire.kt');
+  const {WorldPhase, ColliderPhase, CameraPhase} = require('../build/contracts.js');
+  const {PolicyPhase} = require('../build/performance.js');
+  const spelled = name => {
+    const body = kotlin.match(new RegExp(`object ${name} \\{([^}]*)\\}`));
+    assert.ok(body, `Wire.kt must declare ${name}`);
+    return [...body[1].matchAll(/const val \w+ = "([^"]*)"/g)].map(match => match[1]).sort();
+  };
+  assert.deepEqual(spelled('WorldPhase'), Object.values(WorldPhase).sort());
+  assert.deepEqual(spelled('ColliderPhase'), Object.values(ColliderPhase).sort());
+  assert.deepEqual(spelled('CameraPhase'), Object.values(CameraPhase).sort());
+  assert.deepEqual(spelled('PolicyPhase'), Object.values(PolicyPhase).sort());
 });
 
 // The adapter reported every timing as unavailable, so a HUD on Android could never show a

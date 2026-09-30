@@ -1,19 +1,14 @@
 package com.splatkit.reactnative
 
 import com.facebook.react.bridge.ReadableMap
-import com.splatkit.CharacterSettings
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.ViewManagerDelegate
 import com.facebook.react.viewmanagers.SplatKitViewManagerDelegate
 import com.facebook.react.viewmanagers.SplatKitViewManagerInterface
+import com.splatkit.CharacterSettings
 
 class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManagerInterface<SplatKitView> {
-    private fun ReadableMap.integer(name: String): Int {
-        val value = getDouble(name)
-        require(value.isFinite() && value == value.toInt().toDouble()) { "$name must be an Int32" }
-        return value.toInt()
-    }
     private val generatedDelegate = SplatKitViewManagerDelegate(this)
     override fun getDelegate(): ViewManagerDelegate<SplatKitView> = generatedDelegate
     override fun getName() = "SplatKitView"
@@ -26,7 +21,7 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
         try {
             view.setWorld(WorldRequest(
                 value.getString("requestId") ?: "", value.getString("filePath") ?: "",
-                value.integer("maxShDegree"), value.integer("lodCapacitySplats"), value.integer("residencyCapacitySplats")))
+                value.int32("maxShDegree"), value.int32("lodCapacitySplats"), value.int32("residencyCapacitySplats")))
         } catch (error: RuntimeException) {
             view.invalidRequest(error.message ?: "Malformed world request")
         }
@@ -102,14 +97,14 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
         view.commitProps()
     }
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> = mutableMapOf(
-        "topWorldEvent" to mapOf("registrationName" to "onWorldEvent"),
-        "topStats" to mapOf("registrationName" to "onStats"),
-        "topPolicyEvent" to mapOf("registrationName" to "onPolicyEvent"),
-        "topCameraEvent" to mapOf("registrationName" to "onCameraEvent"),
-        "topCapabilities" to mapOf("registrationName" to "onCapabilities"),
-        "topColliderEvent" to mapOf("registrationName" to "onColliderEvent"),
-        "topCameraPose" to mapOf("registrationName" to "onCameraPose"),
-        "topFocusResult" to mapOf("registrationName" to "onFocusResult"),
+        EventType.WORLD to mapOf("registrationName" to "onWorldEvent"),
+        EventType.STATS to mapOf("registrationName" to "onStats"),
+        EventType.POLICY to mapOf("registrationName" to "onPolicyEvent"),
+        EventType.CAMERA to mapOf("registrationName" to "onCameraEvent"),
+        EventType.CAPABILITIES to mapOf("registrationName" to "onCapabilities"),
+        EventType.COLLIDER to mapOf("registrationName" to "onColliderEvent"),
+        EventType.CAMERA_POSE to mapOf("registrationName" to "onCameraPose"),
+        EventType.FOCUS_RESULT to mapOf("registrationName" to "onFocusResult"),
     )
     override fun onDropViewInstance(view: SplatKitView) { view.dispose(); super.onDropViewInstance(view) }
 }

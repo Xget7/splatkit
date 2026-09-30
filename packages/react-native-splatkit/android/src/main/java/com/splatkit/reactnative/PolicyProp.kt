@@ -1,7 +1,6 @@
 package com.splatkit.reactnative
 
 import com.facebook.react.bridge.ReadableMap
-import com.facebook.react.bridge.ReadableType
 import com.splatkit.RasterStrategy
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
@@ -12,22 +11,6 @@ internal data class RevisionedPolicy(val revision: Int, val policy: RenderPolicy
 
 /** What `onPolicyEvent` says about one application. */
 internal data class PolicyOutcome(val phase: String, val errorCode: String, val message: String)
-
-private fun ReadableMap.number(name: String): Double {
-    require(hasKey(name) && getType(name) == ReadableType.Number) { "$name must be a number" }
-    return getDouble(name)
-}
-
-private fun ReadableMap.int32(name: String): Int {
-    val value = number(name)
-    require(value.isFinite() && value == value.toInt().toDouble()) { "$name must be an Int32" }
-    return value.toInt()
-}
-
-private fun ReadableMap.flag(name: String): Boolean {
-    require(hasKey(name) && getType(name) == ReadableType.Boolean) { "$name must be a boolean" }
-    return getBoolean(name)
-}
 
 /** The revision of a policy prop, or 0 when even that is malformed. */
 internal fun policyPropRevision(map: ReadableMap): Int = runCatching { map.int32("revision") }.getOrDefault(0)
@@ -57,9 +40,10 @@ internal fun parsePolicyProp(map: ReadableMap): RevisionedPolicy? {
 
 /** Shared with the iOS adapter: the codes a host can branch on. */
 internal fun policyOutcome(resolution: RenderPolicyResolution): PolicyOutcome = when {
-    !resolution.accepted -> PolicyOutcome("rejected",
-        if (resolution.preparationFailed) "POLICY_PREPARATION_FAILED" else "INVALID_POLICY",
+    !resolution.accepted -> PolicyOutcome(PolicyPhase.REJECTED,
+        if (resolution.preparationFailed) ErrorCode.POLICY_PREPARATION_FAILED else ErrorCode.INVALID_POLICY,
         resolution.error.orEmpty())
-    resolution.warnings.isNotEmpty() -> PolicyOutcome("warning", "", resolution.warnings.joinToString("; "))
-    else -> PolicyOutcome("applied", "", "")
+    resolution.warnings.isNotEmpty() ->
+        PolicyOutcome(PolicyPhase.WARNING, "", resolution.warnings.joinToString("; "))
+    else -> PolicyOutcome(PolicyPhase.APPLIED, "", "")
 }

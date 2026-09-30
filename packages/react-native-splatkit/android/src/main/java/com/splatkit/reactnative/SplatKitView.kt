@@ -22,6 +22,14 @@ import com.splatkit.SplatSurfaceView
 import com.splatkit.WorldPoint
 import java.io.File
 
+private const val MIN_RENDER_SCALE = 0.1
+private const val MAX_RENDER_SCALE = 2.0
+private const val MAX_SH_DEGREE = 3
+private const val MAX_CULL_MARGIN_DEGREES = 80.0
+
+/** Bit per RasterStrategy wire value, as onCapabilities reports them: hardware, computeTile, hybrid. */
+private const val ALL_RASTER_STRATEGIES_MASK = 0b111
+
 internal class SplatKitEvent(surfaceId: Int, tag: Int, private val name: String, private val data: WritableMap) :
     Event<SplatKitEvent>(surfaceId, tag) {
     override fun getEventName() = name
@@ -71,7 +79,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             try {
                 value.validate()
             } catch (error: IllegalArgumentException) {
-                emitWorld(value.requestId, "failed", 0, "INVALID_REQUEST", error.message.orEmpty())
+                emitWorld(value.requestId, WorldPhase.FAILED, 0, ErrorCode.INVALID_REQUEST, error.message.orEmpty())
                 return
             }
         }
@@ -79,7 +87,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         worldChanged = value != request
     }
 
-    internal fun invalidRequest(message: String) = emitWorld("", "failed", 0, "INVALID_REQUEST", message)
+    internal fun invalidRequest(message: String) =
+        emitWorld("", WorldPhase.FAILED, 0, ErrorCode.INVALID_REQUEST, message)
 
     internal fun setCollider(value: ColliderRequest?) {
         if (dropped) return
@@ -87,7 +96,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             try {
                 value.validate()
             } catch (error: IllegalArgumentException) {
-                emitCollider(value.requestId, "failed", "INVALID_REQUEST", error.message.orEmpty())
+                emitCollider(value.requestId, ColliderPhase.FAILED, ErrorCode.INVALID_REQUEST, error.message.orEmpty())
                 return
             }
         }
@@ -95,7 +104,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         colliderChanged = value != collider
     }
 
-    internal fun invalidCollider(message: String) = emitCollider("", "failed", "INVALID_REQUEST", message)
+    internal fun invalidCollider(message: String) =
+        emitCollider("", ColliderPhase.FAILED, ErrorCode.INVALID_REQUEST, message)
 
     internal fun setCharacter(value: CharacterSettings?) {
         if (dropped || value == character) return
@@ -160,7 +170,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
 
     fun focus(requestId: String, x: Double, y: Double) {
         val hit = finite(x, y) && (nativeView?.focus(x.toFloat(), y.toFloat()) == true)
-        emit("topFocusResult", Arguments.createMap().apply {
+        emit(EventType.FOCUS_RESULT, Arguments.createMap().apply {
             putString("requestId", requestId)
             putBoolean("hit", hit)
         })
@@ -174,18 +184,22 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
 
     fun setPaused(value: Boolean) { paused = value; updateRunning() }
     fun setRenderScale(value: Double) {
-        require(value.isFinite() && value in 0.1..2.0) { "renderScale must be in 0.1..2" }
+        require(value.isFinite() && value in MIN_RENDER_SCALE..MAX_RENDER_SCALE) {
+            "renderScale must be in $MIN_RENDER_SCALE..${MAX_RENDER_SCALE.toInt()}"
+        }
         renderScale = value
         displayChanged = true
     }
     fun setShDegree(value: Int) {
-        require(value in 0..3) { "shDegree must be in 0..3" }
+        require(value in 0..MAX_SH_DEGREE) { "shDegree must be in 0..$MAX_SH_DEGREE" }
         shDegree = value
         displayChanged = true
     }
     fun setLinearBlending(value: Boolean) { linearBlending = value; displayChanged = true }
     fun setCullMarginDegrees(value: Double) {
-        require(value.isFinite() && value in 0.0..80.0) { "cullMarginDegrees must be in 0..80" }
+        require(value.isFinite() && value in 0.0..MAX_CULL_MARGIN_DEGREES) {
+            "cullMarginDegrees must be in 0..${MAX_CULL_MARGIN_DEGREES.toInt()}"
+        }
         cullMarginDegrees = value
         displayChanged = true
     }
@@ -317,25 +331,26 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         view.listener = object : SplatSurfaceView.Listener {
             private fun outcome(phase: String, count: Int = 0, message: String = "") {
                 if (dropped || !session.accept(token, phase)) return
-                emitWorld(world.requestId, phase, count, if (phase == "failed") "WORLD_LOAD_FAILED" else "", message)
+                val code = if (phase == WorldPhase.FAILED) ErrorCode.WORLD_LOAD_FAILED else ""
+                emitWorld(world.requestId, phase, count, code, message)
             }
-            override fun onWorldReady(splatCount: Int) = outcome("uploaded", splatCount)
-            override fun onWorldFrameReady(splatCount: Int) = outcome("frameReady", splatCount)
-            override fun onWorldFailed(message: String) = outcome("failed", message = message)
+            override fun onWorldReady(splatCount: Int) = outcome(WorldPhase.UPLOADED, splatCount)
+            override fun onWorldFrameReady(splatCount: Int) = outcome(WorldPhase.FRAME_READY, splatCount)
+            override fun onWorldFailed(message: String) = outcome(WorldPhase.FAILED, message = message)
             override fun onColliderReady() {
                 if (!dropped && token == session.generation) {
-                    emitCollider(collider?.requestId.orEmpty(), "ready", "", "")
+                    emitCollider(collider?.requestId.orEmpty(), ColliderPhase.READY, "", "")
                 }
             }
             override fun onColliderFailed(message: String) {
                 if (!dropped && token == session.generation) {
-                    emitCollider(collider?.requestId.orEmpty(), "failed", "COLLIDER_LOAD_FAILED", message)
+                    emitCollider(collider?.requestId.orEmpty(), ColliderPhase.FAILED, ErrorCode.COLLIDER_LOAD_FAILED, message)
                 }
             }
         }
         view.cameraPoseListener = { pose ->
             if (!dropped && token == session.generation) {
-                emit("topCameraPose", Arguments.createMap().apply {
+                emit(EventType.CAMERA_POSE, Arguments.createMap().apply {
                     putDouble("x", pose.x.toDouble()); putDouble("y", pose.y.toDouble())
                     putDouble("z", pose.z.toDouble()); putDouble("yaw", pose.yaw.toDouble())
                     putDouble("pitch", pose.pitch.toDouble())
@@ -348,7 +363,9 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         view.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
         view.layout(0, 0, width, height)
         if (!view.isAvailable) {
-            if (session.accept(token, "failed")) emitWorld(world.requestId, "failed", 0, "GPU_UNAVAILABLE", "Vulkan initialization failed")
+            if (session.accept(token, WorldPhase.FAILED)) {
+                emitWorld(world.requestId, WorldPhase.FAILED, 0, ErrorCode.GPU_UNAVAILABLE, "Vulkan initialization failed")
+            }
             return
         }
         emitCapabilities(view)
@@ -382,7 +399,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         main.removeCallbacks(statsTick)
         if (!dropped && isAttachedToWindow && hostResumed && !paused) {
             nativeView?.resume()
-            if (nativeView != null) main.postDelayed(statsTick, 500)
+            if (nativeView != null) main.postDelayed(statsTick, STATS_INTERVAL_MILLIS)
         } else nativeView?.pause()
     }
 
@@ -393,7 +410,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             val world = request ?: return
             if (session.sample(SystemClock.uptimeMillis())) {
                 val stats = view.readStats()
-                emit("topStats", Arguments.createMap().apply {
+                emit(EventType.STATS, Arguments.createMap().apply {
                     putString("requestId", world.requestId)
                     putDouble("loadedSplats", stats.loadedSplatCount.toDouble())
                     putDouble("drawnSplats", stats.drawnSplatCount.toDouble())
@@ -408,19 +425,19 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
                     putBoolean("sortTimingAvailable", stats.sortMillis > 0f)
                 })
             }
-            main.postDelayed(this, 500)
+            main.postDelayed(this, STATS_INTERVAL_MILLIS)
         }
     }
 
     private fun emitWorld(id: String, phase: String, count: Int, code: String, message: String) {
-        emit("topWorldEvent", Arguments.createMap().apply {
+        emit(EventType.WORLD, Arguments.createMap().apply {
             putString("requestId", id); putString("phase", phase)
             putDouble("loadedSplats", count.toDouble()); putString("errorCode", code); putString("message", message)
         })
     }
 
     private fun emitCollider(id: String, phase: String, code: String, message: String) {
-        emit("topColliderEvent", Arguments.createMap().apply {
+        emit(EventType.COLLIDER, Arguments.createMap().apply {
             putString("requestId", id); putString("phase", phase)
             putString("errorCode", code); putString("message", message)
         })
@@ -429,7 +446,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     /** Native limits, features and accepted policy; emitted once per engine. */
     private fun emitCapabilities(view: SplatSurfaceView) {
         val caps = view.deviceCapabilities ?: return
-        emit("topCapabilities", Arguments.createMap().apply {
+        emit(EventType.CAPABILITIES, Arguments.createMap().apply {
             putInt("maxLodCapacitySplats", caps.limits.maxLodCapacitySplats)
             putInt("minResidencyCapacitySplats", caps.limits.minResidencyCapacitySplats)
             putInt("maxResidencyCapacitySplats", caps.limits.maxResidencyCapacitySplats)
@@ -439,7 +456,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             putInt("maxTextureDimension", caps.maxTextureDimension)
             putBoolean("policyRaster", caps.policy.raster)
             // Vulkan applies no raster choice; the Kotlin support type has no strategy mask yet.
-            putInt("policyRasterMask", if (caps.policy.raster) 0b111 else 0)
+            putInt("policyRasterMask", if (caps.policy.raster) ALL_RASTER_STRATEGIES_MASK else 0)
             putBoolean("policyTileSize", caps.policy.tileSize)
             putBoolean("policyLodErrorPixels", caps.policy.lodErrorPixels)
             putBoolean("policyAlphaThreshold", caps.policy.alphaThreshold)
@@ -455,7 +472,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     private fun emitPolicy(revision: Int, resolution: RenderPolicyResolution) {
         val outcome = policyOutcome(resolution)
         val effective = resolution.effective
-        emit("topPolicyEvent", Arguments.createMap().apply {
+        emit(EventType.POLICY, Arguments.createMap().apply {
             putInt("revision", revision)
             putString("phase", outcome.phase)
             putString("errorCode", outcome.errorCode)
@@ -474,7 +491,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
 
     private fun emitCamera(revision: Int, resolution: CameraResolution) {
         val effective = resolution.effective
-        emit("topCameraEvent", Arguments.createMap().apply {
+        emit(EventType.CAMERA, Arguments.createMap().apply {
             putInt("revision", revision)
             putInt("mode", effective.mode.wire)
             putDouble("anchorX", effective.anchor.x.toDouble())
@@ -485,8 +502,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             putDouble("elevation", effective.elevation.toDouble())
             putDouble("orbitRadiansPerSecond", effective.orbitRadiansPerSecond.toDouble())
             putBoolean("hasAnchor", effective.hasAnchor)
-            putString("phase", if (resolution.accepted) "applied" else "rejected")
-            putString("errorCode", if (resolution.accepted) "" else "INVALID_CAMERA")
+            putString("phase", if (resolution.accepted) CameraPhase.APPLIED else CameraPhase.REJECTED)
+            putString("errorCode", if (resolution.accepted) "" else ErrorCode.INVALID_CAMERA)
             putString("message", resolution.error)
         })
     }
