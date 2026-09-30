@@ -139,6 +139,7 @@ Result<uint32_t> validateLodTree(const LodTree& tree) {
           ++li;
           ++subtree;
         }
+        // Same leaf reach as buildLodSelectionData, which the bounds below are checked against.
         const float reach = std::sqrt(2 * std::log(std::max(255.0f * c.alphas[index], 1.0f)));
         for (int axis = 0; axis < 3; ++axis) {
           const int diagonal = axis == 0 ? 0 : axis == 1 ? 3 : 5;

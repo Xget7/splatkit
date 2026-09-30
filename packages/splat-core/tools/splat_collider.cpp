@@ -148,7 +148,7 @@ void compare(const splat::Collider& candidate, const splat::Collider& reference,
       floorError.push_back(got->point.y - want->point.y);
       const splat::Vec3 hip{x, want->point.y + kHip, z};
       for (int d = 0; d < 8; ++d) {
-        const float angle = static_cast<float>(d) * 3.14159265f / 4;
+        const float angle = static_cast<float>(d) * static_cast<float>(M_PI) / 4;
         const splat::Vec3 dir{std::cos(angle), 0, std::sin(angle)};
         const auto wall = reference.raycast(hip, dir, kWallReach);
         if (!wall) continue;
