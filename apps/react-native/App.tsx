@@ -97,6 +97,9 @@ const WORLD_SH_DEGREE = 3;
 const CLOSER_DISTANCE = 0.3;
 
 const WORLD_REQUEST = 'world';
+
+/** Shown from each world request until its first frame. */
+const LOADING_STATUS = 'Loading world';
 const COLLIDER_REQUEST = 'collider';
 
 /** Clears the HUD's preset row, which sits 34pt up and stands about 26pt tall. */
@@ -204,7 +207,7 @@ function Splat({ worldPath, colliderPath }: Props) {
     revision: FIRST_REVISION,
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);
-  const [status, setStatus] = useState<string | null>('Loading world');
+  const [status, setStatus] = useState<string | null>(LOADING_STATUS);
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
   const [camera, setCamera] = useState<SplatKitViewProps['camera']>();
@@ -357,8 +360,13 @@ function Splat({ worldPath, colliderPath }: Props) {
     };
   }, [flying, flightFrame, flightRunning, flightStarted]);
 
+  // A new request replaces the drawn world, so the screen is empty until it loads: the
+  // status line and a blank HUD say so, as on the first load.
   useEffect(() => {
     setFlying(false);
+    setStatus(LOADING_STATUS);
+    setStats(null);
+    setSamples([]);
   }, [world?.requestId]);
 
   const onCameraEvent = useCallback((event: EventOf<'onCameraEvent'>) => {
