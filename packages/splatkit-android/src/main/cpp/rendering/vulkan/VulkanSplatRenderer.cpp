@@ -271,16 +271,12 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   vkCmdSetViewport(cmd, 0, 1, &viewport);
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-  if (world_) {
-    if (gpuDraw) {
-      splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
-    } else if (!compute_ && frame.orderSource == OrderSource::cpu) {
-      splats_->draw(cmd, slot, *world_, std::min(frame.drawCount, world_->count),
-                    std::min(frame.shDegree, world_->shDegree), frame.view, frame.proj,
-                    frame.cameraPosition, extent);
-    }
-  } else {
-    triangle_->draw(cmd);
+  if (world_ && gpuDraw) {
+    splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
+  } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
+    splats_->draw(cmd, slot, *world_, std::min(frame.drawCount, world_->count),
+                  std::min(frame.shDegree, world_->shDegree), frame.view, frame.proj,
+                  frame.cameraPosition, extent);
   }
 
   vkCmdEndRenderPass(cmd);
@@ -343,7 +339,7 @@ bool VulkanSplatRenderer::recreateSwapchain() {
   // pipelines. A render pass with the same attachment format is compatible with the one
   // they were built against (Vulkan 1.1, 8.2 "Render Pass Compatibility"). Only a format
   // change, which also flips the sRGB output path, forces a rebuild.
-  if (splats_ && triangle_ && pipelineFormat_ == activeFormat()) return true;
+  if (splats_ && pipelineFormat_ == activeFormat()) return true;
   return createPipelines();
 }
 
@@ -364,18 +360,10 @@ bool VulkanSplatRenderer::createRenderTarget() {
 }
 
 bool VulkanSplatRenderer::createPipelines() {
-  triangle_.reset();
   splats_.reset();
   pipelineFormat_ = activeFormat();
   const VkRenderPass pass = activeRenderPass();
   LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_), target_ ? 1 : 0);
-
-  auto triangle = DebugTrianglePipeline::create(ctx_, pass);
-  if (!triangle) {
-    LOGE("%s", triangle.error().message.c_str());
-    return false;
-  }
-  triangle_ = std::move(triangle.value());
 
   auto splats = SplatPipeline::create(ctx_, pass, isSrgb(pipelineFormat_));
   if (!splats) {
@@ -424,7 +412,6 @@ VkRenderPass VulkanSplatRenderer::activeRenderPass() const {
 
 void VulkanSplatRenderer::destroySurface() {
   ctx_.waitIdle();
-  triangle_.reset();
   splats_.reset();
   target_.reset();
   swapchain_.reset();

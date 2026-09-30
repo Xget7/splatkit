@@ -30,8 +30,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../splatkit-engine splatki
 
 include(cmake/shaders.cmake)
 splatkit_compile_shaders(splatkit_shaders
-  shaders/triangle.vert
-  shaders/triangle.frag
   shaders/splat.vert
   shaders/splat.frag
   shaders/visibility.comp
@@ -48,7 +46,6 @@ add_library(splatkit SHARED
   rendering/vulkan/Swapchain.cpp
   rendering/vulkan/RenderTarget.cpp
   rendering/vulkan/FrameLoop.cpp
-  rendering/vulkan/DebugTrianglePipeline.cpp
   rendering/vulkan/GpuBuffer.cpp
   rendering/vulkan/SplatPipeline.cpp
   rendering/vulkan/VisibilityPass.cpp

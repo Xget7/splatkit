@@ -6,7 +6,6 @@
 #include <android/native_window.h>
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/DebugTrianglePipeline.h"
 #include "rendering/vulkan/FrameLoop.h"
 #include "rendering/vulkan/RenderTarget.h"
 #include "rendering/vulkan/SplatPipeline.h"
@@ -48,7 +47,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason) override;
 
   // True when a surface with pipelines is up.
-  bool ready() const override { return swapchain_ && splats_ && triangle_; }
+  bool ready() const override { return swapchain_ && splats_; }
   // The target's size with a render scale, else the swapchain's.
   Extent drawExtent() const override;
   // Counts the rebuilds of the swapchain or the target.
@@ -65,7 +64,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) override;
   std::optional<GpuWorldInfo> world() const override;
 
-  // The world, or the debug triangle without one.
+  // The world, or only the clear colour without one.
   bool draw(const Frame& frame) override;
   bool hasCompletedWorldFrame() {
     return worldFrameCompletion_.completed(frameLoop_.completedSubmission());
@@ -99,7 +98,6 @@ class VulkanSplatRenderer final : public SplatRenderer {
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<Swapchain> swapchain_;
   std::unique_ptr<RenderTarget> target_;  // only when renderScale_ != 1
-  std::unique_ptr<DebugTrianglePipeline> triangle_;
   std::unique_ptr<SplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<GpuWorld> world_;
