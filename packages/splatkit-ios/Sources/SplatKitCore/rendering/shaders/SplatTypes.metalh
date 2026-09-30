@@ -74,6 +74,7 @@ struct DrawArguments {
 constant float kSplatDepth = 0.5;
 constant float kMaskDepth = 0.25;
 constant float kSaturated = 254.0 / 255.0;  // coverage at which a pixel counts as opaque
+constant float3 kBackground = float3(0.05, 0.05, 0.08);  // kBackground in MetalSplatRenderer.mm
 
 constant float kBoundsRadius = 3.0;     // draw out to 3 sigma; beyond that nothing is visible
 constant float kLodBoundsRadius = 5.0;  // an opacity of 1000 stays solid out past 3 sigma

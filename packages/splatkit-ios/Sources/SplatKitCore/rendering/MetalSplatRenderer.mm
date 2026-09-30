@@ -19,6 +19,7 @@ namespace splatkit {
 
 namespace {
 constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth16Unorm;
+// The tile raster shader clears to the same colour (kBackground in SplatTypes.metalh).
 constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
 }  // namespace
 
