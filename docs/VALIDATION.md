@@ -60,13 +60,12 @@ Host callbacks may remain display-paced even when presentation vsync is disabled
 | First successful GPU world-frame callback | Public delegate | Public `onWorldFrameReady` listener |
 | Scripted look-at with explicit up vector | Public API | Public API |
 | Orbit: anchor, dolly, focus, animated turn | Public API; scripted 360 on a physical iPhone | Public API |
-| PNG capture | Public API | No SDK capture API |
 | Quality presets | Individual properties | `RenderQuality` presets |
-| Experimental hybrid screen tiles | Implemented | Missing |
 | GPU sort timing | Visibility + radix command interval | Isolated radix interval |
 | Per-instance render policy and capabilities | `SplatMetalView.renderPolicy`, `deviceCapabilities` | `SplatSurfaceView.applyRenderPolicy`, `deviceCapabilities` |
 | Policy fields applied natively | Sort depth with GPU sort; sub-pixel under tight culling | Sort depth and sub-pixel with GPU visibility |
-| RN policy prop, capability and policy events | Adapter compiles; device pending | Physical Mi 9: revisions, fallback warnings, preset reloads, background; rejection host-tested only |
+| RN policy prop, capability and policy events | Physical iPhone 17 Pro | Physical Mi 9: revisions, fallback warnings, preset reloads, background; rejection host-tested only |
 
 Shared functionality does not imply identical internal algorithms or timing semantics.
-Tile parity, missing host contracts and consistent stage diagnostics remain open; no equivalent-feature or universal 30/60 FPS claim.
+Hybrid screen tiles are a Metal strategy for Apple's tile-based GPUs, not a parity gate, and PNG capture is a Metal validation aid.
+Consistent stage diagnostics remain open; there is no equivalent-feature or universal 30/60 FPS claim.

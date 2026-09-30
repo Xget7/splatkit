@@ -46,7 +46,6 @@ scripts/prepare-world.sh scene.ply out/ --collider   # --lod for scenes of sever
 | Offline `.lodsplat` and GPU hierarchical selection | Yes | Yes |
 | 16-bit quantized depth / two radix passes | Per-view policy approximation | Per-view policy approximation |
 | SH degrees 0–3, walk/fly, touch, motion, loaded/drawn stats | Yes | Yes |
-| Hybrid compute screen tiles | Experimental per-view opt-in, for dense close-up scenes | Not implemented |
 | Per-view render policy and capabilities | Yes | Yes |
 | React Native policy prop and events | iPhone 17 Pro validated | Mi 9 validated |
 
@@ -70,23 +69,19 @@ There is no universal 10M/30/60 FPS or lossless guarantee.
 
 [Backend contracts/evidence](packages/splatkit-android/docs/VULKAN.md) | [Parity gates](docs/VALIDATION.md#remaining-parity-gates) | [Historical device measurements](docs/BENCHMARKS.md)
 
-## Support the project
+## Known gaps - contributions welcome
 
-SplatKit is still experimental. The most useful ways to help are:
+These are the things we know are missing.
+We would love help with any of them.
 
-- Test the SDK on a physical Android (preferred).
-- Report bugs with reproduction steps, device and GPU details, OS version,
- world format and size, render settings, and relevant logs.
-- Share feedback about the native and React Native APIs.
-- Improve documentation, examples, tests, or implementation.
+- **Other GPUs.** Android is tested on one Adreno 640 phone, and Mali is untested.
+- **Lifecycle stress.** Backgrounding, rotating, switching worlds and recycling views work in normal use, but nobody has hammered them for leaks.
+- **Long sessions.** Our runs are minutes long, not hours; thermal behaviour over time is unmeasured.
+- **Very large worlds.** LOD limits what is drawn, not what is loaded, so the whole hierarchy stays in memory.
+  A 13M node world raises memory warnings even on an iPhone 17 Pro.
+- **Metal and Vulkan side by side.** There is no automated image comparison between the two backends yet.
 
-Current testing gaps include Mali GPUs, additional Adreno devices, lifecycle
-stress testing, and Metal/Vulkan visual comparisons.
- 
-## Contribute
-
-Use the [agent harness](docs/AGENT_HARNESS.md), [validation gates](docs/VALIDATION.md) and [build guide](CONTRIBUTING.md).
-Include device/driver, world, settings and logs with performance reports.
-Next acceptance work: Mali and more Adreno devices, lifecycle stress, reference-image comparisons, then Vulkan hybrid tiles.
+A bug report is most useful with the device and GPU, OS version, world format and size, render settings and logs.
+To send code, start with the [build guide](CONTRIBUTING.md), the [validation gates](docs/VALIDATION.md) and the [agent harness](docs/AGENT_HARNESS.md).
 
 [MIT license](LICENSE) and [third-party licenses](THIRD_PARTY_LICENSES.txt).
