@@ -40,10 +40,9 @@ test('Android adapter exposes navigation as props, commands and collider events'
   assert.match(view, /fun walk\(forward: Double, right: Double\) \{\s*nativeView\?\.setWalkVelocity/);
 });
 
-test('Android camera transaction waits for world readiness and survives replacement', () => {
+test('Android camera transaction survives world replacement', () => {
   const manager = read('android/src/main/java/com/splatkit/reactnative/SplatKitViewManager.kt');
   const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
-  const render = read('../splatkit-android/src/main/java/com/splatkit/engine/RenderThread.kt');
   assert.match(manager, /override fun setCamera\(/);
   assert.match(manager, /EventType\.CAMERA to mapOf\("registrationName" to "onCameraEvent"\)/);
   assert.match(view, /value\.revision == cameraRevisionSeen/);
@@ -51,6 +50,17 @@ test('Android camera transaction waits for world readiness and survives replacem
   assert.match(view, /token != session\.generation/);
   assert.match(view, /if \(resolution\.accepted\) \{\s*cameraAccepted = requested/);
   assert.match(view, /applyCamera\(view, replayAccepted = true\)[\s\S]*view\.loadWorld/);
+});
+
+// The SDK half of the transaction lives in the Android SDK, which the published package's
+// repository does not carry.
+test('Android SDK applies a pending camera once the world is ready', t => {
+  const sdk = '../splatkit-android/src/main/java/com/splatkit/engine/RenderThread.kt';
+  if (!fs.existsSync(path.join(root, sdk))) {
+    t.skip('the Android SDK sources are only available in the monorepo');
+    return;
+  }
+  const render = read(sdk);
   assert.match(render, /event == SplatEngine\.Event\.WORLD_READY[\s\S]*applyPendingCamera\(\)/);
   assert.match(render, /Looper\.myLooper\(\) == thread\.looper\) markWorldReady\(\)/);
   assert.match(render, /if \(!worldReady\) return/);
