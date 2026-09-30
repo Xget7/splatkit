@@ -72,6 +72,18 @@ const WALK_SPEED = 1.4;
 /** The walker: eye height, shoulder width and the rise it can climb, in meters. */
 const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
 
+/**
+ * An orbit is a fly mode the collider does not constrain, so this circle, in the living
+ * room of the example house, is one its collider leaves clear at every azimuth: 2 m free,
+ * 1.8 m used. Another world needs its own.
+ */
+const ORBIT = {
+  anchor: { x: -7.25, y: 1.6, z: 5.25 },
+  radius: 1.8,
+  elevation: 0.2,
+  radiansPerSecond: Math.PI / 15,
+} as const;
+
 const WORLD_REQUEST = 'world';
 const COLLIDER_REQUEST = 'collider';
 
@@ -416,11 +428,11 @@ function Splat({ worldPath, colliderPath }: Props) {
                 toNativeCameraProp({
                   revision: ++cameraRevision.current,
                   mode: CameraMode.orbit,
-                  anchor: { x: -6, y: 2, z: 3 },
-                  radius: 4,
+                  anchor: ORBIT.anchor,
+                  radius: ORBIT.radius,
                   azimuth: 0,
-                  elevation: 0.2,
-                  orbitRadiansPerSecond: Math.PI / 15,
+                  elevation: ORBIT.elevation,
+                  orbitRadiansPerSecond: ORBIT.radiansPerSecond,
                 }),
               );
             }}
