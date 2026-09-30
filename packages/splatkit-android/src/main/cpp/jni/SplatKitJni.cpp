@@ -25,8 +25,18 @@ constexpr jsize kPoseFloats = 5;
 constexpr jsize kCameraRequestFields = 8;
 constexpr jsize kCameraStateFields = 9;
 constexpr jsize kCameraResolutionFields = kCameraStateFields + 1;
-constexpr jsize kStatsFloats = 7;
+// fps, frame, gpu and sort milliseconds, splat count, walking and motion flags, then the drawn,
+// compute tile, non-empty compute tile and hardware tile counts.
+constexpr jsize kStatsFloats = 11;
 constexpr jsize kAttitudeFloats = 9;
+
+constexpr jboolean toJni(bool value) {
+  return value ? JNI_TRUE : JNI_FALSE;
+}
+
+constexpr double flag(bool value) {
+  return value ? 1.0 : 0.0;
+}
 
 // The handle Kotlin holds is the host's address; JNI has no other way to carry it.
 splatkit::AndroidEngine* toHost(jlong handle) {
@@ -222,26 +232,24 @@ SPLATKIT_JNI(void, nativeSetAnchor)
 SPLATKIT_JNI(jboolean, nativeOrbit)
 (JNIEnv*, jobject, jlong handle, jfloat deltaAzimuth, jfloat deltaElevation) {
   auto* engine = toEngine(handle);
-  return engine != nullptr && engine->orbit(deltaAzimuth, deltaElevation) ? JNI_TRUE : JNI_FALSE;
+  return toJni(engine != nullptr && engine->orbit(deltaAzimuth, deltaElevation));
 }
 
 SPLATKIT_JNI(jboolean, nativeDolly)(JNIEnv*, jobject, jlong handle, jfloat deltaRadius) {
   auto* engine = toEngine(handle);
-  return engine != nullptr && engine->dolly(deltaRadius) ? JNI_TRUE : JNI_FALSE;
+  return toJni(engine != nullptr && engine->dolly(deltaRadius));
 }
 
 SPLATKIT_JNI(jboolean, nativeFocus)(JNIEnv*, jobject, jlong handle, jfloat x, jfloat y) {
   auto* engine = toEngine(handle);
-  return engine != nullptr && engine->focus(x, y) ? JNI_TRUE : JNI_FALSE;
+  return toJni(engine != nullptr && engine->focus(x, y));
 }
 
 SPLATKIT_JNI(jboolean, nativeStartOrbitAnimation)
 (JNIEnv*, jobject, jlong handle, jfloat degrees, jfloat degreesPerSecond, jboolean easeInOut) {
   auto* engine = toEngine(handle);
-  return engine != nullptr &&
-                 engine->startOrbitAnimation(degrees, degreesPerSecond, easeInOut == JNI_TRUE)
-             ? JNI_TRUE
-             : JNI_FALSE;
+  return toJni(engine != nullptr &&
+               engine->startOrbitAnimation(degrees, degreesPerSecond, easeInOut == JNI_TRUE));
 }
 
 // Fills out[0..4]: x, y, z, yaw, pitch.
@@ -264,7 +272,7 @@ void cameraStateToDoubles(const splatkit::CameraState& state, double* out) {
   out[5] = state.azimuth;
   out[6] = state.elevation;
   out[7] = state.orbitRadiansPerSecond;
-  out[8] = state.hasAnchor ? 1.0 : 0.0;
+  out[8] = flag(state.hasAnchor);
 }
 }  // namespace
 
@@ -297,7 +305,7 @@ SPLATKIT_JNI(jstring, nativeApplyCameraRequest)
   request.orbitRadiansPerSecond = static_cast<float>(input[7]);
   const auto resolution = engine->applyCameraRequest(request);
   double values[kCameraResolutionFields]{};
-  values[0] = resolution.accepted ? 1.0 : 0.0;
+  values[0] = flag(resolution.accepted);
   cameraStateToDoubles(resolution.effective, values + 1);
   env->SetDoubleArrayRegion(out, 0, kCameraResolutionFields, values);
   return env->NewStringUTF(resolution.error.c_str());
@@ -324,7 +332,7 @@ SPLATKIT_JNI(jboolean, nativeSetCharacter)
   character.eyeHeight = eyeHeight;
   character.bodyRadius = bodyRadius;
   character.stepHeight = stepHeight;
-  return engine->setCharacter(character) ? JNI_TRUE : JNI_FALSE;
+  return toJni(engine->setCharacter(character));
 }
 
 // `rowMajor` is the 3x3 device to reference rotation as Android hands it out.
@@ -378,27 +386,24 @@ SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat 
   if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
 }
 
-// Legacy out[0..6] is unchanged; [7..10] adds drawn/compute/nonempty/hardware counts.
+// Fills out[0..10] in the order kStatsFloats lists.
 SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
-  constexpr jsize kExtendedStatsFloats = 11;
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;
   const splatkit::Stats s = engine->stats();
   // Float transport represents every integer through 2^24 exactly; larger counts can round.
-  const float values[kExtendedStatsFloats] = {s.fps,
-                                              s.frameMillis,
-                                              s.gpuMillis,
-                                              s.sortMillis,
-                                              static_cast<float>(s.splatCount),
-                                              s.walking ? 1.0f : 0.0f,
-                                              s.motion ? 1.0f : 0.0f,
-                                              static_cast<float>(s.drawnSplatCount),
-                                              static_cast<float>(s.computeTileCount),
-                                              static_cast<float>(s.nonemptyComputeTileCount),
-                                              static_cast<float>(s.hardwareTileCount)};
-  const jsize count =
-      env->GetArrayLength(out) >= kExtendedStatsFloats ? kExtendedStatsFloats : kStatsFloats;
-  env->SetFloatArrayRegion(out, 0, count, values);
+  const float values[kStatsFloats] = {s.fps,
+                                      s.frameMillis,
+                                      s.gpuMillis,
+                                      s.sortMillis,
+                                      static_cast<float>(s.splatCount),
+                                      s.walking ? 1.0f : 0.0f,
+                                      s.motion ? 1.0f : 0.0f,
+                                      static_cast<float>(s.drawnSplatCount),
+                                      static_cast<float>(s.computeTileCount),
+                                      static_cast<float>(s.nonemptyComputeTileCount),
+                                      static_cast<float>(s.hardwareTileCount)};
+  env->SetFloatArrayRegion(out, 0, kStatsFloats, values);
 }
 
 // Policy and capabilities. Both arrays are double: every field is a count, flag or float.
@@ -407,7 +412,10 @@ namespace {
 constexpr jsize kPolicyFields = 9;  // see the index list below
 // accepted, preparationFailed, then the effective policy
 constexpr jsize kPolicyResolutionFields = kPolicyFields + 2;
-constexpr jsize kCapabilityFields = 30;  // limits, flags, support then fallback
+// Capabilities: limits and feature flags, policy support, then the fallback policy.
+constexpr jsize kCapabilityLeadFields = 7;
+constexpr jsize kPolicySupportFields = 14;
+constexpr jsize kCapabilityFields = kCapabilityLeadFields + kPolicySupportFields + kPolicyFields;
 
 // 0 raster, 1 tileSize, 2 lodErrorPixels, 3 alphaThreshold, 4 subpixelThreshold,
 // 5 enableFrustumCulling, 6 enableHiZOcclusion, 7 enableEarlyTermination, 8 sortDepth.
@@ -431,22 +439,22 @@ void policyToDoubles(const splatkit::RenderPolicy& p, double* v) {
   v[2] = static_cast<double>(p.lodErrorPixels);
   v[3] = static_cast<double>(p.alphaThreshold);
   v[4] = static_cast<double>(p.subpixelThreshold);
-  v[5] = p.enableFrustumCulling ? 1.0 : 0.0;
-  v[6] = p.enableHiZOcclusion ? 1.0 : 0.0;
-  v[7] = p.enableEarlyTermination ? 1.0 : 0.0;
+  v[5] = flag(p.enableFrustumCulling);
+  v[6] = flag(p.enableHiZOcclusion);
+  v[7] = flag(p.enableEarlyTermination);
   v[8] = static_cast<double>(static_cast<uint32_t>(p.sortDepth));
 }
 
 void supportToDoubles(const splatkit::RenderPolicySupport& s, double* v) {
-  v[0] = s.raster ? 1.0 : 0.0;
-  v[1] = s.tileSize ? 1.0 : 0.0;
-  v[2] = s.lodErrorPixels ? 1.0 : 0.0;
-  v[3] = s.alphaThreshold ? 1.0 : 0.0;
-  v[4] = s.subpixelThreshold ? 1.0 : 0.0;
-  v[5] = s.enableFrustumCulling ? 1.0 : 0.0;
-  v[6] = s.enableHiZOcclusion ? 1.0 : 0.0;
-  v[7] = s.enableEarlyTermination ? 1.0 : 0.0;
-  v[8] = s.sortDepth ? 1.0 : 0.0;
+  v[0] = flag(s.raster);
+  v[1] = flag(s.tileSize);
+  v[2] = flag(s.lodErrorPixels);
+  v[3] = flag(s.alphaThreshold);
+  v[4] = flag(s.subpixelThreshold);
+  v[5] = flag(s.enableFrustumCulling);
+  v[6] = flag(s.enableHiZOcclusion);
+  v[7] = flag(s.enableEarlyTermination);
+  v[8] = flag(s.sortDepth);
   v[9] = static_cast<double>(s.tileSizeMask);
   v[10] = static_cast<double>(s.minLodErrorPixels);
   v[11] = static_cast<double>(s.maxLodErrorPixels);
@@ -455,7 +463,7 @@ void supportToDoubles(const splatkit::RenderPolicySupport& s, double* v) {
 }
 }  // namespace
 
-// out[0..29]: limits, feature flags, policy support [7..20], fallback policy [21..29].
+// out[0..29]: limits and feature flags [0..6], policy support [7..20], fallback policy [21..29].
 SPLATKIT_JNI(void, nativeCapabilities)(JNIEnv* env, jobject, jlong handle, jdoubleArray out) {
   const splatkit::SplatEngine* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kCapabilityFields) return;
@@ -464,12 +472,12 @@ SPLATKIT_JNI(void, nativeCapabilities)(JNIEnv* env, jobject, jlong handle, jdoub
   values[0] = static_cast<double>(caps.limits.maxLodCapacitySplats);
   values[1] = static_cast<double>(caps.limits.minResidencyCapacitySplats);
   values[2] = static_cast<double>(caps.limits.maxResidencyCapacitySplats);
-  values[3] = caps.supportsComputeTiles ? 1.0 : 0.0;
-  values[4] = caps.supportsHiZOcclusion ? 1.0 : 0.0;
-  values[5] = caps.supportsSubgroups ? 1.0 : 0.0;
+  values[3] = flag(caps.supportsComputeTiles);
+  values[4] = flag(caps.supportsHiZOcclusion);
+  values[5] = flag(caps.supportsSubgroups);
   values[6] = static_cast<double>(caps.maxTextureDimension);
-  supportToDoubles(caps.policy, values + 7);
-  policyToDoubles(caps.policy.fallback, values + 21);
+  supportToDoubles(caps.policy, values + kCapabilityLeadFields);
+  policyToDoubles(caps.policy.fallback, values + kCapabilityLeadFields + kPolicySupportFields);
   env->SetDoubleArrayRegion(out, 0, kCapabilityFields, values);
 }
 
@@ -489,8 +497,8 @@ SPLATKIT_JNI(jobjectArray, nativeApplyRenderPolicy)
   const splatkit::RenderPolicyResolution resolution =
       engine->setRenderPolicy(policyFromDoubles(input));
   double values[kPolicyResolutionFields]{};
-  values[0] = resolution.accepted ? 1.0 : 0.0;
-  values[1] = resolution.preparationFailed ? 1.0 : 0.0;
+  values[0] = flag(resolution.accepted);
+  values[1] = flag(resolution.preparationFailed);
   policyToDoubles(resolution.effective, values + 2);
   env->SetDoubleArrayRegion(out, 0, kPolicyResolutionFields, values);
 
