@@ -62,7 +62,7 @@ class LodSelection {
   struct Config {
     uint32_t phase = 0, capacity = 0, costs = 0, offsets = 0;
     uint32_t costGroups = 0, groups = 0, blocks = 0, frontier0 = 0;
-    uint32_t frontier1 = 0, packets = 0, histogram = 0;
+    uint32_t frontier1 = 0, packets = 0;
     float pixelLimit = 1, colorWeight = 4;
     uint32_t cull = 1;
   } config_;
