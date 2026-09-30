@@ -6,16 +6,23 @@ import os
 /// The one SplatMetalView of the app, shared with SwiftUI through an observable owner so
 /// the HUD can read stats and push settings without recreating the view.
 final class SplatSession: ObservableObject {
+    /// `SKRenderPolicy.raster`: 0 hardware, 1 computeTile, 2 hybrid.
+    private let hybridRaster: UInt32 = 2
+    private let pollInterval = 0.5
+    /// 30 seconds of history at the polling rate.
+    private let fpsHistoryLength = 60
+    private let defaultMemoryLimitMiB = 2800
+    private let minMemoryLimitMiB = 256
+    private let minAvailableBytes = 256 * 1024 * 1024
     let view = SplatMetalView()
     var orbit: OrbitPath?
     @Published var stats = SplatStats()
     @Published var status = "loading"
     @Published var walking = false
     @Published var motion = false
-    @Published var gpu = ""
     @Published var scenePrepared = false
     @Published var loadingFailed = false
-    /// The last 30 seconds of frame rate, sampled with the stats.
+    /// Frame rate samples taken with the stats, the last `fpsHistoryLength` of them.
     @Published var fpsHistory: [Float] = []
     @Published var quality: QualityTier? {
         didSet { quality?.apply(to: view) }
@@ -48,14 +55,13 @@ final class SplatSession: ObservableObject {
         sdkOrbitDolly = args.float("sdk-orbit-dolly").flatMap { $0.isFinite ? $0 : nil }
         monitorResources = (args.bool("resource-monitor") ?? false) || runSeconds != nil
         // A test guard, not a claim about the device's Jetsam limit or total free RAM.
-        let limitMiB = min(max(args.int("memory-limit-mib") ?? 2800, 256), 2800)
+        let limitMiB = min(max(args.int("memory-limit-mib") ?? defaultMemoryLimitMiB, minMemoryLimitMiB), defaultMemoryLimitMiB)
         memoryLimitBytes = UInt64(limitMiB) * 1024 * 1024
         resourceDevice = monitorResources ? MTLCreateSystemDefaultDevice() : nil
         let delegate = Delegate(session: self)
         delegateBox = delegate
         view.delegate = delegate
-        gpu = view.gpuDescription
-        // Per-view policy replaces the old SPLATKIT_METAL_* environment overrides.
+        // Launch switches set the policy fields directly; the quality tier leaves them alone.
         var policy = view.renderPolicy
         if let radius = args.float("min-pixel-radius"), radius.isFinite, radius >= 0 {
             policy.subpixelThreshold = radius
@@ -63,7 +69,7 @@ final class SplatSession: ObservableObject {
         if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
         if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
         if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }
-        if args.bool("tile-raster") ?? false { policy.raster = 2 }
+        if args.bool("tile-raster") ?? false { policy.raster = hybridRaster }
         view.renderPolicy = policy
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities
@@ -110,13 +116,13 @@ final class SplatSession: ObservableObject {
 
     func startPolling() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.stats = self.view.readStats()
             self.sampleSDKOrbit()
             if self.scenePrepared && !self.isIdle {
                 self.fpsHistory.append(self.stats.fps)
-                if self.fpsHistory.count > 60 { self.fpsHistory.removeFirst(self.fpsHistory.count - 60) }
+                if self.fpsHistory.count > self.fpsHistoryLength { self.fpsHistory.removeFirst(self.fpsHistory.count - self.fpsHistoryLength) }
             }
             self.motion = self.view.isMotionEnabled
             if self.monitorResources { self.sampleResources() }
@@ -170,7 +176,7 @@ final class SplatSession: ObservableObject {
               elapsed, footprint, peakFootprint, UInt64(available), UInt64(resourceDevice?.currentAllocatedSize ?? 0),
               thermal.rawValue, stats.loadedSplatCount, stats.drawnSplatCount, stoppedReason == nil ? 0 : 1)
         if footprint >= memoryLimitBytes { stopRun("footprint-limit") }
-        else if available < 256 * 1024 * 1024 { stopRun("available-memory-below-256MiB") }
+        else if available < minAvailableBytes { stopRun("available-memory-below-\(minAvailableBytes >> 20)MiB") }
         else if thermal == .serious || thermal == .critical { stopRun("thermal-\(thermal.rawValue)") }
         else if let runSeconds, elapsed >= runSeconds { stopRun("duration-complete") }
     }

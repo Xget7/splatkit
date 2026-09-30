@@ -54,7 +54,7 @@ enum QualityTier: String, CaseIterable, Identifiable {
     var sortDepth: UInt32 { self == .ultra ? 32 : 16 }
 
     /// Smallest splat footprint kept, in pixels; lower keeps more fine splats.
-    /// Applies under --metal-culling 1.
+    /// Applies to hierarchy worlds, and to others under --metal-culling 1.
     var subpixelThreshold: Float {
         switch self {
         case .ultra: 0.2

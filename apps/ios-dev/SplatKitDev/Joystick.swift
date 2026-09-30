@@ -5,11 +5,12 @@ struct Joystick: View {
     let onChange: (_ forward: Float, _ right: Float) -> Void
     @State private var offset = CGSize.zero
     private let radius: CGFloat = 60
+    private let knobDiameter: CGFloat = 44
 
     var body: some View {
         ZStack {
             Circle().fill(Color.white.opacity(0.12)).frame(width: radius * 2, height: radius * 2)
-            Circle().fill(Color.white.opacity(0.5)).frame(width: 44, height: 44).offset(offset)
+            Circle().fill(Color.white.opacity(0.5)).frame(width: knobDiameter, height: knobDiameter).offset(offset)
         }
         .frame(width: radius * 2, height: radius * 2)
         .contentShape(Circle())

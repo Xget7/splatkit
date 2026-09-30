@@ -5,7 +5,6 @@ struct ContentView: View {
     @StateObject private var session = SplatSession()
     @Environment(\.scenePhase) private var scenePhase
     @State private var walkSpeed: Float = 1.5
-    @State private var captureMessage = ""
     private let args = LaunchArgs()
 
     var body: some View {
@@ -167,7 +166,7 @@ struct ContentView: View {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let file = documents.appendingPathComponent("capture.png")
         session.view.captureFrame(to: file) { ok in
-            captureMessage = ok ? "captured capture.png" : "capture failed"
+            NSLog("SplatCapture: %@", ok ? "captured capture.png" : "capture failed")
         }
     }
 }

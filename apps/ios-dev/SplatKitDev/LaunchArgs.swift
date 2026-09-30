@@ -19,7 +19,8 @@ import Foundation
 /// --metal-culling 1 opts into GPU-private scratch, footprint culling at 0.5 px,
 /// and camera-depth sorting. Default 0 preserves the baseline; restart to change.
 /// --min-pixel-radius <px> selects the experimental cutoff (default 0.5; try 1.0 or 1.2).
-/// This is a source-footprint radius, not diameter, and has no effect without --metal-culling 1.
+/// This is a source-footprint radius, not diameter, and has no effect on a world without a
+/// hierarchy unless --metal-culling 1 is set.
 /// --depth-key-bits <16|32> selects linear camera-depth quantization and two radix
 /// passes (16), or the unchanged four-pass ordering (32, default). Restart to change.
 /// Quantization can change transparency ordering within a bin; no splats are removed.
