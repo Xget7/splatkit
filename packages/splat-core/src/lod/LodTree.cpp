@@ -133,7 +133,8 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   uint32_t root = 0;
   if (options.octreeDepth > 0) {
     // Morton prefixes describe nested cubes, so every cell is a contiguous run of the
-    // sorted keys. Unlike the legacy size-adaptive grid, the hierarchy is built offline.
+    // sorted keys. Unlike the size-adaptive grid below, this hierarchy is meant to be built
+    // offline.
     const uint32_t depth = std::clamp(options.octreeDepth, 1u, kMaxOctreeDepth);
     const uint32_t resolution = 1u << depth;
     const std::size_t clusterLeaves = std::max(options.clusterLeaves, 2u);
