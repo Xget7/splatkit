@@ -2,7 +2,7 @@
 #include "SplatProjection.metalh"
 
 constant bool kTightCulling [[function_constant(1)]];
-constant float kExperimentalMinPixelRadius [[function_constant(2)]];
+constant float kTightMinPixelRadius [[function_constant(2)]];
 constant bool kIndexedLOD [[function_constant(3)]];
 constant bool kQuantizedDepth [[function_constant(4)]];
 
@@ -55,7 +55,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
       index = ranges[r].offset + (t - rangeStarts[r]);
     }
     Splat s = splats[index];
-    visible = projectSplat(cam, s, index, shData, p, kTightCulling, kExperimentalMinPixelRadius);
+    visible = projectSplat(cam, s, index, shData, p, kTightCulling, kTightMinPixelRadius);
     float3 d = float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz;
     // Positive IEEE float bits sort in ascending numeric order. This experiment
     // uses camera depth and recomputes it every frame, including rotations.

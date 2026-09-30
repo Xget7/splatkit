@@ -16,10 +16,11 @@ namespace splatkit {
 // Call reserve only while idle. All encodes and raster consumers use one command queue.
 class MetalVisibility {
  public:
-  // Internal experiment only; the default preserves the existing renderer.
+  // Tight culling drops splats by opacity, near plane and screen footprint, sorts by view
+  // depth and keeps the scratch GPU-private; off, it culls loosely and sorts by distance.
   // Low16 uses linear view depth and finite forward-Z Mat4::perspective planes,
   // independently of the culling option. Shader key width and radix passes agree.
-  bool create(id<MTLDevice> device, id<MTLLibrary> library, bool experiment = false,
+  bool create(id<MTLDevice> device, id<MTLLibrary> library, bool tightCulling = false,
               float minPixelRadius = 0.5f,
               MetalRadixSort::KeyBits depthBits = MetalRadixSort::KeyBits::Full32);
   // Rebuilds the visibility pipelines for a new sub-pixel radius and/or key width,
@@ -46,7 +47,7 @@ class MetalVisibility {
   id<MTLBuffer> depthKeys() const { return sort_.keys(); }
   id<MTLBuffer> projected() const { return projected_; }
   id<MTLBuffer> drawArguments(uint32_t slot) const { return drawArguments_[slot]; }
-  // A four-byte statistics readback, not the GPU counter in experimental mode.
+  // A four-byte readback of the count, which tight culling keeps GPU-private.
   id<MTLBuffer> countBuffer(uint32_t slot) const { return countReadback_[slot]; }
   // Only read after the GPU has completed this slot.
   uint32_t count(uint32_t slot) const {
