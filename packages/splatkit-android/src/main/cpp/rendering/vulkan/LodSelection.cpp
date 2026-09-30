@@ -13,7 +13,29 @@
 namespace splatkit {
 namespace {
 constexpr uint32_t kThreads = 128;
-constexpr uint32_t kMaxCapacity = 2200000;
+// The uniform camera plus the clusters, leaves, scratch and index storage buffers.
+constexpr uint32_t kStorageBindings = 4;
+constexpr uint32_t kBindings = 1 + kStorageBindings;
+// Scratch words before the frontier, cost and packet regions: the 20 state words, padded.
+constexpr size_t kStateWords = 32;
+// Mirrors the branches of lod_selection.comp, which also documents the state words.
+enum Phase : uint32_t {
+  kReset,
+  kClassify,
+  kScanCosts,
+  kScanBlocks,
+  kBudget,
+  kAllocate,
+  kScanOffsets,
+  kCommit,
+  kEmit,
+  kAdvance,
+  kCopyPackets
+};
+// Byte offsets of the indirect dispatch arguments in the scratch state words.
+constexpr VkDeviceSize kFrontierGroupsOffset = 8 * sizeof(uint32_t);    // one group per 128 nodes
+constexpr VkDeviceSize kPacketGroupsOffset = 11 * sizeof(uint32_t);     // one group per packet
+constexpr VkDeviceSize kGroupScanGroupsOffset = 16 * sizeof(uint32_t);  // one per 128 group totals
 }  // namespace
 
 splat::Result<std::unique_ptr<LodSelection>> LodSelection::create(const VulkanContext& ctx) {
@@ -37,26 +59,26 @@ bool LodSelection::initialize() {
       !(families[ctx_.queueFamily()].queueFlags & VK_QUEUE_COMPUTE_BIT) ||
       limits_.maxComputeWorkGroupInvocations < kThreads ||
       limits_.maxComputeWorkGroupSize[0] < kThreads ||
-      limits_.maxComputeSharedMemorySize < kThreads * 16 ||
-      limits_.maxPerStageDescriptorStorageBuffers < 4 ||
-      limits_.maxDescriptorSetStorageBuffers < 4 ||
+      limits_.maxComputeSharedMemorySize < kThreads * 4 * sizeof(uint32_t) ||
+      limits_.maxPerStageDescriptorStorageBuffers < kStorageBindings ||
+      limits_.maxDescriptorSetStorageBuffers < kStorageBindings ||
       limits_.maxPerStageDescriptorUniformBuffers < 1 ||
-      limits_.maxDescriptorSetUniformBuffers < 1 || limits_.maxPerStageResources < 5 ||
+      limits_.maxDescriptorSetUniformBuffers < 1 || limits_.maxPerStageResources < kBindings ||
       limits_.maxUniformBufferRange < sizeof(CameraUniform) ||
       limits_.maxPushConstantsSize < sizeof(Config))
     return false;
 
-  VkDescriptorSetLayoutBinding bindings[5]{};
+  VkDescriptorSetLayoutBinding bindings[kBindings]{};
   bindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-  for (uint32_t i = 1; i < 5; ++i)
+  for (uint32_t i = 1; i < kBindings; ++i)
     bindings[i] = {i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
   VkDescriptorSetLayoutCreateInfo set{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  set.bindingCount = 5;
+  set.bindingCount = kBindings;
   set.pBindings = bindings;
   if (vkCreateDescriptorSetLayout(ctx_.device(), &set, nullptr, &setLayout_) != VK_SUCCESS)
     return false;
   VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlots},
-                                  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4 * kSlots}};
+                                  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kSlots}};
   VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   pool.maxSets = kSlots;
   pool.poolSizeCount = 2;
@@ -99,7 +121,7 @@ LodSelection::~LodSelection() {
 }
 
 bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality quality) {
-  if (budget == 0 || budget > kMaxCapacity || !std::isfinite(quality.pixelLimit) ||
+  if (budget == 0 || budget > kMaxBudget || !std::isfinite(quality.pixelLimit) ||
       quality.pixelLimit < 0 || !std::isfinite(quality.colorWeight) || quality.colorWeight < 0)
     return false;
   const auto valid = splat::validateLodTree(tree);
@@ -122,7 +144,7 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
   const size_t packets = std::min(data->clusters.size(), size_t{config.capacity} / (kThreads + 1));
   if (groups > limits_.maxComputeWorkGroupCount[0] || packets > limits_.maxComputeWorkGroupCount[0])
     return false;
-  size_t words = 32;
+  size_t words = kStateWords;
   auto region = [&](size_t length) {
     const auto start = static_cast<uint32_t>(words);
     words += length;
@@ -180,8 +202,8 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
       {leaves_->handle(), 0, leaves_->size()},
       {scratch_->handle(), 0, scratch_->size()},
       {indices_->handle(), 0, indices_->size()}};
-  VkWriteDescriptorSet writes[5]{};
-  for (uint32_t i = 0; i < 5; ++i) {
+  VkWriteDescriptorSet writes[kBindings]{};
+  for (uint32_t i = 0; i < kBindings; ++i) {
     writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     writes[i].dstSet = sets_[slot];
     writes[i].dstBinding = i;
@@ -190,7 +212,7 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
         i == 0 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     writes[i].pBufferInfo = &buffers[i];
   }
-  vkUpdateDescriptorSets(ctx_.device(), 5, writes, 0, nullptr);
+  vkUpdateDescriptorSets(ctx_.device(), kBindings, writes, 0, nullptr);
   // Inter-frame WAR/WAW plus upload/host writes, including consumers on previous submissions.
   memoryBarrier(
       cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
@@ -200,7 +222,7 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &sets_[slot], 0,
                           nullptr);
-  auto dispatch = [&](uint32_t phase, VkDeviceSize indirectOffset = VK_WHOLE_SIZE) {
+  auto dispatch = [&](Phase phase, VkDeviceSize indirectOffset = VK_WHOLE_SIZE) {
     Config config = config_;
     config.phase = phase;
     vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(config), &config);
@@ -213,20 +235,20 @@ bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input
                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
                       VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   };
-  dispatch(0);
+  dispatch(kReset);
   for (uint32_t round = 0; round < rounds_; ++round) {
-    dispatch(1, 32);
-    dispatch(2, 64);
-    dispatch(3);
-    dispatch(4);
-    dispatch(5, 32);
-    dispatch(6, 64);
-    dispatch(3);
-    dispatch(7);
-    dispatch(8, 32);
-    dispatch(9);
+    dispatch(kClassify, kFrontierGroupsOffset);
+    dispatch(kScanCosts, kGroupScanGroupsOffset);
+    dispatch(kScanBlocks);
+    dispatch(kBudget);
+    dispatch(kAllocate, kFrontierGroupsOffset);
+    dispatch(kScanOffsets, kGroupScanGroupsOffset);
+    dispatch(kScanBlocks);
+    dispatch(kCommit);
+    dispatch(kEmit, kFrontierGroupsOffset);
+    dispatch(kAdvance);
   }
-  dispatch(10, 44);
+  dispatch(kCopyPackets, kPacketGroupsOffset);
   memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
                     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,

@@ -32,6 +32,7 @@ class LodSelection {
     uint32_t capacity = 0;
   };
   static constexpr uint32_t kSlots = 2;
+  static constexpr uint32_t kMaxBudget = 2200000;
   static constexpr VkDeviceSize kCountOffset = 0;
   static constexpr VkDeviceSize kLimitedOffset = 16;
   static constexpr VkDeviceSize kEvaluatedOffset = 20;
@@ -43,7 +44,7 @@ class LodSelection {
   LodSelection& operator=(const LodSelection&) = delete;
 
   // Transactional, bounded allocation/upload; failure preserves old hierarchy and descriptors.
-  // Budget must be 1..2,200,000; effective capacity is min(budget, original leaf count).
+  // Budget must be 1..kMaxBudget; effective capacity is min(budget, original leaf count).
   // Source metadata, scratch and output must each fit maxStorageBufferRange.
   // Metadata may be built once at upload for v1 trees, never on the CPU per frame.
   bool upload(const splat::LodTree& tree, uint32_t budget, Quality quality);
