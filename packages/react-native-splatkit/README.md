@@ -10,8 +10,8 @@ Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk thr
 
 ![Walking a Gaussian splat capture in the example app](https://raw.githubusercontent.com/Xget7/splatkit/main/docs/media/example-walk.gif)
 
-> **Experimental alpha.**
-> The API changes before 1.0, and every release so far is a prerelease published under the `next` dist-tag.
+> **Beta.**
+> The API may still change before 1.0, and every release so far is a prerelease published under the `next` dist-tag.
 > Verified on physical devices only: an iPhone 17 Pro and a Xiaomi Mi 9 (Adreno 640).
 
 ## Contents
@@ -64,7 +64,7 @@ npm install @splatkit/react-native@next
 cd ios && pod install
 ```
 
-The `@next` tag is required while the package is in alpha.
+The `@next` tag names the newest prerelease; until 1.0, `latest` follows it.
 
 **iOS.**
 The podspec vendors `SplatKitCore.xcframework`, which is fetched and checksum-verified when the package is packed, so there is nothing to build.
