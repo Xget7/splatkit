@@ -14,6 +14,19 @@ namespace {
 constexpr auto kCompute = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 constexpr auto kShader = VK_SHADER_STAGE_COMPUTE_BIT;
 constexpr uint32_t kBindings = 10;
+// Every radix shader runs 128 invocations, and each pass sorts one 8-bit digit into 256 buckets.
+constexpr uint32_t kThreads = 128;
+constexpr uint32_t kDigitBits = 8;
+constexpr uint32_t kBuckets = 1u << kDigitBits;
+constexpr VkDeviceSize kWord = sizeof(uint32_t);
+// The scatter shader holds 4 masks and 3 base tables of kBuckets words each.
+constexpr uint32_t kScatterSharedBytes = (4 + 3) * kBuckets * sizeof(uint32_t);
+// The indirect dispatch arguments groupsX, groupsY and groupsZ, then the block count.
+constexpr VkDeviceSize kStateBytes = 4 * sizeof(uint32_t);
+struct PushConstants {
+  uint32_t capacity, shift, maxGroupsX;
+};
+static_assert(sizeof(PushConstants) == 12, "must match the Push block of every radix shader");
 constexpr VkBufferUsageFlags kStorage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 }  // namespace
@@ -40,17 +53,19 @@ RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
   } else if (!(subgroup.supportedStages & kShader) ||
              (subgroup.supportedOperations & kRequired) != kRequired || !subgroup.subgroupSize) {
     result.reason = "compute subgroup basic/arithmetic/ballot unavailable";
-  } else if (limits.maxComputeWorkGroupInvocations < 128 ||
-             limits.maxComputeWorkGroupSize[0] < 128 || limits.maxComputeSharedMemorySize < 7168 ||
+  } else if (limits.maxComputeWorkGroupInvocations < kThreads ||
+             limits.maxComputeWorkGroupSize[0] < kThreads ||
+             limits.maxComputeSharedMemorySize < kScatterSharedBytes ||
              !limits.maxComputeWorkGroupCount[0] || !limits.maxComputeWorkGroupCount[1] ||
              !limits.maxComputeWorkGroupCount[2]) {
     result.reason = "compute workgroup/shared-memory limits too small";
   } else if (limits.maxPerStageDescriptorStorageBuffers < kBindings ||
              limits.maxDescriptorSetStorageBuffers < kBindings ||
-             limits.maxPerStageResources < kBindings || limits.maxPushConstantsSize < 12 ||
-             limits.maxStorageBufferRange < 1024 ||
+             limits.maxPerStageResources < kBindings ||
+             limits.maxPushConstantsSize < sizeof(PushConstants) ||
+             limits.maxStorageBufferRange < kBuckets * kWord ||
              uint64_t{limits.maxComputeWorkGroupCount[0]} * limits.maxComputeWorkGroupCount[1] <
-                 256) {
+                 kBuckets) {
     result.reason = "descriptor/range/dispatch limits too small";
   } else {
     result.supported = true;
@@ -87,32 +102,34 @@ bool RadixSort::initialize() {
   setInfo.pBindings = bindings.data();
   if (vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &setLayout_) != VK_SUCCESS)
     return false;
-  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kBindings * kSlots * 3};
+  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kBindings * kSlots * kSets};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = kSlots * 3;
+  poolInfo.maxSets = kSlots * kSets;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes = &size;
   if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool_) != VK_SUCCESS) return false;
-  std::array<VkDescriptorSetLayout, 3> layouts{setLayout_, setLayout_, setLayout_};
+  std::array<VkDescriptorSetLayout, kSets> layouts{};
+  layouts.fill(setLayout_);
   for (auto& sets : sets_) {
     VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     info.descriptorPool = pool_;
-    info.descriptorSetCount = 3;
+    info.descriptorSetCount = kSets;
     info.pSetLayouts = layouts.data();
     if (vkAllocateDescriptorSets(device, &info, sets.data()) != VK_SUCCESS) return false;
   }
-  const VkPushConstantRange push{kShader, 0, 12};
+  const VkPushConstantRange push{kShader, 0, sizeof(PushConstants)};
   VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   layout.setLayoutCount = 1;
   layout.pSetLayouts = &setLayout_;
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
   if (vkCreatePipelineLayout(device, &layout, nullptr, &layout_) != VK_SUCCESS) return false;
+  // Indexed by Stage.
   const uint32_t* code[] = {shaders::radix_prepare_comp, shaders::radix_histogram_comp,
                             shaders::radix_scan_comp, shaders::radix_scatter_comp};
   const size_t sizes[] = {shaders::radix_prepare_comp_size, shaders::radix_histogram_comp_size,
                           shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size};
-  for (uint32_t i = 0; i < 4; ++i) {
+  for (uint32_t i = 0; i < kStageCount; ++i) {
     VkShaderModule module = createShaderModule(device, code[i], sizes[i]);
     if (!module) return false;
     VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
@@ -134,9 +151,9 @@ bool RadixSort::reserve(uint32_t capacity) {
   if (capacity > kMaxCapacity) return false;
   if (capacity <= capacity_) return true;
   const auto& limits = ctx_.vkbDevice().physical_device.properties.limits;
-  const VkDeviceSize pairBytes = VkDeviceSize{capacity} * 4;
+  const VkDeviceSize pairBytes = VkDeviceSize{capacity} * kWord;
   const uint32_t blocks = (capacity + kBlock - 1) / kBlock;
-  const VkDeviceSize histogramBytes = VkDeviceSize{blocks} * 256 * 4;
+  const VkDeviceSize histogramBytes = VkDeviceSize{blocks} * kBuckets * kWord;
   if (pairBytes > limits.maxStorageBufferRange || histogramBytes > limits.maxStorageBufferRange ||
       uint64_t{blocks} >
           uint64_t{limits.maxComputeWorkGroupCount[0]} * limits.maxComputeWorkGroupCount[1])
@@ -146,10 +163,11 @@ bool RadixSort::reserve(uint32_t capacity) {
     for (auto& keys : slot.keys) keys = GpuBuffer::deviceLocal(ctx_, pairBytes, kStorage);
     for (auto& values : slot.values) values = GpuBuffer::deviceLocal(ctx_, pairBytes, kStorage);
     slot.histogram = GpuBuffer::deviceLocal(ctx_, histogramBytes, kStorage);
-    slot.totals = GpuBuffer::deviceLocal(ctx_, 1024, kStorage);
-    slot.state = GpuBuffer::deviceLocal(ctx_, 16, kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-    slot.count = GpuBuffer::deviceLocal(ctx_, 4, kStorage);
-    slot.status = GpuBuffer::deviceLocal(ctx_, 4, kStorage);
+    slot.totals = GpuBuffer::deviceLocal(ctx_, kBuckets * kWord, kStorage);
+    slot.state =
+        GpuBuffer::deviceLocal(ctx_, kStateBytes, kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+    slot.count = GpuBuffer::deviceLocal(ctx_, kWord, kStorage);
+    slot.status = GpuBuffer::deviceLocal(ctx_, kWord, kStorage);
     if (!slot.keys[0] || !slot.keys[1] || !slot.values[0] || !slot.values[1] || !slot.histogram ||
         !slot.totals || !slot.state || !slot.count || !slot.status)
       return false;
@@ -170,10 +188,10 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
       (input.keyBits != KeyBits::full32 && input.keyBits != KeyBits::low16))
     return false;
   const auto& limits = ctx_.vkbDevice().physical_device.properties.limits;
-  const VkDeviceSize bytes = VkDeviceSize{capacity_} * 4;
+  const VkDeviceSize bytes = VkDeviceSize{capacity_} * kWord;
   const auto valid = [&](VkBuffer buffer, VkDeviceSize offset, VkDeviceSize total,
                          VkDeviceSize range) {
-    if (!buffer || offset > total || range > total - offset || offset % 4 ||
+    if (!buffer || offset > total || range > total - offset || offset % kWord ||
         (limits.minStorageBufferOffsetAlignment && offset % limits.minStorageBufferOffsetAlignment))
       return false;
     for (const auto& s : slots_) {
@@ -188,13 +206,13 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
   };
   if (!valid(input.keys, input.keysOffset, input.keysBytes, bytes) ||
       !valid(input.values, input.valuesOffset, input.valuesBytes, bytes) ||
-      !valid(input.count, input.countOffset, input.countBytes, 4))
+      !valid(input.count, input.countOffset, input.countBytes, kWord))
     return false;
   const auto& s = slots_[slot];
   auto info = [](const std::unique_ptr<GpuBuffer>& buffer) {
     return VkDescriptorBufferInfo{buffer->handle(), 0, buffer->size()};
   };
-  for (uint32_t set = 0; set < 3; ++set) {
+  for (uint32_t set = 0; set < kSets; ++set) {
     const uint32_t in = set == 1 ? 1 : 0;
     const uint32_t out = in ^ 1;
     const VkDescriptorBufferInfo infos[kBindings] = {
@@ -203,7 +221,7 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
                  : info(s.values[in]),
         info(s.keys[out]),
         info(s.values[out]),
-        {input.count, input.countOffset, 4},
+        {input.count, input.countOffset, kWord},
         info(s.histogram),
         info(s.totals),
         info(s.state),
@@ -223,9 +241,7 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
   memoryBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
                 VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
                 kCompute, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-  struct Push {
-    uint32_t capacity, shift, maxGroupsX;
-  } push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
+  PushConstants push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
   const auto bindSet = [&](uint32_t set) {
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &sets_[slot][set],
                             0, nullptr);
@@ -233,31 +249,32 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
   // Bind after each pipeline transition: MoltenVK/gfxstream otherwise retained stale
   // encoded state when a different compute layout (visibility) preceded this pass.
   // VulkanFrameComputeTest covers the complete producer-to-sort chain.
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[0]);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kPrepare]);
   bindSet(0);
   vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
   vkCmdDispatch(cmd, 1, 1, 1);
   memoryBarrier(
       cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
-  const uint32_t passes = input.keyBits == KeyBits::low16 ? 2 : 4;
+  const uint32_t passes = (input.keyBits == KeyBits::low16 ? 16 : 32) / kDigitBits;
   for (uint32_t pass = 0; pass < passes; ++pass) {
-    push.shift = pass * 8;
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[1]);
-    bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
+    push.shift = pass * kDigitBits;
+    const uint32_t set = pass == 0 ? 0 : (pass & 1 ? 1 : 2);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kHistogram]);
+    bindSet(set);
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
     vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
     memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[2]);
-    bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kScan]);
+    bindSet(set);
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
-    const uint32_t scanX = std::min(256u, push.maxGroupsX);
-    vkCmdDispatch(cmd, scanX, (256 + scanX - 1) / scanX, 1);
+    const uint32_t scanX = std::min(kBuckets, push.maxGroupsX);
+    vkCmdDispatch(cmd, scanX, (kBuckets + scanX - 1) / scanX, 1);
     memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[3]);
-    bindSet(pass == 0 ? 0 : (pass & 1 ? 1 : 2));
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kScatter]);
+    bindSet(set);
     vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
     vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
     memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,

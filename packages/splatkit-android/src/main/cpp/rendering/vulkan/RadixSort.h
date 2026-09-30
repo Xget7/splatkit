@@ -66,8 +66,10 @@ class RadixSort {
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
-  std::array<VkPipeline, 4> pipelines_{};
+  enum Stage : uint32_t { kPrepare, kHistogram, kScan, kScatter, kStageCount };
+  std::array<VkPipeline, kStageCount> pipelines_{};
   // First pass external->B; second B->A; subsequent A->B and B->A.
-  std::array<std::array<VkDescriptorSet, 3>, kSlots> sets_{};
+  static constexpr uint32_t kSets = 3;
+  std::array<std::array<VkDescriptorSet, kSets>, kSlots> sets_{};
 };
 }  // namespace splatkit
