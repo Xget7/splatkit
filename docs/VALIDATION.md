@@ -31,8 +31,9 @@ The tool rejects mismatched cameras, dimensions, hashes and colour tags; it neve
 It reports RGB MAE, PSNR, p99 error and worst 32-pixel region; `--max-mae` is an explicit numeric gate, not perceptual acceptance.
 Review silhouettes, thin geometry, transparency and temporal LOD transitions separately.
 
-The Mac integration test `MetalLODTest.OfflineFixtureRendersWithBoundedDrawCount` accepts `SPLAT_LOD_PATH`, optional `SPLAT_LOD_REFERENCE_SPZ`, `SPLAT_LOD_BUDGET`, `SPLAT_LOD_POSE=x,y,z,yaw,pitch` and `SPLAT_LOD_CAPTURE`.
-Its `[ LOD CAMERA ]` line records the actual capture matrices; default framing remains the historical ISS view.
+The Mac integration test `MetalLODTest.OfflineFixtureRendersWithBoundedDrawCount` accepts `SPLAT_LOD_PATH`, optional `SPLAT_LOD_REFERENCE_SPZ`, `SPLAT_LOD_BUDGET` and `SPLAT_LOD_CAPTURE`.
+`SPLAT_LOD_POSE="x y z yaw pitch"` takes the pose as the SplatKit frame log prints it; without it the framing is the historical ISS view.
+`SPLAT_LOD_SIZE="width height"` and `SPLAT_LOD_ERROR_PIXELS` match the device's drawable and policy; `SPLAT_LOD_FRAMES` lets the adaptive threshold settle before the last frame is captured.
 An offline hierarchy is not interchangeable evidence for the default load-time hierarchy.
 
 ## Sustained runs
