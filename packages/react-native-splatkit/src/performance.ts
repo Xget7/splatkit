@@ -1,6 +1,14 @@
 import type {RenderOptions, SHDegree, SplatLimits, WorldRequest} from './contracts';
 import {validateRenderOptions, validateWorldRequest} from './contracts';
 import type {NativeProps} from './specs/SplatViewNativeComponent';
+import {
+  MAX_INT32,
+  MAX_RENDER_SCALE,
+  MAX_SH_DEGREE,
+  MIN_RENDER_SCALE,
+  integer,
+  range,
+} from './validation';
 
 /**
  * `hardware` is the default and the fastest choice for most scenes. `hybrid` composites screen
@@ -15,7 +23,11 @@ export const RasterStrategy = {
 } as const;
 export type RasterStrategy = (typeof RasterStrategy)[keyof typeof RasterStrategy];
 
-export type SortDepth = 16 | 32;
+const TILE_SIZES = [8, 16, 32] as const;
+type TileSize = (typeof TILE_SIZES)[number];
+
+const SORT_DEPTHS = [16, 32] as const;
+export type SortDepth = (typeof SORT_DEPTHS)[number];
 
 export const PerformanceMode = { auto: 'auto', manual: 'manual' } as const;
 export type PerformanceMode = (typeof PerformanceMode)[keyof typeof PerformanceMode];
@@ -123,7 +135,7 @@ export type PerformancePolicy = Readonly<{
   mode: PerformanceMode;
   preset: QualityPreset;
   raster: RasterStrategy;
-  tileSize: 8 | 16 | 32;
+  tileSize: TileSize;
   lodErrorPixels: number;
   lodBudgetSplats: number;
   alphaThreshold: number;
@@ -144,7 +156,7 @@ export type PerformanceOptions = Partial<Omit<PerformancePolicy, 'mode' | 'prese
 /** null means native support is unknown: build with capabilities from onCapabilities. */
 export type EffectivePerformancePolicy = Readonly<{
   raster: RasterStrategy | null;
-  tileSize: 8 | 16 | 32 | null;
+  tileSize: TileSize | null;
   lodErrorPixels: number | null;
   lodBudgetSplats: number;
   alphaThreshold: number | null;
@@ -159,10 +171,18 @@ export type EffectivePerformancePolicy = Readonly<{
   targetFps: null;
 }>;
 
+const DiagnosticCode = {
+  fabricOptionUnavailable: 'fabric-option-unavailable',
+  nativeSupportUnknown: 'native-support-unknown',
+  capabilityFallbackUnavailable: 'capability-fallback-unavailable',
+  limitClamped: 'limit-clamped',
+  nativeOptionFallback: 'native-option-fallback',
+} as const;
+type DiagnosticCode = (typeof DiagnosticCode)[keyof typeof DiagnosticCode];
+
 export type PerformanceDiagnostic = Readonly<{
   severity: 'warning';
-  code: 'fabric-option-unavailable' | 'native-support-unknown' |
-    'capability-fallback-unavailable' | 'limit-clamped' | 'native-option-fallback';
+  code: DiagnosticCode;
   option: keyof PerformancePolicy;
   requested: PerformancePolicy[keyof PerformancePolicy];
   /** A candidate fallback, not a claim about applied native state. */
@@ -241,7 +261,9 @@ export function toNativeViewProps(configuration: SplatKitConfiguration): Pick<Na
 }
 
 const rasterWire: Readonly<Record<RasterStrategy, number>> = {
-  hardware: 0, computeTile: 1, hybrid: 2,
+  [RasterStrategy.hardware]: 0,
+  [RasterStrategy.computeTile]: 1,
+  [RasterStrategy.hybrid]: 2,
 };
 
 /**
@@ -251,7 +273,7 @@ const rasterWire: Readonly<Record<RasterStrategy, number>> = {
  */
 export function toNativePolicyProp(configuration: SplatKitConfiguration,
   revision: number): NativeRenderPolicy {
-  integer('revision', revision, 1, 0x7fffffff);
+  integer('revision', revision, 1, MAX_INT32);
   const policy = configuration.performance.requested;
   return {
     revision,
@@ -297,74 +319,64 @@ export function nativeCapabilitiesFromEvent(event: NativeCapabilitiesEvent): Dev
 
 /** The shared native RenderPolicy defaults; a backend starts from its own fallback. */
 const nativeDefaults = {
-  raster: 'hardware', tileSize: 16, lodErrorPixels: 1, alphaThreshold: 1 / 255,
+  raster: RasterStrategy.hardware, tileSize: 16, lodErrorPixels: 1, alphaThreshold: 1 / 255,
   subpixelThreshold: 0.5, enableFrustumCulling: true, enableHiZOcclusion: false,
   enableEarlyTermination: true, sortDepth: 32,
 } as const;
 
 type PresetValues = Omit<PerformancePolicy, 'mode' | 'preset'>;
 // Every preset rasterizes in hardware; screen tiles only pay off on some scenes, so they are
-// an explicit withPerformance({raster: 'hybrid'}) choice.
+// an explicit withPerformance({raster: RasterStrategy.hybrid}) choice.
 const presets: Readonly<Record<QualityPreset, PresetValues>> = {
-  highEnd: {raster: 'hardware', tileSize: 16, lodErrorPixels: 0.75,
+  highEnd: {raster: RasterStrategy.hardware, tileSize: 16, lodErrorPixels: 0.75,
     lodBudgetSplats: 4_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.35,
     enableFrustumCulling: true, enableHiZOcclusion: true, enableEarlyTermination: true,
     sortDepth: 32, renderScale: 1.25, shDegree: 3,
     residencyCapacitySplats: 4_000_000, targetFps: null},
-  high: {raster: 'hardware', tileSize: 16, lodErrorPixels: 1,
+  high: {raster: RasterStrategy.hardware, tileSize: 16, lodErrorPixels: 1,
     lodBudgetSplats: 3_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.5,
     enableFrustumCulling: true, enableHiZOcclusion: true, enableEarlyTermination: true,
     sortDepth: 32, renderScale: 1, shDegree: 3,
     residencyCapacitySplats: 3_000_000, targetFps: null},
-  balanced: {raster: 'hardware', tileSize: 16, lodErrorPixels: 1.25,
+  balanced: {raster: RasterStrategy.hardware, tileSize: 16, lodErrorPixels: 1.25,
     lodBudgetSplats: 2_000_000, alphaThreshold: 1 / 255, subpixelThreshold: 0.65,
     enableFrustumCulling: true, enableHiZOcclusion: false, enableEarlyTermination: true,
     sortDepth: 16, renderScale: 0.85, shDegree: 2,
     residencyCapacitySplats: 2_000_000, targetFps: null},
-  performance: {raster: 'hardware', tileSize: 8, lodErrorPixels: 2,
+  performance: {raster: RasterStrategy.hardware, tileSize: 8, lodErrorPixels: 2,
     lodBudgetSplats: 1_000_000, alphaThreshold: 2 / 255, subpixelThreshold: 1,
     enableFrustumCulling: true, enableHiZOcclusion: false, enableEarlyTermination: true,
     sortDepth: 16, renderScale: 0.65, shDegree: 1,
     residencyCapacitySplats: 1_000_000, targetFps: null},
 };
 
-const optionKeys = new Set<string>([
-  'raster', 'tileSize', 'lodErrorPixels', 'lodBudgetSplats', 'alphaThreshold',
-  'subpixelThreshold', 'enableFrustumCulling', 'enableHiZOcclusion',
-  'enableEarlyTermination', 'sortDepth', 'renderScale', 'shDegree',
-  'residencyCapacitySplats', 'targetFps',
-]);
+const optionKeys = new Set<string>([...loadKeys, ...propKeys, 'targetFps']);
+const worldKeys = new Set<string>(['requestId', 'filePath', 'maxShDegree']);
 const policyPropKeys = [
   'raster', 'tileSize', 'lodErrorPixels', 'alphaThreshold', 'subpixelThreshold',
   'enableFrustumCulling', 'enableHiZOcclusion', 'enableEarlyTermination', 'sortDepth',
 ] as const;
 
-function integer(name: string, value: number, min: number, max: number): void {
-  if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer in [${min}, ${max}]`);
-  }
-}
-
-function range(name: string, value: number, min: number, max: number): void {
-  if (!Number.isFinite(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be finite and in [${min}, ${max}]`);
-  }
+function isPreset(value: unknown): value is QualityPreset {
+  return typeof value === 'string' && Object.hasOwn(presets, value);
 }
 
 function validatePolicy(policy: PerformancePolicy): void {
-  if (policy.mode !== 'auto' && policy.mode !== 'manual') throw new TypeError('invalid mode');
-  if (typeof policy.preset !== 'string' || !Object.hasOwn(presets, policy.preset)) {
-    throw new TypeError('invalid performance preset');
-  }
-  if (!['hardware', 'computeTile', 'hybrid'].includes(policy.raster)) {
+  if (!Object.values(PerformanceMode).includes(policy.mode)) throw new TypeError('invalid mode');
+  if (!isPreset(policy.preset)) throw new TypeError('invalid performance preset');
+  if (!Object.values(RasterStrategy).includes(policy.raster)) {
     throw new TypeError('invalid raster strategy');
   }
-  if (![8, 16, 32].includes(policy.tileSize)) throw new RangeError('invalid tileSize');
-  if (![16, 32].includes(policy.sortDepth)) throw new RangeError('invalid sortDepth');
-  integer('lodBudgetSplats', policy.lodBudgetSplats, 0, 0x7fffffff);
-  integer('residencyCapacitySplats', policy.residencyCapacitySplats, 1, 0x7fffffff);
-  integer('shDegree', policy.shDegree, 0, 3);
-  range('renderScale', policy.renderScale, 0.1, 2);
+  if (!(TILE_SIZES as readonly number[]).includes(policy.tileSize)) {
+    throw new RangeError('invalid tileSize');
+  }
+  if (!(SORT_DEPTHS as readonly number[]).includes(policy.sortDepth)) {
+    throw new RangeError('invalid sortDepth');
+  }
+  integer('lodBudgetSplats', policy.lodBudgetSplats, 0, MAX_INT32);
+  integer('residencyCapacitySplats', policy.residencyCapacitySplats, 1, MAX_INT32);
+  integer('shDegree', policy.shDegree, 0, MAX_SH_DEGREE);
+  range('renderScale', policy.renderScale, MIN_RENDER_SCALE, MAX_RENDER_SCALE);
   range('lodErrorPixels', policy.lodErrorPixels, Number.MIN_VALUE, Number.MAX_VALUE);
   range('alphaThreshold', policy.alphaThreshold, 0, 1);
   range('subpixelThreshold', policy.subpixelThreshold, 0, Number.MAX_VALUE);
@@ -376,17 +388,17 @@ function validatePolicy(policy: PerformancePolicy): void {
 }
 
 function policyFor(preset: QualityPreset): PerformancePolicy {
-  return Object.freeze({mode: 'auto', preset, ...presets[preset]});
+  return Object.freeze({mode: PerformanceMode.auto, preset, ...presets[preset]});
 }
 
 export class SplatKitBuilder {
   private world?: SplatKitWorldRequest;
   private paused = false;
-  private performance = policyFor('balanced');
+  private performance = policyFor(QualityPreset.balanced);
 
   withWorld(world: SplatKitWorldRequest): this {
     for (const key of Object.keys(world)) {
-      if (!['requestId', 'filePath', 'maxShDegree'].includes(key)) {
+      if (!worldKeys.has(key)) {
         throw new TypeError(`${key} must be configured with withPerformance()`);
       }
     }
@@ -409,16 +421,14 @@ export class SplatKitBuilder {
     for (const key of Object.keys(options)) {
       if (!optionKeys.has(key)) throw new TypeError(`unknown performance option: ${key}`);
     }
-    const next = {...this.performance, ...options, mode: 'manual' as const};
+    const next = {...this.performance, ...options, mode: PerformanceMode.manual};
     validatePolicy(next);
     this.performance = Object.freeze(next);
     return this;
   }
 
   withPreset(preset: QualityPreset): this {
-    if (typeof preset !== 'string' || !Object.hasOwn(presets, preset)) {
-      throw new TypeError('invalid performance preset');
-    }
+    if (!isPreset(preset)) throw new TypeError('invalid performance preset');
     this.performance = policyFor(preset);
     return this;
   }
@@ -429,12 +439,12 @@ export class SplatKitBuilder {
     for (const key of ['supportsComputeTiles', 'supportsHiZOcclusion', 'supportsSubgroups'] as const) {
       if (typeof capabilities[key] !== 'boolean') throw new TypeError(`${key} must be boolean`);
     }
-    integer('maxTextureDimension', capabilities.maxTextureDimension, 1, 0x7fffffff);
+    integer('maxTextureDimension', capabilities.maxTextureDimension, 1, MAX_INT32);
 
     const requested = Object.freeze({...this.performance});
     const diagnostics: PerformanceDiagnostic[] = [];
     const diagnosticKeys = new Set<string>();
-    const warn = (code: PerformanceDiagnostic['code'], option: keyof PerformancePolicy,
+    const warn = (code: DiagnosticCode, option: keyof PerformancePolicy,
       requestedValue: PerformanceDiagnostic['requested'], fallback: PerformanceDiagnostic['fallback'],
       message: string): void => {
       const key = `${code}:${option}`;
@@ -446,7 +456,7 @@ export class SplatKitBuilder {
     const clamp = (option: 'lodBudgetSplats' | 'residencyCapacitySplats', value: number,
       min: number, max: number): number => {
       const effective = Math.min(max, Math.max(min, value));
-      if (effective !== value) warn('limit-clamped', option, value, effective,
+      if (effective !== value) warn(DiagnosticCode.limitClamped, option, value, effective,
         `${option} was clamped to the host-supplied limit`);
       return effective;
     };
@@ -457,12 +467,12 @@ export class SplatKitBuilder {
       requested.residencyCapacitySplats, capabilities.limits.minResidencyCapacitySplats,
       capabilities.limits.maxResidencyCapacitySplats);
     const shDegree = Math.min(requested.shDegree, this.world.maxShDegree) as SHDegree;
-    if (shDegree !== requested.shDegree) warn('limit-clamped', 'shDegree',
+    if (shDegree !== requested.shDegree) warn(DiagnosticCode.limitClamped, 'shDegree',
       requested.shDegree, shDegree, 'shDegree was capped by the world maxShDegree');
 
     const effectiveFields: {
       raster: RasterStrategy | null;
-      tileSize: 8 | 16 | 32 | null;
+      tileSize: TileSize | null;
       lodErrorPixels: number | null;
       alphaThreshold: number | null;
       subpixelThreshold: number | null;
@@ -488,7 +498,7 @@ export class SplatKitBuilder {
           : support[option];
         if (applied) fields[option] = requested[option];
         else if (requested[option] !== nativeDefaults[option]) {
-          warn('native-option-fallback', option, requested[option], null,
+          warn(DiagnosticCode.nativeOptionFallback, option, requested[option], null,
             `${option} fell back to the native default; read onPolicyEvent for the applied value`);
         }
       }
@@ -498,15 +508,16 @@ export class SplatKitBuilder {
       for (const option of policyPropKeys) {
         if (requested[option] === nativeDefaults[option]) continue;
         const hardwareFallback = option === 'raster' && !capabilities.supportsComputeTiles;
-        warn(hardwareFallback ? 'capability-fallback-unavailable' : 'native-support-unknown',
-          option, requested[option], hardwareFallback ? 'hardware' : null,
+        warn(hardwareFallback ? DiagnosticCode.capabilityFallbackUnavailable
+            : DiagnosticCode.nativeSupportUnknown,
+          option, requested[option], hardwareFallback ? RasterStrategy.hardware : null,
           hardwareFallback
             ? 'hardware is the candidate fallback; read onPolicyEvent for the applied raster'
             : `${option} support is unknown until native capabilities are supplied`);
       }
     }
     if (requested.targetFps !== null) {
-      warn('fabric-option-unavailable', 'targetFps', requested.targetFps, null,
+      warn(DiagnosticCode.fabricOptionUnavailable, 'targetFps', requested.targetFps, null,
         'targetFps is a request only; adaptive quality is separate');
     }
 

@@ -1,3 +1,12 @@
+import {
+  MAX_INT32,
+  MAX_RENDER_SCALE,
+  MAX_SH_DEGREE,
+  MIN_RENDER_SCALE,
+  integer,
+  range,
+} from './validation';
+
 export type SHDegree = 0 | 1 | 2 | 3;
 
 /** Immutable load transaction: options apply before decoding this world. */
@@ -85,42 +94,35 @@ export type WorldEvent = Readonly<{
   message: string;
 }>;
 
-function integer(name: string, value: number, min: number, max: number): void {
-  if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer in [${min}, ${max}]`);
-  }
-}
-
-/** Structural validation only: filesystem access and GPU limits remain native. */
-export function validateWorldRequest(request: WorldRequest, limits: SplatLimits): void {
-  if (typeof request.requestId !== 'string' || request.requestId.trim().length === 0) {
-    throw new TypeError('requestId must be a nonempty string');
-  }
-  if (!localPath(request.filePath)) {
-    throw new TypeError('filePath must be an absolute local file path, not a URL');
-  }
-  integer('maxLodCapacitySplats', limits.maxLodCapacitySplats, 0, 0x7fffffff);
-  integer('minResidencyCapacitySplats', limits.minResidencyCapacitySplats, 1, 0x7fffffff);
-  integer('maxResidencyCapacitySplats', limits.maxResidencyCapacitySplats,
-    limits.minResidencyCapacitySplats, 0x7fffffff);
-  integer('maxShDegree', request.maxShDegree, 0, 3);
-  integer('lodCapacitySplats', request.lodCapacitySplats, 0, limits.maxLodCapacitySplats);
-  integer('residencyCapacitySplats', request.residencyCapacitySplats,
-    limits.minResidencyCapacitySplats, limits.maxResidencyCapacitySplats);
-}
-
 function localPath(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') &&
     value !== '/' && !value.includes('\0');
 }
 
-export function validateColliderRequest(request: ColliderRequest): void {
+function validateTransaction(request: Readonly<{requestId: string; filePath: string}>): void {
   if (typeof request.requestId !== 'string' || request.requestId.trim().length === 0) {
     throw new TypeError('requestId must be a nonempty string');
   }
   if (!localPath(request.filePath)) {
     throw new TypeError('filePath must be an absolute local file path, not a URL');
   }
+}
+
+/** Structural validation only: filesystem access and GPU limits remain native. */
+export function validateWorldRequest(request: WorldRequest, limits: SplatLimits): void {
+  validateTransaction(request);
+  integer('maxLodCapacitySplats', limits.maxLodCapacitySplats, 0, MAX_INT32);
+  integer('minResidencyCapacitySplats', limits.minResidencyCapacitySplats, 1, MAX_INT32);
+  integer('maxResidencyCapacitySplats', limits.maxResidencyCapacitySplats,
+    limits.minResidencyCapacitySplats, MAX_INT32);
+  integer('maxShDegree', request.maxShDegree, 0, MAX_SH_DEGREE);
+  integer('lodCapacitySplats', request.lodCapacitySplats, 0, limits.maxLodCapacitySplats);
+  integer('residencyCapacitySplats', request.residencyCapacitySplats,
+    limits.minResidencyCapacitySplats, limits.maxResidencyCapacitySplats);
+}
+
+export function validateColliderRequest(request: ColliderRequest): void {
+  validateTransaction(request);
 }
 
 /** Native refuses these too; failing here names the field instead of keeping the old walker. */
@@ -139,10 +141,8 @@ export function validateCharacter(character: Character): void {
 
 export function validateRenderOptions(options: RenderOptions): void {
   if (typeof options.paused !== 'boolean') throw new TypeError('paused must be boolean');
-  if (!Number.isFinite(options.renderScale) || options.renderScale < 0.1 || options.renderScale > 2) {
-    throw new RangeError('renderScale must be finite and in [0.1, 2]');
-  }
-  integer('shDegree', options.shDegree, 0, 3);
+  range('renderScale', options.renderScale, MIN_RENDER_SCALE, MAX_RENDER_SCALE);
+  integer('shDegree', options.shDegree, 0, MAX_SH_DEGREE);
 }
 
 /** Zero may be a real measurement; native availability must be explicit. */
@@ -204,7 +204,7 @@ function cameraNumber(name: string, value: number): void {
 
 /** Structural validation only; native owns transitions and effective limits. */
 export function validateCameraRequest(request: CameraRequest): void {
-  integer('revision', request.revision, 1, 0x7fffffff);
+  integer('revision', request.revision, 1, MAX_INT32);
   if (request.mode === CameraMode.firstPerson) return;
   if (request.mode !== CameraMode.orbit) throw new RangeError('invalid camera mode');
   if (!request.anchor || typeof request.anchor !== 'object') {
