@@ -67,6 +67,11 @@ Restart the app after copying a world.
 The collider is optional: without one the world still renders and looks around, and the thumb stick stays hidden.
 The status line shows the load, drawn splats and GPU time, or why the world failed to load.
 
+The iOS scripts reuse `ios/build/dd` across sessions and build only the active architecture for local runs.
+`npm run ios:build` compiles without launching; pass `--mode Debug` when needed.
+Serialize builds sharing this directory; use a separate `--buildFolder` for concurrent or clean-build verification.
+Distribution builds use the standard Xcode architecture settings.
+
 ## Camera verification
 
 On a loaded world, compare `Fly route` with and without a deliberate JS-thread stall in a debug build.
