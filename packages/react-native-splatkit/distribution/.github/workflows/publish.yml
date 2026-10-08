@@ -10,14 +10,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Queued/retried runs use the current main tree, so they cannot release an old bump.
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: "24.21.0"
@@ -30,54 +38,48 @@ jobs:
 
       - id: state
         name: Decide whether this version is new
-        run: |
-          version=$(node -p "require('./package.json').version")
-          name=$(node -p "require('./package.json').name")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          if npm view "$name@$version" version >/dev/null 2>&1; then
-            echo "new=false" >> "$GITHUB_OUTPUT"
-            echo "$name@$version is already published; nothing to release."
-          else
-            echo "new=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release-state.cjs
+
+      - run: npm run check
 
       # Prereleases go to the next dist-tag so a later stable release owns `latest` by default.
       - name: Publish to npm
         if: steps.state.outputs.new == 'true'
-        run: |
-          case "$VERSION" in *-*) tag=next ;; *) tag=latest ;; esac
-          npm publish --provenance --tag "$tag"
+        run: npm publish --provenance --tag "$TAG"
         env:
-          VERSION: ${{ steps.state.outputs.version }}
+          TAG: ${{ steps.state.outputs.tag }}
 
       # Until a stable release exists there is nothing for `latest` to mean, and leaving it on an
       # older prerelease makes plain `npm install` hand out a build no README describes. This runs
       # on every push so a tag left behind by an earlier release is corrected without a new version.
       - name: Point latest at the newest release while all of them are prereleases
-        run: |
-          current=$(npm view "$NAME" dist-tags.latest 2>/dev/null || true)
-          if [ "$current" = "$VERSION" ]; then exit 0; fi
-          case "$current" in
-            "" | *-*)
-              npm dist-tag add "$NAME@$VERSION" latest
-              echo "latest: ${current:-none} -> $VERSION"
-              ;;
-            *) echo "latest is the stable $current; leaving it alone." ;;
-          esac
+        if: steps.state.outputs.promoteLatest == 'true'
+        run: npm dist-tag add "$NAME@$VERSION" latest
         env:
           NAME: ${{ steps.state.outputs.name }}
           VERSION: ${{ steps.state.outputs.version }}
 
       - name: Tag the release commit
-        if: steps.state.outputs.new == 'true'
         run: |
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          # npm may already have accepted the version before a previous job failed. Its
+          # gitHead identifies the published source, even if main moved before this retry.
+          sha=$(npm view "$NAME@$VERSION" gitHead)
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::npm did not report a release commit for $NAME@$VERSION"
+            exit 1
+          fi
+          if ! git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$sha"
+            git tag "v$VERSION" "$sha"
+            git push origin "v$VERSION"
+          fi
           # Not --prerelease, for the reason release.yml gives for the Android artifact: every
           # pre-1.0 release is a prerelease, and marking them all prerelease leaves the releases page
           # with no Latest at all.
-          gh release create "v$VERSION" --title "v$VERSION" --generate-notes
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --generate-notes
+          fi
         env:
+          NAME: ${{ steps.state.outputs.name }}
           VERSION: ${{ steps.state.outputs.version }}
           GH_TOKEN: ${{ github.token }}
