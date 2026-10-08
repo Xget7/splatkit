@@ -47,3 +47,37 @@ jobs:
           cd "$directory"
           npm ci --ignore-scripts
           npm run check
+
+  # JS contract checks do not compile the Kotlin adapter or execute its lifecycle state tests.
+  android-adapter:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: packages/react-native-splatkit/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006 cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --ignore-scripts
+        working-directory: packages/react-native-splatkit
+      - name: Compile Fabric bindings and test the adapter on host
+        run: >
+          apps/react-native/android/gradlew
+          -p packages/react-native-splatkit/android/verification
+          :adapter:compileDebugKotlin :adapter:testDebugUnitTest --no-daemon
+      - name: Keep adapter test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-adapter-test-results
+          path: packages/react-native-splatkit/android/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: error
+          retention-days: 14

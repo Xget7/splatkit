@@ -1,0 +1,51 @@
+name: ios-package
+
+# Build candidate bytes before pinning their checksum. Publishing still happens after
+# artifact integration/device acceptance and after the mirror receives the new pin.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build device and simulator XCFramework
+        run: scripts/package-ios.sh
+      - name: Record checksum and build provenance
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import subprocess
+
+          archives = list(Path("build/ios-distribution").glob("package.*/SplatKitCore.xcframework.zip"))
+          if len(archives) != 1:
+              raise SystemExit("expected one XCFramework archive from a fresh CI checkout")
+          archive = archives[0]
+          checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+          (archive.parent / "SplatKitCore.xcframework.zip.sha256").write_text(
+              f"{checksum}  {archive.name}\n")
+          (archive.parent / "build-provenance.json").write_text(json.dumps({
+              "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "sha256": checksum,
+              "xcode": subprocess.check_output(["xcodebuild", "-version"], text=True).strip(),
+              "slices": {"iphoneos": ["arm64"], "iphonesimulator": ["arm64", "x86_64"]},
+          }, indent=2) + "\n")
+          print(f"XCFramework SHA256: {checksum}")
+          PY
+      - name: Keep release candidate bytes
+        uses: actions/upload-artifact@v4
+        with:
+          name: splatkit-ios-${{ github.sha }}
+          path: |
+            build/ios-distribution/package.*/SplatKitCore.xcframework.zip
+            build/ios-distribution/package.*/SplatKitCore.xcframework.zip.sha256
+            build/ios-distribution/package.*/build-provenance.json
+          if-no-files-found: error
+          retention-days: 30

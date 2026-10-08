@@ -10,7 +10,7 @@ Nobody tags by hand.
 | --- | --- | --- | --- |
 | `io.github.xget7:splatkit-android` | `packages/splatkit-android/build.gradle.kts`, the `coordinates(...)` call | `.github/workflows/release.yml` | Maven Central |
 | `@splatkit/react-native` | `packages/react-native-splatkit/package.json` | `publish.yml` in the React Native mirror | npm |
-| splatkit-ios `SplatKitCore.xcframework` | `Package.swift`, the binary target URL | a person, see below | GitHub Releases |
+| splatkit-ios `SplatKitCore.xcframework` | `Package.swift`, the binary target URL | `ios-package.yml` builds; a person uploads, see below | GitHub Releases |
 
 ## What a merge to main does
 
@@ -22,21 +22,29 @@ Nobody tags by hand.
    If it does not, it publishes with provenance, tags and releases.
 
 Both publish steps are no-ops when the version did not move, so an ordinary merge is safe.
+The npm publisher serializes runs from current `main`, rejects registry errors, and repairs missing tags/releases against npm's recorded source commit on retry.
 
 ### The `latest` dist-tag
 
 Prereleases publish under the `next` dist-tag.
 While every published version is a prerelease, the workflow also points `latest` at the newest one, because otherwise plain `npm install @splatkit/react-native` hands out whatever was published first.
+An older-version retry never moves `latest` backwards.
 Once a stable version owns `latest`, the workflow stops touching it.
 
 ## Cutting an iOS release
 
-The XCFramework is built on a Mac, so this part is still manual.
+Run [ios-package.yml](../.github/workflows/ios-package.yml) on the candidate commit, then download its artifact into `build/ios-release`.
+It contains the device/simulator archive, a SHA256 file and `build-provenance.json` naming the source commit and Xcode version.
+Use those exact bytes and checksum for the release; rebuilding produces a different archive.
+Publication still requires the [validation gates](VALIDATION.md) and a manual upload after the mirror receives the pins.
+
+A local Mac build remains available:
 
 ```sh
-rm -rf build/ios-distribution          # a cached Xcode SDK path breaks configure after an upgrade
 scripts/package-ios.sh                 # prints the artifact path and its checksum
 ```
+
+Reuse `build/ios-distribution`; clear its SDK build caches only after an Xcode upgrade invalidates their SDK paths.
 
 Then, in one pull request:
 
@@ -50,8 +58,10 @@ Swift Package Manager reads `Package.swift` at the tag, so tagging before the mi
 ```sh
 gh release create v0.1.0-beta.N -R Xget7/splatkit-ios \
   --title "SplatKit iOS 0.1.0 beta N" --notes "..." \
-  build/ios-distribution/package.*/SplatKitCore.xcframework.zip
+  build/ios-release/SplatKitCore.xcframework.zip
 ```
+
+For a local build, substitute the exact archive path printed by `scripts/package-ios.sh`.
 
 Not `--prerelease`, for the reason `release.yml` gives for the Android artifact: every pre-1.0 release is a prerelease, and marking them all prerelease leaves the releases page with no Latest at all.
 
