@@ -6,11 +6,30 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ## Unreleased
 
+### Added
+
+- Android Fabric adapter compilation and host tests join the React Native CI gate.
+- `ios-package.yml` builds a device/simulator XCFramework candidate with its checksum and source/Xcode provenance for release integration.
+
 ### Fixed
 
 - The React Native mirror's `publish.yml` no longer passes `--prerelease`, so `react-native-splatkit` shows a Latest release the way the Android and iOS repositories already do.
 - The React Native example builds without warnings on either platform.
   Its `Info.plist` no longer declares an empty `NSLocationWhenInUseUsageDescription`, which the app never used and App Store validation rejects, and `MainActivity` uses the `DefaultReactActivityDelegate` constructor React Native 0.87 has not deprecated.
+
+## [0.1.0-beta.1] - 2026-09-30
+
+### Added
+
+- Host-driven orbit, anchor, dolly, focus and look-at camera APIs, with revisioned requests in the shared engine and both native SDKs.
+
+### Fixed
+
+- Offline hierarchy construction splits cells until they hold at most 32 splats, avoiding stretched coarse parents.
+- Walking after an orbit restores a level horizon.
+- GLB colliders with an out-of-range default scene index are rejected.
+- Loading and empty-world frames clear to the background; the example shows loading state while replacing a world.
+- Vulkan pipeline construction owns each shader module for the build that uses it.
 
 ## [0.1.0-alpha09] - 2026-09-21
 
@@ -135,6 +154,7 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 - First Maven Central publication of the Vulkan SDK.
 
+[0.1.0-beta.1]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-beta.1
 [0.1.0-alpha09]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha09
 [0.1.0-alpha08]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha08
 [0.1.0-alpha07]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha07

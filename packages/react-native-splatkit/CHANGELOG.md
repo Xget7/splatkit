@@ -5,12 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## Unreleased
 
+- The npm publisher rejects registry failures, serializes runs from current `main`, preserves forward-only `latest` promotion, and repairs missing release metadata using npm's published source commit.
+- Refresh the development-tool `shell-quote` dependency to 1.12.0, fixing GHSA-pqg4-j6r4-53mv.
+
+## [0.1.0-beta.1] - 2026-10-01
+
 - Add revisioned `camera` requests, `CameraMode`, `toNativeCameraProp`, and `onCameraEvent` with native validation and effective state.
 - Support continuous signed orbit rates and retain accepted camera requests across world replacement.
 - Move the example flythrough to optional host-side Reanimated worklets.
 
-Requires rebuilt native SDKs; update the Android dependency and iOS artifact pin before publishing this package.
-Local verification uses the source Android project and `SPLATKIT_IOS_XCFRAMEWORK_PATH` from `scripts/package-ios.sh`.
+The Android dependency and checksum-verified iOS artifact both pin native SDK `0.1.0-beta.1`.
 
 ## [0.1.0-alpha.3] - 2026-09-21
 
@@ -85,6 +89,7 @@ It replaces the previous `react-native-splatkit` binding, which bound Maven `0.1
 - A fresh React Native 0.87.1 app builds the package on both platforms and ran it on an iPhone 17 Pro; on Android only the SplatKit React Native dev app has run, on a Mi 9.
 - iOS has no gyroscope toggle, and colliders, camera poses and joysticks are not exposed.
 
+[0.1.0-beta.1]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-beta.1
 [0.1.0-alpha.3]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.1
