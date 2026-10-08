@@ -22,12 +22,16 @@ jobs:
           import hashlib
           import json
           from pathlib import Path
+          import shutil
           import subprocess
 
           archives = list(Path("build/ios-distribution").glob("package.*/SplatKitCore.xcframework.zip"))
           if len(archives) != 1:
               raise SystemExit("expected one XCFramework archive from a fresh CI checkout")
-          archive = archives[0]
+          output = Path("build/ios-release")
+          output.mkdir(parents=True)
+          archive = output / archives[0].name
+          shutil.copyfile(archives[0], archive)
           checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
           (archive.parent / "SplatKitCore.xcframework.zip.sha256").write_text(
               f"{checksum}  {archive.name}\n")
@@ -43,9 +47,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: splatkit-ios-${{ github.sha }}
-          path: |
-            build/ios-distribution/package.*/SplatKitCore.xcframework.zip
-            build/ios-distribution/package.*/SplatKitCore.xcframework.zip.sha256
-            build/ios-distribution/package.*/build-provenance.json
+          path: build/ios-release/
           if-no-files-found: error
           retention-days: 30

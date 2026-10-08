@@ -33,10 +33,15 @@ Once a stable version owns `latest`, the workflow stops touching it.
 
 ## Cutting an iOS release
 
-Run [ios-package.yml](../.github/workflows/ios-package.yml) on the candidate commit, then download its artifact into `build/ios-release`.
+Run [ios-package.yml](../.github/workflows/ios-package.yml) on the candidate commit, then download its named artifact into `build/ios-release`.
 It contains the device/simulator archive, a SHA256 file and `build-provenance.json` naming the source commit and Xcode version.
 Use those exact bytes and checksum for the release; rebuilding produces a different archive.
 Publication still requires the [validation gates](VALIDATION.md) and a manual upload after the mirror receives the pins.
+
+```sh
+gh run download <run-id> -R Xget7/splatkit \
+  --name splatkit-ios-<source-sha> --dir build/ios-release
+```
 
 A local Mac build remains available:
 
