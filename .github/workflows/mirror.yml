@@ -78,7 +78,9 @@ jobs:
         run: |
           git clone --depth 1 \
             "https://x-access-token:${MIRROR_TOKEN}@github.com/${REPOSITORY}.git" mirror
-          rsync -a --delete --exclude .git "${DIRECTORY}/" mirror/
+          # Export and clone can produce equal-sized files with the same timestamp.
+          # Compare bytes so a changed manifest or source file is never skipped.
+          rsync -a --checksum --delete --exclude .git "${DIRECTORY}/" mirror/
           cd mirror
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -64,6 +65,29 @@ class ExportedWorkflowTest(unittest.TestCase):
                     self.assertTrue(name in manifest, f"{platform} workflow dependency missing: {name}")
                     self.assertEqual((directory / name).read_bytes(), (export.ROOT / name).read_bytes())
                 self.assertFalse(any("node_modules" in Path(name).parts for name in manifest))
+
+
+@unittest.skipUnless((export.ROOT / ".github/workflows/mirror.yml").is_file(),
+                     "mirror workflow belongs to the upstream repository")
+class MirrorCopyTest(unittest.TestCase):
+    def test_changed_bytes_are_copied_even_with_equal_size_and_timestamp(self):
+        workflow = (export.ROOT / ".github/workflows/mirror.yml").read_text()
+        command = next(line.strip() for line in workflow.splitlines() if line.strip().startswith("rsync "))
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            source, mirror = root / "source", root / "mirror"
+            source.mkdir()
+            mirror.mkdir()
+            # Export and clone can write equal-sized manifests during the same second.
+            # rsync's default quick check then leaves the previous hash behind.
+            for directory, value in ((source, "new"), (mirror, "old")):
+                path = directory / "source-manifest.json"
+                path.write_text(json.dumps({"file": value}) + "\n")
+                os.utime(path, (1_600_000_000, 1_600_000_000))
+            args = [arg.replace("${DIRECTORY}", str(source)) for arg in shlex.split(command)]
+            subprocess.run(args, cwd=root, check=True, capture_output=True)
+            self.assertEqual((mirror / "source-manifest.json").read_bytes(),
+                             (source / "source-manifest.json").read_bytes())
 
 
 if __name__ == "__main__":
