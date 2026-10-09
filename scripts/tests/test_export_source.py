@@ -1,5 +1,11 @@
 import importlib.util
+import json
+import os
 from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "export-ios-source.py"
@@ -35,6 +41,29 @@ class PublishedPathTest(unittest.TestCase):
         self.assertEqual(
             export.published("react-native", "packages/react-native-splatkit/src/distribution/a.ts"),
             "src/distribution/a.ts")
+
+
+class ExportedWorkflowTest(unittest.TestCase):
+    def test_native_core_workflow_inputs_are_exported(self):
+        for platform in ("ios", "android"):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as scratch:
+                result = subprocess.check_output(
+                    [sys.executable, str(SCRIPT), "--platform", platform],
+                    env={**os.environ, "TMPDIR": scratch}, text=True)
+                directory = Path(json.loads(result)["directory"])
+                manifest = json.loads((directory / "source-manifest.json").read_text())
+                workflow = (directory / ".github/workflows/core.yml").read_text()
+                # Check the paths the exported job actually consumes, including npm's
+                # package manifest beside its cache lockfile. No node_modules may leak.
+                inputs = set(re.findall(r"cache-dependency-path:\s+(scripts/[\w./-]+)", workflow))
+                inputs.update(re.findall(r"\bnode\s+(scripts/[\w./-]+)", workflow))
+                for prefix in re.findall(r"\bnpm ci --prefix\s+(scripts/[\w./-]+)", workflow):
+                    inputs.update((f"{prefix}/package.json", f"{prefix}/package-lock.json"))
+                self.assertTrue(inputs, "the interop job must exercise exported inputs")
+                for name in sorted(inputs):
+                    self.assertTrue(name in manifest, f"{platform} workflow dependency missing: {name}")
+                    self.assertEqual((directory / name).read_bytes(), (export.ROOT / name).read_bytes())
+                self.assertFalse(any("node_modules" in Path(name).parts for name in manifest))
 
 
 if __name__ == "__main__":
