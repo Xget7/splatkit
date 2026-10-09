@@ -8,6 +8,7 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ### Added
 
+- Offline SPZ v2/v3/v4 selection and explicit RDF/RUB normalization through `splat-convert`, `ply2spz` and `prepare-world.sh`, with pinned PlayCanvas/SplatTransform interoperability checks in CI.
 - Android Fabric adapter compilation and host tests join the React Native CI gate.
 - `ios-package.yml` builds a device/simulator XCFramework candidate with its checksum and source/Xcode provenance for release integration.
 
