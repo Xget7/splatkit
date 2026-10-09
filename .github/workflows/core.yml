@@ -71,7 +71,9 @@ jobs:
         run: |
           directory="$GITHUB_WORKSPACE"
           if [[ "${{ matrix.tree }}" == ios-export ]]; then
-            directory=$(python3 scripts/export-ios-source.py --platform ios \
+            # setup-node hashes cache inputs only within GITHUB_WORKSPACE.
+            mkdir -p "$GITHUB_WORKSPACE/build/mirror-check"
+            directory=$(TMPDIR="$GITHUB_WORKSPACE/build/mirror-check" python3 scripts/export-ios-source.py --platform ios \
               | python3 -c "import json,sys; print(json.load(sys.stdin)['directory'])")
           fi
           echo "directory=$directory" >> "$GITHUB_OUTPUT"
