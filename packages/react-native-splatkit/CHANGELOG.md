@@ -5,6 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## Unreleased
 
+- Backport a 128-level nesting guard for GHSA-vfj7-8cjw-p6xm in development-tool `braces@3.0.3`; install hooks and CI verify it without changing the version reported by `npm audit`.
 - The npm publisher rejects registry failures, serializes runs from current `main`, preserves forward-only `latest` promotion, and repairs missing release metadata using npm's published source commit.
 - Refresh the development-tool `shell-quote` dependency to 1.12.0, fixing GHSA-pqg4-j6r4-53mv.
 

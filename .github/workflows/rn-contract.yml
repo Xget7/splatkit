@@ -68,6 +68,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci --ignore-scripts
         working-directory: packages/react-native-splatkit
+      - run: npm run patch:tooling
+        working-directory: packages/react-native-splatkit
       - name: Compile Fabric bindings and test the adapter on host
         run: >
           apps/react-native/android/gradlew
@@ -81,3 +83,27 @@ jobs:
           path: packages/react-native-splatkit/android/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: error
           retention-days: 14
+
+  metro-tooling:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: |
+            packages/react-native-splatkit/package-lock.json
+            apps/react-native/package-lock.json
+      - run: npm ci --ignore-scripts && npm run check
+        working-directory: packages/react-native-splatkit
+      - run: npm ci --ignore-scripts && npm run patch:tooling && npm run check:tooling && npm run typecheck
+        working-directory: apps/react-native
+      - name: Bundle both mobile platforms with patched Metro dependencies
+        working-directory: apps/react-native
+        run: |
+          mkdir -p build/metro-security/ios build/metro-security/android
+          npx react-native bundle --platform ios --dev false --entry-file index.js \
+            --bundle-output build/metro-security/ios/main.jsbundle --assets-dest build/metro-security/ios
+          npx react-native bundle --platform android --dev false --entry-file index.js \
+            --bundle-output build/metro-security/android/index.android.bundle --assets-dest build/metro-security/android

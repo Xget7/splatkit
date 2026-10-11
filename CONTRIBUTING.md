@@ -54,6 +54,9 @@ npm ci
 npm run check                # TypeScript, contract tests and Fabric Codegen
 ```
 
+`prepare` backports the [braces depth guard](packages/react-native-splatkit/scripts/patches/braces-3.0.3/validate-depth.js) for development tooling; `check` applies and verifies it even after `npm ci --ignore-scripts`.
+`npm audit` still reports upstream `braces@3.0.3`; remove the backport when a compatible fixed version ships.
+
 Adapter changes also need the Android adapter host tests in its [README](packages/react-native-splatkit/android/README.md) and a run of the [React Native example](apps/react-native/README.md) on a device.
 Check build wiring changes in a fresh React Native app outside this repository, installing the `npm pack` tarball.
 `prepack` fetches and checksum-verifies the iOS `SplatKitCore.xcframework`; `SPLATKIT_IOS_XCFRAMEWORK_PATH` substitutes a local `scripts/package-ios.sh` build.

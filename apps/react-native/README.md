@@ -10,7 +10,7 @@ Reanimated and Worklets are dependencies of this app only.
 The SDK draws no walking UI of its own.
 
 Inside this monorepo the app installs [`@splatkit/react-native`](../../packages/react-native-splatkit/README.md) from `../../packages`, and builds the Android SDK from source, so the example always exercises the current API.
-Outside it, `npm install @splatkit/react-native@next` is the only change.
+Outside it, install `@splatkit/react-native@next` and remove this repository's `postinstall`, `prestart`, `patch:tooling` and `check:tooling` scripts.
 
 Linking the package rather than unpacking it costs the example one extra piece of Metro config, in [`metro.config.js`](metro.config.js).
 The package keeps React and React Native as devDependencies, so from the linked directory Metro resolves them to the package's own `node_modules` and the bundle ends up with two copies of each.
@@ -43,6 +43,10 @@ Worlds are `.spz` or `.lodsplat` files and are not committed; [Preparing a world
 ```sh
 npm ci
 ```
+
+`postinstall` applies the development-tool [braces depth guard](../../packages/react-native-splatkit/scripts/patches/braces-3.0.3/validate-depth.js).
+After `npm ci --ignore-scripts`, run `npm run patch:tooling`; `npm run check:tooling` verifies the patch and glob regressions.
+The upstream version remains `3.0.3`, so `npm audit` still lists the advisory.
 
 Android, on an arm64 device with Vulkan 1.1:
 

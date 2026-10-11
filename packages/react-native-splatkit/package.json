@@ -27,7 +27,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test tests/*.test.cjs",
     "codegen": "node scripts/codegen.cjs",
-    "check": "npm run typecheck && npm test && npm run codegen",
+    "patch:tooling": "node scripts/patch-braces.cjs --node-modules node_modules",
+    "prepare": "npm run patch:tooling -- --if-present",
+    "check": "npm run patch:tooling && npm run typecheck && npm test && npm run codegen",
     "fetch:ios-xcframework": "node scripts/fetch-ios-xcframework.cjs",
     "prepack": "npm run check && npm run fetch:ios-xcframework"
   },

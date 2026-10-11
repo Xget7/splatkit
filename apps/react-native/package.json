@@ -8,6 +8,10 @@
     "ios:build": "react-native build-ios --mode Release --buildFolder build/dd --extra-params ONLY_ACTIVE_ARCH=YES",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "patch:tooling": "node ../../packages/react-native-splatkit/scripts/patch-braces.cjs --node-modules node_modules",
+    "postinstall": "npm run patch:tooling",
+    "check:tooling": "npm run patch:tooling -- --check && node --test ../../packages/react-native-splatkit/tests/braces-security.test.cjs",
+    "prestart": "npm run patch:tooling",
     "start": "react-native start"
   },
   "dependencies": {
