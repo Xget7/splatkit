@@ -1,0 +1,31 @@
+{
+  // C/C++ IntelliSense takes each file's flags from the compile databases that
+  // scripts/lint-cpp.sh leaves in build/lint, the Android flags CI lints with. A file in
+  // none of them, or a checkout that has not run the script yet, gets the defaults below:
+  // C++17 as the CMake projects set it, not the compiler's own C++14.
+  "C_Cpp.default.compileCommands": [
+    "${workspaceFolder}/build/lint/android/compile_commands.json",
+    "${workspaceFolder}/build/lint/engine/compile_commands.json",
+    "${workspaceFolder}/build/lint/core/compile_commands.json"
+  ],
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/packages/splat-core/include",
+    "${workspaceFolder}/packages/splatkit-engine/include",
+    "${workspaceFolder}/packages/splatkit-android/src/main/cpp"
+  ],
+  // The extension cannot parse Objective-C++; read as C++ these headers are all errors.
+  "files.associations": {
+    "**/splatkit-ios/Sources/**/*.h": "objective-cpp",
+    "**/splatkit-ios/tests/*.h": "objective-cpp",
+    "**/react-native-splatkit/ios/*.h": "objective-cpp"
+  },
+  // The mirror checkouts in build/maintenance copy every header, so symbol lookups would
+  // land in them; node_modules is large and none of it is ours.
+  "C_Cpp.files.exclude": {
+    "**/.vscode": true,
+    "**/.vs": true,
+    "**/node_modules": true,
+    "**/build/maintenance": true
+  }
+}
