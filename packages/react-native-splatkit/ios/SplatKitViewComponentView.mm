@@ -237,8 +237,10 @@ using namespace facebook::react;
       // The engine this load creates applies the stored policy, so it is applied once.
       [_splatView loadWorld:[NSString stringWithUTF8String:world.filePath.c_str()]
                    requestId:[NSString stringWithUTF8String:world.requestId.c_str()]
-               maxShDegree:world.maxShDegree lodCapacity:world.lodCapacitySplats
-         residencyCapacity:world.residencyCapacitySplats];
+                        kind:world.kind
+                 maxShDegree:world.maxShDegree
+                 lodCapacity:world.lodCapacitySplats
+           residencyCapacity:world.residencyCapacitySplats];
       return;
     }
   }

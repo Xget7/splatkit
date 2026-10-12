@@ -31,8 +31,11 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraPoseEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock focusResultEvent;
-- (void)loadWorld:(NSString *)path requestId:(NSString *)requestId maxShDegree:(NSInteger)maxShDegree
- lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity;
+/// `kind` 0 decodes one `.spz` or `.lodsplat` file; 1 streams the tileset whose index
+/// `path` names. Anything else fails the load as an invalid request.
+- (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
+      maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
+residencyCapacity:(NSInteger)residencyCapacity;
 /// Loads a collider GLB and enables walk mode when it is ready. An empty path releases it.
 - (void)loadCollider:(NSString *)path requestId:(NSString *)requestId;
 /// The walker's shape, applied at once and to a collider loaded later. NO when a value is

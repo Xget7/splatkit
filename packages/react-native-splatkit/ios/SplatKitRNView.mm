@@ -31,6 +31,10 @@ static const CFTimeInterval kStatsInterval = 0.5;
 /// SplatMetalView's touch sensitivity: radians per point dragged.
 static const CGFloat kLookSensitivity = 0.004;
 
+/// World kinds, numbered as the JS WorldKind, the Codegen spec and the Android adapter number them.
+static const NSInteger kWorldKindFile = 0;
+static const NSInteger kWorldKindTileset = 1;
+
 static const CGFloat kMinRenderScale = 0.1;
 static const CGFloat kMaxRenderScale = 2.0;
 static const NSInteger kMaxShDegree = 3;
@@ -478,9 +482,10 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
 
 // MARK: - Loading
 
-- (void)loadWorld:(NSString *)path requestId:(NSString *)requestId maxShDegree:(NSInteger)maxShDegree
- lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity {
-  if (![self validateRequestId:requestId path:path maxShDegree:maxShDegree]) {
+- (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
+      maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
+residencyCapacity:(NSInteger)residencyCapacity {
+  if (![self validateRequestId:requestId path:path kind:kind maxShDegree:maxShDegree]) {
     [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
              message:@"invalid world request"];
     return;
@@ -532,12 +537,17 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
   };
 
   // Decode off the render thread; the next frame uploads. The serial queue bounds
-  // concurrent decodes to one and the generation gate skips superseded work.
+  // concurrent decodes to one and the generation gate skips superseded work. A tileset
+  // reads only its index here; the engine streams the tiles within the residency budget.
   dispatch_async(_loaderQueue, ^{
     SplatKitRNView *view = weakSelf;
     if (view == nil) return;
     if (generation != view->_generation.load(std::memory_order_acquire)) return;
-    [engine loadWorldFile:path];
+    if (kind == kWorldKindTileset) {
+      [engine loadTiledWorldFile:path];
+    } else {
+      [engine loadWorldFile:path];
+    }
   });
 
   // The world's engine is new, so walk mode has to be rebuilt on it.
@@ -579,10 +589,12 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
       [path rangeOfString:@"\0"].location == NSNotFound;
 }
 
-- (BOOL)validateRequestId:(NSString *)requestId path:(NSString *)path maxShDegree:(NSInteger)maxShDegree {
+- (BOOL)validateRequestId:(NSString *)requestId path:(NSString *)path kind:(NSInteger)kind
+                maxShDegree:(NSInteger)maxShDegree {
   if ([requestId stringByTrimmingCharactersInSet:
       NSCharacterSet.whitespaceAndNewlineCharacterSet].length == 0) return NO;
   if (![self isLocalPath:path]) return NO;
+  if (kind != kWorldKindFile && kind != kWorldKindTileset) return NO;
   if (maxShDegree < 0 || maxShDegree > kMaxShDegree) return NO;
   return YES;
 }

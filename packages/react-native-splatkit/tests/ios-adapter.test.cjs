@@ -108,6 +108,19 @@ test('camera commits after world preparation, reports effective state, and clear
   }
 });
 
+test('iOS adapter streams a tileset and loads any other world as one file', () => {
+  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
+  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const {WorldKind} = require('../build/contracts.js');
+  const numbered = name => Number(native.match(new RegExp(`kWorldKind${name} = (\\d+);`))?.[1]);
+  assert.equal(numbered('File'), WorldKind.file);
+  assert.equal(numbered('Tileset'), WorldKind.tileset);
+  assert.match(mm, /kind:world\.kind/);
+  // An unknown kind fails as an invalid request before any engine exists.
+  assert.match(native, /kind != kWorldKindFile && kind != kWorldKindTileset\) return NO/);
+  assert.match(native, /kind == kWorldKindTileset\) \{\s*\[engine loadTiledWorldFile:path\];\s*\} else \{\s*\[engine loadWorldFile:path\];/);
+});
+
 // The phases are spelled in the JS contracts, the codegen spec and each adapter; the native
 // constants are what the adapter sends, so a drifted spelling has to fail here.
 test('iOS wire phase constants spell the values the JS contracts declare', () => {
