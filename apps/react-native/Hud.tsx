@@ -317,6 +317,13 @@ function Hud({
   );
 }
 
+/** The tinted glass behind the format and preset pills. */
+const CONTROL_SURFACE = {
+  backgroundColor: 'rgba(17, 17, 20, 0.62)',
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: 'rgba(255, 255, 255, 0.12)',
+} as const;
+
 const styles = StyleSheet.create({
   panelSlot: {
     position: 'absolute',
@@ -476,9 +483,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     padding: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(17, 17, 20, 0.62)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    ...CONTROL_SURFACE,
   },
   format: {
     paddingHorizontal: 12,
@@ -497,9 +502,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(17, 17, 20, 0.62)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    ...CONTROL_SURFACE,
   },
   presetActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
