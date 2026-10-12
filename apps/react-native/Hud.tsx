@@ -290,6 +290,8 @@ function Hud({
           return (
             <Pressable
               key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               onPress={() => onPreset(value)}
               style={[styles.preset, active && styles.presetActive]}
             >
