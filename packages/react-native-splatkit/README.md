@@ -76,7 +76,7 @@ Set `minSdkVersion = 29` and `reactNativeArchitectures=arm64-v8a` in the host ap
 
 ## Preparing a world
 
-The view reads `.spz` and `.lodsplat` files, never `.ply`, so a scene is prepared on your computer before it reaches the phone.
+The view reads `.spz` and `.lodsplat` files and tilesets of `.spz` tiles, never `.ply`, so a scene is prepared on your computer before it reaches the phone.
 
 - **[World Labs Marble](https://docs.worldlabs.ai/marble/export/specs#gaussian-splats) exports** are ready as they are: the SPZ is the world and the collider GLB makes it walkable.
 - **Any Gaussian splat PLY**, from SuperSplat, Polycam or a 3DGS training run, goes through `scripts/prepare-world.sh` in the SplatKit repository:
@@ -94,6 +94,7 @@ The first run builds the conversion tools, and every run ends by printing which 
 | none | `out/scene.spz` | Every scene; this is the world. |
 | `--collider` | `out/scene.collider.glb` | Walking. It assumes a space to walk through, not a lone object. |
 | `--lod` | `out/scene.lodsplat`, which becomes the world | Scenes of several million splats: the level-of-detail tree is built here instead of on the phone at load time. |
+| `--tiles` | `out/scene.tiles/`, a `tileset.json` index and its tiles | Scenes bigger than phone memory, or a large area to walk: only the tiles the camera needs are resident. |
 | `--sh N` | | Keeping spherical harmonics up to degree N, 0 to 3. Each degree dropped makes smaller files and uses less GPU memory. |
 | `--spz-version N` | `out/scene.spz` | Selecting container version 2, 3 or 4; PLY conversion defaults to 2. |
 | `--source-frame rub` | `out/scene.spz` | Normalizing right/up/back SPZ from PlayCanvas or Splat Field Guide to the SDK's right/down/forward file convention. |
@@ -153,7 +154,9 @@ A request an adapter rejects is refused before any engine exists, so no capabili
 ## Loading a world
 
 `filePath` must be an absolute, readable local path, never a URL, a `require()` asset or a content URI.
-Supported formats are `.spz` and `.lodsplat`; [Preparing a world](#preparing-a-world) turns a PLY into them.
+A `.spz` or `.lodsplat` file is decoded whole at load.
+A tileset loads with `kind: WorldKind.tileset` and `filePath` naming its `tileset.json`: only the index is read at load, and tiles stream in as the camera needs them, within `residencyCapacitySplats`.
+[Preparing a world](#preparing-a-world) turns a PLY into any of them.
 
 `world` is a transaction, not a setting.
 Native reloads when `requestId` changes and ignores every other edit to the object, so changing a load-time budget means changing the id too.
@@ -171,6 +174,9 @@ adb push world.spz /sdcard/Android/data/<your.application.id>/files/world.spz
 xcrun devicectl device copy to --device <device-id> --domain-type appDataContainer \
   --domain-identifier <your.bundle.id> --source world.spz --destination Documents/world.spz
 ```
+
+A tileset is a folder whose index names its tiles relative to itself: copy the whole folder the same way and point `filePath` at the `tileset.json` inside it.
+`adb push` nests a folder inside one that already exists, so remove an old copy first.
 
 Restart the app after copying a new world.
 
@@ -324,7 +330,7 @@ const configuration = new SplatKitBuilder()
 // <SplatKitView {...toNativeViewProps(configuration)} policy={toNativePolicyProp(configuration, revision)} />
 ```
 
-- `withWorld()` takes world identity, file path and the load-time maximum SH degree.
+- `withWorld()` takes world identity, file path, an optional `kind` and the load-time maximum SH degree.
 - `withRender()` takes `paused`.
 - `withPreset(preset)` replaces the policy with one of the presets below.
 - `withPerformance(options)` overrides fields on top of the current preset and marks the policy `manual`.
@@ -350,7 +356,7 @@ Only the iOS adapter builds `hybrid` today, and `computeTile` is not implemented
 | Knob | Set through | Effect |
 | --- | --- | --- |
 | `lodCapacitySplats` | `withPerformance({lodBudgetSplats})` | LOD tree budget. 0 disables tree building. Load-time. |
-| `residencyCapacitySplats` | `withPerformance({residencyCapacitySplats})` | Resident streaming splats, not a memory guarantee. Load-time. |
+| `residencyCapacitySplats` | `withPerformance({residencyCapacitySplats})` | Resident splats of a tileset, not a memory guarantee. Load-time. |
 | `maxShDegree` | `withWorld()` | Load-time cap on stored spherical-harmonics degree. |
 | `shDegree` | `withPerformance({shDegree})` | Draw-time SH degree, 0 to 3, clamped to `maxShDegree`. |
 | `renderScale` | `withPerformance({renderScale})` | Render resolution scale, `[0.1, 2]`. |
@@ -376,7 +382,7 @@ Extends the standard `ViewProps`.
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `maxShDegree`, `lodCapacitySplats`, `residencyCapacitySplats`. Omit to render nothing. |
+| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `kind` (absent is `WorldKind.file`), `maxShDegree`, `lodCapacitySplats`, `residencyCapacitySplats`. Omit to render nothing. |
 | `collider` | `ColliderRequest` | - | `{requestId, filePath}`. An empty `requestId` releases walk mode. |
 | `character` | `Character` | - | `{eyeHeight, bodyRadius, stepHeight}` in meters. |
 | `policy` | `NativeRenderPolicy` | - | The requested renderer policy, under a `revision`. |
@@ -434,6 +440,7 @@ Every enumerated value is a frozen object with a matching type, so there are no 
 | --- | --- |
 | `QualityPreset` | `highEnd`, `high`, `balanced`, `performance` |
 | `qualityPresets` | every preset in order, for rendering a picker |
+| `WorldKind` | `file`, `tileset` |
 | `WorldPhase` | `uploaded`, `frameReady`, `failed` |
 | `ColliderPhase` | `ready`, `failed` |
 | `CameraMode` | `firstPerson`, `orbit` |
