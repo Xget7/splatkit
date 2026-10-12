@@ -35,11 +35,10 @@ export type RenderStats = Readonly<{
 
 /** The policy the frame is drawn under, as the builder resolved it. */
 export type RenderSettings = Readonly<{
-  /** Which budget applies: a file selects within its LOD budget, a tileset streams. */
   worldKind: WorldKind;
+  /** What `loadBudget` picks for the world's kind. */
+  budgetSplats: number;
   renderScale: number;
-  lodBudgetSplats: number;
-  residencyCapacitySplats: number;
   lodErrorPixels: number | null;
   sortDepth: number | null;
 }>;
@@ -178,8 +177,8 @@ function Panel({ stats, samples, settings }: PanelProps) {
   // A tileset streams by its own error bound, so the LOD error does not apply to it.
   const budget =
     settings.worldKind === WorldKind.tileset
-      ? `Resident ${compact(settings.residencyCapacitySplats)}`
-      : `LOD ${compact(settings.lodBudgetSplats)}${
+      ? `Resident ${compact(settings.budgetSplats)}`
+      : `LOD ${compact(settings.budgetSplats)}${
           settings.lodErrorPixels === null
             ? ''
             : ` @ ${settings.lodErrorPixels} px`

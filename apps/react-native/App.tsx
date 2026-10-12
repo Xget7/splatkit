@@ -32,7 +32,6 @@ import {
   SplatKitCommands,
   SplatKitView,
   SplatKitViewProps,
-  WorldKind,
   WorldPhase,
   conservativeCapabilities,
   nativeCapabilitiesFromEvent,
@@ -56,7 +55,12 @@ import Hud, {
 } from './Hud';
 import Joystick from './Joystick';
 import { ROUTE_SECONDS, poseAt } from './Flythrough';
-import { COLLIDER_PATH, FORMAT_FILES, WorldFormat } from './Formats';
+import {
+  COLLIDER_PATH,
+  FORMAT_FILES,
+  WorldFormat,
+  loadBudget,
+} from './Formats';
 
 const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
 
@@ -219,7 +223,7 @@ function Splat({ filesPath }: Props) {
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);
   const [format, setFormat] = useState<WorldFormat>(INITIAL_FORMAT);
-  const source = FORMAT_FILES[format];
+  const formatFile = FORMAT_FILES[format];
   const [status, setStatus] = useState<string | null>(LOADING_STATUS);
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
@@ -236,8 +240,8 @@ function Splat({ filesPath }: Props) {
       new SplatKitBuilder()
         .withWorld({
           requestId: WORLD_REQUEST,
-          filePath: `${filesPath}/${source.path}`,
-          kind: source.kind,
+          filePath: `${filesPath}/${formatFile.path}`,
+          kind: formatFile.kind,
           maxShDegree: WORLD_SH_DEGREE,
         })
         .withPreset(preset)
@@ -249,33 +253,21 @@ function Splat({ filesPath }: Props) {
           renderScale: RENDER_SCALES[preset],
         })
         .build(capabilities.value),
-    [filesPath, source, preset, capabilities.value],
+    [filesPath, formatFile, preset, capabilities.value],
   );
 
-  const {
-    renderScale,
-    lodBudgetSplats,
-    residencyCapacitySplats,
-    lodErrorPixels,
-    sortDepth,
-  } = configuration.performance.effective;
+  const { effective } = configuration.performance;
+  const { renderScale, lodErrorPixels, sortDepth } = effective;
+  const budgetSplats = loadBudget(formatFile.kind, effective);
   const settings = useMemo<RenderSettings>(
     () => ({
-      worldKind: source.kind,
+      worldKind: formatFile.kind,
+      budgetSplats,
       renderScale,
-      lodBudgetSplats,
-      residencyCapacitySplats,
       lodErrorPixels,
       sortDepth,
     }),
-    [
-      source.kind,
-      renderScale,
-      lodBudgetSplats,
-      residencyCapacitySplats,
-      lodErrorPixels,
-      sortDepth,
-    ],
+    [formatFile.kind, budgetSplats, renderScale, lodErrorPixels, sortDepth],
   );
 
   // A world's splat budget is fixed when it loads, so a preset that asks for a different one
@@ -283,11 +275,7 @@ function Splat({ filesPath }: Props) {
   // limits arriving with the engine never do, because reloading a world this size is seconds
   // of tree build and a second memory peak. Every other policy field reaches the engine live.
   const { requested } = configuration.performance;
-  const budget =
-    source.kind === WorldKind.tileset
-      ? requested.residencyCapacitySplats
-      : requested.lodBudgetSplats;
-  const key = `${format}-${budget}`;
+  const key = `${format}-${loadBudget(formatFile.kind, requested)}`;
   const request = useRef<{
     key: string;
     world: SplatKitViewProps['world'];
@@ -312,7 +300,7 @@ function Splat({ filesPath }: Props) {
     (event: EventOf<'onWorldEvent'>) => {
       const { phase, loadedSplats, message } = event.nativeEvent;
       if (phase === WorldPhase.failed) {
-        setStatus(`Could not load ${source.path}: ${message}`);
+        setStatus(`Could not load ${formatFile.path}: ${message}`);
         return;
       }
       // A large world takes seconds to decode, build and upload, and the first frame comes
@@ -325,7 +313,7 @@ function Splat({ filesPath }: Props) {
       // The benchmark starts itself, so a run needs no hands and every run is the same run.
       if (phase === WorldPhase.frameReady && !control) setFlying(true);
     },
-    [source.path, control],
+    [formatFile.path, control],
   );
 
   const onColliderEvent = useCallback((event: EventOf<'onColliderEvent'>) => {

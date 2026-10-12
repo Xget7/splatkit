@@ -53,3 +53,15 @@ export const FORMAT_FILES: Readonly<Record<WorldFormat, FormatFile>> =
 
 /** The walk collider, shared by all three: they are the same world. */
 export const COLLIDER_PATH = 'collider.glb';
+
+type SplatBudgets = Readonly<{
+  lodBudgetSplats: number;
+  residencyCapacitySplats: number;
+}>;
+
+/** The budget a world loads under: a file selects within its LOD budget, a tileset streams. */
+export function loadBudget(kind: WorldKind, budgets: SplatBudgets): number {
+  return kind === WorldKind.tileset
+    ? budgets.residencyCapacitySplats
+    : budgets.lodBudgetSplats;
+}
