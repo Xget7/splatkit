@@ -99,7 +99,7 @@ The first run builds the conversion tools, and every run ends by printing which 
 | `--spz-version N` | `out/scene.spz` | Selecting container version 2, 3 or 4; PLY conversion defaults to 2. |
 | `--source-frame rub` | `out/scene.spz` | Normalizing right/up/back SPZ from PlayCanvas or Splat Field Guide to the SDK's right/down/forward file convention. |
 
-On an iPhone 17 Pro, the example app was killed for memory while loading a 12M-splat SPZ at SH2; the same scene prepared with `--lod --sh 1` loaded in about 3 seconds.
+On an iPhone 17 Pro, the example app was killed for memory while loading a 12M-splat SPZ at SH2, and again at SH1; the same scene prepared with `--lod --sh 1` loaded in about 3 seconds.
 A `.lodsplat` is uncompressed, so it is many times the SPZ: 1.25 GB against 214 MB for that scene.
 The script's header and the [splat-core tools](https://github.com/Xget7/splatkit/tree/main/packages/splat-core#converting-a-ply) cover the remaining options.
 `prepare-world.sh` normalizes the SPZ to the SDK's RDF file convention before building LOD or colliders; a container version does not identify the coordinate frame.
