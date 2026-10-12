@@ -17,7 +17,7 @@ test('Android adapter maps the versioned policy prop and its events', () => {
   assert.match(manager, /override fun onAfterUpdateTransaction[\s\S]*commitProps\(\)/);
   // The stored policy is applied to each engine a world builds, after capabilities and
   // before the load, and outcomes from a replaced engine are dropped.
-  assert.match(view, /emitCapabilities\(view\)[\s\S]{0,400}?applyPolicy\(view\)[\s\S]{0,400}?view\.loadWorld/);
+  assert.match(view, /emitCapabilities\(view\)[\s\S]{0,400}?applyPolicy\(view\)[\s\S]{0,400}?scheduleDecode\(view, world\)/);
   assert.match(view, /token == session\.generation\) emitPolicy\(requested\.revision/);
   const prop = read('android/src/main/java/com/splatkit/reactnative/PolicyProp.kt');
   assert.match(prop, /INVALID_POLICY/);
@@ -34,7 +34,7 @@ test('Android adapter exposes navigation as props, commands and collider events'
   assert.match(manager, /EventType\.COLLIDER to mapOf\("registrationName" to "onColliderEvent"\)/);
   assert.match(manager, /EventType\.CAMERA_POSE to mapOf\("registrationName" to "onCameraPose"\)/);
   // A world builds a new engine, so walk mode is rebuilt on it after the load is queued.
-  assert.match(view, /view\.loadWorld\([\s\S]*loadCollider\(\)/);
+  assert.match(view, /scheduleDecode\(view, world\)\s*\/\/[^\n]*\n\s*loadCollider\(\)/);
   assert.match(view, /COLLIDER_LOAD_FAILED/);
   // Commands reach the SDK view directly, with no React commit per frame.
   assert.match(view, /fun walk\(forward: Double, right: Double\) \{\s*nativeView\?\.setWalkVelocity/);
@@ -49,7 +49,7 @@ test('Android camera transaction survives world replacement', () => {
   assert.match(view, /listOfNotNull\(cameraAccepted, cameraPending\)/);
   assert.match(view, /token != session\.generation/);
   assert.match(view, /if \(resolution\.accepted\) \{\s*cameraAccepted = requested/);
-  assert.match(view, /applyCamera\(view, replayAccepted = true\)[\s\S]*view\.loadWorld/);
+  assert.match(view, /applyCamera\(view, replayAccepted = true\)[\s\S]*scheduleDecode\(view, world\)/);
 });
 
 // The SDK half of the transaction lives in the Android SDK, which the published package's
@@ -101,6 +101,25 @@ test('Android wire constants spell the values the JS contracts declare', () => {
   assert.deepEqual(spelled('ColliderPhase'), Object.values(ColliderPhase).sort());
   assert.deepEqual(spelled('CameraPhase'), Object.values(CameraPhase).sort());
   assert.deepEqual(spelled('PolicyPhase'), Object.values(PolicyPhase).sort());
+});
+
+test('Android adapter streams a tileset and loads any other world as one file', () => {
+  const kotlin = read('android/src/main/java/com/splatkit/reactnative/Wire.kt');
+  const manager = read('android/src/main/java/com/splatkit/reactnative/SplatKitViewManager.kt');
+  const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
+  const session = read('android/src/main/java/com/splatkit/reactnative/WorldSession.kt');
+  const {WorldKind} = require('../build/contracts.js');
+  const body = kotlin.match(/object WorldKind \{([^}]*)\}/);
+  assert.ok(body, 'Wire.kt must declare WorldKind');
+  const numbered = name => Number(body[1].match(new RegExp(`const val ${name} = (\\d+)`))?.[1]);
+  assert.equal(numbered('FILE'), WorldKind.file);
+  assert.equal(numbered('TILESET'), WorldKind.tileset);
+  // Codegen leaves an absent optional field out of the map; that request is a file.
+  assert.match(manager, /hasKey\("kind"\)[^\n]*else WorldKind\.FILE/);
+  assert.match(session, /require\(kind == WorldKind\.FILE \|\| kind == WorldKind\.TILESET\)/);
+  // The SDK's tiled load takes no options, so the budgets it reads at upload are set first.
+  assert.match(view, /WorldKind\.TILESET\) \{\s*(\/\/[^\n]*\s*)*view\.maxShDegree = world\.maxShDegree\s*view\.residencyBudget = world\.residencyCapacitySplats\s*view\.loadTiledWorld\(file\)/);
+  assert.match(view, /\} else \{\s*view\.loadWorld\(file, world\.maxShDegree, world\.lodCapacitySplats, world\.residencyCapacitySplats\)/);
 });
 
 // The adapter reported every timing as unavailable, so a HUD on Android could never show a

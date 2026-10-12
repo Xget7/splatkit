@@ -376,10 +376,24 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         navigationChanged = false
         character?.let(view::setCharacter)
         characterChanged = false
-        view.loadWorld(File(world.filePath), world.maxShDegree, world.lodCapacitySplats, world.residencyCapacitySplats)
+        scheduleDecode(view, world)
         // This engine is new, so walk mode has to be rebuilt on it.
         loadCollider()
         updateRunning()
+    }
+
+    /** Queues the engine's sole decode behind the load-time options it reads. */
+    private fun scheduleDecode(view: SplatSurfaceView, world: WorldRequest) {
+        val file = File(world.filePath)
+        if (world.kind == WorldKind.TILESET) {
+            // The SDK's tiled load takes no options; it reads these, set first, when the
+            // tileset uploads. A tileset builds no tree, so it has no LOD capacity to set.
+            view.maxShDegree = world.maxShDegree
+            view.residencyBudget = world.residencyCapacitySplats
+            view.loadTiledWorld(file)
+        } else {
+            view.loadWorld(file, world.maxShDegree, world.lodCapacitySplats, world.residencyCapacitySplats)
+        }
     }
 
     private fun clearNative() {

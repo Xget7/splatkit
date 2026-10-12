@@ -5,6 +5,12 @@ import com.facebook.react.bridge.ReadableType
 
 // The spellings below are the ones the JS contracts, the codegen spec and the iOS adapter use.
 
+/** Numbered as the JS WorldKind; a request without one is a file. */
+internal object WorldKind {
+    const val FILE = 0
+    const val TILESET = 1
+}
+
 internal object WorldPhase {
     const val UPLOADED = "uploaded"
     const val FRAME_READY = "frameReady"

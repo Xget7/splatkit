@@ -27,6 +27,7 @@ private fun requireReadableFile(filePath: String) {
 internal data class WorldRequest(
     val requestId: String,
     val filePath: String,
+    val kind: Int,
     val maxShDegree: Int,
     val lodCapacitySplats: Int,
     val residencyCapacitySplats: Int,
@@ -34,6 +35,9 @@ internal data class WorldRequest(
     fun validate() {
         requireRequestId(requestId)
         requireLocalPath(filePath)
+        require(kind == WorldKind.FILE || kind == WorldKind.TILESET) {
+            "kind must be ${WorldKind.FILE} (file) or ${WorldKind.TILESET} (tileset)"
+        }
         require(maxShDegree in 0..MAX_SH_DEGREE) { "maxShDegree must be in 0..$MAX_SH_DEGREE" }
         require(lodCapacitySplats in 0..MAX_LOD_CAPACITY_SPLATS) {
             "lodCapacitySplats must be in 0..$MAX_LOD_CAPACITY_SPLATS"

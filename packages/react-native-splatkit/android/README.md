@@ -29,4 +29,4 @@ Timing availability is false because the public SDK cannot distinguish unavailab
 Props are committed once per Fabric transaction, so a world change with display settings or a policy configures only the new engine, once.
 Each engine emits `onCapabilities`, then applies the current policy before its decode is scheduled; a later revision is applied to the live engine.
 Policy events carry the revision and policy captured at request time and are dropped when the engine was replaced.
-Only local world files are accepted; tileset loading is not wired into this adapter.
+Only local paths are accepted: a world file, or a `tileset.json` whose tiles stream from beside it.

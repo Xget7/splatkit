@@ -19,8 +19,10 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
     override fun setWorld(view: SplatKitView, value: ReadableMap?) {
         if (value == null) { view.setWorld(null); return }
         try {
+            // Optional on the wire: a request written before tilesets is a file.
+            val kind = if (value.hasKey("kind") && !value.isNull("kind")) value.int32("kind") else WorldKind.FILE
             view.setWorld(WorldRequest(
-                value.getString("requestId") ?: "", value.getString("filePath") ?: "",
+                value.getString("requestId") ?: "", value.getString("filePath") ?: "", kind,
                 value.int32("maxShDegree"), value.int32("lodCapacitySplats"), value.int32("residencyCapacitySplats")))
         } catch (error: RuntimeException) {
             view.invalidRequest(error.message ?: "Malformed world request")
