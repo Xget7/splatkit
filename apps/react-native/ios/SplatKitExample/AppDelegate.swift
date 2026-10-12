@@ -36,15 +36,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
           let factory = (UIApplication.shared.delegate as? AppDelegate)?.reactNativeFactory else { return }
     let window = UIWindow(windowScene: windowScene)
     self.window = window
-    // SplatKitView loads absolute file paths; `devicectl device copy to` fills Documents.
+    // SplatKitView loads absolute file paths, which App.tsx builds under Documents;
+    // `devicectl device copy to` fills it.
     let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     factory.startReactNative(
       withModuleName: "SplatKitExample",
       in: window,
-      initialProperties: [
-        "worldPath": documents.appendingPathComponent("world.spz").path,
-        "colliderPath": documents.appendingPathComponent("collider.glb").path,
-      ],
+      initialProperties: ["filesPath": documents.path],
       launchOptions: nil
     )
   }

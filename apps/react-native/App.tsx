@@ -3,7 +3,7 @@
  *
  * Drag anywhere to look around and push the thumb stick to walk once the collider is
  * ready. The SDK draws no walking control and no HUD: the stick, the stats card and the
- * quality picker below are this app's own, and they drive the view through props and
+ * format and quality pickers are this app's own, and they drive the view through props and
  * SplatKitCommands.
  *
  * @format
@@ -32,6 +32,7 @@ import {
   SplatKitCommands,
   SplatKitView,
   SplatKitViewProps,
+  WorldKind,
   WorldPhase,
   conservativeCapabilities,
   nativeCapabilitiesFromEvent,
@@ -55,6 +56,7 @@ import Hud, {
 } from './Hud';
 import Joystick from './Joystick';
 import { ROUTE_SECONDS, poseAt } from './Flythrough';
+import { COLLIDER_PATH, FORMAT_FILES, WorldFormat } from './Formats';
 
 const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
 
@@ -80,7 +82,7 @@ const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
 /**
  * An orbit is a fly mode the collider does not constrain, so this circle, in the living
  * room of the example house, is one its collider leaves clear at every azimuth: 2 m free,
- * 1.8 m used. Another world needs its own.
+ * 1.8 m used. Another world needs its own; the three formats are one world, so they share it.
  */
 const ORBIT = {
   anchor: { x: -7.25, y: 1.6, z: 5.25 },
@@ -135,12 +137,13 @@ const LOD_ERROR_PIXELS = 0.5;
 const SORT_DEPTH = 16;
 
 /**
- * The most splats one frame may select, per tier. Past about two million drawn the depth
- * sort costs as much as the rasteriser in a dense room, so the top tiers stop well short of
- * the four million the backend allows. The top two share a budget, which makes switching
- * between them a change of resolution only: a different budget reloads the world.
+ * The most splats one frame may draw, per tier: the LOD budget a single file selects within,
+ * and the residency a tileset streams within. Past about two million drawn the depth sort
+ * costs as much as the rasteriser in a dense room, so the top tiers stop well short of the
+ * four million the backend allows. The top two share a budget, which makes switching between
+ * them a change of resolution only: a different budget reloads the world.
  */
-const LOD_BUDGETS: Readonly<Record<QualityPreset, number>> = Object.freeze({
+const SPLAT_BUDGETS: Readonly<Record<QualityPreset, number>> = Object.freeze({
   [QualityPreset.highEnd]: 2_500_000,
   [QualityPreset.high]: 2_500_000,
   [QualityPreset.balanced]: 2_000_000,
@@ -181,10 +184,15 @@ const RENDER_SCALES: Readonly<Record<QualityPreset, number>> = Object.freeze({
 /** One pass out and one back, then the camera parks and the renderer goes idle. */
 const FLIGHT_SECONDS = ROUTE_SECONDS * 2;
 
+/** Every prepared world has the plain file, so the example opens on it. */
+const INITIAL_FORMAT: WorldFormat = WorldFormat.spz;
+
 type Props = Readonly<{
-  // Set by MainActivity on Android and SceneDelegate on iOS; see README.md.
-  worldPath: string;
-  colliderPath: string;
+  /**
+   * The absolute directory the worlds and the collider are copied into, set by MainActivity
+   * on Android and SceneDelegate on iOS; see README.md.
+   */
+  filesPath: string;
 }>;
 
 function App(props: Props) {
@@ -196,7 +204,7 @@ function App(props: Props) {
   );
 }
 
-function Splat({ worldPath, colliderPath }: Props) {
+function Splat({ filesPath }: Props) {
   const insets = useSafeAreaInsets();
   const view = useAnimatedRef<React.ComponentRef<typeof SplatKitView>>();
   // Every new configuration needs a new policy revision. The engine reports its own limits
@@ -207,6 +215,8 @@ function Splat({ worldPath, colliderPath }: Props) {
     revision: FIRST_REVISION,
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);
+  const [format, setFormat] = useState<WorldFormat>(INITIAL_FORMAT);
+  const source = FORMAT_FILES[format];
   const [status, setStatus] = useState<string | null>(LOADING_STATUS);
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
@@ -223,42 +233,68 @@ function Splat({ worldPath, colliderPath }: Props) {
       new SplatKitBuilder()
         .withWorld({
           requestId: WORLD_REQUEST,
-          filePath: worldPath,
+          filePath: `${filesPath}/${source.path}`,
+          kind: source.kind,
           maxShDegree: WORLD_SH_DEGREE,
         })
         .withPreset(preset)
         .withPerformance({
           lodErrorPixels: LOD_ERROR_PIXELS,
           sortDepth: SORT_DEPTH,
-          lodBudgetSplats: LOD_BUDGETS[preset],
+          lodBudgetSplats: SPLAT_BUDGETS[preset],
+          residencyCapacitySplats: SPLAT_BUDGETS[preset],
           renderScale: RENDER_SCALES[preset],
         })
         .build(capabilities.value),
-    [worldPath, preset, capabilities.value],
+    [filesPath, source, preset, capabilities.value],
   );
 
-  const { renderScale, lodBudgetSplats, lodErrorPixels, sortDepth } =
-    configuration.performance.effective;
+  const {
+    renderScale,
+    lodBudgetSplats,
+    residencyCapacitySplats,
+    lodErrorPixels,
+    sortDepth,
+  } = configuration.performance.effective;
   const settings = useMemo<RenderSettings>(
-    () => ({ renderScale, lodBudgetSplats, lodErrorPixels, sortDepth }),
-    [renderScale, lodBudgetSplats, lodErrorPixels, sortDepth],
+    () => ({
+      worldKind: source.kind,
+      renderScale,
+      lodBudgetSplats,
+      residencyCapacitySplats,
+      lodErrorPixels,
+      sortDepth,
+    }),
+    [
+      source.kind,
+      renderScale,
+      lodBudgetSplats,
+      residencyCapacitySplats,
+      lodErrorPixels,
+      sortDepth,
+    ],
   );
 
-  // The LOD budget is fixed when a world loads, so a preset that asks for a different one
-  // needs a new request. Only the requested budget makes one: the real limits arriving with
-  // the engine never do, because reloading a world this size is seconds of tree build and a
-  // second memory peak. Every other policy field reaches the engine live.
-  const budget = configuration.performance.requested.lodBudgetSplats;
+  // A world's splat budget is fixed when it loads, so a preset that asks for a different one
+  // needs a new request, as does another format. Only the requested budget makes one: the real
+  // limits arriving with the engine never do, because reloading a world this size is seconds
+  // of tree build and a second memory peak. Every other policy field reaches the engine live.
+  const { requested } = configuration.performance;
+  const budget =
+    source.kind === WorldKind.tileset
+      ? requested.residencyCapacitySplats
+      : requested.lodBudgetSplats;
+  const key = `${format}-${budget}`;
   const request = useRef<{
-    budget: number;
+    key: string;
     world: SplatKitViewProps['world'];
   } | null>(null);
-  if (request.current === null || request.current.budget !== budget) {
+  if (request.current === null || request.current.key !== key) {
     request.current = {
-      budget,
+      key,
       world: {
         ...configuration.world,
-        requestId: `${WORLD_REQUEST}-${budget}`,
+        requestId: `${WORLD_REQUEST}-${key}`,
       },
     };
   }
@@ -273,7 +309,7 @@ function Splat({ worldPath, colliderPath }: Props) {
     (event: EventOf<'onWorldEvent'>) => {
       const { phase, loadedSplats, message } = event.nativeEvent;
       if (phase === WorldPhase.failed) {
-        setStatus(`Could not load ${worldPath}: ${message}`);
+        setStatus(`Could not load ${source.path}: ${message}`);
         return;
       }
       // A large world takes seconds to decode, build and upload, and the first frame comes
@@ -286,7 +322,7 @@ function Splat({ worldPath, colliderPath }: Props) {
       // The benchmark starts itself, so a run needs no hands and every run is the same run.
       if (phase === WorldPhase.frameReady && !control) setFlying(true);
     },
-    [worldPath, control],
+    [source.path, control],
   );
 
   const onColliderEvent = useCallback((event: EventOf<'onColliderEvent'>) => {
@@ -406,7 +442,10 @@ function Splat({ worldPath, colliderPath }: Props) {
         onTouchStart={() => setFlying(false)}
         collider={
           control
-            ? { requestId: COLLIDER_REQUEST, filePath: colliderPath }
+            ? {
+                requestId: COLLIDER_REQUEST,
+                filePath: `${filesPath}/${COLLIDER_PATH}`,
+              }
             : undefined
         }
         character={control ? WALKER : undefined}
@@ -424,6 +463,8 @@ function Splat({ worldPath, colliderPath }: Props) {
         credit={WORLD_CREDIT}
         preset={preset}
         onPreset={setPreset}
+        format={format}
+        onFormat={setFormat}
         top={insets.top}
         bottom={insets.bottom}
       />

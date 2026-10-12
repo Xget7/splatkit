@@ -1,6 +1,6 @@
 /**
- * The render HUD: a performance panel, a quality picker and the world's credit, over the
- * SplatKitView.
+ * The render HUD: a performance panel, the format and quality pickers and the world's credit,
+ * over the SplatKitView.
  *
  * Everything here is the app's own UI. The SDK reports numbers through onStats and
  * onCapabilities and draws none of this itself.
@@ -18,7 +18,12 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { QualityPreset, qualityPresets } from '@splatkit/react-native';
+import {
+  QualityPreset,
+  WorldKind,
+  qualityPresets,
+} from '@splatkit/react-native';
+import { FORMAT_FILES, WorldFormat, worldFormats } from './Formats';
 
 export type RenderStats = Readonly<{
   loadedSplats: number;
@@ -30,8 +35,11 @@ export type RenderStats = Readonly<{
 
 /** The policy the frame is drawn under, as the builder resolved it. */
 export type RenderSettings = Readonly<{
+  /** Which budget applies: a file selects within its LOD budget, a tileset streams. */
+  worldKind: WorldKind;
   renderScale: number;
   lodBudgetSplats: number;
+  residencyCapacitySplats: number;
   lodErrorPixels: number | null;
   sortDepth: number | null;
 }>;
@@ -167,11 +175,18 @@ function Panel({ stats, samples, settings }: PanelProps) {
   const resolution = `${Math.round(window.width * pixels)} x ${Math.round(
     window.height * pixels,
   )}`;
+  // A tileset streams by its own error bound, so the LOD error does not apply to it.
+  const budget =
+    settings.worldKind === WorldKind.tileset
+      ? `Resident ${compact(settings.residencyCapacitySplats)}`
+      : `LOD ${compact(settings.lodBudgetSplats)}${
+          settings.lodErrorPixels === null
+            ? ''
+            : ` @ ${settings.lodErrorPixels} px`
+        }`;
   const caption = [
     `${resolution} px`,
-    `LOD ${compact(settings.lodBudgetSplats)}${
-      settings.lodErrorPixels === null ? '' : ` @ ${settings.lodErrorPixels} px`
-    }`,
+    budget,
     settings.sortDepth === null ? null : `${settings.sortDepth}-bit sort`,
   ]
     .filter(part => part !== null)
@@ -221,6 +236,8 @@ type Props = PanelProps &
   Readonly<{
     preset: QualityPreset;
     onPreset: (preset: QualityPreset) => void;
+    format: WorldFormat;
+    onFormat: (format: WorldFormat) => void;
     /** Who made the world and under what licence; null draws nothing. */
     credit: string | null;
     top: number;
@@ -233,14 +250,39 @@ function Hud({
   settings,
   preset,
   onPreset,
+  format,
+  onFormat,
   credit,
   top,
   bottom,
 }: Props) {
   return (
     <>
-      <View style={[styles.panelSlot, { top: top + 8 }]} pointerEvents="none">
+      <View
+        style={[styles.panelSlot, { top: top + 8 }]}
+        pointerEvents="box-none"
+      >
         <Panel stats={stats} samples={samples} settings={settings} />
+        <View style={styles.formats}>
+          {worldFormats.map(value => {
+            const active = value === format;
+            return (
+              <Pressable
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => onFormat(value)}
+                style={[styles.format, active && styles.presetActive]}
+              >
+                <Text
+                  style={[styles.presetText, active && styles.presetTextActive]}
+                >
+                  {FORMAT_FILES[value].title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
       <View style={[styles.presets, { bottom: bottom + 34 }]}>
         {qualityPresets.map(value => {
@@ -426,6 +468,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontVariant: ['tabular-nums'],
     marginTop: 8,
+  },
+  formats: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    marginTop: 8,
+    padding: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17, 17, 20, 0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  format: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
   presets: {
     position: 'absolute',

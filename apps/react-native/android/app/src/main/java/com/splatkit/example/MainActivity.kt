@@ -4,21 +4,16 @@ import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-import java.io.File
 
 class MainActivity : ReactActivity() {
 
   override fun getMainComponentName(): String = "SplatKitExample"
 
-  // SplatKitView loads absolute file paths. App-specific external storage needs no permission,
-  // and `adb push` fills it.
+  // SplatKitView loads absolute file paths, which App.tsx builds under this directory.
+  // App-specific external storage needs no permission, and `adb push` fills it.
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       object : DefaultReactActivityDelegate(this, mainComponentName) {
         override fun getLaunchOptions(): Bundle =
-            Bundle().apply {
-              val files = getExternalFilesDir(null)
-              putString("worldPath", File(files, "world.spz").path)
-              putString("colliderPath", File(files, "collider.glb").path)
-            }
+            Bundle().apply { putString("filesPath", getExternalFilesDir(null)?.path) }
       }
 }
