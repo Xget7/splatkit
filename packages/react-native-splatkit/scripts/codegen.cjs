@@ -30,7 +30,7 @@ assert.deepEqual(spec.commands.map(command => command.name).sort(),
 assert.deepEqual(spec.commands.find(command => command.name === 'setWalkVelocity')
   .typeAnnotation.params.map(param => [param.name, param.typeAnnotation.type]),
   [['forward', 'DoubleTypeAnnotation'], ['right', 'DoubleTypeAnnotation']]);
-const {CameraPhase, toNativeCameraProp, CameraMode} = require('../build/contracts');
+const {CameraPhase, toNativeCameraProp, CameraMode, WorldKind} = require('../build/contracts');
 const camera = spec.props.find(prop => prop.name === 'camera').typeAnnotation.properties;
 const cameraFields = Object.keys(toNativeCameraProp({revision: 1, mode: CameraMode.firstPerson})).sort();
 assert.deepEqual(camera.map(prop => prop.name).sort(), cameraFields);
@@ -59,7 +59,6 @@ assert.deepEqual(world.map(prop => prop.name).sort(),
 assert.equal(world.find(prop => prop.name === 'lodCapacitySplats').typeAnnotation.type,
   'Int32TypeAnnotation');
 // A world request written before kind existed has to keep loading one file.
-const {WorldKind} = require('../build/contracts');
 const kind = world.find(prop => prop.name === 'kind');
 assert.equal(kind.optional, true);
 assert.deepEqual(kind.typeAnnotation, {type: 'Int32TypeAnnotation', default: WorldKind.file});
