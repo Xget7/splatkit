@@ -9,6 +9,7 @@ const {
   toNativePolicyProp,
   nativeCapabilitiesFromEvent,
 } = require('../build/performance');
+const {WorldKind} = require('../build/contracts');
 
 const world = {requestId: 'world-1', filePath: '/tmp/world.spz', maxShDegree: 3};
 const capabilities = {
@@ -96,6 +97,7 @@ test('maps scale, SH and splat capacities to actual Fabric props', () => {
   assert.deepEqual(toNativeViewProps(config), {
     world: {
       ...world,
+      kind: WorldKind.file,
       lodCapacitySplats: 750_000,
       residencyCapacitySplats: 900_000,
     },
@@ -103,6 +105,21 @@ test('maps scale, SH and splat capacities to actual Fabric props', () => {
     renderScale: 0.75,
     shDegree: 1,
   });
+});
+
+test('a world is one file unless it names a tileset, which keeps its residency budget', () => {
+  const tileset = new SplatKitBuilder()
+    .withWorld({...world, filePath: '/tmp/city/tileset.json', kind: WorldKind.tileset})
+    .withPerformance({residencyCapacitySplats: 1_500_000})
+    .build(capabilities);
+  assert.equal(build().world.kind, WorldKind.file);
+  assert.equal(tileset.world.kind, WorldKind.tileset);
+  assert.equal(tileset.world.residencyCapacitySplats, 1_500_000);
+  assert.equal(toNativeViewProps(tileset).world.kind, WorldKind.tileset);
+  for (const kind of [2, -1, 'tileset', 0.5, null]) {
+    assert.throws(() => new SplatKitBuilder().withWorld({...world, kind}).build(capabilities),
+      RangeError);
+  }
 });
 
 test('clamps valid requests to supplied limits and reports each fallback', () => {
@@ -125,6 +142,7 @@ test('clamps valid requests to supplied limits and reports each fallback', () =>
   assert.equal(config.performance.effective.shDegree, 1);
   assert.deepEqual(config.world, {
     ...world,
+    kind: WorldKind.file,
     maxShDegree: 1,
     lodCapacitySplats: 800_000,
     residencyCapacitySplats: 900_000,

@@ -5,6 +5,8 @@ import {codegenNativeComponent, codegenNativeCommands} from 'react-native';
 type NativeWorldRequest = Readonly<{
   requestId: string;
   filePath: string;
+  /** 0 one file, 1 a tileset index. Optional so a request without it stays a file. */
+  kind?: CodegenTypes.WithDefault<CodegenTypes.Int32, 0>;
   maxShDegree: CodegenTypes.Int32;
   lodCapacitySplats: CodegenTypes.Int32;
   residencyCapacitySplats: CodegenTypes.Int32;

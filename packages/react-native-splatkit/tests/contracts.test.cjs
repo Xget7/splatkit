@@ -14,6 +14,17 @@ test('accepts a local immutable request without mutating or silently clamping it
   assert.equal(request.lodCapacitySplats, 1200000);
 });
 
+test('a world is one file or a tileset, and a request without a kind is a file', () => {
+  const {WorldKind} = require('../build/contracts');
+  assert.deepEqual(WorldKind, {file: 0, tileset: 1});
+  for (const kind of [undefined, WorldKind.file, WorldKind.tileset]) {
+    assert.doesNotThrow(() => validateWorldRequest({...request, kind}, limits));
+  }
+  for (const kind of [2, -1, 'tileset', 0.5, NaN, null]) {
+    assert.throws(() => validateWorldRequest({...request, kind}, limits), RangeError);
+  }
+});
+
 test('rejects remote, relative, root, network and NUL-containing paths', () => {
   for (const filePath of ['https://example.com/world.spz', 'file:///world.spz',
     'world.spz', '/', '//server/world.spz', '/world\0.spz', '']) {

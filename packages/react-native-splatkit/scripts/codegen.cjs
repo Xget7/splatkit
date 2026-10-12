@@ -55,9 +55,14 @@ const focus = spec.events.find(event => event.name === 'onFocusResult').typeAnno
 assert.deepEqual(focus.map(prop => prop.name).sort(), ['hit', 'requestId']);
 const world = spec.props.find(prop => prop.name === 'world').typeAnnotation.properties;
 assert.deepEqual(world.map(prop => prop.name).sort(),
-  ['filePath', 'lodCapacitySplats', 'maxShDegree', 'requestId', 'residencyCapacitySplats']);
+  ['filePath', 'kind', 'lodCapacitySplats', 'maxShDegree', 'requestId', 'residencyCapacitySplats']);
 assert.equal(world.find(prop => prop.name === 'lodCapacitySplats').typeAnnotation.type,
   'Int32TypeAnnotation');
+// A world request written before kind existed has to keep loading one file.
+const {WorldKind} = require('../build/contracts');
+const kind = world.find(prop => prop.name === 'kind');
+assert.equal(kind.optional, true);
+assert.deepEqual(kind.typeAnnotation, {type: 'Int32TypeAnnotation', default: WorldKind.file});
 const policy = spec.props.find(prop => prop.name === 'policy').typeAnnotation.properties;
 assert.deepEqual(policy.map(prop => prop.name).sort(),
   ['alphaThreshold', 'enableEarlyTermination', 'enableFrustumCulling', 'enableHiZOcclusion',

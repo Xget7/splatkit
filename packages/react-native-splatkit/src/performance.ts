@@ -1,5 +1,5 @@
 import type {RenderOptions, SHDegree, SplatLimits, WorldRequest} from './contracts';
-import {validateRenderOptions, validateWorldRequest} from './contracts';
+import {WorldKind, validateRenderOptions, validateWorldRequest} from './contracts';
 import type {NativeProps} from './specs/SplatViewNativeComponent';
 import {
   MAX_INT32,
@@ -351,7 +351,7 @@ const presets: Readonly<Record<QualityPreset, PresetValues>> = {
 };
 
 const optionKeys = new Set<string>([...loadKeys, ...propKeys, 'targetFps']);
-const worldKeys = new Set<string>(['requestId', 'filePath', 'maxShDegree']);
+const worldKeys = new Set<string>(['requestId', 'filePath', 'kind', 'maxShDegree']);
 const policyPropKeys = [
   'raster', 'tileSize', 'lodErrorPixels', 'alphaThreshold', 'subpixelThreshold',
   'enableFrustumCulling', 'enableHiZOcclusion', 'enableEarlyTermination', 'sortDepth',
@@ -521,7 +521,9 @@ export class SplatKitBuilder {
         'targetFps is a request only; adaptive quality is separate');
     }
 
-    const world = Object.freeze({...this.world, lodCapacitySplats: lodBudgetSplats,
+    // Only an absent kind defaults; anything else malformed is validated and rejected below.
+    const kind = this.world.kind === undefined ? WorldKind.file : this.world.kind;
+    const world = Object.freeze({...this.world, kind, lodCapacitySplats: lodBudgetSplats,
       residencyCapacitySplats});
     const render = Object.freeze({paused: this.paused, renderScale: requested.renderScale, shDegree});
     validateWorldRequest(world, capabilities.limits);

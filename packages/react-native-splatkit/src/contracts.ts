@@ -9,16 +9,33 @@ import {
 
 export type SHDegree = 0 | 1 | 2 | 3;
 
+/**
+ * How `filePath` is read. The values are the numbers Codegen transports, and an absent kind
+ * reaches native as `file`.
+ */
+export const WorldKind = {
+  /** One `.spz` or `.lodsplat` file, decoded whole. */
+  file: 0,
+  /**
+   * The `tileset.json` index `splat-tile` writes, with its tiles beside it. Only the index is
+   * read at load; tiles stream in as the camera needs them, within `residencyCapacitySplats`.
+   */
+  tileset: 1,
+} as const;
+export type WorldKind = (typeof WorldKind)[keyof typeof WorldKind];
+
 /** Immutable load transaction: options apply before decoding this world. */
 export type WorldRequest = Readonly<{
   /** Unique for each replacement, including retries of the same file. */
   requestId: string;
   /** Absolute, readable local path. No URL fetching or JS byte transport. */
   filePath: string;
+  /** Absent means {@link WorldKind.file}. */
+  kind?: WorldKind;
   maxShDegree: SHDegree;
   /** Zero disables load-time tree building, not selection of prebuilt trees. */
   lodCapacitySplats: number;
-  /** Resident streaming splats, NOT bytes or a process memory guarantee. */
+  /** Resident streaming splats of a tileset, NOT bytes or a process memory guarantee. */
   residencyCapacitySplats: number;
 }>;
 
@@ -111,6 +128,10 @@ function validateTransaction(request: Readonly<{requestId: string; filePath: str
 /** Structural validation only: filesystem access and GPU limits remain native. */
 export function validateWorldRequest(request: WorldRequest, limits: SplatLimits): void {
   validateTransaction(request);
+  if (request.kind !== undefined &&
+    !(Object.values(WorldKind) as unknown[]).includes(request.kind)) {
+    throw new RangeError('kind must be a WorldKind');
+  }
   integer('maxLodCapacitySplats', limits.maxLodCapacitySplats, 0, MAX_INT32);
   integer('minResidencyCapacitySplats', limits.minResidencyCapacitySplats, 1, MAX_INT32);
   integer('maxResidencyCapacitySplats', limits.maxResidencyCapacitySplats,
