@@ -184,8 +184,11 @@ const RENDER_SCALES: Readonly<Record<QualityPreset, number>> = Object.freeze({
 /** One pass out and one back, then the camera parks and the renderer goes idle. */
 const FLIGHT_SECONDS = ROUTE_SECONDS * 2;
 
-/** Every prepared world has the plain file, so the example opens on it. */
-const INITIAL_FORMAT: WorldFormat = WorldFormat.spz;
+/**
+ * The example world is 12M splats, which an iPhone 17 Pro cannot load as one `.spz`: the
+ * app is killed for memory. With its tree built offline the same world loads in seconds.
+ */
+const INITIAL_FORMAT: WorldFormat = WorldFormat.lodsplat;
 
 type Props = Readonly<{
   /**
