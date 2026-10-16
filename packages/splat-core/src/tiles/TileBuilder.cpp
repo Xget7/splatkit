@@ -312,10 +312,9 @@ struct TileWriter {
 Result<Tileset> buildTiles(const Cloud& cloud, const std::string& directory,
                            const TileBuildOptions& options) {
   if (cloud.numPoints <= 0) return Error{ErrorCode::corrupt, "buildTiles: empty cloud"};
-  if (options.tileSplats == 0) return Error{ErrorCode::corrupt, "buildTiles: tileSplats is 0"};
 
   const LodTree tree = buildLodTree(toSplatCloud(cloud), options.lod);
-  auto chunks = chunkTree(tree, options.tileSplats);
+  auto chunks = chunkTree(tree, options.chunks);
   if (!chunks.ok()) return chunks.error();
 
   TileWriter writer{directory, {}, std::nullopt};

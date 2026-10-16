@@ -1,10 +1,12 @@
 // splat-tile: partitions a Gaussian splat scene into tiles with offline levels of detail,
 // the form the engine streams.
 //
-//   splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--prune-alpha T]
+//   splat-tile in.ply|in.spz out_dir [--tile N] [--fan-out N] [--sh N] [--prune-alpha T]
 //
-// --tile N  the most splats per tile, 262144 by default. Each tile is a chunk of the scene's
+// --tile N  the most splats per tile, 65536 by default. Each tile is a chunk of the scene's
 //           detail tree.
+// --fan-out N  the most children per tile, 4 by default, at least 2. A refinement step swaps a tile
+//           for at most this many.
 // --sh N    keeps spherical harmonics up to degree N before tiling.
 // --prune-alpha T  drops splats whose stored opacity is below T (0 to 1) before tiling.
 //           1/255 drops only what draws nothing; higher trades faint layers for speed.
@@ -27,7 +29,8 @@ namespace {
 
 int usage() {
   std::fprintf(stderr,
-               "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--sh N] [--prune-alpha T]\n");
+               "usage: splat-tile in.ply|in.spz out_dir [--tile N] [--fan-out N] [--sh N] "
+               "[--prune-alpha T]\n");
   return 2;
 }
 
@@ -45,7 +48,9 @@ int run(int argc, char** argv) {
   float pruneAlpha = -1.0f;
   for (int i = 3; i < argc; ++i) {
     if (std::strcmp(argv[i], "--tile") == 0 && i + 1 < argc)
-      options.tileSplats = static_cast<uint32_t>(std::atoi(argv[++i]));
+      options.chunks.chunkSplats = static_cast<uint32_t>(std::atoi(argv[++i]));
+    else if (std::strcmp(argv[i], "--fan-out") == 0 && i + 1 < argc)
+      options.chunks.fanOut = static_cast<uint32_t>(std::atoi(argv[++i]));
     else if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc)
       sh = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--prune-alpha") == 0 && i + 1 < argc)
@@ -53,7 +58,8 @@ int run(int argc, char** argv) {
     else
       return usage();
   }
-  if (sh > 3 || options.tileSplats == 0 || pruneAlpha > 1.0f) return usage();
+  if (sh > 3 || options.chunks.chunkSplats == 0 || options.chunks.fanOut < 2 || pruneAlpha > 1.0f)
+    return usage();
 
   const auto start = std::chrono::steady_clock::now();
   spz::GaussianCloud cloud =

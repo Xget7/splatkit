@@ -68,7 +68,7 @@ struct BuiltWorld {
   TiledWorld world;
   BuiltWorld() {
     TileBuildOptions options;
-    options.tileSplats = 64;
+    options.chunks.chunkSplats = 64;
     auto built = buildTiles(clusters(200, 0.3f, 20.0f), dir.string(), options);
     EXPECT_TRUE(built.ok());
     // The builder wrote the cloud's own coordinates; read them back unchanged.
@@ -88,11 +88,22 @@ TEST(TileStreamer, StreamsDownToTheFinestTilesNearTheCamera) {
 
   const Tileset& set = *built.world.tileset;
   std::size_t drawnSplats = 0;
+  std::size_t drawnLeafSplats = 0;
   for (const std::uint32_t tile : streamer.drawn()) {
-    EXPECT_EQ(set.tiles[tile].level, 0) << set.tiles[tile].file;
-    drawnSplats += set.tiles[tile].count;
+    const Tile& drawn = set.tiles[tile];
+    drawnSplats += drawn.count;
+    if (drawn.level == 0) {
+      drawnLeafSplats += drawn.count;
+      continue;
+    }
+    // The frustum test is conservative, so the box of a coarse tile can reach into the view that
+    // none of its children's boxes does; such a tile stays as it is.
+    for (const std::uint32_t child : drawn.children)
+      EXPECT_FALSE(
+          near.frustum.intersects(set.tiles[child].bounds.min, set.tiles[child].bounds.max))
+          << drawn.file;
   }
-  // Every leaf the camera can see is drawn, and only those: the far cluster is off to
+  // Every leaf the camera can see is drawn, and no other leaf: the far cluster is off to
   // the side of this view.
   std::size_t visibleLeafSplats = 0;
   for (const Tile& t : set.tiles) {
@@ -100,7 +111,7 @@ TEST(TileStreamer, StreamsDownToTheFinestTilesNearTheCamera) {
       visibleLeafSplats += t.count;
     }
   }
-  EXPECT_EQ(drawnSplats, visibleLeafSplats);
+  EXPECT_EQ(drawnLeafSplats, visibleLeafSplats);
   EXPECT_LT(drawnSplats, 400u);
   EXPECT_EQ(streamer.drawnSplats(), drawnSplats);
   EXPECT_LE(streamer.held(), 1000u);

@@ -6,6 +6,7 @@
 #include "splat/core/Result.h"
 #include "splat/lod/LodTree.h"
 #include "splat/tiles/Tileset.h"
+#include "splat/tiles/TreeChunker.h"
 
 namespace spz {
 struct GaussianCloud;
@@ -22,8 +23,9 @@ inline LodBuildOptions octreeLodOptions() {
 }
 
 struct TileBuildOptions {
-  // The most splats a tile holds, at any level.
-  std::uint32_t tileSplats = 262144;
+  // How the detail tree is cut into tiles: the most splats a tile holds, at any level, and the most
+  // children a tile has.
+  TreeChunkOptions chunks;
   // How the detail tree the tiles are cut from is built.
   LodBuildOptions lod = octreeLodOptions();
 };

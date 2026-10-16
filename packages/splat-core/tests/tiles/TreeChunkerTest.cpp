@@ -20,6 +20,7 @@ using splat::LodBuildOptions;
 using splat::LodNode;
 using splat::LodTree;
 using splat::TreeChunk;
+using splat::TreeChunkOptions;
 
 namespace {
 
@@ -29,8 +30,8 @@ constexpr uint32_t kClusterLeaves = 8;
 // 64 leaves most chunks as one level above the leaves; 16 makes chunks nest.
 constexpr uint32_t kBudgets[] = {64, 16};
 
-// The packing of siblings depends on how the subtree sizes fall against the budget, so the
-// invariants are swept over seeds, sizes, layouts and budgets.
+// How the groups fall against the budget depends on the subtree sizes, so the invariants are swept
+// over seeds, sizes, layouts and budgets.
 constexpr unsigned kSweepSeeds[] = {1, 2, 3, 5, 8};
 constexpr int kSweepSizes[] = {2000, 20000};
 constexpr uint32_t kSweepBudgets[] = {16, 24, 32, 40, 64};
@@ -94,7 +95,7 @@ void forEverySweptCase(const std::function<void(const LodTree&, uint32_t)>& chec
 }
 
 std::vector<TreeChunk> chunksOf(const LodTree& tree, uint32_t budget) {
-  auto chunks = chunkTree(tree, budget);
+  auto chunks = chunkTree(tree, TreeChunkOptions{budget});
   EXPECT_TRUE(chunks.ok());
   return chunks.ok() ? std::move(chunks.value()) : std::vector<TreeChunk>{};
 }
@@ -146,53 +147,70 @@ TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
     for (uint32_t c = 0; c < chunks.size(); ++c) {
       const TreeChunk& parent = chunks[c];
       if (parent.children.empty()) continue;
-      // The children's roots and the parent's own tree leaves together make up the parent.
-      std::set<uint32_t> stoodFor;
+      // The children's roots, in child order, are the parent's nodes.
+      std::vector<uint32_t> stoodFor;
       std::set<uint32_t> childNodes;
       for (const uint32_t childIndex : parent.children) {
         EXPECT_LT(childIndex, c);  // children precede parents
         const TreeChunk& child = chunks[childIndex];
-        for (const uint32_t root : child.roots) {
-          EXPECT_FALSE(isLeaf(tree, root));
-          EXPECT_TRUE(stoodFor.insert(root).second);  // no node is stood for twice
-        }
+        stoodFor.insert(stoodFor.end(), child.roots.begin(), child.roots.end());
         childNodes.insert(child.nodes.begin(), child.nodes.end());
       }
-      for (const uint32_t node : parent.nodes) {
-        if (!isLeaf(tree, node)) continue;
-        stoodFor.insert(node);
-        EXPECT_EQ(childNodes.count(node), 1u);  // a leaf is drawn by a child too
-      }
+      EXPECT_EQ(stoodFor, parent.nodes);
+      for (const uint32_t node : parent.nodes)
+        if (isLeaf(tree, node))
+          EXPECT_EQ(childNodes.count(node), 1u);  // a leaf is drawn by a child too
       const std::set<uint32_t> drawn(parent.nodes.begin(), parent.nodes.end());
-      EXPECT_EQ(stoodFor, drawn);
       EXPECT_EQ(drawn.size(), parent.nodes.size());
     }
   });
 }
 
-TEST(TreeChunker, SiblingsArePackedSoTheCountFollowsTheBudget) {
-  const LodTree tree = fixtureTree();
-  for (const uint32_t budget : kBudgets) {
-    SCOPED_TRACE(budget);
-    const auto chunks = chunksOf(tree, budget);
-    std::size_t levelZero = 0;
-    for (const TreeChunk& chunk : chunks) {
-      if (chunk.level == 0) ++levelZero;
-      // Greedy packing closes a chunk only when the next part of its kind would not fit, so two
-      // neighbours of the same kind never fit together.
-      for (std::size_t k = 1; k < chunk.children.size(); ++k) {
-        const TreeChunk& before = chunks[chunk.children[k - 1]];
-        const TreeChunk& after = chunks[chunk.children[k]];
-        if (before.children.empty() != after.children.empty()) continue;
-        EXPECT_GT(before.nodes.size() + after.nodes.size(), budget);
+TEST(TreeChunker, AChunkHasAtMostFanOutChildrenAndNoEmptyOnes) {
+  forEverySweptCase([](const LodTree& tree, uint32_t budget) {
+    for (const uint32_t fanOut : {2u, 4u, 8u}) {
+      const auto chunks = chunkTree(tree, {budget, fanOut}).value();
+      for (const TreeChunk& c : chunks) {
+        EXPECT_LE(c.children.size(), fanOut);
+        EXPECT_FALSE(c.nodes.empty());
+        EXPECT_FALSE(c.roots.empty());
       }
     }
-    // In a run of r neighbouring level 0 chunks every pair holds more than `budget` leaves, so
-    // the run holds more than floor(r / 2) * budget of them; there are at most two runs per
-    // chunk above level 0. Hence level 0 chunks < 2 * leaves / budget + 2 * (the others).
-    const std::size_t above = chunks.size() - levelZero;
-    EXPECT_LE(levelZero * budget, 2 * tree.leafCount + 2 * above * budget);
-  }
+  });
+}
+
+TEST(TreeChunker, TheChunkCountFollowsTheBudget) {
+  constexpr uint32_t kLeaves = 20000;
+  constexpr uint32_t kBudget = 64;
+  constexpr uint32_t kFanOut = 4;
+  constexpr int kLeastRootLevel = 3;
+  constexpr std::size_t kChunksPerBudgetOfNodes = 3;
+  const LodTree tree = treeOf(sweepCloud(kLeaves, 1, Layout::uniform));
+  const auto chunks = chunkTree(tree, {kBudget, kFanOut}).value();
+  const std::size_t budgets = (tree.nodeCount() + kBudget - 1) / kBudget;
+  EXPECT_LE(chunks.size(), kChunksPerBudgetOfNodes * budgets);
+  EXPECT_GE(chunks.back().level, kLeastRootLevel);
+}
+
+TEST(TreeChunker, ASingleLeafIsOneChunk) {
+  const LodTree tree = treeOf(sweepCloud(1, 1, Layout::uniform));
+  ASSERT_EQ(tree.nodeCount(), 1u);
+  const auto chunks = chunkTree(tree).value();
+  ASSERT_EQ(chunks.size(), 1u);
+  EXPECT_EQ(chunks[0].level, 0);
+  EXPECT_EQ(chunks[0].error, 0.0f);
+  EXPECT_EQ(chunks[0].nodes, std::vector<uint32_t>{0});
+  EXPECT_EQ(chunks[0].roots, std::vector<uint32_t>{0});
+  EXPECT_TRUE(chunks[0].children.empty());
+}
+
+TEST(TreeChunker, RefusesAFanOutBelowTwo) {
+  constexpr uint32_t kBudget = 64;
+  constexpr uint32_t kFanOutOfOne = 1;
+  const auto chunks = chunkTree(fixtureTree(), {kBudget, kFanOutOfOne});
+  ASSERT_FALSE(chunks.ok());
+  EXPECT_EQ(chunks.error().code, ErrorCode::corrupt);
+  EXPECT_NE(chunks.error().message.find("fanOut"), std::string::npos);
 }
 
 TEST(TreeChunker, LevelAndErrorFollowTheTree) {
@@ -205,7 +223,10 @@ TEST(TreeChunker, LevelAndErrorFollowTheTree) {
                                          [&](uint32_t n) { return isLeaf(tree, n); });
       EXPECT_EQ(chunk.level == 0, allLeaves);
       EXPECT_EQ(chunk.error == 0.0f, chunk.level == 0);
-      if (chunk.level == 0) continue;
+      if (chunk.level == 0) {
+        EXPECT_TRUE(chunk.children.empty());
+        continue;
+      }
       float largest = 0.0f;
       for (const uint32_t n : chunk.nodes)
         if (!isLeaf(tree, n)) largest = std::max(largest, tree.layout[n].size);
@@ -225,7 +246,7 @@ TEST(TreeChunker, RefusesANodeWiderThanTheBudget) {
   for (uint32_t k = 0; k < kWide; ++k) tree.layout.push_back(LodNode{{0, 0, 0}, 0.1f, 0, 0});
   tree.leafCount = kWide;
 
-  const auto chunks = chunkTree(tree, kBudget);
+  const auto chunks = chunkTree(tree, TreeChunkOptions{kBudget});
   ASSERT_FALSE(chunks.ok());
   EXPECT_EQ(chunks.error().code, ErrorCode::corrupt);
   EXPECT_NE(chunks.error().message.find("chunkSplats"), std::string::npos);
