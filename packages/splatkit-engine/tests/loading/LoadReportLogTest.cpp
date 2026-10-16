@@ -13,7 +13,7 @@ namespace {
 std::vector<std::string>* gLines = nullptr;
 
 void capture(LogLevel, const char* message) {
-  gLines->push_back(message);
+  gLines->emplace_back(message);
 }
 
 struct CapturedLog {
@@ -26,6 +26,10 @@ struct CapturedLog {
     setLogSink(nullptr);
     gLines = nullptr;
   }
+  CapturedLog(const CapturedLog&) = delete;
+  CapturedLog& operator=(const CapturedLog&) = delete;
+  CapturedLog(CapturedLog&&) = delete;
+  CapturedLog& operator=(CapturedLog&&) = delete;
   bool mention(const char* text) const {
     for (const auto& line : lines) {
       if (line.find(text) != std::string::npos) return true;
@@ -58,7 +62,7 @@ TEST(LoadReportLog, AWorldReportLogsOnlyWhatTheWorldHas) {
 }
 
 TEST(LoadReportLog, AColliderReportLogsItsTriangles) {
-  CapturedLog log;
+  const CapturedLog log;
   splat::SplatWorldLoader::ColliderReport report;
   report.triangleCount = 42;
   logColliderReport(report);
