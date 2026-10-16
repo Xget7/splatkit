@@ -4,6 +4,7 @@
 #include <cmath>
 #include <filesystem>
 #include <random>
+#include <set>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -152,6 +153,51 @@ TEST(TileStreamer, FarAwayOnlyTheRootIsDrawn) {
   ASSERT_GE(settle(streamer, from({0, 0, 3}, 0.0001f)), 0);
   ASSERT_GE(settle(streamer, from({10, 0, 2000}, 0.01f)), 0);
   EXPECT_EQ(streamer.drawn(), std::vector<std::uint32_t>{built.world.tileset->root});
+}
+
+// A drawn tile already shows everything beneath it, so drawing its parent too would
+// double the splats under it.
+TEST(TileStreamer, TheDrawnSetNeverHoldsATileAndItsParent) {
+  const BuiltWorld built;
+  const Tileset& set = *built.world.tileset;
+  StreamOptions options;
+  options.residency = 1000;
+  TileStreamer streamer(built.world, options);
+  ASSERT_GE(settle(streamer, from({0, 0, 3}, 0.0001f)), 0);
+
+  std::vector<std::uint32_t> parentOf(set.tiles.size(), set.root);
+  for (std::uint32_t tile = 0; tile < set.tiles.size(); ++tile) {
+    for (const std::uint32_t child : set.tiles[tile].children) parentOf[child] = tile;
+  }
+  const std::vector<std::uint32_t> shown = streamer.drawn();
+  ASSERT_GT(shown.size(), 1u);
+  const std::set<std::uint32_t> drawn(shown.begin(), shown.end());
+  for (const std::uint32_t tile : shown) {
+    for (std::uint32_t up = tile; up != set.root;) {
+      up = parentOf[up];
+      EXPECT_EQ(drawn.count(up), 0u)
+          << set.tiles[tile].file << " is drawn with its ancestor " << set.tiles[up].file;
+    }
+  }
+}
+
+// The root is the fallback every other tile can be replaced by, so memory pressure from
+// a walk across the world never evicts it. The world holds 464 splats and the residency
+// 360, so each stop refines to its leaves only by evicting the last stop's.
+TEST(TileStreamer, TheRootStaysResidentWhileWalking) {
+  const BuiltWorld built;
+  const Tileset& set = *built.world.tileset;
+  StreamOptions options;
+  options.residency = 360;
+  TileStreamer streamer(built.world, options);
+
+  for (const Vec3 origin : {Vec3{0, 0, 3}, Vec3{20, 0, 3}, Vec3{0, 0, 3}}) {
+    ASSERT_GE(settle(streamer, from(origin, 0.0001f)), 0);
+    EXPECT_GT(streamer.drawn().size(), 1u);
+    EXPECT_EQ(streamer.state(set.root), TileState::resident);
+    EXPECT_LE(streamer.held(), options.residency);
+    streamer.drawnNow();
+  }
 }
 
 TEST(TileStreamer, AMissingTileFileIsReportedAndItsParentStays) {
