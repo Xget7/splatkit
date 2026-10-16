@@ -29,6 +29,7 @@ SplatEngine::SplatEngine(std::unique_ptr<SplatRenderer> renderer) : renderer_(st
   // The backend's fallback is the policy in effect until the host sets one.
   policy_ = renderer_->deviceCapabilities().policy.fallback;
   loader_.setMemoryGuard({[this] { return renderer_->availableMemory(); }, &gpuWorldBytes});
+  camera_.setTeleportListener([this] { onTeleport(); });
 }
 
 RenderPolicyResolution SplatEngine::setRenderPolicy(const RenderPolicy& requested) {
@@ -195,77 +196,50 @@ bool SplatEngine::applyPendingLoads() {
   return true;
 }
 
-// Camera.
+// Camera. A teleport needs a fresh sort, not a cull, and its pose is published now
+// rather than at the next frame: a host that sets and reads back before a world exists
+// would otherwise see the previous pose.
+void SplatEngine::onTeleport() {
+  planner_.invalidate();
+  redrawNeeded_ = true;
+  publishPose();
+}
 
 void SplatEngine::setCameraPose(const CameraPose& pose) {
   camera_.setPosition({pose.x, pose.y, pose.z});
   camera_.setOrientation(pose.yaw, pose.pitch);
-  planner_.invalidate();  // a teleport needs a fresh sort, not a cull
-  redrawNeeded_ = true;
-  // Published now, not at the next frame: a host that sets and reads back before a
-  // world exists would otherwise see the previous pose.
-  publishPose();
 }
 
 void SplatEngine::setCameraLookAt(splat::Vec3 position, splat::Vec3 target, splat::Vec3 up) {
   camera_.setLookAt(position, target, up);
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
 }
 
 CameraResolution SplatEngine::applyCameraRequest(const CameraRequest& requested) {
-  CameraResolution resolution = camera_.applyCameraRequest(requested);
-  if (!resolution.accepted) return resolution;
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
-  return resolution;
+  return camera_.applyCameraRequest(requested);
 }
 
 void SplatEngine::setCameraAnchor(splat::Vec3 point) {
   camera_.setAnchor(point);
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
 }
 
 bool SplatEngine::orbit(float deltaAzimuth, float deltaElevation) {
-  if (!camera_.orbit(deltaAzimuth, deltaElevation)) return false;
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
-  return true;
+  return camera_.orbit(deltaAzimuth, deltaElevation);
 }
 
 bool SplatEngine::dolly(float deltaRadius) {
-  if (!camera_.dolly(deltaRadius)) return false;
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
-  return true;
+  return camera_.dolly(deltaRadius);
 }
 
 bool SplatEngine::focus(float x, float y) {
   const Extent extent = renderer_->drawExtent();
   if (extent.width == 0 || extent.height == 0) return false;
   const Lens::TanHalf tan = lens_.tanHalf(extent);
-  if (!camera_.focus(x, y, tan.x, tan.y, lens_.farPlane)) return false;
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
-  return true;
+  return camera_.focus(x, y, tan.x, tan.y, lens_.farPlane);
 }
 
 bool SplatEngine::startOrbitAnimation(float degrees, float degreesPerSecond, bool easeInOut) {
-  if (!camera_.animateOrbit(degrees * kRadiansPerDegree, degreesPerSecond * kRadiansPerDegree,
-                            easeInOut)) {
-    return false;
-  }
-  planner_.invalidate();
-  redrawNeeded_ = true;
-  publishPose();
-  return true;
+  return camera_.animateOrbit(degrees * kRadiansPerDegree, degreesPerSecond * kRadiansPerDegree,
+                              easeInOut);
 }
 
 bool SplatEngine::setCharacter(const splat::CharacterSettings& settings) {

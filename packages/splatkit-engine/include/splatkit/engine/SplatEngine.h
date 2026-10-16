@@ -187,6 +187,7 @@ class SplatEngine {
   void driveBenchmark(float dt, const GpuWorldInfo& world);
   FrameCamera frameCamera(Extent extent) const;
   void reframeDefaultOrbit(Extent extent);
+  void onTeleport();
   void publishPose();
   void requestVisible(const FrameCamera& camera, float dt, Extent extent);
   void streamTiles(const FrameCamera& camera, float pixelScale,
