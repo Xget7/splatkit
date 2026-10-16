@@ -51,7 +51,7 @@ bool isLeaf(const LodTree& tree, uint32_t node) {
 
 TEST(TreeChunker, EveryLeafIsInExactlyOneLevelZeroChunk) {
   const LodTree tree = fixtureTree();
-  for (uint32_t budget : kBudgets) {
+  for (const uint32_t budget : kBudgets) {
     SCOPED_TRACE(budget);
     const auto chunks = chunksOf(tree, budget);
     std::vector<uint32_t> listed;
@@ -69,7 +69,7 @@ TEST(TreeChunker, EveryLeafIsInExactlyOneLevelZeroChunk) {
 
 TEST(TreeChunker, NoChunkExceedsTheBudget) {
   const LodTree tree = fixtureTree();
-  for (uint32_t budget : kBudgets) {
+  for (const uint32_t budget : kBudgets) {
     SCOPED_TRACE(budget);
     const auto chunks = chunksOf(tree, budget);
     ASSERT_GT(chunks.size(), 1u);
@@ -88,14 +88,14 @@ TEST(TreeChunker, NoChunkExceedsTheBudget) {
 
 TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
   const LodTree tree = fixtureTree();
-  for (uint32_t budget : kBudgets) {
+  for (const uint32_t budget : kBudgets) {
     SCOPED_TRACE(budget);
     const auto chunks = chunksOf(tree, budget);
     for (uint32_t c = 0; c < chunks.size(); ++c) {
       const TreeChunk& parent = chunks[c];
       if (parent.children.empty()) continue;
       std::set<uint32_t> stoodFor;
-      for (uint32_t childIndex : parent.children) {
+      for (const uint32_t childIndex : parent.children) {
         EXPECT_LT(childIndex, c);  // children precede parents
         const TreeChunk& child = chunks[childIndex];
         if (isLeaf(tree, child.root)) {
@@ -115,7 +115,7 @@ TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
 
 TEST(TreeChunker, LevelAndErrorFollowTheTree) {
   const LodTree tree = fixtureTree();
-  for (uint32_t budget : kBudgets) {
+  for (const uint32_t budget : kBudgets) {
     SCOPED_TRACE(budget);
     const auto chunks = chunksOf(tree, budget);
     for (const TreeChunk& chunk : chunks) {
@@ -125,11 +125,11 @@ TEST(TreeChunker, LevelAndErrorFollowTheTree) {
       EXPECT_EQ(chunk.error == 0.0f, chunk.level == 0);
       if (chunk.level == 0) continue;
       float largest = 0.0f;
-      for (uint32_t n : chunk.nodes)
+      for (const uint32_t n : chunk.nodes)
         if (!isLeaf(tree, n)) largest = std::max(largest, tree.layout[n].size);
       EXPECT_EQ(chunk.error, largest);
       int deepest = 0;
-      for (uint32_t child : chunk.children) deepest = std::max(deepest, chunks[child].level);
+      for (const uint32_t child : chunk.children) deepest = std::max(deepest, chunks[child].level);
       EXPECT_EQ(chunk.level, 1 + deepest);
     }
   }

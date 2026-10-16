@@ -52,7 +52,7 @@ class Chunker {
     TreeChunk chunk;
     chunk.root = start;
     std::vector<uint32_t> leaves;
-    for (uint32_t node : frontier) {
+    for (const uint32_t node : frontier) {
       if (isLeaf(node)) {
         leaves.push_back(node);
         continue;
