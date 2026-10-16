@@ -39,8 +39,7 @@ TEST(CovarianceFromQuaternionScale, EigenvaluesAreTheSquaredScalesUnderAnyRotati
   const float angle = 2.0f * static_cast<float>(M_PI) / 3.0f;
   const float s = std::sin(angle / 2.0f);
   // 120 degrees about the unit axis (1, 2, 2) / 3.
-  const float quaternion[4] = {s / 3.0f, 2.0f * s / 3.0f, 2.0f * s / 3.0f,
-                               std::cos(angle / 2.0f)};
+  const float quaternion[4] = {s / 3.0f, 2.0f * s / 3.0f, 2.0f * s / 3.0f, std::cos(angle / 2.0f)};
   const float scale[3] = {3.0f, 1.0f, 2.0f};
   const auto e = splat::symmetricEigenvalues(covarianceFromQuaternionScale(quaternion, scale));
   EXPECT_NEAR(e[0], 9.0f, 1e-4f);
