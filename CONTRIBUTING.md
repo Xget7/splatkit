@@ -75,6 +75,7 @@ scripts/lint-cpp.sh --fix    # rewrite the formatting and apply the fixes clang-
 
 Both tools come from the NDK the project pins, so a machine that builds the library can lint it; `.clang-format` and `.clang-tidy` at the root hold the rules.
 The script configures `splat-core`, `splatkit-engine` and `splatkit-android` for the Android target and lints tests and tools too.
+`git config core.hooksPath .githooks` installs a pre-push hook that runs `scripts/lint-cpp.sh --format-only`, the seconds-long formatting half of that check.
 VS Code's C/C++ extension reads the compile databases it leaves in `build/lint`, as [.vscode/settings.json](.vscode/settings.json) sets up.
 
 ## What a pull request needs

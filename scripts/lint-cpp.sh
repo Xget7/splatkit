@@ -4,6 +4,8 @@
 #
 #   scripts/lint-cpp.sh          check: exit 1 on a formatting or clang-tidy finding
 #   scripts/lint-cpp.sh --fix    rewrite the formatting and apply clang-tidy's fixes
+#   scripts/lint-cpp.sh --format-only [--fix]
+#                                only the clang-format step: no CMake, no network, seconds
 #
 # Needs the NDK in ANDROID_NDK_HOME, or under ANDROID_HOME/ndk, or in the default SDK
 # location; CMake, and the network on the first run (FetchContent).
@@ -11,7 +13,14 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 fix=0
-[[ "${1:-}" == "--fix" ]] && fix=1
+format_only=0
+for arg in "$@"; do
+  case "$arg" in
+    --fix) fix=1 ;;
+    --format-only) format_only=1 ;;
+    *) echo "usage: $0 [--fix] [--format-only]" >&2; exit 2 ;;
+  esac
+done
 
 ndk_version="27.1.12297006"
 find_ndk() {
@@ -52,6 +61,10 @@ if (( fix )); then
   sources | xargs "$clang_format" -i
 else
   sources | xargs "$clang_format" --dry-run --Werror
+fi
+if (( format_only )); then
+  echo "clean"
+  exit 0
 fi
 
 # Both compile databases target Android, tests and tools included: the NDK's clang-tidy

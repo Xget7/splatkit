@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs the clang-format check CI's lint workflow runs, before a push leaves the machine.
+# Install once: git config core.hooksPath .githooks
+root="$(git rev-parse --show-toplevel)"
+"$root/scripts/lint-cpp.sh" --format-only
+status=$?
+if (( status == 2 )); then
+  echo "pre-push: NDK not found, skipping the clang-format check (CI still runs it)" >&2
+  exit 0
+fi
+if (( status != 0 )); then
+  echo "pre-push: formatting findings; run scripts/lint-cpp.sh --format-only --fix" >&2
+  exit 1
+fi
