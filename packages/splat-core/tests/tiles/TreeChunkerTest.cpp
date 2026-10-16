@@ -143,25 +143,27 @@ TEST(TreeChunker, NoChunkExceedsTheBudget) {
 
 TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
   forEverySweptCase([](const LodTree& tree, uint32_t budget) {
-    const auto chunks = chunksOf(tree, budget);
-    for (uint32_t c = 0; c < chunks.size(); ++c) {
-      const TreeChunk& parent = chunks[c];
-      if (parent.children.empty()) continue;
-      // The children's roots, in child order, are the parent's nodes.
-      std::vector<uint32_t> stoodFor;
-      std::set<uint32_t> childNodes;
-      for (const uint32_t childIndex : parent.children) {
-        EXPECT_LT(childIndex, c);  // children precede parents
-        const TreeChunk& child = chunks[childIndex];
-        stoodFor.insert(stoodFor.end(), child.roots.begin(), child.roots.end());
-        childNodes.insert(child.nodes.begin(), child.nodes.end());
+    for (const uint32_t fanOut : {2u, 4u, 8u}) {
+      const auto chunks = chunkTree(tree, {budget, fanOut}).value();
+      for (uint32_t c = 0; c < chunks.size(); ++c) {
+        const TreeChunk& parent = chunks[c];
+        if (parent.children.empty()) continue;
+        // The children's roots, in child order, are the parent's nodes.
+        std::vector<uint32_t> stoodFor;
+        std::set<uint32_t> childNodes;
+        for (const uint32_t childIndex : parent.children) {
+          EXPECT_LT(childIndex, c);  // children precede parents
+          const TreeChunk& child = chunks[childIndex];
+          stoodFor.insert(stoodFor.end(), child.roots.begin(), child.roots.end());
+          childNodes.insert(child.nodes.begin(), child.nodes.end());
+        }
+        EXPECT_EQ(stoodFor, parent.nodes);
+        for (const uint32_t node : parent.nodes)
+          if (isLeaf(tree, node))
+            EXPECT_EQ(childNodes.count(node), 1u);  // a leaf is drawn by a child too
+        const std::set<uint32_t> drawn(parent.nodes.begin(), parent.nodes.end());
+        EXPECT_EQ(drawn.size(), parent.nodes.size());
       }
-      EXPECT_EQ(stoodFor, parent.nodes);
-      for (const uint32_t node : parent.nodes)
-        if (isLeaf(tree, node))
-          EXPECT_EQ(childNodes.count(node), 1u);  // a leaf is drawn by a child too
-      const std::set<uint32_t> drawn(parent.nodes.begin(), parent.nodes.end());
-      EXPECT_EQ(drawn.size(), parent.nodes.size());
     }
   });
 }
@@ -202,6 +204,14 @@ TEST(TreeChunker, ASingleLeafIsOneChunk) {
   EXPECT_EQ(chunks[0].nodes, std::vector<uint32_t>{0});
   EXPECT_EQ(chunks[0].roots, std::vector<uint32_t>{0});
   EXPECT_TRUE(chunks[0].children.empty());
+}
+
+TEST(TreeChunker, RefusesAZeroBudget) {
+  constexpr uint32_t kNoBudget = 0;
+  const auto chunks = chunkTree(fixtureTree(), TreeChunkOptions{kNoBudget});
+  ASSERT_FALSE(chunks.ok());
+  EXPECT_EQ(chunks.error().code, ErrorCode::corrupt);
+  EXPECT_NE(chunks.error().message.find("chunkSplats"), std::string::npos);
 }
 
 TEST(TreeChunker, RefusesAFanOutBelowTwo) {

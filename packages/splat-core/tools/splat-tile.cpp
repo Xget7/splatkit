@@ -12,12 +12,15 @@
 //           1/255 drops only what draws nothing; higher trades faint layers for speed.
 //
 // Writes out_dir/tileset.json and one spz per tile. Coordinates are written as they are.
+#include <cerrno>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -39,6 +42,21 @@ bool endsWith(const std::string& s, const char* suffix) {
   return s.size() >= n && s.compare(s.size() - n, n, suffix) == 0;
 }
 
+// Reads a whole number of at least 1 that fits `value`; false for anything else, a minus sign
+// included.
+bool parseCount(const char* flag, const char* text, uint32_t& value) {
+  char* end = nullptr;
+  errno = 0;
+  const int64_t parsed = std::strtoll(text, &end, 10);
+  if (end == text || *end != '\0' || errno == ERANGE || parsed < 1 ||
+      parsed > std::numeric_limits<uint32_t>::max()) {
+    std::fprintf(stderr, "%s needs a whole number of at least 1, got '%s'\n", flag, text);
+    return false;
+  }
+  value = static_cast<uint32_t>(parsed);
+  return true;
+}
+
 int run(int argc, char** argv) {
   if (argc < 3) return usage();
   const std::string in = argv[1];
@@ -47,19 +65,20 @@ int run(int argc, char** argv) {
   int sh = -1;
   float pruneAlpha = -1.0f;
   for (int i = 3; i < argc; ++i) {
-    if (std::strcmp(argv[i], "--tile") == 0 && i + 1 < argc)
-      options.chunks.chunkSplats = static_cast<uint32_t>(std::atoi(argv[++i]));
-    else if (std::strcmp(argv[i], "--fan-out") == 0 && i + 1 < argc)
-      options.chunks.fanOut = static_cast<uint32_t>(std::atoi(argv[++i]));
-    else if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc)
+    if (std::strcmp(argv[i], "--tile") == 0 && i + 1 < argc) {
+      if (!parseCount("--tile", argv[i + 1], options.chunks.chunkSplats)) return usage();
+      ++i;
+    } else if (std::strcmp(argv[i], "--fan-out") == 0 && i + 1 < argc) {
+      if (!parseCount("--fan-out", argv[i + 1], options.chunks.fanOut)) return usage();
+      ++i;
+    } else if (std::strcmp(argv[i], "--sh") == 0 && i + 1 < argc)
       sh = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--prune-alpha") == 0 && i + 1 < argc)
       pruneAlpha = std::strtof(argv[++i], nullptr);
     else
       return usage();
   }
-  if (sh > 3 || options.chunks.chunkSplats == 0 || options.chunks.fanOut < 2 || pruneAlpha > 1.0f)
-    return usage();
+  if (sh > 3 || pruneAlpha > 1.0f) return usage();
 
   const auto start = std::chrono::steady_clock::now();
   spz::GaussianCloud cloud =

@@ -1,7 +1,9 @@
 #include "splat/tiles/TreeChunker.h"
 
 #include <algorithm>
+#include <queue>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace splat {
@@ -23,26 +25,44 @@ class Chunker {
  private:
   bool isLeaf(uint32_t node) const { return layout_[node].childCount == 0; }
 
-  // Index of the interior node the frontier gives up next: the coarsest whose children fit.
-  // frontier.size() when none does.
-  std::size_t nextToExpand(const std::vector<uint32_t>& frontier) const {
-    std::size_t best = frontier.size();
-    for (std::size_t i = 0; i < frontier.size(); ++i) {
-      const LodNode& node = layout_[frontier[i]];
-      if (isLeaf(frontier[i]) || frontier.size() - 1 + node.childCount > chunkSplats_) continue;
-      if (best == frontier.size() || node.size > layout_[frontier[best]].size) best = i;
+  // Appends to `out`, in tree order, the nodes under `node` that were not expanded.
+  void collect(uint32_t node, const std::unordered_set<uint32_t>& expanded,
+               std::vector<uint32_t>& out) const {
+    if (expanded.count(node) == 0) {
+      out.push_back(node);
+      return;
     }
-    return best;
+    const LodNode& parent = layout_[node];
+    for (uint32_t k = 0; k < parent.childCount; ++k) collect(parent.childStart + k, expanded, out);
   }
 
-  // Replaces the node at `index` with its children, in place.
-  void expand(std::vector<uint32_t>& frontier, std::size_t index) const {
-    const LodNode& node = layout_[frontier[index]];
-    std::vector<uint32_t> children(node.childCount);
-    for (uint32_t k = 0; k < node.childCount; ++k) children[k] = node.childStart + k;
-    frontier[index] = children.front();
-    frontier.insert(frontier.begin() + static_cast<std::ptrdiff_t>(index) + 1, children.begin() + 1,
-                    children.end());
+  // The frontier a chunk with these roots draws: the coarsest interior node is replaced by its
+  // children while the frontier still fits. A node whose children do not fit now never will, since
+  // the frontier only grows, so it is dropped for good. Returns the frontier in tree order.
+  std::vector<uint32_t> frontierOf(const std::vector<uint32_t>& roots) const {
+    using Candidate = std::pair<float, uint32_t>;  // LodNode::size, node
+    std::priority_queue<Candidate> coarsest;
+    const auto offer = [&](uint32_t node) {
+      if (!isLeaf(node)) coarsest.emplace(layout_[node].size, node);
+    };
+    for (const uint32_t root : roots) offer(root);
+
+    std::unordered_set<uint32_t> expanded;
+    std::size_t size = roots.size();
+    while (!coarsest.empty()) {
+      const uint32_t node = coarsest.top().second;
+      coarsest.pop();
+      const LodNode& interior = layout_[node];
+      if (size - 1 + interior.childCount > chunkSplats_) continue;
+      expanded.insert(node);
+      size += interior.childCount - 1;
+      for (uint32_t k = 0; k < interior.childCount; ++k) offer(interior.childStart + k);
+    }
+
+    std::vector<uint32_t> frontier;
+    frontier.reserve(size);
+    for (const uint32_t root : roots) collect(root, expanded, frontier);
+    return frontier;
   }
 
   // Lists the chunk standing for `roots`, after the chunks below it, and returns its index. The
@@ -50,10 +70,7 @@ class Chunker {
   // order are exactly this chunk's nodes. The recursion is as deep as the chunk hierarchy, which
   // is logarithmic in the tree.
   uint32_t grow(std::vector<uint32_t> roots) {
-    std::vector<uint32_t> frontier = roots;
-    for (std::size_t next = nextToExpand(frontier); next != frontier.size();
-         next = nextToExpand(frontier))
-      expand(frontier, next);
+    std::vector<uint32_t> frontier = frontierOf(roots);
 
     TreeChunk chunk;
     bool hasInterior = false;
