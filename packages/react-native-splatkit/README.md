@@ -94,7 +94,7 @@ The first run builds the conversion tools, and every run ends by printing which 
 | none | `out/scene.spz` | Every scene; this is the world. |
 | `--collider` | `out/scene.collider.glb` | Walking. It assumes a space to walk through, not a lone object. |
 | `--lod` | `out/scene.lodsplat`, which becomes the world | Scenes of several million splats: the level-of-detail tree is built here instead of on the phone at load time. |
-| `--tiles` | `out/scene.tiles/`, a `tileset.json` index and its tiles | Scenes bigger than phone memory, or a large area to walk: the detail tree is cut into chunks and only the chunks the camera needs are resident. |
+| `--tiles` | `out/scene.tiles/`, a `tileset.json` index and its tiles | Scenes bigger than phone memory, or a large area to walk: the detail tree is cut into chunks of 65536 splats with up to 4 children each, and only the chunks the camera needs are resident. |
 | `--sh N` | | Keeping spherical harmonics up to degree N, 0 to 3. Each degree dropped makes smaller files and uses less GPU memory. |
 | `--spz-version N` | `out/scene.spz` | Selecting container version 2, 3 or 4; PLY conversion defaults to 2. |
 | `--source-frame rub` | `out/scene.spz` | Normalizing right/up/back SPZ from PlayCanvas or Splat Field Guide to the SDK's right/down/forward file convention. |
