@@ -36,6 +36,7 @@ add_library(splat_core STATIC
   src/sorting/SpatialOrder.cpp
   src/sorting/WorkerPool.cpp
   src/math/SymmetricEigen.cpp
+  src/math/Covariance.cpp
   src/lod/LodTree.cpp
   src/lod/LodSelection.cpp
   src/lod/LodFile.cpp

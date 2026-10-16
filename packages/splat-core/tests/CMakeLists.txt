@@ -8,6 +8,7 @@ add_executable(splat_core_tests
   math/Mat4Test.cpp
   math/HalfTest.cpp
   math/SymmetricEigenTest.cpp
+  math/CovarianceTest.cpp
   sorting/DistanceSorterTest.cpp
   sorting/SpatialOrderTest.cpp
   sorting/FrustumSortTest.cpp
