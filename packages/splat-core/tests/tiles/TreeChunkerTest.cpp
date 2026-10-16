@@ -1,6 +1,8 @@
 #include "splat/tiles/TreeChunker.h"
 
 #include <algorithm>
+#include <functional>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -27,14 +29,68 @@ constexpr uint32_t kClusterLeaves = 8;
 // 64 leaves most chunks as one level above the leaves; 16 makes chunks nest.
 constexpr uint32_t kBudgets[] = {64, 16};
 
-LodTree fixtureTree() {
-  const auto bytes = splat::encodeSpz(splat::randomCloud(kSplats, kNoShDegree));
+// The packing of siblings depends on how the subtree sizes fall against the budget, so the
+// invariants are swept over seeds, sizes, layouts and budgets.
+constexpr unsigned kSweepSeeds[] = {1, 2, 3, 5, 8};
+constexpr int kSweepSizes[] = {2000, 20000};
+constexpr uint32_t kSweepBudgets[] = {16, 24, 32, 40, 64};
+constexpr float kCubeHalfExtent = 2.0f;
+constexpr float kClusterSpread = 0.4f;
+constexpr float kClusterOffset = 1.2f;
+constexpr float kSplatLogScale = -3.0f;
+
+LodTree treeOf(const spz::GaussianCloud& source) {
+  const auto bytes = splat::encodeSpz(source);
   auto cloud = splat::decodeSpz(bytes.data(), bytes.size());
   EXPECT_TRUE(cloud.ok());
   LodBuildOptions options;
   options.octreeDepth = splat::kMaxOctreeDepth;
   options.clusterLeaves = kClusterLeaves;
   return buildLodTree(std::move(cloud.value()), options);
+}
+
+LodTree fixtureTree() {
+  return treeOf(splat::randomCloud(kSplats, kNoShDegree));
+}
+
+enum class Layout { uniform, twoClusters };
+
+// `points` splats of one size and opacity, spread through a cube or in two blobs.
+spz::GaussianCloud sweepCloud(int points, unsigned seed, Layout layout) {
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<float> cube(-kCubeHalfExtent, kCubeHalfExtent);
+  std::normal_distribution<float> blob(0.0f, kClusterSpread);
+  spz::GaussianCloud cloud;
+  cloud.numPoints = points;
+  cloud.shDegree = kNoShDegree;
+  for (int i = 0; i < points; ++i) {
+    const float side = (i % 2 == 0) ? -kClusterOffset : kClusterOffset;
+    for (int k = 0; k < 3; ++k)
+      cloud.positions.push_back(layout == Layout::uniform ? cube(rng)
+                                                          : blob(rng) + (k == 0 ? side : 0.0f));
+    for (int k = 0; k < 3; ++k) cloud.scales.push_back(kSplatLogScale);
+    cloud.rotations.insert(cloud.rotations.end(), {0.0f, 0.0f, 0.0f, 1.0f});
+    cloud.alphas.push_back(0.0f);
+    for (int k = 0; k < 3; ++k) cloud.colors.push_back(0.0f);
+  }
+  return cloud;
+}
+
+// Calls `check` with every swept tree and budget, with the case named in the failure trace.
+void forEverySweptCase(const std::function<void(const LodTree&, uint32_t)>& check) {
+  for (const Layout layout : {Layout::uniform, Layout::twoClusters}) {
+    for (const int points : kSweepSizes) {
+      for (const unsigned seed : kSweepSeeds) {
+        const LodTree tree = treeOf(sweepCloud(points, seed, layout));
+        for (const uint32_t budget : kSweepBudgets) {
+          SCOPED_TRACE(::testing::Message()
+                       << (layout == Layout::uniform ? "uniform" : "two clusters") << ", " << points
+                       << " splats, seed " << seed << ", budget " << budget);
+          check(tree, budget);
+        }
+      }
+    }
+  }
 }
 
 std::vector<TreeChunk> chunksOf(const LodTree& tree, uint32_t budget) {
@@ -50,9 +106,7 @@ bool isLeaf(const LodTree& tree, uint32_t node) {
 }  // namespace
 
 TEST(TreeChunker, EveryLeafIsInExactlyOneLevelZeroChunk) {
-  const LodTree tree = fixtureTree();
-  for (const uint32_t budget : kBudgets) {
-    SCOPED_TRACE(budget);
+  forEverySweptCase([](const LodTree& tree, uint32_t budget) {
     const auto chunks = chunksOf(tree, budget);
     std::vector<uint32_t> listed;
     for (const TreeChunk& chunk : chunks)
@@ -64,7 +118,7 @@ TEST(TreeChunker, EveryLeafIsInExactlyOneLevelZeroChunk) {
       if (isLeaf(tree, n)) leaves.push_back(n);
     ASSERT_EQ(leaves.size(), tree.leafCount);
     EXPECT_EQ(listed, leaves);
-  }
+  });
 }
 
 TEST(TreeChunker, NoChunkExceedsTheBudget) {
@@ -87,9 +141,7 @@ TEST(TreeChunker, NoChunkExceedsTheBudget) {
 }
 
 TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
-  const LodTree tree = fixtureTree();
-  for (const uint32_t budget : kBudgets) {
-    SCOPED_TRACE(budget);
+  forEverySweptCase([](const LodTree& tree, uint32_t budget) {
     const auto chunks = chunksOf(tree, budget);
     for (uint32_t c = 0; c < chunks.size(); ++c) {
       const TreeChunk& parent = chunks[c];
@@ -115,7 +167,7 @@ TEST(TreeChunker, ChildrenStandForExactlyTheParentContent) {
       EXPECT_EQ(stoodFor, drawn);
       EXPECT_EQ(drawn.size(), parent.nodes.size());
     }
-  }
+  });
 }
 
 TEST(TreeChunker, SiblingsArePackedSoTheCountFollowsTheBudget) {
@@ -126,12 +178,14 @@ TEST(TreeChunker, SiblingsArePackedSoTheCountFollowsTheBudget) {
     std::size_t levelZero = 0;
     for (const TreeChunk& chunk : chunks) {
       if (chunk.level == 0) ++levelZero;
-      // Greedy packing closes a chunk only when the next part would not fit, so two
-      // neighbours never fit together.
-      for (std::size_t k = 1; k < chunk.children.size(); ++k)
-        EXPECT_GT(
-            chunks[chunk.children[k - 1]].nodes.size() + chunks[chunk.children[k]].nodes.size(),
-            budget);
+      // Greedy packing closes a chunk only when the next part of its kind would not fit, so two
+      // neighbours of the same kind never fit together.
+      for (std::size_t k = 1; k < chunk.children.size(); ++k) {
+        const TreeChunk& before = chunks[chunk.children[k - 1]];
+        const TreeChunk& after = chunks[chunk.children[k]];
+        if (before.children.empty() != after.children.empty()) continue;
+        EXPECT_GT(before.nodes.size() + after.nodes.size(), budget);
+      }
     }
     // In a run of r neighbouring level 0 chunks every pair holds more than `budget` leaves, so
     // the run holds more than floor(r / 2) * budget of them; there are at most two runs per

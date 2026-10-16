@@ -75,16 +75,31 @@ class Chunker {
   }
 
   // Lists `parts` as chunks, merging neighbours while they fit the budget so that the chunk count
-  // follows the budget and not the number of small subtrees. Returns the indices, in order.
+  // follows the budget and not the number of small subtrees. Parts with children merge only with
+  // parts with children, and childless parts only with childless ones: a merged chunk lists the
+  // children of all its parts, so a childless part inside it would have its leaves in no level 0
+  // chunk. Each kind keeps the frontier order. Returns the indices, in order.
   std::vector<uint32_t> pack(std::vector<TreeChunk> parts) {
+    const auto split = std::stable_partition(
+        parts.begin(), parts.end(), [](const TreeChunk& part) { return !part.children.empty(); });
+    std::vector<uint32_t> listed = packRun(parts.begin(), split);
+    const std::vector<uint32_t> leafChunks = packRun(split, parts.end());
+    listed.insert(listed.end(), leafChunks.begin(), leafChunks.end());
+    return listed;
+  }
+
+  using PartIterator = std::vector<TreeChunk>::iterator;
+
+  // Merges the parts in [first, last), in order, closing a chunk when the next part would not fit.
+  std::vector<uint32_t> packRun(PartIterator first, PartIterator last) {
     std::vector<uint32_t> listed;
     TreeChunk merged;
-    for (TreeChunk& part : parts) {
-      if (!merged.nodes.empty() && merged.nodes.size() + part.nodes.size() > chunkSplats_) {
+    for (PartIterator part = first; part != last; ++part) {
+      if (!merged.nodes.empty() && merged.nodes.size() + part->nodes.size() > chunkSplats_) {
         listed.push_back(list(std::move(merged)));
         merged = TreeChunk{};
       }
-      append(merged, std::move(part));
+      append(merged, std::move(*part));
     }
     if (!merged.nodes.empty()) listed.push_back(list(std::move(merged)));
     return listed;

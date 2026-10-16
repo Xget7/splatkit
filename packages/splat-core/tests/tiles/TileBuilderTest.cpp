@@ -119,6 +119,39 @@ TEST(TileBuilder, LeafTilesHoldEveryFileSplatOnce) {
   EXPECT_EQ(std::count(taken.begin(), taken.end(), true), 2400);
 }
 
+TEST(TileBuilder, LeafTileCountsSumToSplatCountAtASmallBudget) {
+  constexpr int kSplats = 20000;
+  constexpr std::uint32_t kTileSplats = 40;
+  constexpr std::uint32_t kClusterLeaves = 32;
+  constexpr float kHalfExtent = 2.0f;
+  constexpr float kSplatRadius = 0.01f;
+  constexpr float kLogitAlpha = 1.0f;
+  std::mt19937 rng(1);
+  std::uniform_real_distribution<float> u(-kHalfExtent, kHalfExtent);
+  spz::GaussianCloud source;
+  source.numPoints = kSplats;
+  for (int i = 0; i < kSplats; ++i) {
+    for (int k = 0; k < 3; ++k) source.positions.push_back(u(rng));
+    source.scales.insert(source.scales.end(), 3, std::log(kSplatRadius));
+    source.rotations.insert(source.rotations.end(), {0.0f, 0.0f, 0.0f, 1.0f});
+    source.alphas.push_back(kLogitAlpha);
+    source.colors.insert(source.colors.end(), 3, 0.0f);
+  }
+
+  const TempPath dir("splat-tiles", TempKind::directory);
+  TileBuildOptions options;
+  options.tileSplats = kTileSplats;
+  options.lod.clusterLeaves = kClusterLeaves;
+  auto built = buildTiles(source, dir.string(), options);
+  ASSERT_TRUE(built.ok()) << built.error().message;
+  const Tileset& set = built.value();
+  std::size_t leafSplats = 0;
+  for (const Tile& t : set.tiles)
+    if (t.level == 0) leafSplats += t.count;
+  EXPECT_EQ(set.splatCount, static_cast<std::uint32_t>(kSplats));
+  EXPECT_EQ(leafSplats, static_cast<std::size_t>(kSplats));
+}
+
 TEST(TileBuilder, InteriorTilesAreTreeNodesWithinBudget) {
   const TempPath dir("splat-tiles", TempKind::directory);
   TileBuildOptions options;

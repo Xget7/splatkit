@@ -23,7 +23,8 @@ struct TreeChunk {
 // replacing its coarsest interior node with that node's children while the frontier still fits;
 // the interior nodes left over each start a child chunk, and the tree leaves left over share one
 // more at level 0. Sibling chunks are then packed in frontier order into merged chunks of at
-// most `chunkSplats` nodes, so the chunk count follows the budget, not the number of clusters.
+// most `chunkSplats` nodes, so the chunk count follows the budget, not the number of clusters;
+// chunks with children pack only with chunks with children, and level 0 chunks only with level 0.
 // Reads `layout` only.
 // Chunks are listed children before parents; the root chunk is the last entry.
 // Fails as `corrupt` when a node has more children than `chunkSplats`.
