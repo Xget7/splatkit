@@ -7,6 +7,7 @@
 #include "splat/math/Frustum.h"
 #include "splat/tiles/TileStreamer.h"
 #include "splatkit/Log.h"
+#include "splatkit/loading/LoadReportLog.h"
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
@@ -102,19 +103,7 @@ void SplatEngine::reportWorld(const splat::Result<splat::SplatWorldLoader::World
     emit(Event::worldFailed, report.error().message);
     return;
   }
-  const auto& r = report.value();
-  LOGI("decoded %zu splats in %.0f ms, sh degree %d, bounds y [%.2f, %.2f], reordered in %.0f ms",
-       r.splatCount, r.decodeMillis, r.shDegree, r.bounds.min[1], r.bounds.max[1], r.reorderMillis);
-  if (r.nodeCount > 0) {
-    LOGI("level of detail tree: %zu nodes over %zu splats, built in %.0f ms", r.nodeCount,
-         r.splatCount, r.treeMillis);
-  }
-  if (r.tileCount > 0) LOGI("tiled world: %zu tiles", r.tileCount);
-  if (r.availableBytes > 0) {
-    LOGI("memory: the load needs about %llu MiB with headroom, %llu MiB free",
-         static_cast<unsigned long long>(r.neededBytes >> 20),
-         static_cast<unsigned long long>(r.availableBytes >> 20));
-  }
+  logWorldReport(report.value());
 }
 
 void SplatEngine::reportCollider(
@@ -124,8 +113,7 @@ void SplatEngine::reportCollider(
     emit(Event::colliderFailed, report.error().message);
     return;
   }
-  LOGI("collider: %zu triangles, grid built in %.0f ms", report.value().triangleCount,
-       report.value().millis);
+  logColliderReport(report.value());
 }
 
 // Uploads what the loader left. True when a new world is drawn from now on.
