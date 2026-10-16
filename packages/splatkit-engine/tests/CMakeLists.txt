@@ -1,4 +1,5 @@
 add_executable(splatkit_engine_tests
+  camera/LensTest.cpp
   camera/WalkCameraTest.cpp
   diagnostics/BenchmarkTest.cpp
   diagnostics/StatsPublisherTest.cpp

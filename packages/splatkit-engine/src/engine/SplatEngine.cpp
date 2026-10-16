@@ -12,9 +12,6 @@
 namespace splatkit {
 namespace {
 
-constexpr float kFieldOfViewRadians = 65.0f * static_cast<float>(M_PI) / 180.0f;
-constexpr float kNearPlane = 0.05f;
-constexpr float kFarPlane = 200.0f;
 // A frame longer than this (a stall, a resume) steps the camera as if it were this long.
 constexpr float kMaxFrameSeconds = 0.1f;
 // How many pixels the splats a tile hides may cover before the tiles below are wanted.
@@ -22,27 +19,9 @@ constexpr float kTilePixels = 1.0f;
 constexpr float kRadiansPerDegree = static_cast<float>(M_PI) / 180.0f;
 // Decode threads a tiled world streams its tiles with.
 constexpr int kLoaderThreads = 2;
-// The default orbit frames the bounding sphere with 5% to spare, never closer than the minimum
-// radius, and treats an aspect below the minimum as that, so a zero-width view still frames.
-constexpr float kFramingPadding = 1.05f;
-constexpr float kMinFramingRadius = 0.05f;
-constexpr float kMinFramingAspect = 1e-3f;
 
 using splat::Clock;
 using splat::millisSince;
-
-float framingRadius(const splat::Bounds& bounds, Extent extent) {
-  const splat::Vec3 half{(bounds.max[0] - bounds.min[0]) * 0.5f,
-                         (bounds.max[1] - bounds.min[1]) * 0.5f,
-                         (bounds.max[2] - bounds.min[2]) * 0.5f};
-  const float sphere = splat::length(half);
-  const float aspect = extent.width > 0 && extent.height > 0
-                           ? static_cast<float>(extent.width) / extent.height
-                           : 1.0f;
-  const float halfY = kFieldOfViewRadians * 0.5f;
-  const float halfX = std::atan(std::tan(halfY) * std::max(aspect, kMinFramingAspect));
-  return std::max(kMinFramingRadius, sphere * kFramingPadding / std::sin(std::min(halfX, halfY)));
-}
 
 }  // namespace
 
@@ -208,7 +187,7 @@ bool SplatEngine::applyPendingLoads() {
                              (worldBounds.min[2] + worldBounds.max[2]) * 0.5f};
     framedBounds_ = worldBounds;
     framedExtent_ = renderer_->drawExtent();
-    camera_.setDefaultAnchor(centre, framingRadius(worldBounds, framedExtent_));
+    camera_.setDefaultAnchor(centre, lens_.framingRadius(worldBounds, framedExtent_));
   }
   const GpuWorldInfo gpu = renderer_->world().value_or(GpuWorldInfo{});
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", gpu.count, millisSince(start), gpu.shDegree);
@@ -270,9 +249,8 @@ bool SplatEngine::dolly(float deltaRadius) {
 bool SplatEngine::focus(float x, float y) {
   const Extent extent = renderer_->drawExtent();
   if (extent.width == 0 || extent.height == 0) return false;
-  const float tanHalfY = std::tan(kFieldOfViewRadians * 0.5f);
-  const float tanHalfX = tanHalfY * static_cast<float>(extent.width) / extent.height;
-  if (!camera_.focus(x, y, tanHalfX, tanHalfY, kFarPlane)) return false;
+  const Lens::TanHalf tan = lens_.tanHalf(extent);
+  if (!camera_.focus(x, y, tan.x, tan.y, lens_.farPlane)) return false;
   planner_.invalidate();
   redrawNeeded_ = true;
   publishPose();
@@ -302,7 +280,7 @@ void SplatEngine::reframeDefaultOrbit(Extent extent) {
   if (!framedBounds_ || extent.width == 0 || extent.height == 0) return;
   if (extent.width == framedExtent_.width && extent.height == framedExtent_.height) return;
   framedExtent_ = extent;
-  camera_.reframeDefaultAnchor(framingRadius(*framedBounds_, extent));
+  camera_.reframeDefaultAnchor(lens_.framingRadius(*framedBounds_, extent));
 }
 
 void SplatEngine::publishPose() {
@@ -312,8 +290,7 @@ void SplatEngine::publishPose() {
 SplatEngine::FrameCamera SplatEngine::frameCamera(Extent extent) const {
   FrameCamera c;
   c.view = camera_.viewMatrix();
-  const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-  c.proj = splat::Mat4::perspective(kFieldOfViewRadians, aspect, kNearPlane, kFarPlane);
+  c.proj = lens_.projection(extent);
   c.axes.position = camera_.position();
   c.axes.forward = {-c.view.at(2, 0), -c.view.at(2, 1), -c.view.at(2, 2)};
   c.axes.up = {c.view.at(1, 0), c.view.at(1, 1), c.view.at(1, 2)};
