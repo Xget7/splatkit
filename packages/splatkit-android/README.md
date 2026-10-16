@@ -49,6 +49,7 @@ class WorldActivity : Activity() {
 ```
 
 Loads decode asynchronously; ready/failure callbacks run on the main thread.
+Unlike iOS, loads are not checked against the memory the app has left, so a world it cannot hold can get it killed; prepare a large world as a `.lodsplat` or a tileset.
 `onWorldReady` means uploaded; `onWorldFrameReady` fires once after a world draw's Vulkan fence completes.
 Keep the view resumed while waiting; completion does not prove visible pixels, presentation scanout or full streamed detail.
 Use `loadCollider(File)` for optional GLB walk collision; otherwise the camera flies.

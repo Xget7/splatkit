@@ -30,6 +30,7 @@ view.resume()
 ```
 
 Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the layer follows the view's window.
+A world the app cannot hold calls `worldFailed` before it decodes, with the memory it needs and the format to prepare it as, instead of iOS ending the app; [LoadCost.cpp](../splat-core/src/loading/LoadCost.cpp) holds the estimate.
 A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xget7/splatkit/blob/main/scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 
 ## API

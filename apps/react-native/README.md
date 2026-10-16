@@ -3,7 +3,7 @@
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
 Drag anywhere to look around.
 `SPZ`, `LOD splat` and `Tileset` load the same world as one `.spz`, one `.lodsplat` and a streamed tileset, the three formats [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) weighs; [`Formats.ts`](Formats.ts) names their files.
-The app opens on `LOD splat`: the example world is 12M splats, and loading it as one `.spz` gets the app killed for memory on an iPhone 17 Pro.
+The app opens on `LOD splat`: the example world is 12M splats, too many to load as one `.spz` on an iPhone 17 Pro, where `SPZ` reports the memory it would need instead.
 Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
 After loading, `Orbit` applies a revisioned camera transaction around an example anchor; `Closer` moves in another 0.3 m.
 The anchor and flythrough route are specific to the example world; adapt them for your own world.

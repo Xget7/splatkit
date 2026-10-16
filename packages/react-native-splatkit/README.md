@@ -99,7 +99,8 @@ The first run builds the conversion tools, and every run ends by printing which 
 | `--spz-version N` | `out/scene.spz` | Selecting container version 2, 3 or 4; PLY conversion defaults to 2. |
 | `--source-frame rub` | `out/scene.spz` | Normalizing right/up/back SPZ from PlayCanvas or Splat Field Guide to the SDK's right/down/forward file convention. |
 
-On an iPhone 17 Pro, the example app was killed for memory while loading a 12M-splat SPZ at SH2, and again at SH1; the same scene prepared with `--lod --sh 1` loaded in about 3 seconds.
+On an iPhone 17 Pro, a 12M-splat SPZ at SH1 needs about 4.6 GB to load with only 3.5 GB free, so the load fails with `WORLD_LOAD_FAILED` saying so instead of the app being killed.
+The same scene prepared with `--lod --sh 1` loaded in about 4 seconds, peaking near 2.7 GB.
 A `.lodsplat` is uncompressed, so it is many times the SPZ: 1.25 GB against 214 MB for that scene.
 The script's header and the [splat-core tools](https://github.com/Xget7/splatkit/tree/main/packages/splat-core#converting-a-ply) cover the remaining options.
 `prepare-world.sh` normalizes the SPZ to the SDK's RDF file convention before building LOD or colliders; a container version does not identify the coordinate frame.
@@ -484,7 +485,7 @@ Both adapters share these, so a host branches on `errorCode` without checking th
 | Code | Reported on | Meaning |
 | --- | --- | --- |
 | `INVALID_REQUEST` | `onWorldEvent`, `onColliderEvent` | The request failed structural validation before native tried to load it. |
-| `WORLD_LOAD_FAILED` | `onWorldEvent` | The world file could not be decoded or loaded. |
+| `WORLD_LOAD_FAILED` | `onWorldEvent` | The world file could not be decoded or loaded, or on iOS needs more memory than the app has left. |
 | `GPU_UNAVAILABLE` | `onWorldEvent` | The GPU backend could not be initialized. |
 | `COLLIDER_LOAD_FAILED` | `onColliderEvent` | The collider GLB could not be loaded. |
 | `INVALID_CAMERA` | `onCameraEvent` | The camera request failed validation; the effective camera is unchanged. |
@@ -500,6 +501,7 @@ Prefer a physical device: emulators often lack full Vulkan 1.1, which reports `G
 **The world fails to load.**
 `filePath` must be absolute, local and readable.
 Confirm the file is really at that path in the sandbox, and read `message` for the loader's reason.
+A `message` saying the world needs more memory than is free comes from iOS's check before decoding; prepare that world as a `.lodsplat` or a tileset, as [Preparing a world](#preparing-a-world) describes.
 
 **Nothing renders and the log mentions Fabric or Codegen.**
 `SplatKitView` is Fabric-only.
