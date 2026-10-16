@@ -95,7 +95,7 @@ cmake/                             embeds the shader source into the library
 
 The shader is compiled at run time from the embedded source, so the library is a plain static archive with no metallib to ship.
 The renderer keeps two frames in flight and reads GPU time from the command buffer.
-GPU path: visibility → radix → indirect draw; compatibility frames may use CPU order.
+GPU path: visibility → radix → indirect draw; a device where that pipeline cannot be created fails the world load with a clear error.
 `sortMillis` includes visibility/radix.
 That path draws front to back and stops shading a pixel once it is opaque, so the frame costs what the visible layers cost.
 The sort has unit tests that run on a Mac: `cmake -S packages/splatkit-ios -B build/ios-mac && cmake --build build/ios-mac && ctest --test-dir build/ios-mac`.

@@ -390,7 +390,7 @@ Extends the standard `ViewProps`.
 | `renderScale` | `number` | `1` | Render resolution scale. |
 | `shDegree` | `number` (0-3) | `3` | Draw-time spherical-harmonics degree. |
 | `linearBlending` | `boolean` | `false` | Blends in linear light instead of the encoded space training used. |
-| `cullMarginDegrees` | `number` | `10` | Angular culling margin for the CPU fallback; the GPU path uses projected bounds. |
+| `cullMarginDegrees` | `number` | `10` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |
 | `motionEnabled` | `boolean` | `false` | Drives the camera from the gyroscope. Ignored where the sensor is missing. |
 | `touchLookEnabled` | `boolean` | `true` | Whether a one-finger drag turns the camera. |
 | `lookSensitivity` | `number` | `0.004` | Radians per point dragged. |

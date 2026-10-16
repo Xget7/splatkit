@@ -75,7 +75,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `shDegree`, `maxShDegree` | Draw/load SH cap, 0–3. Set the load cap before loading. |
 | `splatBudget` | LOD capacity for subsequent loads; zero disables automatic tree construction. Prebuilt LOD files still select a hierarchy. GPU maximum: 2.2M. |
 | `residencyBudget` | Resident splats for subsequent streamed worlds, separate from LOD selection. |
-| `cullMarginDegrees` | CPU fallback's angular margin; GPU visibility uses current-camera projected bounds. |
+| `cullMarginDegrees` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |
 | `linearBlending` | Optional linear-light blend; not the default trained-space compositing. |
 | `setMotionEnabled`, `setWalkVelocity`, `walk` | Gyroscope, continuous forward/right velocity in meters per second, and a single step in meters. |
 | `look(deltaYaw, deltaPitch)` | Turns the camera by radians, for a look pad or mouse. |

@@ -53,8 +53,8 @@ React Native: `npm install @splatkit/react-native@next`, published from [react-n
 One policy prop drives both adapters.
 
 `splat-core` owns formats, hierarchy and navigation; `splatkit-engine` owns orchestration; each native SDK owns its GPU resources and view lifecycle.
-CPU loading/preprocessing and a bounded compatibility ordering path remain.
-GPU rendering does not mean zero CPU work.
+Loading and preprocessing run on the CPU; sorting, culling and rendering run on the GPU.
+A renderer that cannot sort on the GPU fails the world load with a clear error.
 
 ## Validation and limits
 
