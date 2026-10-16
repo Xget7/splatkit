@@ -15,7 +15,10 @@
 
 #include "load-spz.h"
 #include "splat/formats/SpzDecoder.h"
+#include "splat/lod/LodTree.h"
+#include "splat/tiles/TreeChunker.h"
 #include "support/TempPath.h"
+#include "support/TestWorlds.h"
 
 using splat::buildTiles;
 using splat::readTileset;
@@ -212,6 +215,75 @@ TEST(TileBuilder, MergedOpacityIsClampedToOne) {
     largest = std::max(largest, a);
   }
   EXPECT_GE(largest, 0.9f);
+}
+
+// Determinant of the symmetric matrix with upper triangle xx, xy, xz, yy, yz, zz.
+double determinant(const float* c) {
+  return static_cast<double>(c[0]) *
+             (static_cast<double>(c[3]) * c[5] - static_cast<double>(c[4]) * c[4]) -
+         static_cast<double>(c[1]) *
+             (static_cast<double>(c[1]) * c[5] - static_cast<double>(c[4]) * c[2]) +
+         static_cast<double>(c[2]) *
+             (static_cast<double>(c[1]) * c[4] - static_cast<double>(c[3]) * c[2]);
+}
+
+// How far the splat reaches on the screen from any direction: the cube root of the covariance's
+// determinant is the geometric mean of the three axis variances, and a splat of opacity `alpha`
+// covers `alpha` times that much.
+double coverageProxy(float alpha, const float* covariance) {
+  return alpha * std::cbrt(determinant(covariance));
+}
+
+// The tree renderer draws a node of opacity A > 1 as min(1, A * G), which covers 1 + ln A times the
+// area of the same splat at opacity 1. A tile file cannot hold A > 1, so it must carry that
+// excess in the splat's extent.
+TEST(TileBuilder, MergedCoverageSurvivesTheOpacityClamp) {
+  constexpr std::uint32_t kTileSplats = 50;
+  constexpr double kCoverageTolerance = 0.02;
+  constexpr float kAlphaTolerance = 1e-3f;
+  const spz::GaussianCloud source = clusters(1200, 0.05f, 20.0f);
+
+  // Both sides start from the cloud as the file holds it, in the file's own frame.
+  const std::vector<std::uint8_t> bytes = splat::encodeSpz(source);
+  const spz::GaussianCloud stored = spz::loadSpz(bytes, {});
+  splat::SpzDecodeOptions inFileFrame;
+  inFileFrame.sourceFrame = splat::kInternalFrame;
+  auto decoded = splat::decodeSpz(bytes.data(), bytes.size(), inFileFrame);
+  ASSERT_TRUE(decoded.ok());
+
+  const TempPath dir("splat-tiles", TempKind::directory);
+  TileBuildOptions options;
+  options.tileSplats = kTileSplats;
+  auto built = buildTiles(stored, dir.string(), options);
+  ASSERT_TRUE(built.ok()) << built.error().message;
+  const Tile& root = built.value().tiles[built.value().root];
+  const splat::SplatCloud written = decodeTile(dir.path(), root);
+
+  const splat::LodTree tree = splat::buildLodTree(std::move(decoded.value()), options.lod);
+  auto chunks = splat::chunkTree(tree, kTileSplats);
+  ASSERT_TRUE(chunks.ok());
+  const splat::TreeChunk& rootChunk = chunks.value().back();
+  ASSERT_EQ(rootChunk.nodes.size(), written.count());
+
+  double expected = 0.0;
+  std::size_t mergedAboveOne = 0;
+  for (const std::uint32_t node : rootChunk.nodes) {
+    const float alpha = tree.nodes.alphas[node];
+    const float extentGrowth = alpha > 1.0f ? 1.0f + std::log(alpha) : 1.0f;
+    expected += std::min(1.0f, alpha) * extentGrowth *
+                coverageProxy(1.0f, &tree.nodes.covariances[node * 6]);
+    if (alpha > 1.0f) ++mergedAboveOne;
+  }
+  ASSERT_GT(mergedAboveOne, 0u);
+
+  double actual = 0.0;
+  std::size_t saturated = 0;
+  for (std::size_t i = 0; i < written.count(); ++i) {
+    actual += coverageProxy(written.alphas[i], &written.covariances[i * 6]);
+    if (std::abs(written.alphas[i] - 1.0f) <= kAlphaTolerance) ++saturated;
+  }
+  EXPECT_NEAR(actual, expected, kCoverageTolerance * expected);
+  EXPECT_GE(saturated, mergedAboveOne);
 }
 
 TEST(TileBuilder, TileFilesDecodeWithTheEngineDecoder) {
