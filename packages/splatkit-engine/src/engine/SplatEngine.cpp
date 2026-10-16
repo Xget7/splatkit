@@ -1,9 +1,9 @@
 #include "splatkit/engine/SplatEngine.h"
 
-#include <chrono>
 #include <cmath>
 #include <utility>
 
+#include "splat/diagnostics/Stopwatch.h"
 #include "splat/math/Frustum.h"
 #include "splat/tiles/TileStreamer.h"
 #include "splatkit/Log.h"
@@ -28,11 +28,8 @@ constexpr float kFramingPadding = 1.05f;
 constexpr float kMinFramingRadius = 0.05f;
 constexpr float kMinFramingAspect = 1e-3f;
 
-using Clock = std::chrono::steady_clock;
-
-double millisSince(Clock::time_point start) {
-  return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
-}
+using splat::Clock;
+using splat::millisSince;
 
 float framingRadius(const splat::Bounds& bounds, Extent extent) {
   const splat::Vec3 half{(bounds.max[0] - bounds.min[0]) * 0.5f,
