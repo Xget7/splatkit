@@ -182,7 +182,6 @@ class SplatEngine {
   }
   void reportWorld(const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
   void reportCollider(const splat::Result<splat::SplatWorldLoader::ColliderReport>& report);
-  // Puts the loader's finished decodes to use: collider to the camera, world to the GPU.
   bool uploadFinishedLoads();
   float frameSeconds(int64_t frameTimeNanos);
   void driveBenchmark(float dt, const GpuWorldInfo& world);
