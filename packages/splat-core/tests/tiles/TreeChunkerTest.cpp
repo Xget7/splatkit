@@ -250,7 +250,7 @@ TEST(TreeChunker, TheHierarchyStaysShallowWithMixedSplatSizes) {
     ASSERT_GE(chunks.size(), kLeastChunks);
     const double budgets = static_cast<double>(tree.nodeCount()) / kBudget;
     const int perfect = static_cast<int>(std::ceil(std::log(budgets) / std::log(kFanOut)));
-    EXPECT_LE(chunks.back().level, 2 * perfect + kSlackLevels);
+    EXPECT_LE(chunks.back().level, perfect + kSlackLevels);
   }
 }
 
@@ -281,6 +281,16 @@ TEST(TreeChunker, RefusesAFanOutBelowTwo) {
   ASSERT_FALSE(chunks.ok());
   EXPECT_EQ(chunks.error().code, ErrorCode::corrupt);
   EXPECT_NE(chunks.error().message.find("fanOut"), std::string::npos);
+}
+
+TEST(TreeChunker, RefusesChildrenListedBeforeTheirParent) {
+  constexpr uint32_t kBudget = 64;
+  LodTree tree = fixtureTree();
+  tree.layout[0].childStart = 0;  // the root claims itself as its first child
+  const auto chunks = chunkTree(tree, {kBudget});
+  ASSERT_FALSE(chunks.ok());
+  EXPECT_EQ(chunks.error().code, ErrorCode::corrupt);
+  EXPECT_NE(chunks.error().message.find("layout"), std::string::npos);
 }
 
 TEST(TreeChunker, ValidatesTheOptionsWithoutATree) {

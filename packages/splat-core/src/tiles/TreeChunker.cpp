@@ -144,7 +144,7 @@ class Chunker {
   const std::vector<LodNode>& layout_;
   uint32_t chunkSplats_;
   uint32_t fanOut_;
-  std::vector<uint64_t> leaves_;  // the tree leaves under each node, a leaf counting itself
+  std::vector<uint32_t> leaves_;  // the tree leaves under each node, a leaf counting itself
   std::vector<TreeChunk> chunks_;
 };
 
@@ -162,7 +162,13 @@ Result<std::vector<TreeChunk>> chunkTree(const LodTree& tree, const TreeChunkOpt
   if (!valid.ok()) return valid.error();
   const uint32_t chunkSplats = options.chunkSplats;
   for (std::size_t n = 0; n < tree.layout.size(); ++n) {
-    if (tree.layout[n].childCount > chunkSplats)
+    const LodNode& node = tree.layout[n];
+    // The leaf-weight pass walks the layout backwards, so children must sit after their parent.
+    if (node.childCount > 0 &&
+        (node.childStart <= n || node.childStart + node.childCount > tree.layout.size()))
+      return Error{ErrorCode::corrupt,
+                   "node " + std::to_string(n) + " has children outside the layout after it"};
+    if (node.childCount > chunkSplats)
       return Error{ErrorCode::corrupt, "node " + std::to_string(n) + " has " +
                                            std::to_string(tree.layout[n].childCount) +
                                            " children, more than chunkSplats " +
