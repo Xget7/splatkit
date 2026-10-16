@@ -116,8 +116,16 @@ void SplatEngine::reportCollider(
   logColliderReport(report.value());
 }
 
-// Uploads what the loader left. True when a new world is drawn from now on.
-bool SplatEngine::applyPendingLoads() {
+// The second half of a load. loadWorld and loadCollider decode on the thread that called
+// them and leave the result in the loader; this runs once per frame on the render thread
+// and puts whatever finished to use. A collider becomes the camera's walking surface. A
+// world goes to the GPU: a single file world uploads whole (with its level of detail tree
+// when it has one), a tiled world gets an empty slab that a new TileStreamer fills from
+// here on. The default orbit is framed around the world's bounds, the planner forgets the
+// old world, and the host hears worldReady with the source splat count. Returns true when
+// a new world is drawn from now on; a failed upload reports worldFailed and keeps the
+// current one.
+bool SplatEngine::uploadFinishedLoads() {
   if (auto collider = loader_.takeCollider()) {
     camera_.setCollider(std::move(collider));
     emit(Event::colliderReady);
@@ -360,7 +368,7 @@ float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
 // a still scene costs no GPU time and almost no battery.
 void SplatEngine::render(int64_t frameTimeNanos) {
   if (!renderer_->ready()) return;
-  if (applyPendingLoads()) redrawNeeded_ = true;
+  if (uploadFinishedLoads()) redrawNeeded_ = true;
 
   const Extent extent = renderer_->drawExtent();
   reframeDefaultOrbit(extent);
