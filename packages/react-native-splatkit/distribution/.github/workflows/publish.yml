@@ -22,11 +22,11 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Queued/retried runs use the current main tree, so they cannot release an old bump.
           ref: main
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24.21.0"
           registry-url: "https://registry.npmjs.org"
