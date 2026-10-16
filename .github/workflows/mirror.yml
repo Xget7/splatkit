@@ -34,22 +34,23 @@ jobs:
           - platform: react-native
             repository: Xget7/react-native-splatkit
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
       - name: Record the commit being mirrored
         run: echo "MIRROR_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       # The test workflows run alongside this one on the same push; do not mirror a commit
-      # the tests have not passed.
+      # the tests have not passed. lint.yml is style only and neither mirror ships it or its
+      # tooling, so a formatting finding must not keep tested source from the mirrors.
       - name: Wait for the tests on the mirrored commit
         run: scripts/wait-for-checks.sh
         env:
           GH_TOKEN: ${{ github.token }}
-          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml rn-contract.yml
+          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml rn-contract.yml
           WAIT_SHA: ${{ env.MIRROR_SHA }}
 
       # Without this the failure is an opaque git authentication error four steps later.
