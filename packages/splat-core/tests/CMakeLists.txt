@@ -9,12 +9,10 @@ add_executable(splat_core_tests
   math/HalfTest.cpp
   math/SymmetricEigenTest.cpp
   math/CovarianceTest.cpp
-  sorting/DistanceSorterTest.cpp
   sorting/SpatialOrderTest.cpp
   sorting/FrustumSortTest.cpp
   lod/LodTreeTest.cpp
   lod/LodFileTest.cpp
-  lod/LodSorterTest.cpp
   io/MappedFileTest.cpp
   loading/SplatWorldLoaderTest.cpp
   sorting/VisibilityPlannerTest.cpp
@@ -24,7 +22,6 @@ add_executable(splat_core_tests
   tiles/SlabAllocatorTest.cpp
   tiles/TileSchedulerTest.cpp
   tiles/TileStreamerTest.cpp
-  sorting/SlabSorterTest.cpp
   math/FrustumTest.cpp
   tools/CloudEditTest.cpp
   loading/LoadCostTest.cpp
