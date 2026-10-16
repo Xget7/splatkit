@@ -94,7 +94,7 @@ class Chunker {
   std::vector<uint32_t> packRun(PartIterator first, PartIterator last) {
     std::vector<uint32_t> listed;
     TreeChunk merged;
-    for (PartIterator part = first; part != last; ++part) {
+    for (auto part = first; part != last; ++part) {
       if (!merged.nodes.empty() && merged.nodes.size() + part->nodes.size() > chunkSplats_) {
         listed.push_back(list(std::move(merged)));
         merged = TreeChunk{};
