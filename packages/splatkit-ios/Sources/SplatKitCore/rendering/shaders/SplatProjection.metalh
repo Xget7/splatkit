@@ -151,12 +151,13 @@ inline SplatVertex expandQuad(constant Camera& cam, Projected p, uint vertexId) 
   float2 delta = (corner.x * unpackHalf2(p.axis1) + corner.y * unpackHalf2(p.axis2)) * 2.0 * p.radius / cam.screenSize;
   SplatVertex out;
   out.position = float4(p.center + delta, kSplatDepth, 1.0);
-  out.relativePosition = p.radius * corner;
-  out.color = float4(unpackHalf2(p.color0), unpackHalf2(p.color1));
+  out.gaussian = half2(p.radius * corner * kGaussianScale);
+  half2 color1 = as_type<half2>(p.color1);
+  out.color = half4(as_type<half2>(p.color0), color1.x, log2(max(color1.y, HALF_MIN)));
   return out;
 }
 
-inline float splatAlpha(SplatVertex in) {
-  float r2 = dot(in.relativePosition, in.relativePosition);
-  return min(exp(-0.5 * r2) * in.color.a, 1.0);
+// log2 of the unclamped alpha. LOD opacities above 1 make it positive near the centre.
+inline half splatPower(SplatVertex in) {
+  return in.color.a - dot(in.gaussian, in.gaussian);
 }

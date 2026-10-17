@@ -43,7 +43,7 @@ class MetalVisibility {
               uint32_t rangeCount, id<MTLBuffer> indices = nil, id<MTLBuffer> activeCount = nil);
 
   id<MTLBuffer> order() const { return sort_.values(); }
-  // GPU-owned uint32 slots; Low16 only uses the lower 16 bits.
+  // GPU-owned uint32 slots as the cull wrote them, unsorted; Low16 only uses the lower 16 bits.
   id<MTLBuffer> depthKeys() const { return sort_.keys(); }
   id<MTLBuffer> projected() const { return projected_; }
   id<MTLBuffer> drawArguments(uint32_t slot) const { return drawArguments_[slot]; }

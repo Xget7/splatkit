@@ -9,7 +9,8 @@ namespace splatkit {
 
 // Stable ascending sort of uint32 key/value pairs. No camera or splat knowledge.
 // Call reserve while idle, fill keys()/values(), then encode on the render queue.
-// The GPU-written count must not exceed capacity(). Results are in the same buffers.
+// The GPU-written count must not exceed capacity(). The sorted values land in values();
+// keys() is scratch afterwards, since the last pass skips the key write nobody reads.
 // Scratch is shared across frames: all encodes and their consumers use one queue.
 class MetalRadixSort {
  public:
@@ -38,7 +39,7 @@ class MetalRadixSort {
   id<MTLComputePipelineState> prepare_ = nil;
   id<MTLComputePipelineState> histogram_ = nil;
   id<MTLComputePipelineState> scan_ = nil;
-  id<MTLComputePipelineState> scatter_ = nil;
+  id<MTLComputePipelineState> scatter_ = nil, scatterLast_ = nil;
   uint32_t capacity_ = 0;
   std::array<id<MTLBuffer>, 2> keys_{};
   std::array<id<MTLBuffer>, 2> values_{};

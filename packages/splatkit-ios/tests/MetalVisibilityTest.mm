@@ -269,15 +269,19 @@ TEST(MetalVisibilityTightCullingTest, QuantizesCameraDepthAndSortsBothSourceAndL
     // Same quantization bin keeps 1 before 2 within this single SIMD group, even
     // though 2 is slightly nearer. Float32 ordering would reverse them.
     const uint32_t expected[n - 2] = {4, 1, 2, 3, 0, 5};
+    // The sort leaves the keys as the cull wrote them; sorted here they must be the
+    // quantized depths of the expected order.
+    std::vector<uint32_t> sortedKeys(keys, keys + (n - 2));
+    std::sort(sortedKeys.begin(), sortedKeys.end());
     for (uint32_t i = 0; i < n - 2; ++i) {
       ASSERT_LT(order[i], n);
       EXPECT_EQ(projected[order[i]].index, expected[i]);
       const auto key = static_cast<uint32_t>((depths[expected[i]] - 1) / 256 * 65535);
-      EXPECT_EQ(keys[i], key);
-      EXPECT_LE(keys[i], 65535u);
+      EXPECT_EQ(sortedKeys[i], key);
+      EXPECT_LE(sortedKeys[i], 65535u);
     }
-    EXPECT_EQ(keys[0], 0u);
-    EXPECT_EQ(keys[5], 65535u);
+    EXPECT_EQ(sortedKeys[0], 0u);
+    EXPECT_EQ(sortedKeys[5], 65535u);
   }
 }
 

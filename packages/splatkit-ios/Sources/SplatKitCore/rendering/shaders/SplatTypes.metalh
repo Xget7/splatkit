@@ -42,8 +42,8 @@ struct Projected {
 
 struct SplatVertex {
   float4 position [[position]];
-  float2 relativePosition;
-  float4 color;
+  half2 gaussian;        // corner * radius * kGaussianScale; its squared length is the exp2 exponent
+  half4 color [[flat]];  // rgb, log2(opacity)
 };
 
 struct BlitVertex {
@@ -89,6 +89,8 @@ constant float kProjectionFovClamp = 1.3;
 constant float kLooseCullExtent = 1.2;
 constant float kDisplayGamma = 2.2;  // for a linear-blended output
 constant float2 kCorners[4] = {float2(-1, -1), float2(-1, 1), float2(1, -1), float2(1, 1)};
+constant float kGaussianScale = 0.8493218;  // sqrt(0.5 * log2(e)): exp(-0.5 r^2) = exp2(-(kGaussianScale r)^2)
+constant half kLog2MinAlpha = -7.994353h;   // log2(1/255)
 
 inline float2 unpackHalf2(uint packed) {
   return float2(as_type<half2>(packed));

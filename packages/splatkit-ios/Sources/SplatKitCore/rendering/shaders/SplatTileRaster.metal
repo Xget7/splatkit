@@ -235,7 +235,7 @@ kernel void rasterSplatTiles(uint2 tile [[threadgroup_position_in_grid]],
                              axis1.x * delta.y - axis1.y * delta.x) / det;
     if (any(abs(relative) > p.radius)) continue;
     half2 q = half2(relative), color1 = as_type<half2>(p.color1);
-    half alpha = min(exp(half(-0.5) * dot(q, q)) * color1.y, half(1.0));
+    half alpha = min(exp2(half(-kGaussianScale * kGaussianScale) * dot(q, q)) * color1.y, half(1.0));
     if (alpha < half(1.0 / 255.0)) continue;
     color += transmittance * float(alpha) * float3(unpackHalf2(p.color0), float(color1.x));
     transmittance *= 1.0 - float(alpha);
