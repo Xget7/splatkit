@@ -2,8 +2,8 @@
 
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
 Drag anywhere to look around.
-`SPZ`, `LOD splat` and `Tileset` load the same world as one `.spz`, one `.lodsplat` and a streamed tileset, the three formats [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) weighs; [`Formats.ts`](Formats.ts) names their files.
-The app opens on `LOD splat`: the example world is 12M splats, too many to load as one `.spz` on an iPhone 17 Pro, where `SPZ` reports the memory it would need instead.
+The world is one `.lodsplat`, the detail tree built offline by [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world); [`World.ts`](World.ts) names its file.
+The example world is 12M splats, too many to load as one `.spz` on an iPhone 17 Pro; with its tree built offline it loads in seconds.
 Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
 After loading, `Orbit` applies a revisioned camera transaction around an example anchor; `Closer` moves in another 0.3 m.
 The anchor and flythrough route are specific to the example world; adapt them for your own world.
@@ -40,10 +40,10 @@ Then match what this app changes from the template:
 ## Run this app
 
 Needs Node 22.13 or newer, the Android SDK with NDK, Xcode 26 and CocoaPods.
-Worlds are not committed; [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) turns a PLY into all three formats and the collider:
+Worlds are not committed; [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) turns a PLY into the `.lodsplat` and the collider:
 
 ```sh
-../../scripts/prepare-world.sh scene.ply out/ --sh 1 --lod --tiles --collider
+../../scripts/prepare-world.sh scene.ply out/ --sh 1 --lod --collider
 ```
 
 ```sh
@@ -59,10 +59,7 @@ Android, on an arm64 device with Vulkan 1.1:
 ```sh
 npm run android
 files=/sdcard/Android/data/com.splatkit.example/files
-adb push out/scene.spz $files/world.spz
 adb push out/scene.lodsplat $files/world.lodsplat
-adb shell rm -rf $files/world.tiles  # a push into an existing folder nests inside it
-adb push out/scene.tiles $files/world.tiles
 adb push out/scene.collider.glb $files/collider.glb
 ```
 
@@ -73,13 +70,11 @@ cd ios && pod install && cd ..
 npm run ios -- --device
 copy() { xcrun devicectl device copy to --device <device-id> --domain-type appDataContainer \
   --domain-identifier com.splatkit.example --source "$1" --destination "Documents/$2"; }
-copy out/scene.spz world.spz
 copy out/scene.lodsplat world.lodsplat
-copy out/scene.tiles world.tiles
 copy out/scene.collider.glb collider.glb
 ```
 
-A missing world file or tileset index fails the load and names the file, but a tile missing from the folder is left out silently; restart the app after replacing one.
+A missing world file fails the load and names the file; restart the app after replacing one.
 The collider is optional: without one the world still renders and looks around, and the thumb stick stays hidden.
 The status line shows the load, drawn splats and GPU time, or why the world failed to load.
 

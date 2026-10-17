@@ -3,7 +3,7 @@
  *
  * Drag anywhere to look around and push the thumb stick to walk once the collider is
  * ready. The SDK draws no walking control and no HUD: the stick, the stats card and the
- * format and quality pickers are this app's own, and they drive the view through props and
+ * quality picker are this app's own, and they drive the view through props and
  * SplatKitCommands.
  *
  * @format
@@ -55,12 +55,7 @@ import Hud, {
 } from './Hud';
 import Joystick from './Joystick';
 import { ROUTE_SECONDS, poseAt } from './Flythrough';
-import {
-  COLLIDER_PATH,
-  FORMAT_FILES,
-  WorldFormat,
-  loadBudget,
-} from './Formats';
+import { COLLIDER_PATH, WORLD_KIND, WORLD_PATH } from './World';
 
 const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
 
@@ -188,12 +183,6 @@ const RENDER_SCALES: Readonly<Record<QualityPreset, number>> = Object.freeze({
 /** One pass out and one back, then the camera parks and the renderer goes idle. */
 const FLIGHT_SECONDS = ROUTE_SECONDS * 2;
 
-/**
- * The example world is 12M splats, which an iPhone 17 Pro cannot load as one `.spz`: the
- * app is killed for memory. With its tree built offline the same world loads in seconds.
- */
-const INITIAL_FORMAT: WorldFormat = WorldFormat.lodsplat;
-
 type Props = Readonly<{
   /**
    * The absolute directory the worlds and the collider are copied into, set by MainActivity
@@ -222,8 +211,6 @@ function Splat({ filesPath }: Props) {
     revision: FIRST_REVISION,
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);
-  const [format, setFormat] = useState<WorldFormat>(INITIAL_FORMAT);
-  const formatFile = FORMAT_FILES[format];
   const [status, setStatus] = useState<string | null>(LOADING_STATUS);
   const [walking, setWalking] = useState(false);
   const [flying, setFlying] = useState(false);
@@ -240,8 +227,8 @@ function Splat({ filesPath }: Props) {
       new SplatKitBuilder()
         .withWorld({
           requestId: WORLD_REQUEST,
-          filePath: `${filesPath}/${formatFile.path}`,
-          kind: formatFile.kind,
+          filePath: `${filesPath}/${WORLD_PATH}`,
+          kind: WORLD_KIND,
           maxShDegree: WORLD_SH_DEGREE,
         })
         .withPreset(preset)
@@ -253,29 +240,29 @@ function Splat({ filesPath }: Props) {
           renderScale: RENDER_SCALES[preset],
         })
         .build(capabilities.value),
-    [filesPath, formatFile, preset, capabilities.value],
+    [filesPath, preset, capabilities.value],
   );
 
   const { effective } = configuration.performance;
   const { renderScale, lodErrorPixels, sortDepth } = effective;
-  const budgetSplats = loadBudget(formatFile.kind, effective);
+  const budgetSplats = effective.lodBudgetSplats;
   const settings = useMemo<RenderSettings>(
     () => ({
-      worldKind: formatFile.kind,
+      worldKind: WORLD_KIND,
       budgetSplats,
       renderScale,
       lodErrorPixels,
       sortDepth,
     }),
-    [formatFile.kind, budgetSplats, renderScale, lodErrorPixels, sortDepth],
+    [budgetSplats, renderScale, lodErrorPixels, sortDepth],
   );
 
   // A world's splat budget is fixed when it loads, so a preset that asks for a different one
-  // needs a new request, as does another format. Only the requested budget makes one: the real
+  // needs a new request. Only the requested budget makes one: the real
   // limits arriving with the engine never do, because reloading a world this size is seconds
   // of tree build and a second memory peak. Every other policy field reaches the engine live.
   const { requested } = configuration.performance;
-  const key = `${format}-${loadBudget(formatFile.kind, requested)}`;
+  const key = `${requested.lodBudgetSplats}`;
   const request = useRef<{
     key: string;
     world: SplatKitViewProps['world'];
@@ -300,7 +287,7 @@ function Splat({ filesPath }: Props) {
     (event: EventOf<'onWorldEvent'>) => {
       const { phase, loadedSplats, message } = event.nativeEvent;
       if (phase === WorldPhase.failed) {
-        setStatus(`Could not load ${formatFile.path}: ${message}`);
+        setStatus(`Could not load ${WORLD_PATH}: ${message}`);
         return;
       }
       // A large world takes seconds to decode, build and upload, and the first frame comes
@@ -313,7 +300,7 @@ function Splat({ filesPath }: Props) {
       // The benchmark starts itself, so a run needs no hands and every run is the same run.
       if (phase === WorldPhase.frameReady && !control) setFlying(true);
     },
-    [formatFile.path, control],
+    [control],
   );
 
   const onColliderEvent = useCallback((event: EventOf<'onColliderEvent'>) => {
@@ -454,8 +441,6 @@ function Splat({ filesPath }: Props) {
         credit={WORLD_CREDIT}
         preset={preset}
         onPreset={setPreset}
-        format={format}
-        onFormat={setFormat}
         top={insets.top}
         bottom={insets.bottom}
       />

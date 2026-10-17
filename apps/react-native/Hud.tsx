@@ -1,5 +1,5 @@
 /**
- * The render HUD: a performance panel, the format and quality pickers and the world's credit,
+ * The render HUD: a performance panel, the quality picker and the world's credit,
  * over the SplatKitView.
  *
  * Everything here is the app's own UI. The SDK reports numbers through onStats and
@@ -23,7 +23,6 @@ import {
   WorldKind,
   qualityPresets,
 } from '@splatkit/react-native';
-import { FORMAT_FILES, WorldFormat, worldFormats } from './Formats';
 
 export type RenderStats = Readonly<{
   loadedSplats: number;
@@ -235,8 +234,6 @@ type Props = PanelProps &
   Readonly<{
     preset: QualityPreset;
     onPreset: (preset: QualityPreset) => void;
-    format: WorldFormat;
-    onFormat: (format: WorldFormat) => void;
     /** Who made the world and under what licence; null draws nothing. */
     credit: string | null;
     top: number;
@@ -249,8 +246,6 @@ function Hud({
   settings,
   preset,
   onPreset,
-  format,
-  onFormat,
   credit,
   top,
   bottom,
@@ -262,26 +257,6 @@ function Hud({
         pointerEvents="box-none"
       >
         <Panel stats={stats} samples={samples} settings={settings} />
-        <View style={styles.formats}>
-          {worldFormats.map(value => {
-            const active = value === format;
-            return (
-              <Pressable
-                key={value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                onPress={() => onFormat(value)}
-                style={[styles.format, active && styles.presetActive]}
-              >
-                <Text
-                  style={[styles.presetText, active && styles.presetTextActive]}
-                >
-                  {FORMAT_FILES[value].title}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
       </View>
       <View style={[styles.presets, { bottom: bottom + 34 }]}>
         {qualityPresets.map(value => {
@@ -317,7 +292,7 @@ function Hud({
   );
 }
 
-/** The tinted glass behind the format and preset pills. */
+/** The tinted glass behind the preset pills. */
 const CONTROL_SURFACE = {
   backgroundColor: 'rgba(17, 17, 20, 0.62)',
   borderWidth: StyleSheet.hairlineWidth,
@@ -476,19 +451,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontVariant: ['tabular-nums'],
     marginTop: 8,
-  },
-  formats: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    marginTop: 8,
-    padding: 2,
-    borderRadius: 999,
-    ...CONTROL_SURFACE,
-  },
-  format: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
   },
   presets: {
     position: 'absolute',
