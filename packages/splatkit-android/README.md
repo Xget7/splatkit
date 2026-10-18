@@ -102,7 +102,7 @@ Above 3M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
 Parents and subpixel rejection are approximate.
 There is no universal 10M or 30/60 FPS guarantee.
-Hybrid compute screen tiles remain Metal-only.
+Compute screen tiles are not implemented.
 
 [Architecture, limits and evidence](docs/VULKAN.md) |
 [Agent harness](../../docs/AGENT_HARNESS.md) |

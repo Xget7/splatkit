@@ -105,9 +105,6 @@ A chunk of the detail tree stored as its own spz file: a frontier of nodes drawn
 A tile has at most a few children, so one refinement step costs a few uploads.
 _Avoid_: cell, block, node (a node is inside a cloud, a tile is a cloud)
 
-**Screen tile**:
-A rectangular group of image pixels composited together; unrelated to a world's streaming tiles.
-
 **Level**:
 How deep a tile's content sits in the tree: level 0 holds the file's splats, each level up holds nodes that stand in for the tiles below it.
 Made offline, never on the phone.

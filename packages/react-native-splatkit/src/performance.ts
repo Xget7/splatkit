@@ -11,10 +11,8 @@ import {
 } from './validation';
 
 /**
- * `hardware` is the default and the fastest choice for most scenes. `hybrid` composites screen
- * tiles in compute and suits close-up views where many large translucent splats overlap each
- * pixel; on distant or sparse scenes it adds GPU work and lowers the frame rate. It is
- * experimental and iOS-only today. `computeTile` is not implemented by any adapter yet.
+ * `hardware` is the only strategy any adapter implements. `hybrid` and `computeTile` resolve to
+ * it with a fallback warning.
  */
 export const RasterStrategy = {
   hardware: 'hardware',

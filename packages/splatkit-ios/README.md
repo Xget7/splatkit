@@ -30,6 +30,7 @@ view.resume()
 ```
 
 Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the layer follows the view's window.
+The display link asks for 120 Hz, which an iPhone grants only when the host's Info.plist sets `CADisableMinimumFrameDurationOnPhone` to true.
 A world the app cannot hold calls `worldFailed` before it decodes, with the memory it needs and the format to prepare it as, instead of iOS ending the app; [LoadCost.cpp](../splat-core/src/loading/LoadCost.cpp) holds the estimate.
 A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xget7/splatkit/blob/main/scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 
@@ -62,7 +63,7 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 | `cameraPoseInterval` | Seconds between `cameraPoseChanged` delegate calls; 0, the default, never |
 | `startBenchmark(seconds:)` | A reproducible turn with the frame time distribution logged |
 | `captureFrame(to:completion:)` | The next frame as a PNG |
-| `renderPolicy`, `deviceCapabilities` | Per-view renderer policy, re-validated on the render thread; invalid or unpreparable requests keep the previous policy. Sort depth, the raster strategy, the LOD error threshold and the LOD splat limit apply with GPU sort, the sub-pixel threshold is fixed and a different request resolves to it with a warning |
+| `renderPolicy`, `deviceCapabilities` | Per-view renderer policy, re-validated on the render thread; invalid or unpreparable requests keep the previous policy. Sort depth, the LOD error threshold and the LOD splat limit apply with GPU sort, the sub-pixel threshold is fixed and a different request resolves to it with a warning |
 | `readStats()`, `gpuDescription` | Frame, GPU and sort times, splats drawn, device name |
 | `delegate` | World, collider and camera pose outcomes, on the main thread |
 
@@ -107,6 +108,7 @@ Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels` and `--
 | `--quality ultra` | Starting level of the on-screen picker: `ultra`, `high` (default), `balanced`, `fast` |
 | `--shot tour` | ISS camera, +Y up: `overview`, `orbit` (default), `detail`, `flyby`, `tour` |
 | `--run-seconds 20` | Bounded run with resource monitoring |
+| `--metalfx 0` | Upscales a `--scale` below 1 with the linear blit instead of MetalFX |
 
 Defaults: 32-bit sorting, hardware raster.
 Culling, LOD and depth quantization are approximations pending visual acceptance.

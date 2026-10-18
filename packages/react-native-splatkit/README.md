@@ -358,8 +358,8 @@ Every preset rasterizes in hardware, with frustum culling and early termination 
 | `performance` | 0.65 | 1 | 1,000,000 | 1,000,000 | 8 | 2.0 | 2/255 | 1.0 | No | 16 |
 
 Lower `lodErrorPixels` sharpens the far field, which is where a captured room looks soft, and costs fill rate.
-`withPerformance({raster: RasterStrategy.hybrid})` opts into experimental screen-tile compositing, which helps only where many large translucent splats overlap one pixel and costs more on sparse scenes.
-Only the iOS adapter builds `hybrid` today, and `computeTile` is not implemented anywhere.
+No adapter implements `hybrid` or `computeTile`; both resolve to `hardware` with a fallback warning.
+The Sub-pixel column applies on Android only; iOS is fixed at 1.0 px.
 
 ### Splat budgets
 
