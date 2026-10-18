@@ -5,6 +5,12 @@ options:
     iOS: "17.0"
   xcodeVersion: "26.0"
   createIntermediateGroups: true
+# Xcode's recommended settings, kept here so it stops proposing the upgrade.
+settings:
+  base:
+    DEVELOPMENT_TEAM: R2NGS9RVQ9
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
 targets:
   SplatKitDev:
     type: application
@@ -17,7 +23,6 @@ targets:
       - path: ../../packages/splatkit-ios/Sources/SplatKit
     settings:
       base:
-        DEVELOPMENT_TEAM: R2NGS9RVQ9
         CODE_SIGN_STYLE: Automatic
         PRODUCT_BUNDLE_IDENTIFIER: com.splatkit.devapp
         SWIFT_VERSION: "5.0"
