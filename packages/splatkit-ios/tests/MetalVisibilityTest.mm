@@ -247,6 +247,57 @@ TEST_F(MetalVisibilityTest, KeepsAQuadCrossingTheEdgeAndCullsTransparentSplats) 
   EXPECT_EQ(kept, (std::vector<uint32_t>{0, 3}));
 }
 
+TEST_F(MetalVisibilityTest, CullsByFootprintAndDepthPlanesAndCapsTheQuadRadius) {
+  Gpu& gpu = Gpu::get();
+  VisibilityInput input(6);
+  auto* source = static_cast<GpuSplat*>(input.splats.contents);
+  // Depth 2 and focal 500: a world sigma of s projects to 250 s pixels. The quad reaches
+  // 2.5 sigma of the source after the 0.3 px^2 low-pass and ellipseAxes' 0.1 px^2 eigenvalue
+  // floor are taken off, so a 0.6 px sigma leaves a 1.7 px footprint and 0.2 px leaves 0.94 px.
+  struct Case {
+    float z, sigma;
+    uint32_t rgba8, lodAlpha;
+  };
+  const uint32_t two = 0x40000000u;  // float bits of 2.0
+  const Case cases[] = {
+      {-2.0f, 0.0024f, 0xffffffffu, 0},  // 0.6 px sigma, 1.7 px footprint: kept
+      {-2.0f, 0.0008f, 0xffffffffu, 0},  // 0.2 px sigma, 0.94 px footprint: culled
+      {-0.05f, 0.1f, 0xffffffffu, 0},    // centre inside the 0.1 near plane: culled
+      {-150.0f, 1.0f, 0xffffffffu, 0},   // centre past the 100 far plane: culled
+      {-2.0f, 0.1f, 0x00000000u, two},   // black and transparent, LOD opacity 2: kept
+      {-2.0f, 1.6f, 0xffffffffu, 0},     // 400 px sigma, 1000 px quad: kept, cut at 512 px
+  };
+  for (uint32_t i = 0; i < 6; ++i) {
+    const uint32_t variance = splat::toHalf(cases[i].sigma * cases[i].sigma);
+    source[i].position[2] = cases[i].z;
+    source[i].rgba8 = cases[i].rgba8;
+    source[i].lodAlpha = cases[i].lodAlpha;
+    source[i].cov[0] = variance;
+    source[i].cov[1] = variance << 16;
+    source[i].cov[2] = variance << 16;
+  }
+  ASSERT_TRUE(visibility.reserve(6));
+  const SplatRenderer::Range range{0, 6};
+  id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
+  ASSERT_TRUE(visibility.encode(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1));
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  ASSERT_EQ(cmd.status, MTLCommandBufferStatusCompleted);
+  const uint32_t count = visibility.count(0);
+  const auto* projected = static_cast<const ProjectedSplat*>(visibility.projected().contents);
+  std::vector<uint32_t> kept;
+  const ProjectedSplat* huge = nullptr;
+  for (uint32_t i = 0; i < count; ++i) {
+    kept.push_back(projected[i].index);
+    if (projected[i].index == 5) huge = &projected[i];
+  }
+  std::sort(kept.begin(), kept.end());
+  EXPECT_EQ(kept, (std::vector<uint32_t>{0, 4, 5}));
+  ASSERT_NE(huge, nullptr);
+  // The radius is in sigmas; 512 px over a 400 px sigma, within half precision of the axes.
+  EXPECT_NEAR(huge->radius, 512.0f / 400.0f, 0.02f);
+}
+
 TEST(MetalVisibilityKeysTest, QuantizesCameraDepthAndSortsBothSourceAndLodIndices) {
   Gpu& gpu = Gpu::get();
   constexpr uint32_t n = 8;
