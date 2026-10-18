@@ -47,7 +47,6 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
     uniform = metal::buffer(r->device_, sizeof(CameraUniform));
     if (uniform == nil) return nullptr;
   }
-  // See deviceCapabilities() and applyRenderPolicy() for the per-instance contract.
   r->depthBits_ = MetalRadixSort::KeyBits::Full32;
   r->gpuSort_ = r->visibility_.create(r->device_, r->library_, r->depthBits_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
@@ -92,6 +91,7 @@ void MetalSplatRenderer::setDrawableSize(uint32_t width, uint32_t height) {
   LOGI("drawable %ux%u, was %ux%u", width, height, width_, height_);
   width_ = width;
   height_ = height;
+  if (scaler_ != nil) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -100,6 +100,7 @@ void MetalSplatRenderer::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
+  if (scaler_ != nil) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -107,6 +108,9 @@ void MetalSplatRenderer::setRenderScale(float scale) {
 void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
   if (enabled == spatialUpscaling_) return;
   spatialUpscaling_ = enabled;
+  // The scaler is not retained by the command buffers that encode it, so it must not be
+  // replaced while one is in flight.
+  if (scaler_ != nil) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -232,6 +236,8 @@ MTLPixelFormat MetalSplatRenderer::targetFormat() const {
 
 bool MetalSplatRenderer::createTarget() {
   target_ = nil;
+  scaler_ = nil;
+  upscaled_ = nil;
   if ((renderScale_ == 1.0f && !gpuSort_) || width_ == 0 || height_ == 0) return true;
   MTLTextureDescriptor* desc = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:targetFormat()

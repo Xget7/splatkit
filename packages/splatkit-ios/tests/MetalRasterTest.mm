@@ -281,6 +281,16 @@ TEST_F(MetalRasterTest, HalfScaleFrameReachesTheDrawableThroughMetalFXOrTheBlit)
   EXPECT_GT(pixels[center + 2], 200);
   EXPECT_LT(pixels[center + 1], 20);
 
+  // Each transition rebuilds the target and the scaler together.
+  renderer->setRenderScale(1.0f);
+  EXPECT_FALSE(renderer->upscalerActive());
+  centerPixel(&pixels);
+  EXPECT_GT(pixels[center + 2], 200);
+  renderer->setRenderScale(0.5f);
+  EXPECT_EQ(renderer->upscalerActive(), scalerExpected);
+  centerPixel(&pixels);
+  EXPECT_GT(pixels[center + 2], 200);
+
   renderer->setSpatialUpscaling(false);
   EXPECT_FALSE(renderer->upscalerActive());
   EXPECT_TRUE(layer.framebufferOnly);

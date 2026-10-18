@@ -111,6 +111,8 @@ class MetalSplatRenderer final : public SplatRenderer {
   MetalSplatRenderer() = default;
   bool createPipelines();
   bool createTarget();
+  // Rebuilds scaler_ and upscaled_ for the current target_; a nil scaler_ means the blit.
+  bool createScaler();
   MTLPixelFormat pixelFormat() const;
   // Where the splats are drawn: the drawable's format, or half floats when the GPU order
   // path accumulates coverage front to back, which 8 bits would round away.
@@ -158,7 +160,6 @@ class MetalSplatRenderer final : public SplatRenderer {
 #else
   id scaler_ = nil;  // stays nil: the scaled frame always goes through the blit
 #endif
-  bool createScaler();
   std::unique_ptr<MetalWorld> world_;
   float renderScale_ = 1.0f;
   bool spatialUpscaling_ = true;
