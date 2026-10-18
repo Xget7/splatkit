@@ -85,6 +85,7 @@ TEST_F(MetalRasterTest, SubpixelThresholdIsFixed) {
   ASSERT_NE(renderer, nullptr);
   const DeviceCapabilities caps = renderer->deviceCapabilities();
   EXPECT_FALSE(caps.policy.subpixelThreshold);
+  EXPECT_EQ(caps.policy.fallback.subpixelThreshold, kMinPixelRadius);
   RenderPolicy policy = caps.policy.fallback;
   policy.subpixelThreshold = caps.policy.fallback.subpixelThreshold + 0.5f;
   const RenderPolicyResolution resolution = resolveRenderPolicy(policy, caps.policy);

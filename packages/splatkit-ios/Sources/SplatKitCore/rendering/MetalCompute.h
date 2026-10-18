@@ -3,9 +3,21 @@
 #import <Metal/Metal.h>
 
 #include <algorithm>
+
+#include "SplatShaderSource.h"
+#include "rendering/MetalShaderTypes.h"
 #include "splatkit/Log.h"
 
 namespace splatkit::metal {
+
+// The embedded shader source, compiled with the constants the host shares with it.
+// SIMD prefix reductions are available on iOS starting with MSL 2.3.
+inline id<MTLLibrary> shaderLibrary(id<MTLDevice> device, NSError** error) {
+  MTLCompileOptions* options = [MTLCompileOptions new];
+  options.languageVersion = MTLLanguageVersion2_3;
+  options.preprocessorMacros = @{@"SPLAT_MIN_PIXEL_RADIUS" : @(kMinPixelRadius)};
+  return [device newLibraryWithSource:@(SplatShaderSource) options:options error:error];
+}
 
 inline id<MTLComputePipelineState> pipeline(id<MTLDevice> device, id<MTLLibrary> library,
                                             const char* name,

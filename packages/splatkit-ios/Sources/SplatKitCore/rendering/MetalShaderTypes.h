@@ -36,6 +36,10 @@ struct alignas(8) ProjectedSplat {
 static_assert(sizeof(ProjectedSplat) == 32);
 static_assert(offsetof(ProjectedSplat, index) == 28);
 
+// Smallest footprint, in pixels, the visibility kernel keeps; the renderer reports it as the
+// fixed sub-pixel threshold and shaderLibrary() passes it to the shader source.
+inline constexpr float kMinPixelRadius = 1.0f;
+
 // Indices of the shaders' [[function_constant(n)]] declarations.
 inline constexpr size_t kFnShDegree = 0;
 inline constexpr size_t kFnIndexedLod = 3;

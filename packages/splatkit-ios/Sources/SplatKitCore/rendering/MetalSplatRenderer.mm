@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "SplatShaderSource.h"
 #include "rendering/MetalCompute.h"
 #include "rendering/MetalShaderTypes.h"
 #include "splat/math/Mat4.h"
@@ -22,9 +21,6 @@ namespace splatkit {
 namespace {
 constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth16Unorm;
 constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
-// The policy cannot move the shader's footprint cutoff (kMinPixelRadius); capabilities report
-// the RenderPolicy default so the default policy resolves without a warning.
-constexpr float kFixedSubpixelThreshold = 0.5f;
 }  // namespace
 
 std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
@@ -41,10 +37,7 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
   }
   r->queue_ = [r->device_ newCommandQueue];
   NSError* error = nil;
-  // SIMD prefix reductions are available on iOS starting with MSL 2.3.
-  MTLCompileOptions* options = [MTLCompileOptions new];
-  options.languageVersion = MTLLanguageVersion2_3;
-  r->library_ = [r->device_ newLibraryWithSource:@(SplatShaderSource) options:options error:&error];
+  r->library_ = metal::shaderLibrary(r->device_, &error);
   if (r->library_ == nil) {
     LOGE("shader compilation failed: %s", error.localizedDescription.UTF8String);
     return nullptr;
@@ -147,7 +140,7 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = 1.0f;
   policy.fallback.alphaThreshold = 1.0f / 255.0f;
-  policy.fallback.subpixelThreshold = kFixedSubpixelThreshold;
+  policy.fallback.subpixelThreshold = kMinPixelRadius;
   policy.fallback.sortDepth =
       depthBits_ == MetalRadixSort::KeyBits::Low16 ? SortKeyBits::low16 : SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;

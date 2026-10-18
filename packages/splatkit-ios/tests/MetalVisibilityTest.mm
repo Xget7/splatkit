@@ -208,6 +208,45 @@ TEST_F(MetalVisibilityTest, DropsAProjectedSubpixelGaussianBeforeSorting) {
   EXPECT_EQ(visibility.count(0), 1u);
 }
 
+TEST_F(MetalVisibilityTest, KeepsAQuadCrossingTheEdgeAndCullsTransparentSplats) {
+  Gpu& gpu = Gpu::get();
+  VisibilityInput input(4);
+  auto* camera = static_cast<const CameraUniform*>(input.uniforms.contents);
+  auto* source = static_cast<GpuSplat*>(input.splats.contents);
+  // Depth is 2, so a splat at x sits at clip x / w = x * proj(0,0) / 2.
+  const float edge = 2.0f / camera->proj.at(0, 0);
+  struct Case {
+    float centre, sigma;
+    uint32_t rgba8;
+  };
+  const Case cases[] = {
+      {1.25f * edge, 0.3f, 0xffffffffu},   // centre off screen, quad reaches 187 px into it
+      {1.25f * edge, 0.05f, 0xffffffffu},  // same centre, quad ends 100 px short of the edge
+      {0.0f, 0.1f, 0x00ffffffu},           // opacity 0
+      {0.0f, 0.1f, 0xffffffffu},
+  };
+  for (uint32_t i = 0; i < 4; ++i) {
+    const uint32_t variance = splat::toHalf(cases[i].sigma * cases[i].sigma);
+    source[i].position[0] = cases[i].centre;
+    source[i].rgba8 = cases[i].rgba8;
+    source[i].cov[0] = variance;
+    source[i].cov[1] = variance << 16;
+    source[i].cov[2] = variance << 16;
+  }
+  ASSERT_TRUE(visibility.reserve(4));
+  const SplatRenderer::Range range{0, 4};
+  id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
+  ASSERT_TRUE(visibility.encode(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1));
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  ASSERT_EQ(cmd.status, MTLCommandBufferStatusCompleted);
+  ASSERT_EQ(visibility.count(0), 2u);
+  const auto* projected = static_cast<const ProjectedSplat*>(visibility.projected().contents);
+  std::vector<uint32_t> kept = {projected[0].index, projected[1].index};
+  std::sort(kept.begin(), kept.end());
+  EXPECT_EQ(kept, (std::vector<uint32_t>{0, 3}));
+}
+
 TEST(MetalVisibilityKeysTest, QuantizesCameraDepthAndSortsBothSourceAndLodIndices) {
   Gpu& gpu = Gpu::get();
   constexpr uint32_t n = 8;

@@ -79,20 +79,20 @@ inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device
                          thread Projected& out) {
   float4 rgba = unpackUnorm4x8(s.rgba8);
   // Peak opacity sent to rasterization, including LOD's above-one override.
+  // exp(-r²/2) <= 1: if the peak fails the fragment cutoff, every pixel fails.
+  // Keep equality: the fragment uses <, not <=. Do not cull dark but opaque splats.
   float alpha = s.lodAlpha != 0u ? as_type<float>(s.lodAlpha) : rgba.a;
+  if (alpha < 1.0 / 255.0) return false;
 
   float4 viewPos4 = cam.view * float4(s.px, s.py, s.pz, 1.0);
   float3 viewPos = viewPos4.xyz;
   if (viewPos.z >= 0.0) return false;
   float4 clip = cam.proj * viewPos4;
-  float bounds = kLooseCullExtent * clip.w;
   // Metal's perspective clip depth is [0,w], not OpenGL's [-w,w].
   // For this camera, clip.w = -viewPos.z and near = proj[3][2] / proj[2][2].
-  // The centre is tested against near and far, and against the sides with a margin.
-  if (clip.z < 0.0 || clip.z > clip.w ||
-      clip.x < -bounds || clip.x > bounds || clip.y < -bounds || clip.y > bounds) {
-    return false;
-  }
+  // The centre is tested against near and far; the sides use the quad's footprint below.
+  if (clip.z < 0.0 || clip.z > clip.w) return false;
+  if (clip.w <= cam.proj[3][2] / cam.proj[2][2]) return false;
 
   float2 c0 = unpackHalf2(s.cov0);
   float2 c1 = unpackHalf2(s.cov1);
@@ -106,6 +106,14 @@ inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device
   // The axes are sigma in pixels; cutting the radius truncates the Gaussian without reshaping it.
   float sigmaPixels = sqrt(max(dot(axis1, axis1), dot(axis2, axis2)));
   radius = min(radius, kMaxPixelRadius / max(sigmaPixels, 1e-6));
+
+  // Bound the actual half-packed raster quad, not just its centre: a large or anisotropic
+  // splat crossing an edge must survive.
+  float2 packedAxis1 = float2(half2(axis1));
+  float2 packedAxis2 = float2(half2(axis2));
+  float2 extentPixels = radius * (abs(packedAxis1) + abs(packedAxis2));
+  float2 margin = (extentPixels + 0.5) * 2.0 * clip.w / cam.screenSize;
+  if (any(abs(clip.xy) > clip.w + margin)) return false;
 
   float maxVariance = max(dot(axis1, axis1), dot(axis2, axis2));
   float maxSourceSigma = sqrt(max(maxVariance - kLowPassVariance, 0.0));
