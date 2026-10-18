@@ -38,8 +38,6 @@ static_assert(offsetof(ProjectedSplat, index) == 28);
 
 // Indices of the shaders' [[function_constant(n)]] declarations.
 inline constexpr size_t kFnShDegree = 0;
-inline constexpr size_t kFnTightCulling = 1;
-inline constexpr size_t kFnMinPixelRadius = 2;
 inline constexpr size_t kFnIndexedLod = 3;
 inline constexpr size_t kFnQuantizedDepth = 4;
 inline constexpr size_t kFnLastSortPass = 5;

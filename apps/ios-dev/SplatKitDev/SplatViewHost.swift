@@ -63,9 +63,6 @@ final class SplatSession: ObservableObject {
         view.delegate = delegate
         // Launch switches set the policy fields directly; the quality tier leaves them alone.
         var policy = view.renderPolicy
-        if let radius = args.float("min-pixel-radius"), radius.isFinite, radius >= 0 {
-            policy.subpixelThreshold = radius
-        }
         if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
         if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
         if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }

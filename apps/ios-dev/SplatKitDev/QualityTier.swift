@@ -53,17 +53,6 @@ enum QualityTier: String, CaseIterable, Identifiable {
     /// 32-bit keys keep exact depth order; 16-bit halves the radix passes.
     var sortDepth: UInt32 { self == .ultra ? 32 : 16 }
 
-    /// Smallest splat footprint kept, in pixels; lower keeps more fine splats.
-    /// Applies to hierarchy worlds, and to others under --metal-culling 1.
-    var subpixelThreshold: Float {
-        switch self {
-        case .ultra: 0.2
-        case .high: 0.3
-        case .balanced: 0.5
-        case .fast: 0.8
-        }
-    }
-
     func apply(to view: SplatMetalView) {
         view.renderScale = renderScale
         view.shDegree = shDegree
@@ -71,7 +60,6 @@ enum QualityTier: String, CaseIterable, Identifiable {
         policy.sortDepth = sortDepth
         policy.lodErrorPixels = lodErrorPixels
         policy.lodSplatLimit = lodSplatLimit
-        policy.subpixelThreshold = subpixelThreshold
         view.renderPolicy = policy
     }
 }

@@ -16,11 +16,6 @@ import Foundation
 /// successful GPU frame. Loading stays covered while the renderer prepares that frame.
 /// --orbit 0, --pose, --walk or --benchmark disable the automatic orbit and enable touch look.
 /// No animated zoom. Gyro motion is opt-in with --gyro 1 on non-ISS worlds.
-/// --metal-culling 1 opts into GPU-private scratch, footprint culling at 0.5 px,
-/// and camera-depth sorting. Default 0 preserves the baseline; restart to change.
-/// --min-pixel-radius <px> selects the experimental cutoff (default 0.5; try 1.0 or 1.2).
-/// This is a source-footprint radius, not diameter, and has no effect on a world without a
-/// hierarchy unless --metal-culling 1 is set.
 /// --depth-key-bits <16|32> selects linear camera-depth quantization and two radix
 /// passes (16), or the unchanged four-pass ordering (32, default). Restart to change.
 /// Quantization can change transparency ordering within a bin; no splats are removed.
@@ -32,7 +27,7 @@ import Foundation
 /// Dense tiles (>512 candidates) and tiles touched by large footprints (>16 tiles)
 /// use hardware completion, never truncated lists. Scratch is capped at 128 MiB.
 /// --quality <ultra|high|balanced|fast> picks the starting level (default high) unless --scale,
-/// --shdraw, --depth-key-bits or --min-pixel-radius set the renderer directly.
+/// --shdraw or --depth-key-bits set the renderer directly.
 /// --shot <overview|orbit|detail|flyby|tour> picks the ISS camera shot (default orbit).
 /// --hud 0 hides the stats card and quality picker, for screen recordings.
 /// --keep-awake 1 disables idle screen locking only while this dev view is active.

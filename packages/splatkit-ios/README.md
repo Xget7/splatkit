@@ -60,7 +60,7 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 | `cameraPoseInterval` | Seconds between `cameraPoseChanged` delegate calls; 0, the default, never |
 | `startBenchmark(seconds:)` | A reproducible turn with the frame time distribution logged |
 | `captureFrame(to:completion:)` | The next frame as a PNG |
-| `renderPolicy`, `deviceCapabilities` | Per-view renderer policy, re-validated on the render thread; invalid or unpreparable requests keep the previous policy. Sort depth, the raster strategy, the LOD error threshold and the LOD splat limit apply with GPU sort, the sub-pixel threshold only under the tight-culling experiment |
+| `renderPolicy`, `deviceCapabilities` | Per-view renderer policy, re-validated on the render thread; invalid or unpreparable requests keep the previous policy. Sort depth, the raster strategy, the LOD error threshold and the LOD splat limit apply with GPU sort, the sub-pixel threshold is fixed and a different request resolves to it with a warning |
 | `readStats()`, `gpuDescription` | Frame, GPU and sort times, splats drawn, device name |
 | `delegate` | World, collider and camera pose outcomes, on the main thread |
 
@@ -107,11 +107,10 @@ Colours blend in the encoded space by default, on a `bgra8Unorm` layer; `linearB
 Start motion after `splatView(_:worldFrameReady:)`, not upload-only `worldReady`.
 Keep the view attached/resumed while loading; readiness means GPU completion, not visual acceptance.
 
-Dev-only switches; `--quality`, `--min-pixel-radius`, `--depth-key-bits`, `--lod-error-pixels`, `--lod-splat-limit` and `--tile-raster` set the view's `renderPolicy`, the rest apply before renderer creation:
+Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels`, `--lod-splat-limit` and `--tile-raster` set the view's `renderPolicy`, the rest apply before renderer creation:
 
 | Switch | Effect |
 |---|---|
-| `--metal-culling 1 --min-pixel-radius 1` | Covariance bounds, opacity/subpixel rejection |
 | `--depth-key-bits 16` | Two radix passes; uint32 storage unchanged; ties may shimmer |
 | `--tile-raster 1` | Hybrid raster: 16×16 tiles, compute ≤512 candidates, dense/large-footprint tiles use hardware |
 | `--budget 4000000` | LOD capacity, at most 4M; not guaranteed quality |

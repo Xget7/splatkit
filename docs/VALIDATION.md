@@ -63,7 +63,7 @@ Host callbacks may remain display-paced even when presentation vsync is disabled
 | Quality presets | Individual properties | `RenderQuality` presets |
 | GPU sort timing | Visibility + radix command interval | Isolated radix interval |
 | Per-instance render policy and capabilities | `SplatMetalView.renderPolicy`, `deviceCapabilities` | `SplatSurfaceView.applyRenderPolicy`, `deviceCapabilities` |
-| Policy fields applied natively | Sort depth with GPU sort; sub-pixel under tight culling | Sort depth and sub-pixel with GPU visibility |
+| Policy fields applied natively | Sort depth with GPU sort | Sort depth and sub-pixel with GPU visibility |
 | RN policy prop, capability and policy events | Physical iPhone 17 Pro | Physical Mi 9: revisions, fallback warnings, preset reloads, background; rejection host-tested only |
 
 Shared functionality does not imply identical internal algorithms or timing semantics.

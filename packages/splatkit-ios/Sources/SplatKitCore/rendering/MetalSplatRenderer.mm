@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -24,6 +23,9 @@ namespace {
 constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth16Unorm;
 // The tile raster shader clears to the same colour (kBackground in SplatTypes.metalh).
 constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
+// The policy cannot move the shader's footprint cutoff (kMinPixelRadius); capabilities report
+// the RenderPolicy default so the default policy resolves without a warning.
+constexpr float kFixedSubpixelThreshold = 0.5f;
 }  // namespace
 
 std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
@@ -53,22 +55,11 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
     uniform = metal::buffer(r->device_, sizeof(CameraUniform));
     if (uniform == nil) return nullptr;
   }
-  // Creation-time opt-in for tight culling and GPU-private scratch buffers; LOD worlds
-  // always cull tightly. The public render policy controls sort key width independently of
-  // this flag; its sub-pixel threshold applies only under tight culling.
   // See deviceCapabilities() and applyRenderPolicy() for the per-instance contract.
-  const char* cullingValue = std::getenv("SPLATKIT_METAL_CULLING_EXPERIMENT");
-  const bool tightCulling = cullingValue != nullptr && std::strcmp(cullingValue, "1") == 0;
-  r->minPixelRadius_ = 0.5f;
   r->depthBits_ = MetalRadixSort::KeyBits::Full32;
-  r->gpuSort_ = r->visibility_.create(r->device_, r->library_, tightCulling, r->minPixelRadius_,
-                                      r->depthBits_);
+  r->gpuSort_ = r->visibility_.create(r->device_, r->library_, r->depthBits_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
        static_cast<uint32_t>(r->depthBits_), static_cast<uint32_t>(r->depthBits_) / 8);
-  if (tightCulling)
-    LOGI("Metal culling experiment: opacity < 1/255, footprint bounds, %.2fpx, view depth, private "
-         "scratch",
-         r->minPixelRadius_);
   if (!r->gpuSort_) LOGW("GPU sort unavailable, sorting on the CPU");
   r->inFlight_ = dispatch_semaphore_create(kFramesInFlight);
   r->description_ = std::string(r->device_.name.UTF8String) + ", Metal";
@@ -158,14 +149,14 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = 1.0f;
   policy.fallback.alphaThreshold = 1.0f / 255.0f;
-  policy.fallback.subpixelThreshold = minPixelRadius_;
+  policy.fallback.subpixelThreshold = kFixedSubpixelThreshold;
   policy.fallback.sortDepth =
       depthBits_ == MetalRadixSort::KeyBits::Low16 ? SortKeyBits::low16 : SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
   policy.fallback.enableEarlyTermination = true;
-  // The key width and hybrid tiles are public per-instance controls. The sub-pixel radius is
-  // meaningful only under tight culling; alpha, tile size and occlusion stay fixed
-  // shader/rasterization choices. Pure compute tiles are not built.
+  // The key width and hybrid tiles are public per-instance controls. The sub-pixel radius,
+  // alpha, tile size and occlusion stay fixed shader/rasterization choices. Pure compute
+  // tiles are not built.
   // The LOD error threshold applies live to a hierarchy world and at its next upload.
   policy.lodErrorPixels = gpuSort_;
   policy.minLodErrorPixels = 0.1f;
@@ -175,7 +166,6 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.rasterMask = 1u << static_cast<uint32_t>(RasterStrategy::hardware) |
                       1u << static_cast<uint32_t>(RasterStrategy::hybrid);
   policy.sortDepth = gpuSort_;
-  policy.subpixelThreshold = visibility_.tightCulling();
   return caps;
 }
 
@@ -184,7 +174,7 @@ bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::stri
                                            ? MetalRadixSort::KeyBits::Low16
                                            : MetalRadixSort::KeyBits::Full32;
   const bool tiles = policy.raster == RasterStrategy::hybrid;
-  const bool visibilityChanged = bits != depthBits_ || policy.subpixelThreshold != minPixelRadius_;
+  const bool visibilityChanged = bits != depthBits_;
   const bool lodChanged =
       policy.lodErrorPixels != lodErrorPixels_ || policy.lodSplatLimit != lodSplatLimit_;
   if (!visibilityChanged && tiles == computeRaster_ && !lodChanged) return true;
@@ -214,12 +204,11 @@ bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::stri
     if (reason != nullptr) *reason = "Metal render target rebuild failed";
     return false;
   }
-  if (visibilityChanged && !visibility_.reconfigure(policy.subpixelThreshold, bits)) {
+  if (visibilityChanged && !visibility_.reconfigure(bits)) {
     if (tilesChanged) setTiles(!tiles);
     if (reason != nullptr) *reason = "Metal visibility pipeline rebuild failed";
     return false;
   }
-  minPixelRadius_ = policy.subpixelThreshold;
   depthBits_ = bits;
   if (tilesChanged && !tiles) tileRaster_.releaseScratch();
   // Plain configuration read by the next selection encode; it cannot fail, so it goes last.
@@ -232,9 +221,8 @@ bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::stri
     lod_->setPixelLimit(lodPixels_);
     lod_->setSplatLimit(lodSplatLimit_);
   }
-  LOGI("Metal policy: %u-bit sort keys, %.3fpx sub-pixel radius, %.2fpx LOD error, %u LOD "
-       "splat limit, %s raster",
-       static_cast<uint32_t>(bits), minPixelRadius_, lodErrorPixels_, lodSplatLimit_,
+  LOGI("Metal policy: %u-bit sort keys, %.2fpx LOD error, %u LOD splat limit, %s raster",
+       static_cast<uint32_t>(bits), lodErrorPixels_, lodSplatLimit_,
        computeRaster_ ? "hybrid" : "hardware");
   return true;
 }
@@ -420,9 +408,8 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
   if (!lod->create(device_, library_) || !lod->upload(tree, budget, lodErrorPixels_)) return false;
   lod->setSplatLimit(lodSplatLimit_);
   // Compact projections and radix scratch scale with the cut, not all resident nodes.
-  // The cut is tightly culled.
   MetalVisibility visibility;
-  if (!visibility.create(device_, library_, true, minPixelRadius_, depthBits_) ||
+  if (!visibility.create(device_, library_, depthBits_) ||
       !visibility.reserve(static_cast<uint32_t>(tree.nodeCount()), lod->budget()))
     return false;
   std::array<id<MTLBuffer>, kFramesInFlight> readback{};

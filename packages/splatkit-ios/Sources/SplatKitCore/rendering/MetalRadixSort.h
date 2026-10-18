@@ -16,8 +16,7 @@ class MetalRadixSort {
  public:
   // Low16 requires zero upper bits. Keys remain uint32 storage in both modes.
   enum class KeyBits : uint32_t { Low16 = 16, Full32 = 32 };
-  bool create(id<MTLDevice> device, id<MTLLibrary> library,
-              MTLResourceOptions storage = MTLResourceStorageModeShared);
+  bool create(id<MTLDevice> device, id<MTLLibrary> library);
   // Transactional allocation: failure preserves the previous buffers and capacity.
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
@@ -35,7 +34,6 @@ class MetalRadixSort {
                 "Both key widths must finish in the input buffers");
 
   id<MTLDevice> device_ = nil;
-  MTLResourceOptions storage_ = MTLResourceStorageModeShared;
   id<MTLComputePipelineState> prepare_ = nil;
   id<MTLComputePipelineState> histogram_ = nil;
   id<MTLComputePipelineState> scan_ = nil;

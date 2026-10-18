@@ -167,7 +167,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   std::atomic<uint32_t> lastSelectedCount_{0};
   std::atomic<uint32_t> lastLodLimitedCount_{0}, lastLodEvaluatedCount_{0};
   std::atomic<double> lastSelectMillis_{0};
-  float minPixelRadius_ = 0.5f;
   float lodErrorPixels_ = 1.0f;
   uint32_t lodSplatLimit_ = 0;
   // The threshold selection runs at: the policy's, raised while a cut would exceed the splat

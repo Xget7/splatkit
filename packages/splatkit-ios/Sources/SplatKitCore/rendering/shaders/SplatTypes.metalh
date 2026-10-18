@@ -90,7 +90,7 @@ constant float kLowPassVariance = 0.3;
 // A splat's view-space x/y is clamped to this multiple of the half field of view before the
 // projection is linearised, which bounds the error of the linearisation near the edges.
 constant float kProjectionFovClamp = 1.3;
-// Loose culling keeps a splat whose centre is within this multiple of the clip extent.
+// A splat is kept while its centre is within this multiple of the clip extent.
 constant float kLooseCullExtent = 1.2;
 constant float kDisplayGamma = 2.2;  // for a linear-blended output
 constant float2 kCorners[4] = {float2(-1, -1), float2(-1, 1), float2(1, -1), float2(1, 1)};

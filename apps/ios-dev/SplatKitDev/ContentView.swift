@@ -102,7 +102,7 @@ struct ContentView: View {
         view.maxShDegree = args.int("sh") ?? 1
         if let v = args.int("shdraw") { view.shDegree = v }
         // Explicit renderer switches win; otherwise start at a quality level, High by default.
-        let customQuality = ["scale", "shdraw", "depth-key-bits", "min-pixel-radius", "lod-error-pixels", "lod-splat-limit"].contains(where: args.has)
+        let customQuality = ["scale", "shdraw", "depth-key-bits", "lod-error-pixels", "lod-splat-limit"].contains(where: args.has)
         if !customQuality {
             session.quality = args.string("quality").flatMap(QualityTier.init(rawValue:)) ?? .high
         }

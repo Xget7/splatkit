@@ -1,8 +1,6 @@
 #include "SplatTypes.metalh"
 #include "SplatProjection.metalh"
 
-constant bool kTightCulling [[function_constant(1)]];
-constant float kTightMinPixelRadius [[function_constant(2)]];
 constant bool kIndexedLOD [[function_constant(3)]];
 constant bool kQuantizedDepth [[function_constant(4)]];
 
@@ -55,12 +53,12 @@ kernel void visibility(uint t [[thread_position_in_grid]],
       index = ranges[r].offset + (t - rangeStarts[r]);
     }
     Splat s = splats[index];
-    visible = projectSplat(cam, s, index, shData, p, kTightCulling, kTightMinPixelRadius);
+    visible = projectSplat(cam, s, index, shData, p);
     float3 d = float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz;
-    // Positive IEEE float bits sort in ascending numeric order. Tight culling and quantized
-    // keys use view depth, which changes with rotation; otherwise squared distance.
+    // Positive IEEE float bits sort in ascending numeric order. Quantized keys use view
+    // depth, which changes with rotation; otherwise squared distance.
     float depth = -(cam.view * float4(s.px, s.py, s.pz, 1.0)).z;
-    float sortDepth = kTightCulling || kQuantizedDepth ? depth : dot(d, d);
+    float sortDepth = kQuantizedDepth ? depth : dot(d, d);
     key = kQuantizedDepth ? quantizedDepthKey(cam, depth) : as_type<uint>(sortDepth);
     visible = visible && isfinite(sortDepth);
   }
@@ -74,10 +72,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
   base = simd_broadcast(base, 0);
   if (visible) {
     keys[base + rank] = key;
-    // Tight culling over source ranges stores each projection at its slab index;
-    // otherwise projections are compacted in key order.
-    uint projectionIndex = kTightCulling && !kIndexedLOD ? index : base + rank;
-    values[base + rank] = projectionIndex;
-    projected[projectionIndex] = p;
+    values[base + rank] = base + rank;
+    projected[base + rank] = p;
   }
 }
