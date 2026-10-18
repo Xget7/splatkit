@@ -254,6 +254,7 @@ bool MetalSplatRenderer::createTarget() {
 bool MetalSplatRenderer::createScaler() {
   scaler_ = nil;
   const bool wanted = spatialUpscaling_ && target_ != nil && renderScale_ < 1.0f;
+#if SPLATKIT_HAS_METALFX
   if (wanted) {
     if (![MTLFXSpatialScalerDescriptor supportsDevice:device_]) {
       LOGI("MetalFX spatial scaler unsupported here; the scaled frame is blitted");
@@ -280,6 +281,9 @@ bool MetalSplatRenderer::createScaler() {
       }
     }
   }
+#else
+  if (wanted) LOGI("MetalFX is absent from this SDK; the scaled frame is blitted");
+#endif
   if (layer_ != nil) layer_.framebufferOnly = scaler_ == nil;
   return true;
 }
@@ -687,11 +691,15 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
 }
 
 void MetalSplatRenderer::encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture) {
+#if SPLATKIT_HAS_METALFX
   if (scaler_ != nil) {
     scaler_.colorTexture = target_;
     scaler_.outputTexture = drawableTexture;
     [scaler_ encodeToCommandBuffer:cmd];
-  } else if (target_ != nil) {
+    return;
+  }
+#endif
+  if (target_ != nil) {
     MTLRenderPassDescriptor* blit = [MTLRenderPassDescriptor renderPassDescriptor];
     blit.colorAttachments[0].texture = drawableTexture;
     blit.colorAttachments[0].loadAction = MTLLoadActionDontCare;

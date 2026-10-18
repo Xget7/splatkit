@@ -37,6 +37,11 @@ targets:
           - -lzstd
           - -lz
           - -lc++
+        # The simulator SDK has no MetalFX.
+        OTHER_LDFLAGS[sdk=iphoneos*]:
+          - $(inherited)
+          - -framework
+          - MetalFX
         ENABLE_BITCODE: NO
         CLANG_CXX_LANGUAGE_STANDARD: c++17
     dependencies:

@@ -2,8 +2,6 @@
 #include <cstdlib>
 #include <string>
 
-#import <MetalFX/MetalFX.h>
-
 #include "rendering/MetalSplatRenderer.h"
 #include "splat/formats/SpzDecoder.h"
 #include "splat/io/MappedFile.h"
@@ -246,8 +244,12 @@ TEST_F(MetalRasterTest, HalfScaleFrameReachesTheDrawableThroughMetalFXOrTheBlit)
   renderer->setLayer(layer);
   renderer->setDrawableSize(64, 64);
   renderer->setRenderScale(0.5f);
+#if SPLATKIT_HAS_METALFX
   const bool scalerExpected =
       [MTLFXSpatialScalerDescriptor supportsDevice:MTLCreateSystemDefaultDevice()];
+#else
+  const bool scalerExpected = false;
+#endif
   EXPECT_EQ(renderer->upscalerActive(), scalerExpected);
   EXPECT_EQ(layer.framebufferOnly, !scalerExpected);
   splat::SplatCloud cloud;

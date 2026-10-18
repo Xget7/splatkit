@@ -13,7 +13,10 @@ Pod::Spec.new do |s|
   s.vendored_frameworks = 'ios/SplatKitCore.xcframework'
   # The spz loader calls the system zlib.
   s.libraries = 'c++', 'z'
-  s.frameworks = 'UIKit', 'QuartzCore', 'Metal', 'MetalFX'
+  s.frameworks = 'UIKit', 'QuartzCore', 'Metal'
+  # The simulator SDK has no MetalFX; the renderer blits there.
+  s.pod_target_xcconfig = { 'OTHER_LDFLAGS[sdk=iphoneos*]' => '$(inherited) -framework MetalFX' }
+  s.user_target_xcconfig = { 'OTHER_LDFLAGS[sdk=iphoneos*]' => '$(inherited) -framework MetalFX' }
   s.requires_arc = true
 
   # Defined by the app's Podfile (react_native_pods); adds the Fabric dependencies and flags, so it runs last.

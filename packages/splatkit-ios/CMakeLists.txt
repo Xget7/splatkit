@@ -43,8 +43,13 @@ target_include_directories(splatkit_ios
 )
 target_compile_options(splatkit_ios PRIVATE -Wall -Wextra -Werror -fobjc-arc)
 target_link_libraries(splatkit_ios PUBLIC splatkit_engine
-  "-framework Metal" "-framework MetalFX" "-framework QuartzCore" "-framework Foundation"
+  "-framework Metal" "-framework QuartzCore" "-framework Foundation"
   "-framework CoreGraphics" "-framework ImageIO" "-framework UniformTypeIdentifiers")
+# The iOS simulator SDK has no MetalFX; the renderer compiles the scaler out via __has_include.
+find_library(SPLATKIT_METALFX_FRAMEWORK MetalFX)
+if(SPLATKIT_METALFX_FRAMEWORK)
+  target_link_libraries(splatkit_ios PUBLIC "-framework MetalFX")
+endif()
 add_dependencies(splatkit_ios splatkit_ios_shaders)
 
 if(SPLATKIT_IOS_BUILD_TESTS)

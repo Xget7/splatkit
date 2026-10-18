@@ -1,7 +1,12 @@
 #pragma once
 
 #import <Metal/Metal.h>
+#if __has_include(<MetalFX/MetalFX.h>)
 #import <MetalFX/MetalFX.h>
+#define SPLATKIT_HAS_METALFX 1
+#else
+#define SPLATKIT_HAS_METALFX 0  // the iOS simulator SDK ships no MetalFX
+#endif
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <array>
@@ -146,8 +151,12 @@ class MetalSplatRenderer final : public SplatRenderer {
   CAMetalLayer* layer_ = nil;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  id<MTLTexture> target_ = nil;          // scaled rendering or half-float GPU compositing
+  id<MTLTexture> target_ = nil;  // scaled rendering or half-float GPU compositing
+#if SPLATKIT_HAS_METALFX
   id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to the drawable, when active
+#else
+  id scaler_ = nil;  // stays nil: the scaled frame always goes through the blit
+#endif
   bool createScaler();
   std::unique_ptr<MetalWorld> world_;
   float renderScale_ = 1.0f;
