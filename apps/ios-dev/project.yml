@@ -51,3 +51,14 @@ targets:
       - sdk: ImageIO.framework
       - sdk: CoreGraphics.framework
       - sdk: UniformTypeIdentifiers.framework
+schemes:
+  SplatKitDev:
+    build:
+      targets:
+        SplatKitDev: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release
