@@ -25,8 +25,9 @@ struct GpuWorldInfo {
   int shDegree = 0;
 };
 
-// Screen-tile ownership from the last completed hybrid frame. All zero when
-// unavailable. Compute includes background tiles; nonemptyCompute excludes them.
+// Screen-tile ownership of the last completed frame for a backend that rasterises some
+// tiles in compute. No backend does today, so every field is zero. Compute includes
+// background tiles; nonemptyCompute excludes them.
 struct ScreenTileStats {
   uint32_t compute = 0;
   uint32_t nonemptyCompute = 0;
