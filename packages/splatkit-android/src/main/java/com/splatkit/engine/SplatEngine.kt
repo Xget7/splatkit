@@ -8,6 +8,7 @@ import com.splatkit.CameraRequest
 import com.splatkit.CameraResolution
 import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
+import com.splatkit.LensSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
 import com.splatkit.SplatStats
@@ -147,6 +148,14 @@ internal class SplatEngine {
     fun setCharacter(settings: CharacterSettings): Boolean =
         nativeSetCharacter(handle, settings.eyeHeight, settings.bodyRadius, settings.stepHeight)
 
+    /** False when a value is out of range; the previous lens stays. */
+    fun setLens(settings: LensSettings): Boolean {
+        val range = settings.depthRange
+        return nativeSetLens(
+            handle, settings.fieldOfViewDegrees != null, settings.fieldOfViewDegrees ?: 0f,
+            range != null, range?.nearPlane ?: 0f, range?.farPlane ?: 0f)
+    }
+
     fun setAttitude(rowMajor: FloatArray) = nativeSetAttitude(handle, rowMajor)
     fun setMotionEnabled(enabled: Boolean) = nativeSetMotionEnabled(handle, enabled)
 
@@ -259,6 +268,14 @@ internal class SplatEngine {
         eyeHeight: Float,
         bodyRadius: Float,
         stepHeight: Float,
+    ): Boolean
+    private external fun nativeSetLens(
+        handle: Long,
+        hasFieldOfView: Boolean,
+        fieldOfViewDegrees: Float,
+        hasDepthRange: Boolean,
+        nearPlane: Float,
+        farPlane: Float,
     ): Boolean
     private external fun nativeLook(handle: Long, deltaYaw: Float, deltaPitch: Float)
     private external fun nativeWalk(handle: Long, forward: Float, right: Float)

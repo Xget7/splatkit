@@ -340,6 +340,20 @@ class SplatSurfaceView @JvmOverloads constructor(
         private set
 
     /**
+     * The lens: vertical field of view and depth range. Applies at once and reframes the
+     * default orbit. False when a value is out of range, and then the previous lens stays.
+     */
+    fun setLens(settings: LensSettings): Boolean {
+        val accepted = renderThread.setLens(settings)
+        if (accepted) lens = settings
+        return accepted
+    }
+
+    /** The lens in effect. */
+    var lens = LensSettings()
+        private set
+
+    /**
      * Runs a reproducible capture: the gyroscope goes off, the camera takes a fixed pose
      * and turns once over [seconds], then the frame time distribution is logged.
      * Starts as soon as a world is loaded.

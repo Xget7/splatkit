@@ -82,6 +82,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `look(deltaYaw, deltaPitch)` | Turns the camera by radians, for a look pad or mouse. |
 | `touchLookEnabled`, `lookSensitivity` | Whether a one-finger drag turns the camera, and radians per pixel dragged. |
 | `setCharacter(CharacterSettings)`, `character` | The walker's shape in walk mode: `eyeHeight`, `bodyRadius`, `stepHeight`. |
+| `setLens(LensSettings)`, `lens` | Vertical `fieldOfViewDegrees` (10-120) and `depthRange` (near and far planes, at most 100,000:1); null keeps the default 65 degrees and 0.05-200. Applies at once and reframes the default orbit; false keeps the previous lens. |
 | `cameraPoseIntervalMillis`, `cameraPoseListener` | Milliseconds between pose callbacks, and the callback itself; 0, the default, never reports. |
 | `isAvailable`, `gpuDescription` | Renderer availability and driver description. |
 | `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. Only `sortDepth` and `subpixelThreshold` apply, with GPU visibility; other fields fall back with a warning each. |

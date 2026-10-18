@@ -335,6 +335,17 @@ SPLATKIT_JNI(jboolean, nativeSetCharacter)
   return toJni(engine->setCharacter(character));
 }
 
+SPLATKIT_JNI(jboolean, nativeSetLens)
+(JNIEnv*, jobject, jlong handle, jboolean hasFieldOfView, jfloat fieldOfViewDegrees,
+ jboolean hasDepthRange, jfloat nearPlane, jfloat farPlane) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return JNI_FALSE;
+  splatkit::LensSettings settings;
+  if (hasFieldOfView) settings.fieldOfViewDegrees = fieldOfViewDegrees;
+  if (hasDepthRange) settings.depthRange = splatkit::DepthRange{nearPlane, farPlane};
+  return toJni(engine->setLens(settings));
+}
+
 // `rowMajor` is the 3x3 device to reference rotation as Android hands it out.
 SPLATKIT_JNI(void, nativeSetAttitude)(JNIEnv* env, jobject, jlong handle, jfloatArray rowMajor) {
   auto* engine = toEngine(handle);

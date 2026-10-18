@@ -11,6 +11,7 @@ import com.splatkit.CameraRequest
 import com.splatkit.CameraResolution
 import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
+import com.splatkit.LensSettings
 import com.splatkit.WorldPoint
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
@@ -202,6 +203,9 @@ internal class RenderThread {
         runBlockingOnThread { accepted = engine?.setCharacter(settings) ?: false }
         return accepted
     }
+
+    /** Waits: the caller learns whether the lens was in range. */
+    fun setLens(settings: LensSettings): Boolean = booleanOnRenderThread { engine?.setLens(settings) ?: false }
 
     fun setMotionEnabled(enabled: Boolean) = post { engine?.setMotionEnabled(enabled) }
 
