@@ -162,6 +162,15 @@ A tileset loads with `kind: WorldKind.tileset` and `filePath` naming its `tilese
 `world` is a transaction, not a setting.
 Native reloads when `requestId` changes and ignores every other edit to the object, so changing a load-time budget means changing the id too.
 
+### The lens
+
+`fieldOfViewDegrees` (vertical, 10 to 120) and the depth range `nearPlane`/`farPlane` (world units, set both or neither) are optional `world` fields.
+Absent, native keeps its default of 65 degrees and 0.05 to 200.
+The default orbit frames the world through whichever lens is in effect.
+The far plane may be at most 100,000 times the near one; past that the shaders lose it to float precision.
+Splats past the far plane are not drawn, so a world larger than 200 units needs a farther one.
+16-bit sort keys span the depth range, so pair a far plane well past 200 with a 32-bit `sortDepth`.
+
 ### Getting a world file onto a device
 
 Worlds are not bundled with the app.
@@ -331,7 +340,7 @@ const configuration = new SplatKitBuilder()
 // <SplatKitView {...toNativeViewProps(configuration)} policy={toNativePolicyProp(configuration, revision)} />
 ```
 
-- `withWorld()` takes world identity, file path, an optional `kind` and the load-time maximum SH degree.
+- `withWorld()` takes world identity, file path, an optional `kind`, the load-time maximum SH degree and an optional [lens](#the-lens).
 - `withRender()` takes `paused`.
 - `withPreset(preset)` replaces the policy with one of the presets below.
 - `withPerformance(options)` overrides fields on top of the current preset and marks the policy `manual`.
@@ -383,7 +392,7 @@ Extends the standard `ViewProps`.
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `kind` (absent is `WorldKind.file`), `maxShDegree`, `lodCapacitySplats`, `residencyCapacitySplats`. Omit to render nothing. |
+| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `kind` (absent is `WorldKind.file`), `maxShDegree`, `lodCapacitySplats`, `residencyCapacitySplats`, and the optional [lens](#the-lens) `fieldOfViewDegrees`, `nearPlane`, `farPlane`. Omit to render nothing. |
 | `collider` | `ColliderRequest` | - | `{requestId, filePath}`. An empty `requestId` releases walk mode. |
 | `character` | `Character` | - | `{eyeHeight, bodyRadius, stepHeight}` in meters. |
 | `policy` | `NativeRenderPolicy` | - | The requested renderer policy, under a `revision`. |

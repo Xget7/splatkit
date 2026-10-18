@@ -1,5 +1,7 @@
 package com.splatkit.reactnative
 
+import com.splatkit.DepthRange
+import com.splatkit.LensSettings
 import java.io.File
 
 // What the Vulkan backend accepts, which conservativeCapabilities in performance.ts must fit.
@@ -7,6 +9,10 @@ private const val MAX_LOD_CAPACITY_SPLATS = 2_200_000
 private const val MIN_RESIDENCY_CAPACITY_SPLATS = 100_000
 private const val MAX_RESIDENCY_CAPACITY_SPLATS = 8_000_000
 private const val MAX_SH_DEGREE = 3
+// The lens the engine accepts, which validateWorldRequest in contracts.ts must match.
+private const val MIN_FIELD_OF_VIEW_DEGREES = 10f
+private const val MAX_FIELD_OF_VIEW_DEGREES = 120f
+private const val MAX_DEPTH_RANGE_RATIO = 100_000f
 
 /** Stats leave the adapter at most twice a second. */
 internal const val STATS_INTERVAL_MILLIS = 500L
@@ -31,7 +37,15 @@ internal data class WorldRequest(
     val maxShDegree: Int,
     val lodCapacitySplats: Int,
     val residencyCapacitySplats: Int,
+    /** Null keeps the engine default, as do both planes left null. */
+    val fieldOfViewDegrees: Float? = null,
+    val nearPlane: Float? = null,
+    val farPlane: Float? = null,
 ) {
+    val lens: LensSettings
+        get() = LensSettings(fieldOfViewDegrees,
+            if (nearPlane != null && farPlane != null) DepthRange(nearPlane, farPlane) else null)
+
     fun validate() {
         requireRequestId(requestId)
         requireLocalPath(filePath)
@@ -44,6 +58,18 @@ internal data class WorldRequest(
         }
         require(residencyCapacitySplats in MIN_RESIDENCY_CAPACITY_SPLATS..MAX_RESIDENCY_CAPACITY_SPLATS) {
             "residencyCapacitySplats must be in $MIN_RESIDENCY_CAPACITY_SPLATS..$MAX_RESIDENCY_CAPACITY_SPLATS"
+        }
+        fieldOfViewDegrees?.let {
+            require(it in MIN_FIELD_OF_VIEW_DEGREES..MAX_FIELD_OF_VIEW_DEGREES) {
+                "fieldOfViewDegrees must be in $MIN_FIELD_OF_VIEW_DEGREES..$MAX_FIELD_OF_VIEW_DEGREES"
+            }
+        }
+        require((nearPlane == null) == (farPlane == null)) { "nearPlane and farPlane must be set together" }
+        if (nearPlane != null && farPlane != null) {
+            require(nearPlane > 0f && farPlane.isFinite() && farPlane > nearPlane &&
+                farPlane / nearPlane <= MAX_DEPTH_RANGE_RATIO) {
+                "farPlane must be finite, beyond a positive nearPlane and at most $MAX_DEPTH_RANGE_RATIO times it"
+            }
         }
         requireReadableFile(filePath)
     }

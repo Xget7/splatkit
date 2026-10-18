@@ -1,5 +1,7 @@
 package com.splatkit.reactnative
 
+import com.splatkit.DepthRange
+import com.splatkit.LensSettings
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -47,6 +49,26 @@ class WorldSessionTest {
                 valid.copy(kind = -1), valid.copy(kind = 2),
                 valid.copy(maxShDegree = 4), valid.copy(lodCapacitySplats = 2_200_001),
                 valid.copy(residencyCapacitySplats = 99_999)).forEach {
+                assertThrows(IllegalArgumentException::class.java) { it.validate() }
+            }
+        } finally { file.delete() }
+    }
+
+    @Test fun anAbsentLensKeepsTheDefaultAndASetOneIsInRange() {
+        val file = File.createTempFile("splat-request", ".spz")
+        try {
+            val valid = WorldRequest("request", file.absolutePath, WorldKind.FILE, 3, 0, 2_000_000)
+            valid.validate()
+            assertEquals(LensSettings(), valid.lens)
+            val set = valid.copy(fieldOfViewDegrees = 90f, nearPlane = 0.5f, farPlane = 50_000f)
+            set.validate()
+            assertEquals(LensSettings(90f, DepthRange(0.5f, 50_000f)), set.lens)
+            listOf(valid.copy(fieldOfViewDegrees = 9.9f), valid.copy(fieldOfViewDegrees = 120.1f),
+                valid.copy(fieldOfViewDegrees = Float.NaN), valid.copy(nearPlane = 0.05f),
+                valid.copy(farPlane = 1000f), valid.copy(nearPlane = -1f, farPlane = 10f),
+                valid.copy(nearPlane = 2f, farPlane = 1f), valid.copy(nearPlane = 1f, farPlane = Float.NaN),
+                valid.copy(nearPlane = 1f, farPlane = Float.POSITIVE_INFINITY),
+                valid.copy(nearPlane = 0.5f, farPlane = 50_001f)).forEach {
                 assertThrows(IllegalArgumentException::class.java) { it.validate() }
             }
         } finally { file.delete() }

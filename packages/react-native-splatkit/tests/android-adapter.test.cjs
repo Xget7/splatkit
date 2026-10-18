@@ -86,6 +86,25 @@ test('conservativeCapabilities fit the ranges the Android adapter accepts', () =
     'maxResidencyCapacitySplats exceeds the adapter maximum');
 });
 
+// A lens the JS contract accepts but the adapter refuses fails the load with no field named.
+test('the Android adapter accepts the lens ranges the JS contract declares', () => {
+  const kotlin = read('android/src/main/java/com/splatkit/reactnative/WorldSession.kt');
+  const constant = name => {
+    const match = kotlin.match(new RegExp(`const val ${name} = (\\d[\\d_]*)f`));
+    assert.ok(match, `WorldSession must state ${name}`);
+    return Number(match[1].replace(/_/g, ''));
+  };
+  const validation = require('../build/validation.js');
+  for (const name of ['MIN_FIELD_OF_VIEW_DEGREES', 'MAX_FIELD_OF_VIEW_DEGREES',
+    'MAX_DEPTH_RANGE_RATIO']) {
+    assert.equal(constant(name), validation[name], name);
+  }
+  // The engine the world builds takes the lens before its decode is queued.
+  const view = read('android/src/main/java/com/splatkit/reactnative/SplatKitView.kt');
+  assert.match(view, /if \(!applyLens\(view, world, token\)\) return\s*scheduleDecode\(view, world\)/);
+  assert.match(view, /fun applyLens[^{]*\{\s*if \(view\.setLens\(world\.lens\)\) return true/);
+});
+
 // The wire spellings exist in the JS contracts, the codegen spec and each adapter; Kotlin
 // compares against its own constants, so a drifted spelling has to fail here.
 test('Android wire constants spell the values the JS contracts declare', () => {

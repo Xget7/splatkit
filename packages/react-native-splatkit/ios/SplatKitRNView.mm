@@ -484,8 +484,9 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
 
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
       maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
-residencyCapacity:(NSInteger)residencyCapacity {
-  if (![self validateRequestId:requestId path:path kind:kind maxShDegree:maxShDegree]) {
+residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
+  if (![self validateRequestId:requestId path:path kind:kind maxShDegree:maxShDegree] ||
+      ![SKSplatEngine acceptsLens:lens]) {
     [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
              message:@"invalid world request"];
     return;
@@ -509,6 +510,7 @@ residencyCapacity:(NSInteger)residencyCapacity {
   [engine setMaxShDegree:(int)MIN(MAX(maxShDegree, 0), kMaxShDegree)];
   [engine setSplatBudget:(int)MAX(lodCapacity, 0)];
   [engine setResidencyBudget:(int)MAX(residencyCapacity, 1)];
+  [engine setLens:lens];
   [engine setRenderScale:(float)self.renderScale];
   [engine setShDegree:(int)self.shDegree];
   [engine setLinearBlending:self.linearBlending];

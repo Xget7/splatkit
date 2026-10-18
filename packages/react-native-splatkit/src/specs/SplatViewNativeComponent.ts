@@ -10,6 +10,11 @@ type NativeWorldRequest = Readonly<{
   maxShDegree: CodegenTypes.Int32;
   lodCapacitySplats: CodegenTypes.Int32;
   residencyCapacitySplats: CodegenTypes.Int32;
+  /** Vertical degrees; 0, as absent arrives, keeps the native default. */
+  fieldOfViewDegrees?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
+  /** World units, both or neither; 0 keeps the native default range. */
+  nearPlane?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
+  farPlane?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
 }>;
 
 /** Immutable collider transaction, the walk-mode counterpart of a world request. */

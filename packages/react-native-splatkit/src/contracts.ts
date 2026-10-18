@@ -1,7 +1,10 @@
 import {
+  MAX_DEPTH_RANGE_RATIO,
+  MAX_FIELD_OF_VIEW_DEGREES,
   MAX_INT32,
   MAX_RENDER_SCALE,
   MAX_SH_DEGREE,
+  MIN_FIELD_OF_VIEW_DEGREES,
   MIN_RENDER_SCALE,
   integer,
   range,
@@ -37,6 +40,16 @@ export type WorldRequest = Readonly<{
   lodCapacitySplats: number;
   /** Resident streaming splats of a tileset, NOT bytes or a process memory guarantee. */
   residencyCapacitySplats: number;
+  /** Vertical, 10 to 120 degrees. Absent keeps the native default of 65. */
+  fieldOfViewDegrees?: number;
+  /**
+   * The depth range drawn, in world units; set both planes or neither. Absent keeps the
+   * native default of 0.05 to 200. The far plane may be at most 100,000 times the near one.
+   * Splats past the far plane are not drawn, and a farther one coarsens 16-bit sort keys,
+   * which span the range: pair a far plane well past 200 with a 32-bit `sortDepth`.
+   */
+  nearPlane?: number;
+  farPlane?: number;
 }>;
 
 export type RenderOptions = Readonly<{
@@ -140,6 +153,29 @@ export function validateWorldRequest(request: WorldRequest, limits: SplatLimits)
   integer('lodCapacitySplats', request.lodCapacitySplats, 0, limits.maxLodCapacitySplats);
   integer('residencyCapacitySplats', request.residencyCapacitySplats,
     limits.minResidencyCapacitySplats, limits.maxResidencyCapacitySplats);
+  validateLens(request);
+}
+
+// Native reads these as float32, and the wire carries zero for an absent field.
+function validateLens(request: WorldRequest): void {
+  if (request.fieldOfViewDegrees !== undefined) {
+    range('fieldOfViewDegrees', request.fieldOfViewDegrees, MIN_FIELD_OF_VIEW_DEGREES,
+      MAX_FIELD_OF_VIEW_DEGREES);
+  }
+  const {nearPlane, farPlane} = request;
+  if (nearPlane === undefined && farPlane === undefined) return;
+  if (nearPlane === undefined || farPlane === undefined) {
+    throw new TypeError('nearPlane and farPlane must be set together');
+  }
+  const near = Math.fround(nearPlane);
+  const far = Math.fround(farPlane);
+  if (!Number.isFinite(nearPlane) || !(near > 0)) {
+    throw new RangeError('nearPlane must be finite and positive');
+  }
+  if (!Number.isFinite(far) || !(far > near) || far / near > MAX_DEPTH_RANGE_RATIO) {
+    throw new RangeError(
+      `farPlane must be finite, beyond nearPlane and at most ${MAX_DEPTH_RANGE_RATIO} times it`);
+  }
 }
 
 export function validateColliderRequest(request: ColliderRequest): void {

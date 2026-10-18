@@ -58,6 +58,45 @@ test('residency is a separate bounded count, not a byte or quality budget', () =
   assert.doesNotThrow(() => validateWorldRequest({...request, residencyCapacitySplats: 8000000}, limits));
 });
 
+test('a lens field left out keeps the native default, and a set one is in range', () => {
+  assert.doesNotThrow(() => validateWorldRequest({...request, fieldOfViewDegrees: 10}, limits));
+  assert.doesNotThrow(() => validateWorldRequest({...request, fieldOfViewDegrees: 120}, limits));
+  for (const fieldOfViewDegrees of [0, 9.99, 120.01, NaN, Infinity, -65]) {
+    assert.throws(() => validateWorldRequest({...request, fieldOfViewDegrees}, limits), RangeError);
+  }
+});
+
+test('the depth range comes as a pair the shaders can read back', () => {
+  assert.doesNotThrow(() =>
+    validateWorldRequest({...request, nearPlane: 0.5, farPlane: 50000}, limits));
+  for (const planes of [{nearPlane: 0.05}, {farPlane: 1000}]) {
+    assert.throws(() => validateWorldRequest({...request, ...planes}, limits), TypeError);
+  }
+  for (const [nearPlane, farPlane] of [[0, 10], [-1, 10], [1, 1], [2, 1], [NaN, 10],
+    [1, NaN], [1, Infinity], [0.5, 50001], [1e-50, 1], [1, 1 + 1e-12]]) {
+    assert.throws(() => validateWorldRequest({...request, nearPlane, farPlane}, limits),
+      RangeError, `${nearPlane}..${farPlane}`);
+  }
+});
+
+// The iOS adapter defers to the engine's own check, so its ranges are the contract's. The
+// engine sources are only available in the monorepo.
+test('the engine accepts the lens ranges the contract declares', t => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const header = path.join(__dirname, '../../splatkit-engine/include/splatkit/camera/Lens.h');
+  if (!fs.existsSync(header)) {
+    t.skip('the engine sources are only available in the monorepo');
+    return;
+  }
+  const lens = fs.readFileSync(header, 'utf8');
+  const constant = name => Number(lens.match(new RegExp(`constexpr float ${name} = (\\d+);`))?.[1]);
+  const validation = require('../build/validation.js');
+  assert.equal(constant('kMinFieldOfViewDegrees'), validation.MIN_FIELD_OF_VIEW_DEGREES);
+  assert.equal(constant('kMaxFieldOfViewDegrees'), validation.MAX_FIELD_OF_VIEW_DEGREES);
+  assert.equal(constant('kMaxDepthRatio'), validation.MAX_DEPTH_RANGE_RATIO);
+});
+
 test('rejects malformed native limits before accepting requests', () => {
   for (const invalid of [{maxLodCapacitySplats: NaN}, {maxLodCapacitySplats: 2 ** 31},
     {minResidencyCapacitySplats: 0}, {maxResidencyCapacitySplats: 99999}]) {

@@ -376,10 +376,20 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         navigationChanged = false
         character?.let(view::setCharacter)
         characterChanged = false
+        if (!applyLens(view, world, token)) return
         scheduleDecode(view, world)
         // This engine is new, so walk mode has to be rebuilt on it.
         loadCollider()
         updateRunning()
+    }
+
+    /** Validated already, so a refusal means the engine and the adapter disagree on a range. */
+    private fun applyLens(view: SplatSurfaceView, world: WorldRequest, token: Long): Boolean {
+        if (view.setLens(world.lens)) return true
+        if (session.accept(token, WorldPhase.FAILED)) {
+            emitWorld(world.requestId, WorldPhase.FAILED, 0, ErrorCode.INVALID_REQUEST, "the engine refused the lens")
+        }
+        return false
     }
 
     /** Queues the engine's sole decode behind the load-time options it reads. */

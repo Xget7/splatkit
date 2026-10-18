@@ -8,6 +8,10 @@ import com.facebook.react.viewmanagers.SplatKitViewManagerDelegate
 import com.facebook.react.viewmanagers.SplatKitViewManagerInterface
 import com.splatkit.CharacterSettings
 
+// Codegen sends an absent lens field as zero or leaves it out; either keeps the engine default.
+private fun ReadableMap.lensField(key: String): Float? =
+    if (hasKey(key) && !isNull(key)) getDouble(key).takeIf { it != 0.0 }?.toFloat() else null
+
 class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManagerInterface<SplatKitView> {
     private val generatedDelegate = SplatKitViewManagerDelegate(this)
     override fun getDelegate(): ViewManagerDelegate<SplatKitView> = generatedDelegate
@@ -23,7 +27,8 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
             val kind = if (value.hasKey("kind") && !value.isNull("kind")) value.int32("kind") else WorldKind.FILE
             view.setWorld(WorldRequest(
                 value.getString("requestId") ?: "", value.getString("filePath") ?: "", kind,
-                value.int32("maxShDegree"), value.int32("lodCapacitySplats"), value.int32("residencyCapacitySplats")))
+                value.int32("maxShDegree"), value.int32("lodCapacitySplats"), value.int32("residencyCapacitySplats"),
+                value.lensField("fieldOfViewDegrees"), value.lensField("nearPlane"), value.lensField("farPlane")))
         } catch (error: RuntimeException) {
             view.invalidRequest(error.message ?: "Malformed world request")
         }

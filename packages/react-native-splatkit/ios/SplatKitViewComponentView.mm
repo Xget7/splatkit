@@ -234,13 +234,22 @@ using namespace facebook::react;
       // An empty request ID means no world; release the current one like Android's null world.
       [_splatView dispose];
     } else {
+      // Absent lens fields arrive as zero. One plane without the other is still a range,
+      // which the engine refuses.
+      SKLensSettings lens{};
+      lens.hasFieldOfView = world.fieldOfViewDegrees != 0;
+      lens.fieldOfViewDegrees = static_cast<float>(world.fieldOfViewDegrees);
+      lens.hasDepthRange = world.nearPlane != 0 || world.farPlane != 0;
+      lens.nearPlane = static_cast<float>(world.nearPlane);
+      lens.farPlane = static_cast<float>(world.farPlane);
       // The engine this load creates applies the stored policy, so it is applied once.
       [_splatView loadWorld:[NSString stringWithUTF8String:world.filePath.c_str()]
                    requestId:[NSString stringWithUTF8String:world.requestId.c_str()]
                         kind:world.kind
                  maxShDegree:world.maxShDegree
                  lodCapacity:world.lodCapacitySplats
-           residencyCapacity:world.residencyCapacitySplats];
+           residencyCapacity:world.residencyCapacitySplats
+                        lens:lens];
       return;
     }
   }

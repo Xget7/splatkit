@@ -52,6 +52,10 @@ A picked anchor is a collider ray hit; without a collider the default is the cen
 Camera movement around an anchor by azimuth, elevation and radius.
 Orbit is fly mode; first-person input resumes walking from the same pose.
 
+**Lens**:
+The view's vertical field of view and depth range; the engine draws, picks and frames the default orbit through it.
+_Avoid_: projection (that is the matrix it makes), frustum, camera settings
+
 **Sort**:
 Ordering splats by camera depth in the direction required by compositing.
 _Avoid_: depth sort, z-order
