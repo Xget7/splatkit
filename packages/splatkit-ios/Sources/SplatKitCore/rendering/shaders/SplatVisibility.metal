@@ -54,13 +54,13 @@ kernel void visibility(uint t [[thread_position_in_grid]],
     }
     Splat s = splats[index];
     visible = projectSplat(cam, s, index, shData, p);
-    float3 d = float3(s.px, s.py, s.pz) - cam.cameraPosition.xyz;
-    // Positive IEEE float bits sort in ascending numeric order. Quantized keys use view
-    // depth, which changes with rotation; otherwise squared distance.
+    // Both key widths order by view depth, which the blend order along a view ray needs;
+    // positive IEEE float bits sort in ascending numeric order. Behind the camera a
+    // negative depth yields a key in the high half, after every visible splat, and
+    // projectSplat has already dropped it.
     float depth = -(cam.view * float4(s.px, s.py, s.pz, 1.0)).z;
-    float sortDepth = kQuantizedDepth ? depth : dot(d, d);
-    key = kQuantizedDepth ? quantizedDepthKey(cam, depth) : as_type<uint>(sortDepth);
-    visible = visible && isfinite(sortDepth);
+    key = kQuantizedDepth ? quantizedDepthKey(cam, depth) : as_type<uint>(depth);
+    visible = visible && isfinite(depth);
   }
   // No lane returns before these collectives, including padded tail lanes.
   uint rank = simd_prefix_exclusive_sum(visible ? 1u : 0u);
