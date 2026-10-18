@@ -44,7 +44,7 @@ enum QualityTier: String, CaseIterable, Identifiable {
     var lodSplatLimit: UInt32 {
         switch self {
         case .ultra: 0
-        case .high: 2_800_000
+        case .high: 1_800_000
         case .balanced: 2_000_000
         case .fast: 1_300_000
         }
