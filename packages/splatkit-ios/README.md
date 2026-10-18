@@ -66,19 +66,8 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 
 ## Raster strategy
 
-Hardware rasterization is the default and the fastest choice for most scenes.
-Hybrid screen tiles are an experimental opt-in for scenes where many large translucent splats overlap each pixel, such as close-up interiors:
-
-```swift
-var policy = splatView.renderPolicy
-policy.raster = 2  // hybrid; 0 restores hardware
-splatView.renderPolicy = policy
-```
-
-They composite 16×16 tiles in compute on top of the GPU's own tiling, so on distant or sparse scenes they only add work.
-ISS at a 45 m orbit on an iPhone 17 Pro drew the same 1.98M splats at 18.9 FPS with tiles and 23.1 FPS without.
-The first request builds the tile pipelines; switching back to hardware frees the tile scratch.
-`computeTile` is not built and falls back to hardware with a warning.
+Hardware rasterization is the only strategy Metal builds.
+A policy that asks for `computeTile` or `hybrid` resolves to hardware with a warning, and `deviceCapabilities.supportsComputeTiles` is false.
 
 Touch: a one-finger drag looks around.
 The view ships no walking control; the host draws its own, wherever it likes, and drives it with `setWalkVelocity` or `walk`.
@@ -87,7 +76,7 @@ The view ships no walking control; the host draws its own, wherever it likes, an
 ## Layout
 
 ```
-Sources/SplatKitCore/rendering/    renderer, world, visibility, radix, LOD, tiles; shaders/ contains MSL
+Sources/SplatKitCore/rendering/    renderer, world, visibility, radix, LOD; shaders/ contains MSL
 Sources/SplatKitCore/engine/       SKSplatEngine, the Objective-C boundary over the shared engine
 Sources/SplatKitCore/include/      the public header Swift imports
 Sources/SplatKit/                  RenderThread, MotionInput, SplatMetalView
@@ -107,12 +96,11 @@ Colours blend in the encoded space by default, on a `bgra8Unorm` layer; `linearB
 Start motion after `splatView(_:worldFrameReady:)`, not upload-only `worldReady`.
 Keep the view attached/resumed while loading; readiness means GPU completion, not visual acceptance.
 
-Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels`, `--lod-splat-limit` and `--tile-raster` set the view's `renderPolicy`, the rest apply before renderer creation:
+Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels` and `--lod-splat-limit` set the view's `renderPolicy`, the rest apply before renderer creation:
 
 | Switch | Effect |
 |---|---|
 | `--depth-key-bits 16` | Two radix passes; uint32 storage unchanged; ties may shimmer |
-| `--tile-raster 1` | Hybrid raster: 16×16 tiles, compute ≤512 candidates, dense/large-footprint tiles use hardware |
 | `--budget 4000000` | LOD capacity, at most 4M; not guaranteed quality |
 | `--quality ultra` | Starting level of the on-screen picker: `ultra`, `high` (default), `balanced`, `fast` |
 | `--shot tour` | ISS camera, +Y up: `overview`, `orbit` (default), `detail`, `flyby`, `tour` |
@@ -120,7 +108,6 @@ Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels`, `--lod
 
 Defaults: 32-bit sorting, hardware raster.
 Culling, LOD and depth quantization are approximations pending visual acceptance.
-Tile termination uses transmittance ≤0.0001; hardware geometry submission remains.
 Private allocations still consume unified memory.
 The dev memory guard cannot cancel in-flight work or prevent allocation spikes.
 
@@ -135,6 +122,5 @@ Selection feeds visibility → radix → raster; denied refinements retain paren
 The hierarchy stays resident, without Hi-Z or temporal transitions.
 
 Stats: `loadedSplatCount` counts source splats; `drawnSplatCount` counts completed draw candidates.
-Tile counts distinguish compute, nonempty compute and hardware screen tiles.
 Command timings overlap; HUD sort includes visibility/radix.
 [Phone measurements](../../docs/BENCHMARKS.md) record settings, evidence and visual limitations.

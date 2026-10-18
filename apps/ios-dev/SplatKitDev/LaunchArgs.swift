@@ -21,11 +21,6 @@ import Foundation
 /// Quantization can change transparency ordering within a bin; no splats are removed.
 /// --lod-error-pixels <px> sets the hierarchy refinement threshold (default 1; lower draws more).
 /// --lod-splat-limit <n> caps the splats a frame selects, 0 for the loaded budget; detail thins evenly.
-/// --tile-raster 1 sets the view's raster policy to hybrid: bounded 16x16 compute compositing,
-/// with T <= 0.0001. It helps only where many large splats overlap; ISS orbits run slower.
-/// Hardware fallback retains its existing 254/255 opacity coverage mask.
-/// Dense tiles (>512 candidates) and tiles touched by large footprints (>16 tiles)
-/// use hardware completion, never truncated lists. Scratch is capped at 128 MiB.
 /// --quality <ultra|high|balanced|fast> picks the starting level (default high) unless --scale,
 /// --shdraw or --depth-key-bits set the renderer directly.
 /// --shot <overview|orbit|detail|flyby|tour> picks the ISS camera shot (default orbit).

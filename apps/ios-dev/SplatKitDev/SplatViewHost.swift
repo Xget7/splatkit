@@ -6,8 +6,6 @@ import os
 /// The one SplatMetalView of the app, shared with SwiftUI through an observable owner so
 /// the HUD can read stats and push settings without recreating the view.
 final class SplatSession: ObservableObject {
-    /// `SKRenderPolicy.raster`: 0 hardware, 1 computeTile, 2 hybrid.
-    private let hybridRaster: UInt32 = 2
     private let pollInterval = 0.5
     /// 30 seconds of history at the polling rate.
     private let fpsHistoryLength = 60
@@ -66,7 +64,6 @@ final class SplatSession: ObservableObject {
         if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
         if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
         if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }
-        if args.bool("tile-raster") ?? false { policy.raster = hybridRaster }
         view.renderPolicy = policy
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities

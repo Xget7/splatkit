@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "rendering/MetalLOD.h"
-#include "rendering/MetalTileRaster.h"
 #include "rendering/MetalVisibility.h"
 #include "rendering/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -90,10 +89,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   float lodPixels() const { return lodPixels_; }
   uint32_t lastLodLimitedCount() const { return lod_ ? lastLodLimitedCount_.load() : 0; }
   uint32_t lastLodEvaluatedCount() const { return lod_ ? lastLodEvaluatedCount_.load() : 0; }
-  ScreenTileStats lastScreenTileStats() const override {
-    if (gpuFailed_.load()) return {};
-    return {lastComputeTiles_.load(), lastNonemptyComputeTiles_.load(), lastHardwareTiles_.load()};
-  }
   bool reportsPresentTimes() const override { return true; }
   uint32_t takePresentTimes(std::vector<int64_t>* times) override;
   const std::string& deviceDescription() const override { return description_; }
@@ -115,15 +110,14 @@ class MetalSplatRenderer final : public SplatRenderer {
   // Encode only: draw() commits these in dependency order after validation succeeds.
   id<MTLCommandBuffer> encodeSelection(uint32_t slot);
   id<MTLCommandBuffer> encodeVisibilityAndSort(const Frame& frame, uint32_t slot);
-  bool encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture, const Frame& frame,
+  void encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture, const Frame& frame,
                     uint32_t slot, uint32_t drawCount, bool gpuOrder);
   void encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture);
   id<MTLBuffer> encodeCapture(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture,
                               CaptureHandler* onCapture);
   // Transfers the acquired inFlight_ slot to the final completion handler.
-  void submitFrame(id<MTLCommandBuffer> cmd, id<CAMetalDrawable> drawable, uint32_t slot,
-                   bool tileRendered, bool drewWorld, id<MTLBuffer> captured,
-                   CaptureHandler onCapture);
+  void submitFrame(id<MTLCommandBuffer> cmd, id<CAMetalDrawable> drawable, bool drewWorld,
+                   id<MTLBuffer> captured, CaptureHandler onCapture);
 
   id<MTLDevice> device_ = nil;
   id<MTLCommandQueue> queue_ = nil;
@@ -176,18 +170,11 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t lodAdaptedReadback_ = 0;
   void adaptLodThreshold();
   MetalRadixSort::KeyBits depthBits_ = MetalRadixSort::KeyBits::Full32;
-  MetalTileRaster tileRaster_;
-  // Pipelines exist once a view first asks for hybrid tiles; computeRaster_ is the policy.
-  bool tileRasterReady_ = false;
-  bool computeRaster_ = false;
   // A GPU error latches this renderer off. Never repeatedly resubmit failed work.
   std::atomic<bool> gpuFailed_{false};
   bool gpuSort_ = false;
   std::atomic<double> lastSortMillis_{0};
   std::atomic<uint32_t> lastDrawCount_{0};
-  std::atomic<uint32_t> lastComputeTiles_{0};
-  std::atomic<uint32_t> lastNonemptyComputeTiles_{0};
-  std::atomic<uint32_t> lastHardwareTiles_{0};
   CaptureHandler capture_;
   std::string description_;
 };

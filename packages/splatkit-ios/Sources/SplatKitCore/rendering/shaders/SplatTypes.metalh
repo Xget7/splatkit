@@ -74,7 +74,6 @@ struct DrawArguments {
 constant float kSplatDepth = 0.5;
 constant float kMaskDepth = 0.25;
 constant float kSaturated = 254.0 / 255.0;  // coverage at which a pixel counts as opaque
-constant float3 kBackground = float3(0.05, 0.05, 0.08);  // kBackground in MetalSplatRenderer.mm
 
 // A quad stops where the Gaussian falls to kQuadMinAlpha, and never past these radii: a blob at
 // 2.5 sigma keeps 4 % of its peak, and an LOD opacity of 1000 stays visible out to 4.9 sigma.

@@ -34,7 +34,6 @@ add_library(splatkit_ios STATIC
   Sources/SplatKitCore/rendering/MetalVisibility.mm
   Sources/SplatKitCore/rendering/MetalLOD.mm
   Sources/SplatKitCore/rendering/MetalRadixSort.mm
-  Sources/SplatKitCore/rendering/MetalTileRaster.mm
   Sources/SplatKitCore/rendering/MetalWorld.mm
   Sources/SplatKitCore/engine/SKSplatEngine.mm
 )

@@ -61,8 +61,7 @@ public struct SplatStats {
     /// Last completed visibility/order result, refreshed twice a second without a GPU wait.
     /// This counts submitted splats, not splats contributing a visible pixel after occlusion.
     public var drawnSplatCount: Int = 0
-    /// Screen tiles completed by compute, including background-only tiles.
-    /// All tile counts are zero when hybrid diagnostics are unavailable.
+    /// Screen tiles completed by compute; zero while the renderer has no tile path.
     public var computeTileCount: Int = 0
     /// Compute tiles whose candidate list contains at least one splat.
     public var nonemptyComputeTileCount: Int = 0

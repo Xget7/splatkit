@@ -82,9 +82,7 @@ typedef struct {
 
 /// The renderer-applicable policy. Mirror of the host contract: raster 0 hardware,
 /// 1 computeTile, 2 hybrid; tileSize 8/16/32; sortDepth 16/32.
-/// Hardware is the default and the fastest choice for most scenes. Hybrid screen tiles are
-/// an opt-in for scenes where many large translucent splats overlap each pixel, such as
-/// close-up interiors; on distant or sparse scenes they add GPU work and lower the frame rate.
+/// Metal builds hardware only; computeTile and hybrid requests resolve to it with a warning.
 typedef struct {
   uint32_t raster;
   uint32_t tileSize;

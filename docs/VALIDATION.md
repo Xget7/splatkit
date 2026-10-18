@@ -67,5 +67,5 @@ Host callbacks may remain display-paced even when presentation vsync is disabled
 | RN policy prop, capability and policy events | Physical iPhone 17 Pro | Physical Mi 9: revisions, fallback warnings, preset reloads, background; rejection host-tested only |
 
 Shared functionality does not imply identical internal algorithms or timing semantics.
-Hybrid screen tiles are a Metal strategy for Apple's tile-based GPUs, not a parity gate, and PNG capture is a Metal validation aid.
+PNG capture is a Metal validation aid.
 Consistent stage diagnostics remain open; there is no equivalent-feature or universal 30/60 FPS claim.
