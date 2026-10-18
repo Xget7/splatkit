@@ -122,6 +122,21 @@ test('a world is one file unless it names a tileset, which keeps its residency b
   }
 });
 
+test('a world carries its lens to the native props and the build validates it', () => {
+  const lens = {fieldOfViewDegrees: 30, nearPlane: 0.05, farPlane: 4};
+  const config = new SplatKitBuilder().withWorld({...world, ...lens}).build(capabilities);
+  assert.deepEqual(
+    {fieldOfViewDegrees: config.world.fieldOfViewDegrees, nearPlane: config.world.nearPlane,
+      farPlane: config.world.farPlane}, lens);
+  assert.equal(toNativeViewProps(config).world.farPlane, lens.farPlane);
+  assert.throws(
+    () => new SplatKitBuilder().withWorld({...world, fieldOfViewDegrees: 5}).build(capabilities),
+    RangeError);
+  assert.throws(
+    () => new SplatKitBuilder().withWorld({...world, nearPlane: 0.05}).build(capabilities),
+    TypeError);
+});
+
 test('clamps valid requests to supplied limits and reports each fallback', () => {
   const limited = {
     ...capabilities,

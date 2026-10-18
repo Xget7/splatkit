@@ -351,7 +351,12 @@ const presets: Readonly<Record<QualityPreset, PresetValues>> = {
 };
 
 const optionKeys = new Set<string>([...loadKeys, ...propKeys, 'targetFps']);
-const worldKeys = new Set<string>(['requestId', 'filePath', 'kind', 'maxShDegree']);
+// Keyed by the type, so a new world field fails to compile until withWorld accepts it.
+const worldFields: Readonly<Record<keyof SplatKitWorldRequest, true>> = {
+  requestId: true, filePath: true, kind: true, maxShDegree: true,
+  fieldOfViewDegrees: true, nearPlane: true, farPlane: true,
+};
+const worldKeys = new Set<string>(Object.keys(worldFields));
 const policyPropKeys = [
   'raster', 'tileSize', 'lodErrorPixels', 'alphaThreshold', 'subpixelThreshold',
   'enableFrustumCulling', 'enableHiZOcclusion', 'enableEarlyTermination', 'sortDepth',
