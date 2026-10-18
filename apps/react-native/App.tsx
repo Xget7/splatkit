@@ -140,12 +140,12 @@ const SORT_DEPTH = 16;
  * and the residency a tileset streams within. Past about two million drawn the depth sort
  * costs as much as the rasteriser in a dense room, so the top tiers stop well short of the
  * four million the backend allows. A different budget reloads the world, so switching
- * between two tiers with different budgets is a reload, not just a change of resolution.
+ * between two tiers with different budgets reloads it.
  */
 const SPLAT_BUDGETS: Readonly<Record<QualityPreset, number>> = Object.freeze({
   [QualityPreset.highEnd]: 2_500_000,
   [QualityPreset.high]: 1_800_000,
-  [QualityPreset.balanced]: 2_000_000,
+  [QualityPreset.balanced]: 1_500_000,
   [QualityPreset.performance]: 1_000_000,
 });
 

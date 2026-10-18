@@ -45,8 +45,8 @@ enum QualityTier: String, CaseIterable, Identifiable {
         switch self {
         case .ultra: 0
         case .high: 1_800_000
-        case .balanced: 2_000_000
-        case .fast: 1_300_000
+        case .balanced: 1_500_000
+        case .fast: 1_000_000
         }
     }
 
