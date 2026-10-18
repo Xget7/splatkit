@@ -375,7 +375,8 @@ public final class SplatMetalView: UIView {
     public private(set) var character = CharacterSettings()
 
     /// The lens: vertical field of view and depth range. Applies at once and reframes the
-    /// default orbit. False when a value is out of range, and then the previous lens stays.
+    /// default orbit. False when a value is out of range or the view has no engine, and then
+    /// the previous lens stays.
     @discardableResult
     public func setLens(_ settings: LensSettings) -> Bool {
         let accepted = renderThread.setLens(SKLensSettings(
