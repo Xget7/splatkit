@@ -79,7 +79,7 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   if (layer_ == nil) return;
   layer_.device = device_;
   layer_.pixelFormat = pixelFormat();
-  layer_.framebufferOnly = scaler_ == nil;
+  layer_.framebufferOnly = YES;
   ++generation_;
   if (pipelineFormat_ != targetFormat() && !createPipelines()) {
     LOGE("rendering stopped: no pipelines");
@@ -249,10 +249,11 @@ bool MetalSplatRenderer::createTarget() {
   return createScaler();
 }
 
-// MetalFX reads the whole scaled target and writes the drawable, so the drawable must be
-// shader-writable: the layer stops being framebuffer-only while a scaler exists.
+// MetalFX requires a private-storage output, which the iOS drawable is not, so the scaler
+// writes upscaled_ at drawable size and the blit pass copies that to the drawable.
 bool MetalSplatRenderer::createScaler() {
   scaler_ = nil;
+  upscaled_ = nil;
   const bool wanted = spatialUpscaling_ && target_ != nil && renderScale_ < 1.0f;
 #if SPLATKIT_HAS_METALFX
   if (wanted) {
@@ -276,6 +277,20 @@ bool MetalSplatRenderer::createScaler() {
       } else {
         scaler_.inputContentWidth = target_.width;
         scaler_.inputContentHeight = target_.height;
+        MTLTextureDescriptor* out =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat()
+                                                               width:width_
+                                                              height:height_
+                                                           mipmapped:NO];
+        out.usage =
+            MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite | MTLTextureUsageRenderTarget;
+        out.storageMode = MTLStorageModePrivate;
+        upscaled_ = [device_ newTextureWithDescriptor:out];
+        if (upscaled_ == nil) {
+          LOGE("MetalFX output %ux%u failed; the scaled frame is blitted", width_, height_);
+          scaler_ = nil;
+          return true;
+        }
         LOGI("MetalFX spatial scaler %lux%lu to %ux%u", static_cast<unsigned long>(target_.width),
              static_cast<unsigned long>(target_.height), width_, height_);
       }
@@ -284,7 +299,6 @@ bool MetalSplatRenderer::createScaler() {
 #else
   if (wanted) LOGI("MetalFX is absent from this SDK; the scaled frame is blitted");
 #endif
-  if (layer_ != nil) layer_.framebufferOnly = scaler_ == nil;
   return true;
 }
 
@@ -691,22 +705,23 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
 }
 
 void MetalSplatRenderer::encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture) {
+  id<MTLTexture> source = target_;
 #if SPLATKIT_HAS_METALFX
   if (scaler_ != nil) {
     scaler_.colorTexture = target_;
-    scaler_.outputTexture = drawableTexture;
+    scaler_.outputTexture = upscaled_;
     [scaler_ encodeToCommandBuffer:cmd];
-    return;
+    source = upscaled_;
   }
 #endif
-  if (target_ != nil) {
+  if (source != nil) {
     MTLRenderPassDescriptor* blit = [MTLRenderPassDescriptor renderPassDescriptor];
     blit.colorAttachments[0].texture = drawableTexture;
     blit.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     blit.colorAttachments[0].storeAction = MTLStoreActionStore;
     id<MTLRenderCommandEncoder> scale = [cmd renderCommandEncoderWithDescriptor:blit];
     [scale setRenderPipelineState:blitPipeline_];
-    [scale setFragmentTexture:target_ atIndex:0];
+    [scale setFragmentTexture:source atIndex:0];
     [scale drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [scale endEncoding];
   }
@@ -736,7 +751,7 @@ id<MTLBuffer> MetalSplatRenderer::encodeCapture(id<MTLCommandBuffer> cmd,
       [copy endEncoding];
       *onCapture = std::move(capture_);
       capture_ = nullptr;
-      layer_.framebufferOnly = scaler_ == nil;
+      layer_.framebufferOnly = YES;
     }
   }
 

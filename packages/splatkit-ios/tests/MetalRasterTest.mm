@@ -251,7 +251,7 @@ TEST_F(MetalRasterTest, HalfScaleFrameReachesTheDrawableThroughMetalFXOrTheBlit)
   const bool scalerExpected = false;
 #endif
   EXPECT_EQ(renderer->upscalerActive(), scalerExpected);
-  EXPECT_EQ(layer.framebufferOnly, !scalerExpected);
+  EXPECT_TRUE(layer.framebufferOnly);
   splat::SplatCloud cloud;
   cloud.positions = {0, 0, -2};
   cloud.colors = {1, 0, 0};

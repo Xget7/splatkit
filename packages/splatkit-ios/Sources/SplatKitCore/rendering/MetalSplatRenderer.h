@@ -151,9 +151,10 @@ class MetalSplatRenderer final : public SplatRenderer {
   CAMetalLayer* layer_ = nil;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  id<MTLTexture> target_ = nil;  // scaled rendering or half-float GPU compositing
+  id<MTLTexture> target_ = nil;    // scaled rendering or half-float GPU compositing
+  id<MTLTexture> upscaled_ = nil;  // MetalFX output at drawable size, private storage
 #if SPLATKIT_HAS_METALFX
-  id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to the drawable, when active
+  id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to upscaled_, when active
 #else
   id scaler_ = nil;  // stays nil: the scaled frame always goes through the blit
 #endif
