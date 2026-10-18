@@ -140,5 +140,5 @@ test('iOS wire phase constants spell the values the JS contracts declare', () =>
 test('iOS adapter validates the lens up front and sets it before the decode', () => {
   const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
   assert.match(native, /\[SKSplatEngine acceptsLens:lens\][\s\S]*?\[self dispose\]/);
-  assert.match(native, /\[engine setLens:lens\][\s\S]*loadWorldFile/);
+  assert.match(native, /if \(!\[engine setLens:lens\]\) \{[\s\S]*?kErrorInvalidRequest[\s\S]*?return;\s*\}\s*_engine = engine;[\s\S]*loadWorldFile/);
 });

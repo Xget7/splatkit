@@ -503,6 +503,11 @@ residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
              message:@"Metal is unavailable on this device"];
     return;
   }
+  if (![engine setLens:lens]) {
+    [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
+             message:@"the engine refused the lens"];
+    return;
+  }
   _engine = engine;
 
   // Settings are render-thread state; apply them here (the main thread) before the decode
@@ -510,7 +515,6 @@ residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
   [engine setMaxShDegree:(int)MIN(MAX(maxShDegree, 0), kMaxShDegree)];
   [engine setSplatBudget:(int)MAX(lodCapacity, 0)];
   [engine setResidencyBudget:(int)MAX(residencyCapacity, 1)];
-  [engine setLens:lens];
   [engine setRenderScale:(float)self.renderScale];
   [engine setShDegree:(int)self.shDegree];
   [engine setLinearBlending:self.linearBlending];
