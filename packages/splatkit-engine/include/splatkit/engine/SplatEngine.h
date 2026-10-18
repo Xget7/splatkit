@@ -90,6 +90,12 @@ class SplatEngine {
   bool startOrbitAnimation(float degrees, float degreesPerSecond, bool easeInOut);
   CameraPose cameraPose() const { return stats_.pose(); }
 
+  // The lens the view draws, picks and frames through. Takes effect on the next frame and
+  // reframes the default orbit. Out of range settings are refused as a whole and the lens
+  // in use stays. Render thread.
+  bool setLens(const LensSettings& settings);
+  const Lens& lens() const { return lens_; }
+
   // What the host needs to know about loading. Ready events fire on the render thread
   // once the data is in use; failures fire on whichever thread found them.
   enum class Event { worldReady = 0, worldFailed = 1, colliderReady = 2, colliderFailed = 3 };
