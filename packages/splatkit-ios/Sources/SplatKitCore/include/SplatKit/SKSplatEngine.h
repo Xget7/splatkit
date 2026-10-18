@@ -56,6 +56,18 @@ typedef struct {
   float stepHeight;
 } SKCharacterSettings;
 
+/// The lens the view draws, picks and frames through. A field whose flag is NO keeps the
+/// engine default: a 65 degree vertical field of view and a depth range of 0.05 to 200.
+typedef struct {
+  BOOL hasFieldOfView;
+  /// Vertical, 10 to 120.
+  float fieldOfViewDegrees;
+  BOOL hasDepthRange;
+  /// Positive and under the far plane, at most 100,000 times nearer.
+  float nearPlane;
+  float farPlane;
+} SKLensSettings;
+
 /// A snapshot of what the engine is doing, refreshed twice a second.
 typedef struct {
   /// Frames per second over the last half second.
@@ -219,6 +231,11 @@ typedef NS_ENUM(NSInteger, SKSplatEvent) {
 /// NO when a value is not a walkable one; the previous settings stay. Render thread.
 - (BOOL)setCharacter:(SKCharacterSettings)settings;
 @property(nonatomic, readonly) SKCharacterSettings character;
+/// Applies at once and reframes the default orbit. NO when a value is out of range; the
+/// previous lens stays. Render thread.
+- (BOOL)setLens:(SKLensSettings)settings;
+/// Whether `setLens:` would take these settings. Any thread.
++ (BOOL)acceptsLens:(SKLensSettings)settings;
 /// Device to reference rotation, row major 3x3, device axes x right, y up, z out of the
 /// screen, reference z up.
 - (void)setAttitude:(const float*)rowMajor;

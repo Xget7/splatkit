@@ -162,6 +162,13 @@ final class RenderThread {
         return accepted
     }
 
+    /// Waits: the caller learns whether the lens was in range.
+    func setLens(_ settings: SKLensSettings) -> Bool {
+        var accepted = false
+        sync { [self] in accepted = engine?.setLens(settings) ?? false }
+        return accepted
+    }
+
     func setAttitude(_ rowMajor: [Float]) {
         post { [self] in rowMajor.withUnsafeBufferPointer { engine?.setAttitude($0.baseAddress!) } }
     }

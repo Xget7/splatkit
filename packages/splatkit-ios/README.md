@@ -56,6 +56,7 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 | `setWalkVelocity(forward:right:)`, `walk(forward:right:)` | Continuous walking in meters per second, or a single step in meters; the host draws its own control and drives these |
 | `look(deltaYaw:deltaPitch:)` | Turns the camera by radians, for a look pad or mouse |
 | `setCharacter(_:)`, `character` | The walker's shape in walk mode: `CharacterSettings(eyeHeight:bodyRadius:stepHeight:)` |
+| `setLens(_:)`, `lens` | Vertical `fieldOfViewDegrees` (10-120) and `depthRange` (near and far planes, at most 100,000:1) in `LensSettings`; nil keeps the default 65 degrees and 0.05-200. Applies at once and reframes the default orbit; false keeps the previous lens. |
 | `touchLookEnabled`, `lookSensitivity` | Whether a one-finger drag turns the camera, and radians per point dragged |
 | `setMotionEnabled(_:)`, `isMotionEnabled` | Gyroscope driven camera |
 | `cameraPoseInterval` | Seconds between `cameraPoseChanged` delegate calls; 0, the default, never |

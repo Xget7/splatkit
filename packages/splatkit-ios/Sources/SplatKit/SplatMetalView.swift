@@ -39,6 +39,34 @@ public struct CharacterSettings: Equatable {
     }
 }
 
+/// The distances the view draws between, in world units. Both bound one range, so they are
+/// set together.
+public struct DepthRange: Equatable {
+    public var nearPlane: Float
+    public var farPlane: Float
+
+    public init(nearPlane: Float, farPlane: Float) {
+        self.nearPlane = nearPlane
+        self.farPlane = farPlane
+    }
+}
+
+/// The lens the view draws, picks and frames through. A nil field keeps the engine default:
+/// a 65 degree vertical field of view and a depth range of 0.05 to 200.
+///
+/// `fieldOfViewDegrees` is vertical, 10 to 120. `depthRange` needs a positive near plane under
+/// the far one, at most 100,000 times nearer: wider, the shaders lose the far plane to float
+/// precision. A far plane past 200 also coarsens 16-bit sort keys, which span the range.
+public struct LensSettings: Equatable {
+    public var fieldOfViewDegrees: Float?
+    public var depthRange: DepthRange?
+
+    public init(fieldOfViewDegrees: Float? = nil, depthRange: DepthRange? = nil) {
+        self.fieldOfViewDegrees = fieldOfViewDegrees
+        self.depthRange = depthRange
+    }
+}
+
 /// A snapshot of what the engine is doing, refreshed twice a second.
 public struct SplatStats {
     /// Frames per second over the last half second: frames the display showed when
@@ -345,6 +373,23 @@ public final class SplatMetalView: UIView {
 
     /// The walker's shape in effect.
     public private(set) var character = CharacterSettings()
+
+    /// The lens: vertical field of view and depth range. Applies at once and reframes the
+    /// default orbit. False when a value is out of range, and then the previous lens stays.
+    @discardableResult
+    public func setLens(_ settings: LensSettings) -> Bool {
+        let accepted = renderThread.setLens(SKLensSettings(
+            hasFieldOfView: ObjCBool(settings.fieldOfViewDegrees != nil),
+            fieldOfViewDegrees: settings.fieldOfViewDegrees ?? 0,
+            hasDepthRange: ObjCBool(settings.depthRange != nil),
+            nearPlane: settings.depthRange?.nearPlane ?? 0,
+            farPlane: settings.depthRange?.farPlane ?? 0))
+        if accepted { lens = settings }
+        return accepted
+    }
+
+    /// The lens in effect.
+    public private(set) var lens = LensSettings()
 
     /// Runs a reproducible capture: the gyroscope goes off, the camera takes a fixed pose
     /// and turns once over `seconds`, then the frame time distribution is logged.
