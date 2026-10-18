@@ -261,7 +261,7 @@ final class RenderThread {
         policy.tileSize = 16
         policy.lodErrorPixels = 1
         policy.alphaThreshold = 1 / 255
-        policy.subpixelThreshold = 0.5
+        policy.subpixelThreshold = 1  // kMinPixelRadius: the only value this backend renders
         policy.enableFrustumCulling = true
         policy.enableHiZOcclusion = false
         policy.enableEarlyTermination = true
