@@ -36,9 +36,11 @@ struct alignas(8) ProjectedSplat {
 static_assert(sizeof(ProjectedSplat) == 32);
 static_assert(offsetof(ProjectedSplat, index) == 28);
 
-// Smallest footprint, in pixels, the visibility kernel keeps; the renderer reports it as the
-// fixed sub-pixel threshold and shaderLibrary() passes it to the shader source.
+// Smallest footprint, in pixels, the visibility kernel keeps, and the peak opacity below which
+// it drops a splat (its quad would end at the centre). The renderer reports both as the fixed
+// policy fallback and shaderLibrary() passes them to the shader source.
 inline constexpr float kMinPixelRadius = 1.0f;
+inline constexpr float kQuadMinAlpha = 2.0f / 255.0f;
 
 // Indices of the shaders' [[function_constant(n)]] declarations.
 inline constexpr size_t kFnShDegree = 0;

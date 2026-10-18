@@ -78,11 +78,10 @@ inline float3 shColor(const device uint* shData, uint index, float3 d) {
 inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device uint* shData,
                          thread Projected& out) {
   float4 rgba = unpackUnorm4x8(s.rgba8);
-  // Peak opacity sent to rasterization, including LOD's above-one override.
-  // exp(-r²/2) <= 1: if the peak fails the fragment cutoff, every pixel fails.
-  // Keep equality: the fragment uses <, not <=. Do not cull dark but opaque splats.
+  // Peak opacity sent to rasterization, including LOD's above-one override. A peak below the
+  // quad cutoff has no quad at all. Dark but opaque splats are kept: they occlude.
   float alpha = s.lodAlpha != 0u ? as_type<float>(s.lodAlpha) : rgba.a;
-  if (alpha < 1.0 / 255.0) return false;
+  if (alpha < kQuadMinAlpha) return false;
 
   float4 viewPos4 = cam.view * float4(s.px, s.py, s.pz, 1.0);
   float3 viewPos = viewPos4.xyz;

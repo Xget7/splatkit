@@ -234,8 +234,9 @@ final class RenderThread {
 
     // Policy and capabilities.
 
-    /// The policy applied to the engine, cached for cheap reads off the render thread.
-    private var appliedPolicy = RenderThread.defaultPolicy()
+    /// The policy applied to the engine, cached for cheap reads off the render thread. It
+    /// starts as the engine's own, so the fixed fields never drift from the backend.
+    private lazy var appliedPolicy: SKRenderPolicy = engine?.renderPolicy ?? SKRenderPolicy()
     var renderPolicy: SKRenderPolicy { appliedPolicy }
 
     /// Re-validates and applies a policy on the render thread. Keeps the previous policy
@@ -261,20 +262,6 @@ final class RenderThread {
     /// Read-only; the engine has no setters for these after creation.
     var deviceCapabilities: SKDeviceCapabilities {
         engine?.deviceCapabilities ?? SKDeviceCapabilities()
-    }
-
-    private static func defaultPolicy() -> SKRenderPolicy {
-        var policy = SKRenderPolicy()
-        policy.raster = 0
-        policy.tileSize = 16
-        policy.lodErrorPixels = 1
-        policy.alphaThreshold = 1 / 255
-        policy.subpixelThreshold = 1  // kMinPixelRadius: the only value this backend renders
-        policy.enableFrustumCulling = true
-        policy.enableHiZOcclusion = false
-        policy.enableEarlyTermination = true
-        policy.sortDepth = 32
-        return policy
     }
 
     var gpuDescription: String { engine?.gpuDescription ?? "" }

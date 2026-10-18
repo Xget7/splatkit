@@ -146,7 +146,7 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.raster = RasterStrategy::hardware;
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = 1.0f;
-  policy.fallback.alphaThreshold = 1.0f / 255.0f;
+  policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = kMinPixelRadius;
   policy.fallback.sortDepth =
       depthBits_ == MetalRadixSort::KeyBits::Low16 ? SortKeyBits::low16 : SortKeyBits::full32;
