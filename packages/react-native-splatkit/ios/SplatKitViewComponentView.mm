@@ -10,6 +10,21 @@ using namespace facebook::react;
 @property(nonatomic, strong) SplatKitRNView *splatView;
 @end
 
+/// The device's capabilities from one throwaway engine, since the view has no engine until a
+/// world loads. Absent on a device without Metal, where no policy can apply anyway.
+static const SKDeviceCapabilities *DeviceCapabilities() {
+  static SKDeviceCapabilities capabilities;
+  static const SKDeviceCapabilities *available = nullptr;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    SKSplatEngine *probe = [SKSplatEngine create];
+    if (probe == nil) return;
+    capabilities = probe.deviceCapabilities;
+    available = &capabilities;
+  });
+  return available;
+}
+
 @implementation SplatKitViewComponentView {
   // Fabric mounts with updateProps before updateEventEmitter, so world and policy work waits for
   // finalizeUpdates; otherwise the capability and policy events of the first engine are dropped.
@@ -185,15 +200,21 @@ using namespace facebook::react;
     // Value initialized: the props carry no lodSplatLimit, and an indeterminate one starves
     // the selector to that many splats. Zero is the engine's own default, meaning no limit.
     SKRenderPolicy policy{};
-    policy.raster = static_cast<uint32_t>(next.policy.raster);
-    policy.tileSize = static_cast<uint32_t>(next.policy.tileSize);
-    policy.lodErrorPixels = static_cast<float>(next.policy.lodErrorPixels);
-    policy.alphaThreshold = static_cast<float>(next.policy.alphaThreshold);
-    policy.subpixelThreshold = static_cast<float>(next.policy.subpixelThreshold);
-    policy.enableFrustumCulling = next.policy.enableFrustumCulling;
-    policy.enableHiZOcclusion = next.policy.enableHiZOcclusion;
-    policy.enableEarlyTermination = next.policy.enableEarlyTermination;
-    policy.sortDepth = static_cast<uint32_t>(next.policy.sortDepth);
+    // A field this backend cannot apply keeps the backend's own value, so it raises no fallback
+    // warning for a request the host never made.
+    if (const SKDeviceCapabilities *device = DeviceCapabilities()) {
+      policy = device->fallback;
+      const SKRenderPolicySupport &support = device->policy;
+      if (support.raster) policy.raster = static_cast<uint32_t>(next.policy.raster);
+      if (support.tileSize) policy.tileSize = static_cast<uint32_t>(next.policy.tileSize);
+      if (support.lodErrorPixels) policy.lodErrorPixels = static_cast<float>(next.policy.lodErrorPixels);
+      if (support.alphaThreshold) policy.alphaThreshold = static_cast<float>(next.policy.alphaThreshold);
+      if (support.subpixelThreshold) policy.subpixelThreshold = static_cast<float>(next.policy.subpixelThreshold);
+      if (support.enableFrustumCulling) policy.enableFrustumCulling = next.policy.enableFrustumCulling;
+      if (support.enableHiZOcclusion) policy.enableHiZOcclusion = next.policy.enableHiZOcclusion;
+      if (support.enableEarlyTermination) policy.enableEarlyTermination = next.policy.enableEarlyTermination;
+      if (support.sortDepth) policy.sortDepth = static_cast<uint32_t>(next.policy.sortDepth);
+    }
     [_splatView setPolicy:policy revision:next.policy.revision];
     _policyChanged = YES;
   }

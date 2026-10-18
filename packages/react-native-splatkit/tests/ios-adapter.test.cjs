@@ -43,6 +43,8 @@ test('iOS adapter applies the versioned policy prop and reports it by revision',
   const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
   assert.match(mm, /next\.policy\.revision/);
   assert.match(mm, /setPolicy:policy revision:/);
+  // Only the fields the backend reports as supported leave the fallback.
+  assert.match(mm, /policy = device->fallback;[\s\S]*if \(support\.subpixelThreshold\) policy\.subpixelThreshold/);
   assert.match(mm, /onPolicyEvent/);
   assert.match(mm, /onCapabilities/);
   // A world load applies the stored policy itself, so a combined update applies it once.
