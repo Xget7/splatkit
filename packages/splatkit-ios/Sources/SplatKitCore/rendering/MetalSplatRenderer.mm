@@ -1,5 +1,11 @@
 #include "rendering/MetalSplatRenderer.h"
 
+#if SPLATKIT_HAS_METALFX
+// Recorded in the object as an autolink option, so a static consumer (SwiftPM, CocoaPods)
+// links MetalFX exactly where this slice was built against it.
+asm(".linker_option \"-framework\", \"MetalFX\"");
+#endif
+
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
 #include <os/proc.h>
