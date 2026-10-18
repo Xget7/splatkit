@@ -392,8 +392,8 @@ TEST(MetalVisibilityTightCullingTest, ConfigurableCutoffKeepsLargerFootprintsAnd
   auto* source = static_cast<GpuSplat*>(input.splats.contents);
   const float radii[] = {0.75f, 1.1f, 1.5f, 1.5f, 1.5f};
   for (uint32_t i = 0; i < 5; ++i) {
-    // focal=500, depth=2, support radius=3: sigmaWorld = radiusPx / 750.
-    const float sigma = radii[i] / 750.0f;
+    // focal=500, depth=2, support radius=2.5: sigmaWorld = radiusPx / 625.
+    const float sigma = radii[i] / 625.0f;
     const uint32_t variance = splat::toHalf(sigma * sigma);
     source[i].cov[0] = variance;
     source[i].cov[1] = variance << 16;

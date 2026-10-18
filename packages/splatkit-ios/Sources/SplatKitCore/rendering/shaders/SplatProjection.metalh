@@ -106,7 +106,11 @@ inline bool projectSplat(constant Camera& cam, Splat s, uint index, const device
   float2 axis1, axis2;
   ellipseAxes(cov2D, axis1, axis2);
 
-  float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius, sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
+  float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius,
+                     sqrt(2.0 * log(max(alpha / kQuadMinAlpha, 1.0))));
+  // The axes are sigma in pixels; cutting the radius truncates the Gaussian without reshaping it.
+  float sigmaPixels = sqrt(max(dot(axis1, axis1), dot(axis2, axis2)));
+  radius = min(radius, kMaxPixelRadius / max(sigmaPixels, 1e-6));
 
   if (tightCulling) {
     // Use the unfiltered covariance eigenvalue for the configurable source-footprint
