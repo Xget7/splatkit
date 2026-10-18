@@ -214,6 +214,7 @@ final class RenderThread {
     // Settings.
 
     func setRenderScale(_ scale: Float) { post { [self] in engine?.setRenderScale(scale) } }
+    func setSpatialUpscaling(_ enabled: Bool) { post { [self] in engine?.setSpatialUpscaling(enabled) } }
     func setCullMargin(_ degrees: Float) { post { [self] in engine?.setCullMargin(degrees) } }
     func setLinearBlending(_ linear: Bool) { post { [self] in engine?.setLinearBlending(linear) } }
     func setSplatBudget(_ budget: Int) { post { [self] in engine?.setSplatBudget(Int32(budget)) } }

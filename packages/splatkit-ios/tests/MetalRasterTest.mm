@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include <string>
 
+#import <MetalFX/MetalFX.h>
+
 #include "rendering/MetalSplatRenderer.h"
 #include "splat/formats/SpzDecoder.h"
 #include "splat/io/MappedFile.h"
@@ -233,6 +235,55 @@ TEST_F(MetalRasterTest, GpuOrderedSplatContributesToThePresentedPixels) {
   ASSERT_EQ(pixels.size(), 64u * 64u * 4u);
   const size_t center = (32 * 64 + 32) * 4;
   EXPECT_GT(pixels[center + 2], 200);  // red, not the background
+  EXPECT_LT(pixels[center + 1], 20);
+}
+
+TEST_F(MetalRasterTest, HalfScaleFrameReachesTheDrawableThroughMetalFXOrTheBlit) {
+  auto renderer = MetalSplatRenderer::create();
+  ASSERT_NE(renderer, nullptr);
+  CAMetalLayer* layer = [CAMetalLayer layer];
+  layer.drawableSize = CGSizeMake(64, 64);
+  renderer->setLayer(layer);
+  renderer->setDrawableSize(64, 64);
+  renderer->setRenderScale(0.5f);
+  const bool scalerExpected =
+      [MTLFXSpatialScalerDescriptor supportsDevice:MTLCreateSystemDefaultDevice()];
+  EXPECT_EQ(renderer->upscalerActive(), scalerExpected);
+  EXPECT_EQ(layer.framebufferOnly, !scalerExpected);
+  splat::SplatCloud cloud;
+  cloud.positions = {0, 0, -2};
+  cloud.colors = {1, 0, 0};
+  cloud.alphas = {1};
+  cloud.covariances = {0.04f, 0, 0, 0.04f, 0, 0.04f};
+  ASSERT_TRUE(renderer->uploadWorld(cloud, 0));
+  SplatRenderer::Frame frame;
+  frame.orderSource = SplatRenderer::OrderSource::gpu;
+  const SplatRenderer::Range range{0, 1};
+  frame.ranges = &range;
+  frame.rangeCount = 1;
+  frame.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
+  auto centerPixel = [&](std::vector<uint8_t>* out) {
+    dispatch_semaphore_t captured = dispatch_semaphore_create(0);
+    renderer->captureNextFrame([&](std::vector<uint8_t> image, uint32_t, uint32_t) {
+      *out = std::move(image);
+      dispatch_semaphore_signal(captured);
+    });
+    ASSERT_TRUE(renderer->draw(frame));
+    ASSERT_EQ(dispatch_semaphore_wait(captured, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)),
+              0);
+    ASSERT_EQ(out->size(), 64u * 64u * 4u);
+  };
+  std::vector<uint8_t> pixels;
+  centerPixel(&pixels);
+  const size_t center = (32 * 64 + 32) * 4;
+  EXPECT_GT(pixels[center + 2], 200);
+  EXPECT_LT(pixels[center + 1], 20);
+
+  renderer->setSpatialUpscaling(false);
+  EXPECT_FALSE(renderer->upscalerActive());
+  EXPECT_TRUE(layer.framebufferOnly);
+  centerPixel(&pixels);
+  EXPECT_GT(pixels[center + 2], 200);
   EXPECT_LT(pixels[center + 1], 20);
 }
 

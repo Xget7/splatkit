@@ -48,6 +48,7 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 | `focus(x:y:)` | Pick an anchor through normalized view coordinates against the collider; false keeps the previous anchor |
 | `animateOrbit(degrees:degreesPerSecond:easeInOut:)` | Run a finite engine-driven orbit and idle again when it finishes |
 | `renderScale` | Fraction of the view's resolution the splats are drawn at, 0.1 to 2 |
+| `spatialUpscaling` | Below a render scale of 1, upscale with MetalFX instead of a linear blit; on by default |
 | `cullMarginDegrees` | Angular margin kept drawn around the view |
 | `linearBlending` | Blend in linear light instead of the encoded colour space |
 | `splatBudget`, `residencyBudget` | Most splats drawn per frame, most splats resident on the GPU; a tiled scene that fits the residency whole is fetched whole, so turning never meets a coarse stand-in |

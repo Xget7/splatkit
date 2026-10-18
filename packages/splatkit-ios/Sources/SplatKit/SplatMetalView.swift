@@ -257,6 +257,12 @@ public final class SplatMetalView: UIView {
         }
     }
 
+    /// Below a render scale of one, upscale with MetalFX instead of a linear blit. On by
+    /// default; devices without the scaler keep the blit.
+    public var spatialUpscaling: Bool = true {
+        didSet { renderThread.setSpatialUpscaling(spatialUpscaling) }
+    }
+
     /// Angular margin around the view, in degrees, kept drawn so that what turns into
     /// view before the next cull lands is already there. 10 by default.
     public var cullMarginDegrees: Float = 10 {

@@ -225,6 +225,9 @@ typedef NS_ENUM(NSInteger, SKSplatEvent) {
 - (void)setMotionEnabled:(BOOL)enabled;
 
 - (void)setRenderScale:(float)scale;
+/// Rescale a frame drawn below the view's resolution with MetalFX instead of a linear
+/// blit. On by default; the blit remains where the device has no scaler.
+- (void)setSpatialUpscaling:(BOOL)enabled;
 - (void)setCullMargin:(float)degrees;
 - (void)setLinearBlending:(BOOL)linear;
 - (void)setSplatBudget:(int)budget;

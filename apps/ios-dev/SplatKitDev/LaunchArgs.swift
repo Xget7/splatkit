@@ -24,6 +24,7 @@ import Foundation
 /// --quality <ultra|high|balanced|fast> picks the starting level (default high) unless --scale,
 /// --shdraw or --depth-key-bits set the renderer directly.
 /// --shot <overview|orbit|detail|flyby|tour> picks the ISS camera shot (default orbit).
+/// --metalfx 0 upscales a --scale below 1 with the linear blit instead of MetalFX.
 /// --hud 0 hides the stats card and quality picker, for screen recordings.
 /// --keep-awake 1 disables idle screen locking only while this dev view is active.
 /// --resource-monitor 1 logs process footprint, remaining process allowance, Metal

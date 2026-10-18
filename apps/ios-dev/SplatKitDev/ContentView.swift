@@ -98,6 +98,7 @@ struct ContentView: View {
         session.orbit = nil
         // Change framing with camera distance, not render resolution or field of view.
         view.renderScale = args.float("scale") ?? 1
+        view.spatialUpscaling = args.bool("metalfx") ?? true
         view.touchLookEnabled = !orbitEnabled && !sdkOrbitEnabled
         view.maxShDegree = args.int("sh") ?? 1
         if let v = args.int("shdraw") { view.shDegree = v }

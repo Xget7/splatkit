@@ -329,6 +329,10 @@ SKRenderPolicySupport fromCppSupport(const splatkit::RenderPolicySupport& s) {
   _engine->setRenderScale(scale);
 }
 
+- (void)setSpatialUpscaling:(BOOL)enabled {
+  _engine->setSpatialUpscaling(enabled);
+}
+
 - (void)setCullMargin:(float)degrees {
   _engine->setCullMargin(degrees);
 }

@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.vendored_frameworks = 'ios/SplatKitCore.xcframework'
   # The spz loader calls the system zlib.
   s.libraries = 'c++', 'z'
-  s.frameworks = 'UIKit', 'QuartzCore', 'Metal'
+  s.frameworks = 'UIKit', 'QuartzCore', 'Metal', 'MetalFX'
   s.requires_arc = true
 
   # Defined by the app's Podfile (react_native_pods); adds the Fabric dependencies and flags, so it runs last.

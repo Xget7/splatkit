@@ -103,6 +103,8 @@ class SplatEngine {
   // pixel each. Render thread.
   void setRenderScale(float scale) { renderer_->setRenderScale(scale); }
   float renderScale() const { return renderer_->renderScale(); }
+  void setSpatialUpscaling(bool enabled) { renderer_->setSpatialUpscaling(enabled); }
+  bool spatialUpscaling() const { return renderer_->spatialUpscaling(); }
 
   // Base angular margin around the view, in degrees, that a tiled world's streaming keeps
   // drawn so that what turns into view before a wider tile load lands is already there; a

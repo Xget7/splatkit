@@ -1,6 +1,7 @@
 #pragma once
 
 #import <Metal/Metal.h>
+#import <MetalFX/MetalFX.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <array>
@@ -42,6 +43,11 @@ class MetalSplatRenderer final : public SplatRenderer {
 
   void setRenderScale(float scale) override;
   float renderScale() const override { return renderScale_; }
+  void setSpatialUpscaling(bool enabled) override;
+  bool spatialUpscaling() const override { return spatialUpscaling_; }
+  // True while frames go through MetalFX: a scale below one, the setting on, and a device
+  // that has the scaler. Otherwise the scaled target is blitted.
+  bool upscalerActive() const { return scaler_ != nil; }
   void setLinearBlending(bool linear) override;
   bool linearBlending() const override { return linearBlending_; }
   void setVsync(bool vsync) override;
@@ -140,9 +146,12 @@ class MetalSplatRenderer final : public SplatRenderer {
   CAMetalLayer* layer_ = nil;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  id<MTLTexture> target_ = nil;  // scaled rendering or half-float GPU compositing
+  id<MTLTexture> target_ = nil;          // scaled rendering or half-float GPU compositing
+  id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to the drawable, when active
+  bool createScaler();
   std::unique_ptr<MetalWorld> world_;
   float renderScale_ = 1.0f;
+  bool spatialUpscaling_ = true;
   bool linearBlending_ = false;
   uint32_t generation_ = 0;
   uint64_t frame_ = 0;

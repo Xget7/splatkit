@@ -79,7 +79,7 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   if (layer_ == nil) return;
   layer_.device = device_;
   layer_.pixelFormat = pixelFormat();
-  layer_.framebufferOnly = YES;
+  layer_.framebufferOnly = scaler_ == nil;
   ++generation_;
   if (pipelineFormat_ != targetFormat() && !createPipelines()) {
     LOGE("rendering stopped: no pipelines");
@@ -100,6 +100,13 @@ void MetalSplatRenderer::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
+  ++generation_;
+  createTarget();
+}
+
+void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
+  if (enabled == spatialUpscaling_) return;
+  spatialUpscaling_ = enabled;
   ++generation_;
   createTarget();
 }
@@ -237,8 +244,44 @@ bool MetalSplatRenderer::createTarget() {
   if (target_ == nil) {
     LOGE("render target %lux%lu failed", static_cast<unsigned long>(desc.width),
          static_cast<unsigned long>(desc.height));
+    return false;
   }
-  return target_ != nil;
+  return createScaler();
+}
+
+// MetalFX reads the whole scaled target and writes the drawable, so the drawable must be
+// shader-writable: the layer stops being framebuffer-only while a scaler exists.
+bool MetalSplatRenderer::createScaler() {
+  scaler_ = nil;
+  const bool wanted = spatialUpscaling_ && target_ != nil && renderScale_ < 1.0f;
+  if (wanted) {
+    if (![MTLFXSpatialScalerDescriptor supportsDevice:device_]) {
+      LOGI("MetalFX spatial scaler unsupported here; the scaled frame is blitted");
+    } else {
+      MTLFXSpatialScalerDescriptor* desc = [MTLFXSpatialScalerDescriptor new];
+      desc.inputWidth = target_.width;
+      desc.inputHeight = target_.height;
+      desc.outputWidth = width_;
+      desc.outputHeight = height_;
+      desc.colorTextureFormat = target_.pixelFormat;
+      desc.outputTextureFormat = pixelFormat();
+      desc.colorProcessingMode = linearBlending_ ? MTLFXSpatialScalerColorProcessingModeLinear
+                                                 : MTLFXSpatialScalerColorProcessingModePerceptual;
+      scaler_ = [desc newSpatialScalerWithDevice:device_];
+      if (scaler_ == nil) {
+        LOGE("MetalFX spatial scaler %lux%lu to %ux%u failed; the scaled frame is blitted",
+             static_cast<unsigned long>(target_.width), static_cast<unsigned long>(target_.height),
+             width_, height_);
+      } else {
+        scaler_.inputContentWidth = target_.width;
+        scaler_.inputContentHeight = target_.height;
+        LOGI("MetalFX spatial scaler %lux%lu to %ux%u", static_cast<unsigned long>(target_.width),
+             static_cast<unsigned long>(target_.height), width_, height_);
+      }
+    }
+  }
+  if (layer_ != nil) layer_.framebufferOnly = scaler_ == nil;
+  return true;
 }
 
 // One splat pipeline per spherical harmonics degree, specialised through a function
@@ -644,7 +687,11 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
 }
 
 void MetalSplatRenderer::encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture) {
-  if (target_ != nil) {
+  if (scaler_ != nil) {
+    scaler_.colorTexture = target_;
+    scaler_.outputTexture = drawableTexture;
+    [scaler_ encodeToCommandBuffer:cmd];
+  } else if (target_ != nil) {
     MTLRenderPassDescriptor* blit = [MTLRenderPassDescriptor renderPassDescriptor];
     blit.colorAttachments[0].texture = drawableTexture;
     blit.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -681,7 +728,7 @@ id<MTLBuffer> MetalSplatRenderer::encodeCapture(id<MTLCommandBuffer> cmd,
       [copy endEncoding];
       *onCapture = std::move(capture_);
       capture_ = nullptr;
-      layer_.framebufferOnly = YES;
+      layer_.framebufferOnly = scaler_ == nil;
     }
   }
 

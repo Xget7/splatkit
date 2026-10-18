@@ -43,7 +43,7 @@ target_include_directories(splatkit_ios
 )
 target_compile_options(splatkit_ios PRIVATE -Wall -Wextra -Werror -fobjc-arc)
 target_link_libraries(splatkit_ios PUBLIC splatkit_engine
-  "-framework Metal" "-framework QuartzCore" "-framework Foundation"
+  "-framework Metal" "-framework MetalFX" "-framework QuartzCore" "-framework Foundation"
   "-framework CoreGraphics" "-framework ImageIO" "-framework UniformTypeIdentifiers")
 add_dependencies(splatkit_ios splatkit_ios_shaders)
 
