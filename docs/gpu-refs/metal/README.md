@@ -72,6 +72,14 @@ The FST lists GPU families only; the OS that ships an API comes from `API_AVAILA
 
 Anything above iOS 17 needs an availability check and a fallback, or a raised floor.
 
+## Validation
+
+- API Validation: launch with `MTL_DEBUG_LAYER=1` ([Validating your app's Metal API usage](https://developer.apple.com/documentation/xcode/validating-your-apps-metal-api-usage)).
+  It checks unretained resource references only on `MTLCommandBuffer`, never on `MTL4CommandBuffer`.
+- Shader Validation: launch with `MTL_SHADER_VALIDATION=1`, scoped with `MTL_SHADER_VALIDATION_ENABLE_PIPELINES` / `_DISABLE_PIPELINES` by pipeline label ([Validating your app's Metal shader usage](https://developer.apple.com/documentation/xcode/validating-your-apps-metal-shader-usage)).
+  It reports out-of-bounds and non-resident reads, threadgroup memory and NaN/Inf faults.
+- Neither reports a missing barrier or a data race; prove synchronization with a numeric test that compares GPU output against a CPU reference.
+
 ## Candidates worth a measured trial
 
 Each needs the GPU change workflow and a phone run before it lands.
