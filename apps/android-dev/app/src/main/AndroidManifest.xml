@@ -6,6 +6,8 @@
         android:allowBackup="false"
         android:appCategory="game"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <!-- Release builds stay profileable, so Perfetto records the library's trace sections. -->
+        <profileable android:shell="true" />
         <activity
             android:launchMode="singleTop"
             android:name=".MainActivity"
