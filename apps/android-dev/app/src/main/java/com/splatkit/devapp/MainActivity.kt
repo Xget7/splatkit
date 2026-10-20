@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -28,6 +29,8 @@ class MainActivity : Activity() {
     private var pendingPose: CameraPose? = null
     /** World and collider extras of the last load, so a repeated intent changes settings without reloading. */
     private var loadedWorld: String? = null
+    /** The HUD, joystick and gyroscope toggle, which --ez hud false hides for captures. */
+    private val overlays = mutableListOf<View>()
 
     private fun applyPendingPose() {
         pendingPose?.let {
@@ -74,6 +77,7 @@ class MainActivity : Activity() {
             setMargins(0, 0, dp(24), dp(40))
         })
         setContentView(root)
+        overlays += listOf(hud, joystick, gyroButton)
 
         // A world pushed to the app's external files dir loads instead of the bundled kitchen:
         //   adb push house.spz /sdcard/Android/data/com.splatkit.devapp/files/
@@ -126,6 +130,11 @@ class MainActivity : Activity() {
         if (intent?.hasExtra("linear") == true) splatView.linearBlending = intent.getBooleanExtra("linear", false)
         // --ef margin 20 widens the angular margin the cull keeps drawn around the view.
         if (intent?.hasExtra("margin") == true) splatView.cullMarginDegrees = intent.getFloatExtra("margin", 10f)
+        // --ez hud false hides every overlay, so a screencap holds only the rendered frame.
+        if (intent?.hasExtra("hud") == true) {
+            val visibility = if (intent.getBooleanExtra("hud", true)) View.VISIBLE else View.GONE
+            overlays.forEach { it.visibility = visibility }
+        }
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
         val worldKey = "$worldPath|$colliderPath|${intent?.getBooleanExtra("bytes", false)}"
