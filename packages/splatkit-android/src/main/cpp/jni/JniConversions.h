@@ -19,7 +19,7 @@ inline constexpr jsize kCameraRequestFields = 8;
 inline constexpr jsize kCameraStateFields = 9;
 inline constexpr jsize kCameraResolutionFields = kCameraStateFields + 1;
 // fps, frame, gpu and sort milliseconds, splat count, walking and motion flags, then the drawn,
-// compute tile, non-empty compute tile and hardware tile counts.
+// compute tile, non-empty compute tile and hardware tile counts, then the world's SH degree.
 inline constexpr jsize kStatsFloats = 12;
 inline constexpr jsize kAttitudeFloats = 9;
 
