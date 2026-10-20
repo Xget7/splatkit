@@ -1,6 +1,6 @@
 // The JNI entry points of com.splatkit.engine.SplatEngine. Each one checks the handle
-// and forwards to the SplatEngine; the layouts of the float arrays shared with Kotlin are
-// documented where they are filled.
+// and forwards to the SplatEngine; the layouts of the arrays shared with Kotlin are in
+// JniConversions.h.
 
 #include <jni.h>
 
@@ -12,6 +12,7 @@
 #include <string>
 
 #include "engine/AndroidEngine.h"
+#include "jni/JniConversions.h"
 #include "splatkit/Log.h"
 
 // `SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, ...)` declares the exported symbol
@@ -21,22 +22,26 @@
 
 namespace {
 
-constexpr jsize kPoseFloats = 5;
-constexpr jsize kCameraRequestFields = 8;
-constexpr jsize kCameraStateFields = 9;
-constexpr jsize kCameraResolutionFields = kCameraStateFields + 1;
-// fps, frame, gpu and sort milliseconds, splat count, walking and motion flags, then the drawn,
-// compute tile, non-empty compute tile and hardware tile counts.
-constexpr jsize kStatsFloats = 11;
-constexpr jsize kAttitudeFloats = 9;
-
-constexpr jboolean toJni(bool value) {
-  return value ? JNI_TRUE : JNI_FALSE;
-}
-
-constexpr double flag(bool value) {
-  return value ? 1.0 : 0.0;
-}
+using splatkit::jni::cameraPoseToFloats;
+using splatkit::jni::cameraRequestFromDoubles;
+using splatkit::jni::cameraStateToDoubles;
+using splatkit::jni::capabilitiesToDoubles;
+using splatkit::jni::flag;
+using splatkit::jni::kAttitudeFloats;
+using splatkit::jni::kCameraRequestFields;
+using splatkit::jni::kCameraResolutionFields;
+using splatkit::jni::kCameraStateFields;
+using splatkit::jni::kCapabilityFields;
+using splatkit::jni::kPolicyFields;
+using splatkit::jni::kPolicyResolutionFields;
+using splatkit::jni::kPoseFloats;
+using splatkit::jni::kStatsFloats;
+using splatkit::jni::policyFromDoubles;
+using splatkit::jni::policyToDoubles;
+using splatkit::jni::statsToFloats;
+using splatkit::jni::toJni;
+using splatkit::jni::withBytes;
+using splatkit::jni::withUtf8;
 
 // The handle Kotlin holds is the host's address; JNI has no other way to carry it.
 splatkit::AndroidEngine* toHost(jlong handle) {
@@ -95,26 +100,6 @@ class EventBridge {
   jobject engine_;
   jmethodID method_ = nullptr;
 };
-
-// Hands the bytes of a Java array to `use` without copying them for longer than the call.
-template <typename Use>
-void withBytes(JNIEnv* env, jbyteArray bytes, Use use) {
-  if (bytes == nullptr) return;
-  const jsize size = env->GetArrayLength(bytes);
-  jbyte* data = env->GetByteArrayElements(bytes, nullptr);
-  if (data == nullptr) return;
-  use(reinterpret_cast<const std::uint8_t*>(data), static_cast<std::size_t>(size));
-  env->ReleaseByteArrayElements(bytes, data, JNI_ABORT);
-}
-
-template <typename Use>
-void withUtf8(JNIEnv* env, jstring text, Use use) {
-  if (text == nullptr) return;
-  const char* chars = env->GetStringUTFChars(text, nullptr);
-  if (chars == nullptr) return;
-  use(std::string(chars));
-  env->ReleaseStringUTFChars(text, chars);
-}
 
 }  // namespace
 
@@ -256,25 +241,10 @@ SPLATKIT_JNI(jboolean, nativeStartOrbitAnimation)
 SPLATKIT_JNI(void, nativeCameraPose)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kPoseFloats) return;
-  const splatkit::CameraPose p = engine->cameraPose();
-  const float values[kPoseFloats] = {p.x, p.y, p.z, p.yaw, p.pitch};
+  float values[kPoseFloats]{};
+  cameraPoseToFloats(engine->cameraPose(), values);
   env->SetFloatArrayRegion(out, 0, kPoseFloats, values);
 }
-
-// State: mode, anchor xyz, radius, azimuth, elevation, angular rate, hasAnchor.
-namespace {
-void cameraStateToDoubles(const splatkit::CameraState& state, double* out) {
-  out[0] = static_cast<double>(static_cast<int>(state.mode));
-  out[1] = state.anchor.x;
-  out[2] = state.anchor.y;
-  out[3] = state.anchor.z;
-  out[4] = state.radius;
-  out[5] = state.azimuth;
-  out[6] = state.elevation;
-  out[7] = state.orbitRadiansPerSecond;
-  out[8] = flag(state.hasAnchor);
-}
-}  // namespace
 
 SPLATKIT_JNI(void, nativeCameraState)(JNIEnv* env, jobject, jlong handle, jdoubleArray out) {
   auto* engine = toEngine(handle);
@@ -295,15 +265,7 @@ SPLATKIT_JNI(jstring, nativeApplyCameraRequest)
   }
   double input[kCameraRequestFields]{};
   env->GetDoubleArrayRegion(requested, 0, kCameraRequestFields, input);
-  splatkit::CameraRequest request;
-  request.mode = static_cast<splatkit::CameraMode>(static_cast<int>(input[0]));
-  request.anchor = {static_cast<float>(input[1]), static_cast<float>(input[2]),
-                    static_cast<float>(input[3])};
-  request.radius = static_cast<float>(input[4]);
-  request.azimuth = static_cast<float>(input[5]);
-  request.elevation = static_cast<float>(input[6]);
-  request.orbitRadiansPerSecond = static_cast<float>(input[7]);
-  const auto resolution = engine->applyCameraRequest(request);
+  const auto resolution = engine->applyCameraRequest(cameraRequestFromDoubles(input));
   double values[kCameraResolutionFields]{};
   values[0] = flag(resolution.accepted);
   cameraStateToDoubles(resolution.effective, values + 1);
@@ -401,94 +363,19 @@ SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat 
 SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;
-  const splatkit::Stats s = engine->stats();
-  // Float transport represents every integer through 2^24 exactly; larger counts can round.
-  const float values[kStatsFloats] = {s.fps,
-                                      s.frameMillis,
-                                      s.gpuMillis,
-                                      s.sortMillis,
-                                      static_cast<float>(s.splatCount),
-                                      s.walking ? 1.0f : 0.0f,
-                                      s.motion ? 1.0f : 0.0f,
-                                      static_cast<float>(s.drawnSplatCount),
-                                      static_cast<float>(s.computeTileCount),
-                                      static_cast<float>(s.nonemptyComputeTileCount),
-                                      static_cast<float>(s.hardwareTileCount)};
+  float values[kStatsFloats]{};
+  statsToFloats(engine->stats(), values);
   env->SetFloatArrayRegion(out, 0, kStatsFloats, values);
 }
 
-// Policy and capabilities. Both arrays are double: every field is a count, flag or float.
-
-namespace {
-constexpr jsize kPolicyFields = 9;  // see the index list below
-// accepted, preparationFailed, then the effective policy
-constexpr jsize kPolicyResolutionFields = kPolicyFields + 2;
-// Capabilities: limits and feature flags, policy support, then the fallback policy.
-constexpr jsize kCapabilityLeadFields = 7;
-constexpr jsize kPolicySupportFields = 14;
-constexpr jsize kCapabilityFields = kCapabilityLeadFields + kPolicySupportFields + kPolicyFields;
-
-// 0 raster, 1 tileSize, 2 lodErrorPixels, 3 alphaThreshold, 4 subpixelThreshold,
-// 5 enableFrustumCulling, 6 enableHiZOcclusion, 7 enableEarlyTermination, 8 sortDepth.
-splatkit::RenderPolicy policyFromDoubles(const double* v) {
-  splatkit::RenderPolicy p;
-  p.raster = static_cast<splatkit::RasterStrategy>(static_cast<uint32_t>(v[0]));
-  p.tileSize = static_cast<uint32_t>(v[1]);
-  p.lodErrorPixels = static_cast<float>(v[2]);
-  p.alphaThreshold = static_cast<float>(v[3]);
-  p.subpixelThreshold = static_cast<float>(v[4]);
-  p.enableFrustumCulling = v[5] != 0.0;
-  p.enableHiZOcclusion = v[6] != 0.0;
-  p.enableEarlyTermination = v[7] != 0.0;
-  p.sortDepth = static_cast<splatkit::SortKeyBits>(static_cast<uint32_t>(v[8]));
-  return p;
-}
-
-void policyToDoubles(const splatkit::RenderPolicy& p, double* v) {
-  v[0] = static_cast<double>(static_cast<uint32_t>(p.raster));
-  v[1] = static_cast<double>(p.tileSize);
-  v[2] = static_cast<double>(p.lodErrorPixels);
-  v[3] = static_cast<double>(p.alphaThreshold);
-  v[4] = static_cast<double>(p.subpixelThreshold);
-  v[5] = flag(p.enableFrustumCulling);
-  v[6] = flag(p.enableHiZOcclusion);
-  v[7] = flag(p.enableEarlyTermination);
-  v[8] = static_cast<double>(static_cast<uint32_t>(p.sortDepth));
-}
-
-void supportToDoubles(const splatkit::RenderPolicySupport& s, double* v) {
-  v[0] = flag(s.raster);
-  v[1] = flag(s.tileSize);
-  v[2] = flag(s.lodErrorPixels);
-  v[3] = flag(s.alphaThreshold);
-  v[4] = flag(s.subpixelThreshold);
-  v[5] = flag(s.enableFrustumCulling);
-  v[6] = flag(s.enableHiZOcclusion);
-  v[7] = flag(s.enableEarlyTermination);
-  v[8] = flag(s.sortDepth);
-  v[9] = static_cast<double>(s.tileSizeMask);
-  v[10] = static_cast<double>(s.minLodErrorPixels);
-  v[11] = static_cast<double>(s.maxLodErrorPixels);
-  v[12] = static_cast<double>(s.minSubpixelThreshold);
-  v[13] = static_cast<double>(s.maxSubpixelThreshold);
-}
-}  // namespace
+// Policy and capabilities.
 
 // out[0..29]: limits and feature flags [0..6], policy support [7..20], fallback policy [21..29].
 SPLATKIT_JNI(void, nativeCapabilities)(JNIEnv* env, jobject, jlong handle, jdoubleArray out) {
   const splatkit::SplatEngine* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kCapabilityFields) return;
-  const splatkit::DeviceCapabilities caps = engine->deviceCapabilities();
   double values[kCapabilityFields]{};
-  values[0] = static_cast<double>(caps.limits.maxLodCapacitySplats);
-  values[1] = static_cast<double>(caps.limits.minResidencyCapacitySplats);
-  values[2] = static_cast<double>(caps.limits.maxResidencyCapacitySplats);
-  values[3] = flag(caps.supportsComputeTiles);
-  values[4] = flag(caps.supportsHiZOcclusion);
-  values[5] = flag(caps.supportsSubgroups);
-  values[6] = static_cast<double>(caps.maxTextureDimension);
-  supportToDoubles(caps.policy, values + kCapabilityLeadFields);
-  policyToDoubles(caps.policy.fallback, values + kCapabilityLeadFields + kPolicySupportFields);
+  capabilitiesToDoubles(engine->deviceCapabilities(), values);
   env->SetDoubleArrayRegion(out, 0, kCapabilityFields, values);
 }
 

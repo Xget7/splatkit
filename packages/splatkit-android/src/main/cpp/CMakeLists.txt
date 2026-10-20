@@ -58,6 +58,7 @@ add_library(splatkit SHARED
   rendering/vulkan/VulkanSplatRenderer.cpp
   rendering/vulkan/device/Vma.cpp
   engine/AndroidEngine.cpp
+  jni/JniConversions.cpp
   jni/SplatKitJni.cpp
 )
 target_include_directories(splatkit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
