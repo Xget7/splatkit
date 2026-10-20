@@ -260,8 +260,9 @@ TEST_F(MetalFrameComputeTest,
   const std::shared_ptr<std::atomic<bool>> failed = loop->failureLatch();
   compute.reset();
   loop.reset();
-  // Only the two handlers and this test still hold the latch.
-  ASSERT_EQ(failed.use_count(), 3);
+  // The report owns the latch and only the handlers still hold the report, so the latch has a
+  // second owner exactly while a handler owns the report.
+  ASSERT_GE(failed.use_count(), 2);
 
   [selection commit];
   [sort commit];

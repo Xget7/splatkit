@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "rendering/metal/layout/MetalFrameSlots.h"
@@ -84,10 +85,14 @@ class MetalFrameCompute {
   float lodPixels() const { return lodPixels_; }
 
  private:
-  // What the selection and sort completion handlers write. The handlers hold a share of it:
-  // Metal documents no order between one command buffer's handlers and another's, so a handler
-  // can still be running after the render buffer's has released the last frame slot.
+  // What the selection and sort completion handlers write, with the frame loop's failure latch
+  // they set. The handlers hold a share of it: Metal documents no order between one command
+  // buffer's handlers and another's, so a handler can still be running after the render
+  // buffer's has released the last frame slot.
   struct GpuReport {
+    explicit GpuReport(std::shared_ptr<std::atomic<bool>> failureLatch)
+        : failed(std::move(failureLatch)) {}
+    const std::shared_ptr<std::atomic<bool>> failed;
     std::atomic<uint32_t> selectedCount{0};
     std::atomic<uint32_t> lodLimitedCount{0};
     std::atomic<uint32_t> lodEvaluatedCount{0};
@@ -119,7 +124,7 @@ class MetalFrameCompute {
   float lodPixels_ = kDefaultLodPixels;
   uint32_t lodAdaptedReadback_ = 0;
   uint64_t frames_ = 0;  // submitted so far, which also paces the LOD log
-  std::shared_ptr<GpuReport> report_ = std::make_shared<GpuReport>();
+  std::shared_ptr<GpuReport> report_;
 };
 
 }  // namespace splatkit
