@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: android-actions/setup-android@v4
+      - uses: ./.github/actions/android-sdk
         with:
-          packages: "ndk;27.1.12297006 cmake;3.22.1"
+          packages: "cmake;3.22.1"
       - name: clang-format and clang-tidy
         run: ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006" scripts/lint-cpp.sh
