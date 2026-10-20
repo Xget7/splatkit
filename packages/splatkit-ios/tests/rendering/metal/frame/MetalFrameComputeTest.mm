@@ -2,9 +2,9 @@
 
 #include <vector>
 
-#include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/frame/MetalFrameCompute.h"
 #include "splat/math/Mat4.h"
+#include "support/MetalTestContext.h"
 
 namespace splatkit {
 namespace {
@@ -14,9 +14,9 @@ constexpr Extent kExtent{64, 64};
 class MetalFrameComputeTest : public testing::Test {
  protected:
   void SetUp() override {
-    context_ = MetalContext::create();
-    if (context_ == nullptr) GTEST_SKIP() << "Apple GPU family 7 unavailable";
-    compute_ = std::make_unique<MetalFrameCompute>(*context_, loop_);
+    gpu_ = &test::Gpu::get();
+    if (gpu_->device == nil || gpu_->library == nil) GTEST_SKIP() << "No Metal device";
+    compute_ = std::make_unique<MetalFrameCompute>(gpu_->device, gpu_->queue, gpu_->library, loop_);
     ASSERT_TRUE(compute_->create());
     frame_.orderSource = SplatRenderer::OrderSource::gpu;
     frame_.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
@@ -69,14 +69,13 @@ class MetalFrameComputeTest : public testing::Test {
       tree.nodes.positions.insert(tree.nodes.positions.end(), {x, y, -8});
       tree.nodes.colors.insert(tree.nodes.colors.end(), {1, 1, 1});
       tree.nodes.alphas.push_back(1);
-      tree.nodes.covariances.insert(tree.nodes.covariances.end(),
-                                    {0.001f, 0, 0, 0.001f, 0, 0.001f});
+      tree.nodes.covariances.insert(tree.nodes.covariances.end(), {0.04f, 0, 0, 0.04f, 0, 0.04f});
       tree.layout.push_back({{x, y, -8}, 0, 0, 0});
     }
     return tree;
   }
 
-  std::unique_ptr<MetalContext> context_;
+  test::Gpu* gpu_ = nullptr;
   MetalFrameLoop loop_{MetalFrameCompute::kSlots};
   std::unique_ptr<MetalFrameCompute> compute_;
   SplatRenderer::Frame frame_;
@@ -128,7 +127,7 @@ TEST_F(MetalFrameComputeTest, APolicyChangesTheKeyWidthAndTheLodLimits) {
 }
 
 TEST_F(MetalFrameComputeTest, AFlatWorldIsProjectedSortedFrontToBackAndCounted) {
-  auto world = MetalWorld::upload(context_->device(), threeSplats(), 0);
+  auto world = MetalWorld::upload(gpu_->device, threeSplats(), 0);
   ASSERT_NE(world, nullptr);
   ASSERT_TRUE(compute_->configureFlatWorld(world->info().count));
   const SplatRenderer::Range range{0, 3};
@@ -156,7 +155,7 @@ TEST_F(MetalFrameComputeTest, AFlatWorldIsProjectedSortedFrontToBackAndCounted) 
 }
 
 TEST_F(MetalFrameComputeTest, SixteenBitKeysOrderTheSameWorld) {
-  auto world = MetalWorld::upload(context_->device(), threeSplats(), 0);
+  auto world = MetalWorld::upload(gpu_->device, threeSplats(), 0);
   ASSERT_NE(world, nullptr);
   ASSERT_TRUE(compute_->configureFlatWorld(world->info().count));
   std::string reason;
@@ -176,7 +175,7 @@ TEST_F(MetalFrameComputeTest, SixteenBitKeysOrderTheSameWorld) {
 }
 
 TEST_F(MetalFrameComputeTest, RangesOutsideTheWorldEncodeNothing) {
-  auto world = MetalWorld::upload(context_->device(), threeSplats(), 0);
+  auto world = MetalWorld::upload(gpu_->device, threeSplats(), 0);
   ASSERT_NE(world, nullptr);
   ASSERT_TRUE(compute_->configureFlatWorld(world->info().count));
   const SplatRenderer::Range range{2, 5};
@@ -188,7 +187,7 @@ TEST_F(MetalFrameComputeTest, RangesOutsideTheWorldEncodeNothing) {
 
 TEST_F(MetalFrameComputeTest, ALodWorldSelectsACutAndTheThresholdFollowsThePolicy) {
   auto tree = sixtyFourLeaves();
-  auto world = MetalWorld::upload(context_->device(), tree.nodes, 0);
+  auto world = MetalWorld::upload(gpu_->device, tree.nodes, 0);
   ASSERT_NE(world, nullptr);
   ASSERT_TRUE(compute_->configureLodWorld(tree, 64));
   ASSERT_TRUE(compute_->hasLod());
@@ -209,6 +208,7 @@ TEST_F(MetalFrameComputeTest, ALodWorldSelectsACutAndTheThresholdFollowsThePolic
   ASSERT_TRUE(compute_->configure(policy(0.1f), &reason));
   frame(1);
   EXPECT_EQ(compute_->lastSelectedCount(), 64u);
+  EXPECT_EQ(compute_->lastDrawCount(), 64u);
   EXPECT_EQ(compute_->lastLodEvaluatedCount(), 1u);
 
   // A limit below the refined cut denies the split and raises the threshold; lifting it
@@ -224,7 +224,7 @@ TEST_F(MetalFrameComputeTest, ALodWorldSelectsACutAndTheThresholdFollowsThePolic
 
 TEST_F(MetalFrameComputeTest, ReplacingTheLodWorldByAFlatOneDropsTheSelection) {
   auto tree = sixtyFourLeaves();
-  auto lodWorld = MetalWorld::upload(context_->device(), tree.nodes, 0);
+  auto lodWorld = MetalWorld::upload(gpu_->device, tree.nodes, 0);
   ASSERT_NE(lodWorld, nullptr);
   ASSERT_TRUE(compute_->configureLodWorld(tree, 64));
   compute_->updateCamera(frame_, 0, kExtent, false);

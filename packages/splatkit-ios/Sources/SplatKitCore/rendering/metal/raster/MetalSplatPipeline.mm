@@ -9,17 +9,18 @@ namespace {
 constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
 }  // namespace
 
-bool MetalSplatPipeline::create(const MetalContext& context, MTLPixelFormat format) {
+bool MetalSplatPipeline::create(id<MTLDevice> device, id<MTLLibrary> library,
+                                MTLPixelFormat format) {
   format_ = format;
   NSError* error = nil;
-  id<MTLFunction> fragment = [context.library() newFunctionWithName:@"splatFragment"];
+  id<MTLFunction> fragment = [library newFunctionWithName:@"splatFragment"];
   for (int degree = 0; degree <= kMaxShDegree; ++degree) {
     MTLFunctionConstantValues* constants = [MTLFunctionConstantValues new];
     uint32_t value = static_cast<uint32_t>(degree);
     [constants setConstantValue:&value type:MTLDataTypeUInt atIndex:kFnShDegree];
-    id<MTLFunction> vertex = [context.library() newFunctionWithName:@"splatVertex"
-                                                     constantValues:constants
-                                                              error:&error];
+    id<MTLFunction> vertex = [library newFunctionWithName:@"splatVertex"
+                                           constantValues:constants
+                                                    error:&error];
     if (vertex == nil) {
       LOGE("splat vertex function: %s", error.localizedDescription.UTF8String);
       return false;
@@ -35,8 +36,8 @@ bool MetalSplatPipeline::create(const MetalContext& context, MTLPixelFormat form
     desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
     desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
     desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    id<MTLRenderPipelineState> state =
-        [context.device() newRenderPipelineStateWithDescriptor:desc error:&error];
+    id<MTLRenderPipelineState> state = [device newRenderPipelineStateWithDescriptor:desc
+                                                                              error:&error];
     if (state == nil) {
       LOGE("splat pipeline degree %d: %s", degree, error.localizedDescription.UTF8String);
       return false;
@@ -48,8 +49,8 @@ bool MetalSplatPipeline::create(const MetalContext& context, MTLPixelFormat form
   // back with "under" compositing of premultiplied colour onto a clear of zero:
   // out = (1 - dst.a) * src + dst, for colour and coverage alike.
   MTLRenderPipelineDescriptor* under = [MTLRenderPipelineDescriptor new];
-  under.vertexFunction = [context.library() newFunctionWithName:@"projectedVertex"];
-  under.fragmentFunction = [context.library() newFunctionWithName:@"splatFragmentUnder"];
+  under.vertexFunction = [library newFunctionWithName:@"projectedVertex"];
+  under.fragmentFunction = [library newFunctionWithName:@"splatFragmentUnder"];
   under.colorAttachments[0].pixelFormat = format_;
   under.depthAttachmentPixelFormat = MetalRenderTarget::kDepthFormat;
   under.colorAttachments[0].blendingEnabled = YES;
@@ -57,27 +58,27 @@ bool MetalSplatPipeline::create(const MetalContext& context, MTLPixelFormat form
   under.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
   under.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOneMinusDestinationAlpha;
   under.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOne;
-  projectedPipeline_ = [context.device() newRenderPipelineStateWithDescriptor:under error:&error];
+  projectedPipeline_ = [device newRenderPipelineStateWithDescriptor:under error:&error];
   if (projectedPipeline_ == nil) {
     LOGE("projected pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
   // The background goes under whatever coverage is left, with the same blend.
-  under.vertexFunction = [context.library() newFunctionWithName:@"blitVertex"];
-  under.fragmentFunction = [context.library() newFunctionWithName:@"backgroundFragment"];
-  backgroundPipeline_ = [context.device() newRenderPipelineStateWithDescriptor:under error:&error];
+  under.vertexFunction = [library newFunctionWithName:@"blitVertex"];
+  under.fragmentFunction = [library newFunctionWithName:@"backgroundFragment"];
+  backgroundPipeline_ = [device newRenderPipelineStateWithDescriptor:under error:&error];
   if (backgroundPipeline_ == nil) {
     LOGE("background pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
   // The saturation mask touches the depth buffer only.
   MTLRenderPipelineDescriptor* mask = [MTLRenderPipelineDescriptor new];
-  mask.vertexFunction = [context.library() newFunctionWithName:@"blitVertex"];
-  mask.fragmentFunction = [context.library() newFunctionWithName:@"saturationMask"];
+  mask.vertexFunction = [library newFunctionWithName:@"blitVertex"];
+  mask.fragmentFunction = [library newFunctionWithName:@"saturationMask"];
   mask.colorAttachments[0].pixelFormat = format_;
   mask.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
   mask.depthAttachmentPixelFormat = MetalRenderTarget::kDepthFormat;
-  maskPipeline_ = [context.device() newRenderPipelineStateWithDescriptor:mask error:&error];
+  maskPipeline_ = [device newRenderPipelineStateWithDescriptor:mask error:&error];
   if (maskPipeline_ == nil) {
     LOGE("saturation mask pipeline: %s", error.localizedDescription.UTF8String);
     return false;
@@ -85,10 +86,10 @@ bool MetalSplatPipeline::create(const MetalContext& context, MTLPixelFormat form
   MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
   depth.depthCompareFunction = MTLCompareFunctionLessEqual;
   depth.depthWriteEnabled = NO;
-  splatDepth_ = [context.device() newDepthStencilStateWithDescriptor:depth];
+  splatDepth_ = [device newDepthStencilStateWithDescriptor:depth];
   depth.depthCompareFunction = MTLCompareFunctionAlways;
   depth.depthWriteEnabled = YES;
-  maskDepth_ = [context.device() newDepthStencilStateWithDescriptor:depth];
+  maskDepth_ = [device newDepthStencilStateWithDescriptor:depth];
 
   LOGI("pipelines for format %lu", static_cast<unsigned long>(format_));
   return true;

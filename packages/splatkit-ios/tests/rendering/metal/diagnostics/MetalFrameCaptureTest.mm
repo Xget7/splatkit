@@ -45,7 +45,13 @@ class MetalFrameCaptureTest : public testing::Test {
     return pixels;
   }
 
+  // Every buffer is committed: an uncommitted one holds its queue slot until the autorelease pool
+  // drains, which a repeated run never does.
   id<MTLCommandBuffer> commandBuffer() { return [test::Gpu::get().queue commandBuffer]; }
+  static void finish(id<MTLCommandBuffer> cmd) {
+    [cmd commit];
+    [cmd waitUntilCompleted];
+  }
 };
 
 TEST_F(MetalFrameCaptureTest, ACopyOfTheTextureReachesTheHandlerAsBgraBytes) {
@@ -59,7 +65,7 @@ TEST_F(MetalFrameCaptureTest, ACopyOfTheTextureReachesTheHandlerAsBgraBytes) {
   });
   EXPECT_TRUE(capture.pending());
   id<MTLCommandBuffer> cmd = commandBuffer();
-  auto readback = capture.encode(cmd, texture(), kWidth, kHeight);
+  auto readback = capture.encode(cmd, texture());
   ASSERT_TRUE(readback);
   EXPECT_FALSE(capture.pending());
   [cmd commit];
@@ -78,7 +84,7 @@ TEST_F(MetalFrameCaptureTest, ANewRequestReplacesThePendingOne) {
   capture.request([&](std::vector<uint8_t>, uint32_t, uint32_t) { ++first; });
   capture.request([&](std::vector<uint8_t>, uint32_t, uint32_t) { ++second; });
   id<MTLCommandBuffer> cmd = commandBuffer();
-  auto readback = capture.encode(cmd, texture(), kWidth, kHeight);
+  auto readback = capture.encode(cmd, texture());
   [cmd commit];
   [cmd waitUntilCompleted];
   MetalFrameCapture::deliver(std::move(readback), false);
@@ -89,10 +95,11 @@ TEST_F(MetalFrameCaptureTest, ANewRequestReplacesThePendingOne) {
 TEST_F(MetalFrameCaptureTest, NothingIsEncodedWithoutARequest) {
   MetalFrameCapture capture(test::Gpu::get().device);
   id<MTLCommandBuffer> cmd = commandBuffer();
-  auto readback = capture.encode(cmd, texture(), kWidth, kHeight);
+  auto readback = capture.encode(cmd, texture());
   EXPECT_FALSE(readback);
   EXPECT_EQ(readback.buffer, nil);
   EXPECT_EQ(MetalFrameCapture::completion(std::move(readback)), nullptr);
+  finish(cmd);
 }
 
 TEST_F(MetalFrameCaptureTest, AnUnreadableTextureKeepsTheRequestForALaterFrame) {
@@ -100,13 +107,14 @@ TEST_F(MetalFrameCaptureTest, AnUnreadableTextureKeepsTheRequestForALaterFrame) 
   bool called = false;
   capture.request([&](std::vector<uint8_t>, uint32_t, uint32_t) { called = true; });
   id<MTLCommandBuffer> cmd = commandBuffer();
-  auto skipped = capture.encode(cmd, unreadableDrawable(), kWidth, kHeight);
+  auto skipped = capture.encode(cmd, unreadableDrawable());
   EXPECT_FALSE(skipped);
   EXPECT_TRUE(capture.pending());
   EXPECT_FALSE(called);
-  auto taken = capture.encode(cmd, texture(), kWidth, kHeight);
+  auto taken = capture.encode(cmd, texture());
   EXPECT_TRUE(taken);
   EXPECT_FALSE(capture.pending());
+  finish(cmd);
 }
 
 TEST_F(MetalFrameCaptureTest, AFailedGpuDeliversNothingAtZeroSize) {
@@ -119,7 +127,8 @@ TEST_F(MetalFrameCaptureTest, AFailedGpuDeliversNothingAtZeroSize) {
     h = height;
   });
   id<MTLCommandBuffer> cmd = commandBuffer();
-  auto readback = capture.encode(cmd, texture(), kWidth, kHeight);
+  auto readback = capture.encode(cmd, texture());
+  finish(cmd);
   MetalFrameCapture::deliver(std::move(readback), true);
   EXPECT_TRUE(got.empty());
   EXPECT_EQ(w, 0u);
@@ -133,7 +142,7 @@ TEST_F(MetalFrameCaptureTest, TwoCapturesInFlightKeepTheirOwnBuffers) {
   id<MTLTexture> source = texture();
   capture.request(record);
   id<MTLCommandBuffer> first = commandBuffer();
-  auto a = capture.encode(first, source, kWidth, kHeight);
+  auto a = capture.encode(first, source);
   [first commit];
   [first waitUntilCompleted];
   const uint8_t overwrite[4] = {7, 7, 7, 7};
@@ -143,7 +152,7 @@ TEST_F(MetalFrameCaptureTest, TwoCapturesInFlightKeepTheirOwnBuffers) {
             bytesPerRow:4];
   capture.request(record);
   id<MTLCommandBuffer> second = commandBuffer();
-  auto b = capture.encode(second, source, kWidth, kHeight);
+  auto b = capture.encode(second, source);
   [second commit];
   [second waitUntilCompleted];
   MetalFrameCapture::deliver(std::move(a), false);

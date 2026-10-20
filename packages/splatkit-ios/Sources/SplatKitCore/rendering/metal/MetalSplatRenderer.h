@@ -3,10 +3,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <array>
-#include <atomic>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>

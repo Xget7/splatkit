@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <set>
 #include "rendering/metal/MetalSplatRenderer.h"
 #include "rendering/metal/cull/MetalVisibilityPass.h"

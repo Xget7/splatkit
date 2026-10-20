@@ -101,6 +101,8 @@ bool MetalVisibilityPass::encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot,
   if (slot >= kSlots || rangeCount > kMaxRanges || capacity_ == 0 ||
       (rangeCount > 0 && ranges == nullptr))
     return false;
+  const size_t sortBytes = size_t{capacity_} * sizeof(uint32_t);
+  if (keys.length < sortBytes || values.length < sortBytes) return false;
   // Validate before writing slot inputs, so a rejected request cannot corrupt them.
   uint32_t total = 0;
   for (uint32_t i = 0; i < rangeCount; ++i) {

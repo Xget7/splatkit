@@ -31,10 +31,9 @@ class MetalFrameCapture {
   void request(Handler handler) { handler_ = std::move(handler); }
   bool pending() const { return handler_ != nullptr; }
 
-  // Appends the copy of `texture` to `cmd` and takes the pending handler. Empty, with the handler
-  // kept, when nothing is pending or `texture` is not readable yet.
-  Readback encode(id<MTLCommandBuffer> cmd, id<MTLTexture> texture, uint32_t width,
-                  uint32_t height);
+  // Appends the copy of all of `texture` to `cmd` and takes the pending handler. Empty, with the
+  // handler kept, when nothing is pending or `texture` is not readable yet.
+  Readback encode(id<MTLCommandBuffer> cmd, id<MTLTexture> texture);
 
   // Runs the handler with the copied pixels, or with none when `failed`.
   static void deliver(Readback readback, bool failed);

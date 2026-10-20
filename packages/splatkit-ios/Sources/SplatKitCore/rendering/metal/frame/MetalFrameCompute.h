@@ -9,7 +9,6 @@
 #include <string>
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
-#include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/presentation/MetalFrameLoop.h"
 #include "rendering/metal/selection/MetalLodSelection.h"
 #include "rendering/metal/sort/MetalRadixSort.h"
@@ -23,12 +22,13 @@ namespace splatkit {
 // uniforms, the LOD selection, the visibility pass and the radix sort between its projection
 // and its indirect arguments. Owns the adaptive LOD threshold and the counters the GPU reports
 // back. Render thread only, except the stat accessors, which are safe from any thread. The
-// context and the frame loop must outlive it. Encode only; draw() commits what is returned.
+// frame loop must outlive it. Encode only; draw() commits what is returned.
 class MetalFrameCompute {
  public:
   static constexpr uint32_t kSlots = MetalVisibilityPass::kSlots;
 
-  MetalFrameCompute(const MetalContext& context, MetalFrameLoop& frameLoop);
+  MetalFrameCompute(id<MTLDevice> device, id<MTLCommandQueue> queue, id<MTLLibrary> library,
+                    MetalFrameLoop& frameLoop);
 
   MetalFrameCompute(const MetalFrameCompute&) = delete;
   MetalFrameCompute& operator=(const MetalFrameCompute&) = delete;
@@ -89,7 +89,9 @@ class MetalFrameCompute {
                       MetalRadixSort::KeyBits bits) const;
   void adaptLodThreshold();
 
-  const MetalContext& context_;
+  id<MTLDevice> device_ = nil;
+  id<MTLCommandQueue> queue_ = nil;
+  id<MTLLibrary> library_ = nil;
   MetalFrameLoop& frameLoop_;
   std::array<id<MTLBuffer>, kSlots> uniforms_{};
   MetalVisibilityPass visibility_;

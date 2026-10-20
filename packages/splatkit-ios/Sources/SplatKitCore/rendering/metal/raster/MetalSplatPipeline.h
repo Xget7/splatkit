@@ -5,7 +5,6 @@
 #include <array>
 #include <cstdint>
 
-#include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/layout/MetalShaderTypes.h"
 #include "rendering/metal/presentation/MetalRenderTarget.h"
 #include "rendering/metal/world/MetalWorld.h"
@@ -31,7 +30,7 @@ class MetalSplatPipeline {
   // colour attachments of `format`. format() reports it even when a pipeline failed, so a
   // failed build is not retried until the format changes. False when a pipeline could not be
   // built.
-  bool create(const MetalContext& context, MTLPixelFormat format);
+  bool create(id<MTLDevice> device, id<MTLLibrary> library, MTLPixelFormat format);
   // False until the splat pipelines exist.
   bool ready() const { return splatPipelines_[0] != nil; }
   // The colour format of the last create(); invalid before it.

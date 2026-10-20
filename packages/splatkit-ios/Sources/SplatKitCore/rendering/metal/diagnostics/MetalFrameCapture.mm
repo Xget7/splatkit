@@ -7,14 +7,15 @@
 namespace splatkit {
 
 MetalFrameCapture::Readback MetalFrameCapture::encode(id<MTLCommandBuffer> cmd,
-                                                      id<MTLTexture> texture, uint32_t width,
-                                                      uint32_t height) {
+                                                      id<MTLTexture> texture) {
   Readback readback;
   if (!handler_) return readback;
   if (texture.framebufferOnly) {
     LOGW("capture skipped: the drawable is not readable yet");
     return readback;
   }
+  const auto width = static_cast<uint32_t>(texture.width);
+  const auto height = static_cast<uint32_t>(texture.height);
   const NSUInteger bytesPerRow = NSUInteger{width} * 4;
   readback.buffer = [device_ newBufferWithLength:bytesPerRow * height
                                          options:MTLResourceStorageModeShared];

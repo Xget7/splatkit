@@ -1,12 +1,9 @@
 #include "rendering/metal/MetalSplatRenderer.h"
 
 #include <algorithm>
-#include <cmath>
 #include <utility>
 #include <vector>
 
-#include "rendering/metal/device/MetalShaderLibrary.h"
-#include "splat/math/Mat4.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
@@ -15,7 +12,8 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
   std::unique_ptr<MetalSplatRenderer> r(new MetalSplatRenderer());
   r->context_ = MetalContext::create();
   if (r->context_ == nullptr) return nullptr;
-  r->compute_ = std::make_unique<MetalFrameCompute>(*r->context_, r->frameLoop_);
+  r->compute_ = std::make_unique<MetalFrameCompute>(r->context_->device(), r->context_->queue(),
+                                                    r->context_->library(), r->frameLoop_);
   if (!r->compute_->create()) return nullptr;
   r->capture_ = std::make_unique<MetalFrameCapture>(r->context_->device());
   r->surface_ = std::make_unique<MetalSurface>(r->context_->device(), r->context_->library(),
@@ -34,7 +32,8 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   bool built = surface_->setLayer(layer);
   if (layer == nil) return;
   if (pipeline_.format() != surface_->targetFormat()) {
-    built = pipeline_.create(*context_, surface_->targetFormat()) && built;
+    built = pipeline_.create(context_->device(), context_->library(), surface_->targetFormat()) &&
+            built;
   }
   if (!built) {
     LOGE("rendering stopped: no pipelines");
@@ -57,7 +56,8 @@ void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
 void MetalSplatRenderer::setLinearBlending(bool linear) {
   if (linear == surface_->linearBlending()) return;
   const bool blitReady = surface_->setLinearBlending(linear);
-  const bool pipelinesReady = pipeline_.create(*context_, surface_->targetFormat());
+  const bool pipelinesReady =
+      pipeline_.create(context_->device(), context_->library(), surface_->targetFormat());
   if (!blitReady || !pipelinesReady) {
     LOGE("rendering stopped: no pipelines");
     surface_->setLayer(nil);
@@ -203,8 +203,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
                    {compute_->projected(), compute_->order(), compute_->drawArguments(slot)},
                    drawCount, gpuOrder);
   surface_->encodeOutput(cmd, drawable.texture);
-  MetalFrameCapture::Readback readback =
-      capture_->encode(cmd, drawable.texture, surface_->width(), surface_->height());
+  MetalFrameCapture::Readback readback = capture_->encode(cmd, drawable.texture);
   if (readback) surface_->allowReadback(false);
 
   // Submit dependencies in order on the same queue. The final completion releases

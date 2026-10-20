@@ -2,10 +2,10 @@
 
 #include <vector>
 
-#include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/frame/MetalFrameCompute.h"
 #include "rendering/metal/raster/MetalSplatPipeline.h"
 #include "splat/math/Mat4.h"
+#include "support/MetalTestContext.h"
 
 namespace splatkit {
 namespace {
@@ -16,12 +16,12 @@ constexpr size_t kCentre = (size_t{kSize} / 2 * kSize + kSize / 2) * 4;
 class MetalSplatPipelineTest : public testing::Test {
  protected:
   void SetUp() override {
-    context_ = MetalContext::create();
-    if (context_ == nullptr) GTEST_SKIP() << "Apple GPU family 7 unavailable";
-    compute_ = std::make_unique<MetalFrameCompute>(*context_, loop_);
+    gpu_ = &test::Gpu::get();
+    if (gpu_->device == nil || gpu_->library == nil) GTEST_SKIP() << "No Metal device";
+    compute_ = std::make_unique<MetalFrameCompute>(gpu_->device, gpu_->queue, gpu_->library, loop_);
     ASSERT_TRUE(compute_->create());
-    ASSERT_TRUE(pipeline_.create(*context_, MTLPixelFormatBGRA8Unorm));
-    target_ = std::make_unique<MetalRenderTarget>(context_->device());
+    ASSERT_TRUE(pipeline_.create(gpu_->device, gpu_->library, MTLPixelFormatBGRA8Unorm));
+    target_ = std::make_unique<MetalRenderTarget>(gpu_->device);
     ASSERT_TRUE(target_->ensureDepth(kSize, kSize));
     MTLTextureDescriptor* desc =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
@@ -30,7 +30,7 @@ class MetalSplatPipelineTest : public testing::Test {
                                                        mipmapped:NO];
     desc.usage = MTLTextureUsageRenderTarget;
     desc.storageMode = MTLStorageModeShared;
-    drawable_ = [context_->device() newTextureWithDescriptor:desc];
+    drawable_ = [gpu_->device newTextureWithDescriptor:desc];
     frame_.orderSource = SplatRenderer::OrderSource::gpu;
     frame_.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
     compute_->updateCamera(frame_, 0, {kSize, kSize}, false);
@@ -45,13 +45,13 @@ class MetalSplatPipelineTest : public testing::Test {
     cloud.covariances = {0.05f, 0, 0, 0.05f, 0, 0.05f, 0.05f, 0, 0, 0.05f, 0, 0.05f};
     cloud.shDegree = 1;
     cloud.sh.assign(18, 0.0f);
-    return MetalWorld::upload(context_->device(), cloud, 1);
+    return MetalWorld::upload(gpu_->device, cloud, 1);
   }
 
   // The centre pixel after encoding with `encode` into a fresh pass, as B, G, R, A.
   template <typename Encode>
   std::vector<uint8_t> centreAfter(Encode encode) {
-    id<MTLCommandBuffer> cmd = [context_->queue() commandBuffer];
+    id<MTLCommandBuffer> cmd = [gpu_->queue commandBuffer];
     encode(cmd);
     [cmd commit];
     [cmd waitUntilCompleted];
@@ -64,13 +64,15 @@ class MetalSplatPipelineTest : public testing::Test {
     return {pixels.begin() + kCentre, pixels.begin() + kCentre + 4};
   }
 
-  // Degree 1: the degree-0 CPU pipeline draws nothing on this GPU, before and after the split.
-  void drawCpu(id<MTLCommandBuffer> cmd, const MetalWorld* world, uint32_t drawCount) {
-    pipeline_.encode(cmd, *target_, drawable_, compute_->uniforms(0), world, 1, {}, drawCount,
+  // Degree 1 by default: the degree-0 CPU pipeline draws nothing on this GPU, before and after
+  // the split (see the disabled test).
+  void drawCpu(id<MTLCommandBuffer> cmd, const MetalWorld* world, uint32_t drawCount,
+               int degree = 1) {
+    pipeline_.encode(cmd, *target_, drawable_, compute_->uniforms(0), world, degree, {}, drawCount,
                      false);
   }
 
-  std::unique_ptr<MetalContext> context_;
+  test::Gpu* gpu_ = nullptr;
   MetalFrameLoop loop_{MetalFrameCompute::kSlots};
   std::unique_ptr<MetalFrameCompute> compute_;
   MetalSplatPipeline pipeline_;
@@ -80,15 +82,15 @@ class MetalSplatPipelineTest : public testing::Test {
 };
 
 TEST(MetalSplatPipelineCreateTest, ItIsReadyOnlyAfterCreateAndRemembersTheFormat) {
-  auto context = MetalContext::create();
-  if (context == nullptr) GTEST_SKIP() << "Apple GPU family 7 unavailable";
+  auto& gpu = test::Gpu::get();
+  if (gpu.device == nil || gpu.library == nil) GTEST_SKIP() << "No Metal device";
   MetalSplatPipeline pipeline;
   EXPECT_FALSE(pipeline.ready());
   EXPECT_EQ(pipeline.format(), MTLPixelFormatInvalid);
-  ASSERT_TRUE(pipeline.create(*context, MTLPixelFormatRGBA16Float));
+  ASSERT_TRUE(pipeline.create(gpu.device, gpu.library, MTLPixelFormatRGBA16Float));
   EXPECT_TRUE(pipeline.ready());
   EXPECT_EQ(pipeline.format(), MTLPixelFormatRGBA16Float);
-  ASSERT_TRUE(pipeline.create(*context, MTLPixelFormatBGRA8Unorm_sRGB));
+  ASSERT_TRUE(pipeline.create(gpu.device, gpu.library, MTLPixelFormatBGRA8Unorm_sRGB));
   EXPECT_EQ(pipeline.format(), MTLPixelFormatBGRA8Unorm_sRGB);
 }
 
@@ -127,6 +129,18 @@ TEST_F(MetalSplatPipelineTest, ACpuOrderDrawsBackToBackAndCountsTheEntries) {
 
   pixel = centreAfter([&](id<MTLCommandBuffer> cmd) { drawCpu(cmd, world.get(), 0); });
   EXPECT_NEAR(pixel[2], 13, 1);
+}
+
+// Known gap, fixed separately: the degree-0 CPU pipeline leaves the background untouched.
+TEST_F(MetalSplatPipelineTest, DISABLED_ACpuOrderAtDegreeZeroDrawsTheSplats) {
+  auto world = overlappingSplats();
+  ASSERT_NE(world, nullptr);
+  const uint32_t backToFront[2] = {0, 1};
+  ASSERT_TRUE(world->writeOrder(backToFront, 2));
+  const auto pixel =
+      centreAfter([&](id<MTLCommandBuffer> cmd) { drawCpu(cmd, world.get(), 2, 0); });
+  EXPECT_GT(pixel[2], 150);
+  EXPECT_LT(pixel[1], 80);
 }
 
 TEST_F(MetalSplatPipelineTest, AGpuOrderDrawsTheSortedProjectionsFrontToBack) {

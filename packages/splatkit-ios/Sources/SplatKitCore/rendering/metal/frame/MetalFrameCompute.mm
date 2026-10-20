@@ -25,18 +25,18 @@ bool reserveOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort, uint
 
 }  // namespace
 
-MetalFrameCompute::MetalFrameCompute(const MetalContext& context, MetalFrameLoop& frameLoop)
-    : context_(context), frameLoop_(frameLoop) {}
+MetalFrameCompute::MetalFrameCompute(id<MTLDevice> device, id<MTLCommandQueue> queue,
+                                     id<MTLLibrary> library, MetalFrameLoop& frameLoop)
+    : device_(device), queue_(queue), library_(library), frameLoop_(frameLoop) {}
 
 bool MetalFrameCompute::createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort,
                                        MetalRadixSort::KeyBits bits) const {
-  return visibility.create(context_.device(), context_.library(), bits) &&
-         sort.create(context_.device(), context_.library());
+  return visibility.create(device_, library_, bits) && sort.create(device_, library_);
 }
 
 bool MetalFrameCompute::create() {
   for (auto& uniform : uniforms_) {
-    uniform = metal::buffer(context_.device(), sizeof(CameraUniform));
+    uniform = metal::buffer(device_, sizeof(CameraUniform));
     if (uniform == nil) return false;
   }
   gpuSort_ = createOrdering(visibility_, sort_, MetalRadixSort::KeyBits::Full32);
@@ -91,9 +91,7 @@ bool MetalFrameCompute::configureFlatWorld(uint32_t count) {
 bool MetalFrameCompute::configureLodWorld(const splat::LodTree& tree, uint32_t budget) {
   if (!gpuSort_) return false;
   auto lod = std::make_unique<MetalLodSelection>();
-  if (!lod->create(context_.device(), context_.library()) ||
-      !lod->upload(tree, budget, lodErrorPixels_))
-    return false;
+  if (!lod->create(device_, library_) || !lod->upload(tree, budget, lodErrorPixels_)) return false;
   lod->setSplatLimit(lodSplatLimit_);
   // Compact projections and radix scratch scale with the cut, not all resident nodes.
   MetalVisibilityPass visibility;
@@ -103,7 +101,7 @@ bool MetalFrameCompute::configureLodWorld(const splat::LodTree& tree, uint32_t b
     return false;
   std::array<id<MTLBuffer>, kSlots> readback{};
   for (auto& buffer : readback) {
-    buffer = metal::buffer(context_.device(), 6 * sizeof(uint32_t));
+    buffer = metal::buffer(device_, 6 * sizeof(uint32_t));
     if (!buffer) return false;
   }
   visibility_ = std::move(visibility);
@@ -156,7 +154,7 @@ void MetalFrameCompute::adaptLodThreshold() {
 
 id<MTLCommandBuffer> MetalFrameCompute::encodeSelection(uint32_t slot) {
   adaptLodThreshold();
-  auto selection = [context_.queue() commandBuffer];
+  auto selection = [queue_ commandBuffer];
   selection.label = @"GPU LOD selection";
   lod_->encode(selection, uniforms_[slot]);
   id<MTLBuffer> selectedCount = lodReadback_[slot];
@@ -198,7 +196,7 @@ id<MTLCommandBuffer> MetalFrameCompute::encodeSelection(uint32_t slot) {
 id<MTLCommandBuffer> MetalFrameCompute::encodeVisibilityAndSort(const SplatRenderer::Frame& frame,
                                                                 uint32_t slot,
                                                                 const MetalWorld& world) {
-  id<MTLCommandBuffer> sort = [context_.queue() commandBuffer];
+  id<MTLCommandBuffer> sort = [queue_ commandBuffer];
   const int degree = world.drawDegree(frame.shDegree);
   if (!visibility_.encodeProject(sort, slot, uniforms_[slot], world.splats(), world.harmonics(),
                                  degree, lod_ ? nullptr : frame.ranges, lod_ ? 0 : frame.rangeCount,
