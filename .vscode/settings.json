@@ -17,7 +17,7 @@
   // The extension cannot parse Objective-C++; read as C++ these headers are all errors.
   "files.associations": {
     "**/splatkit-ios/Sources/**/*.h": "objective-cpp",
-    "**/splatkit-ios/tests/*.h": "objective-cpp",
+    "**/splatkit-ios/tests/**/*.h": "objective-cpp",
     "**/react-native-splatkit/ios/*.h": "objective-cpp"
   },
   // The mirror checkouts in build/maintenance copy every header, so symbol lookups would
