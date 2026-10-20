@@ -3,7 +3,6 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -15,17 +14,18 @@
 #include "rendering/metal/frame/MetalFrameCompute.h"
 #include "rendering/metal/presentation/MetalFrameLoop.h"
 #include "rendering/metal/presentation/MetalSurface.h"
+#include "rendering/metal/raster/MetalSplatPipeline.h"
 #include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
 
-// Everything between a CAMetalLayer and a presented frame: the Metal context, the
-// pipelines built for the layer's pixel format, the surface that holds the layer and the
-// offscreen target a render scale needs, and the world bound to them. The layer is attached
-// and sized by the view; the world stays through a detach. Render thread only, except where
-// noted.
+// Everything between a CAMetalLayer and a presented frame: the Metal context, the frame compute
+// and the splat pipelines built for the layer's pixel format, the surface that holds the layer
+// and the offscreen target a render scale needs, and the world bound to them. The layer is
+// attached and sized by the view; the world stays through a detach. draw() is the frame
+// script over those parts. Render thread only, except where noted.
 class MetalSplatRenderer final : public SplatRenderer {
  public:
   // Null when the device has no Metal.
@@ -107,10 +107,7 @@ class MetalSplatRenderer final : public SplatRenderer {
 
  private:
   MetalSplatRenderer() = default;
-  bool createPipelines();
 
-  void encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture, const Frame& frame,
-                    uint32_t slot, uint32_t drawCount, bool gpuOrder);
   id<MTLBuffer> encodeCapture(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture,
                               CaptureHandler* onCapture);
   // Transfers the acquired frame slot to the loop, which returns it when the frame completes.
@@ -119,15 +116,7 @@ class MetalSplatRenderer final : public SplatRenderer {
 
   std::unique_ptr<MetalContext> context_;
   MetalFrameLoop frameLoop_{kFramesInFlight};
-  std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
-  // The GPU order path: front to back in batches, a saturation mask between them, the
-  // background last.
-  id<MTLRenderPipelineState> projectedPipeline_ = nil;
-  id<MTLRenderPipelineState> maskPipeline_ = nil;
-  id<MTLRenderPipelineState> backgroundPipeline_ = nil;
-  id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
-  id<MTLDepthStencilState> maskDepth_ = nil;   // always write
-  MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
+  MetalSplatPipeline pipeline_;
 
   std::unique_ptr<MetalFrameCompute> compute_;
   std::unique_ptr<MetalSurface> surface_;
