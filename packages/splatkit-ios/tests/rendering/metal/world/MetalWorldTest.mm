@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "MetalTestContext.h"
+#include "support/MetalTestContext.h"
 #include "rendering/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
 

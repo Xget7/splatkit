@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 
-#include "MetalTestContext.h"
+#include "support/MetalTestContext.h"
 #include "rendering/MetalVisibility.h"
 #include "splat/math/Half.h"
 #include "splat/math/Mat4.h"

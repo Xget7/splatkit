@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <set>
-#include "MetalTestContext.h"
+#include "support/MetalTestContext.h"
 #include "rendering/MetalCompute.h"
 #include "rendering/MetalLOD.h"
 #include "rendering/MetalSplatRenderer.h"
