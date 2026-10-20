@@ -51,6 +51,8 @@ FAILURE = re.compile(r"SplatKit E: |SplatWorldMissing: |SplatRunStopped: ")
 ERROR = re.compile(r"SplatKit E: |failed assertion|-\[MTLDebug|Invalid (device|constant|threadgroup|texture) "
                    r"(load|store)|Shader Validation|SplatWorldMissing: ")
 WAITING, STARTED, DONE, FAILED = "waiting", "started", "done", "failed"
+# The turn holds pitch, so a change during it means a touch moved the camera.
+PITCH = re.compile(r" pitch (-?\d+\.\d+),")
 # MetalContext::capabilities(), logged once when the renderer starts.
 CAPABILITIES = re.compile(r"Metal capabilities: family (?P<family>Apple\d+), Metal (?P<metal>\d+), "
                           r"threadgroup memory (?P<threadgroup_memory_bytes>\d+) B, "
@@ -107,6 +109,13 @@ def gpu_capabilities(log):
     if match is None:
         return None
     return {key: value if key == "family" else int(value) for key, value in match.groupdict().items()}
+
+
+def touch_failure(log):
+    turn = log.partition(BENCHMARK_STARTED)[2].partition(BENCHMARK_DONE)[0]
+    if len(set(PITCH.findall(turn))) > 1:
+        return "the camera pitch changed during the turn; the screen was touched"
+    return None
 
 
 def benchmark_state(log):
@@ -228,7 +237,7 @@ def run(args):
     recorded = bool(trace) and trace[0].returncode == 0 and trace_path.exists()
     if args.trace:
         summary["trace"] = {"path": str(trace_path), "recorded": recorded}
-    failure = failure or trace_failure(args.trace, recorded)
+    failure = failure or trace_failure(args.trace, recorded) or touch_failure(log)
     if failure or summary["errors"]:
         summary["status"] = "failed"
     if failure:

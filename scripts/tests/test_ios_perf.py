@@ -99,6 +99,15 @@ class ConsoleTest(unittest.TestCase):
         self.assertEqual(len(perf.console_errors(log)), 3)
         self.assertEqual(perf.console_errors("SplatKit I: benchmark gpu ms: mean 5.0"), [])
 
+    def test_a_pitch_change_during_the_turn_means_the_screen_was_touched(self):
+        def stats(pitch):
+            return f"SplatKit I: 120.0 fps, gpu 4.9 ms, pos 0.00 0.00 0.00, yaw 1.00 pitch {pitch}, fly"
+        steady = "\n".join([stats("0.30"), "SplatKit I: benchmark started: 10 splats", stats("0.00"),
+                            stats("0.00"), "SplatKit I: benchmark gpu ms: mean 4.9", stats("0.40")])
+        self.assertIsNone(perf.touch_failure(steady))
+        touched = steady.replace(stats("0.00"), stats("-0.24"), 1)
+        self.assertIn("touched", perf.touch_failure(touched))
+
     def test_state_follows_benchmark_and_world_failure(self):
         self.assertEqual(perf.benchmark_state("SplatKit I: benchmark started: 10 splats, one turn over 30.000 s"),
                          perf.STARTED)
