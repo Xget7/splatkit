@@ -93,8 +93,8 @@ bool VulkanSplatPipeline::createDescriptors(const VulkanCameraUniforms& cameras)
 
 bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
   VkDevice device = ctx_.device();
-  const ShaderModule vert(device, shaders::splat_vert, shaders::splat_vert_size);
-  const ShaderModule frag(device, shaders::splat_frag, shaders::splat_frag_size);
+  const VulkanShaderModule vert(device, shaders::splat_vert, shaders::splat_vert_size);
+  const VulkanShaderModule frag(device, shaders::splat_frag, shaders::splat_frag_size);
   if (!vert || !frag) return false;
 
   // constant_id 0 of the vertex shader is the SH degree; each pipeline gets its own.

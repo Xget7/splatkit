@@ -101,8 +101,8 @@ bool VulkanLodSelection::initialize() {
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
   if (vkCreatePipelineLayout(ctx_.device(), &layout, nullptr, &layout_) != VK_SUCCESS) return false;
-  const ShaderModule module(ctx_.device(), shaders::lod_selection_comp,
-                            shaders::lod_selection_comp_size);
+  const VulkanShaderModule module(ctx_.device(), shaders::lod_selection_comp,
+                                  shaders::lod_selection_comp_size);
   if (!module) return false;
   VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   pipeline.layout = layout_;
@@ -216,7 +216,7 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
   }
   vkUpdateDescriptorSets(ctx_.device(), kBindings, writes, 0, nullptr);
   // Inter-frame WAR/WAW plus upload/host writes, including consumers on previous submissions.
-  memoryBarrier(
+  vulkanMemoryBarrier(
       cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
       VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -232,10 +232,10 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
       vkCmdDispatch(cmd, 1, 1, 1);
     else
       vkCmdDispatchIndirect(cmd, scratch_->handle(), indirectOffset);
-    memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
-                      VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+    vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                            VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   };
   dispatch(kReset);
   for (uint32_t round = 0; round < rounds_; ++round) {
@@ -251,11 +251,11 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
     dispatch(kAdvance);
   }
   dispatch(kCopyPackets, kPacketGroupsOffset);
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-                    VK_ACCESS_TRANSFER_READ_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+                          VK_ACCESS_TRANSFER_READ_BIT);
   return true;
 }
 }  // namespace splatkit

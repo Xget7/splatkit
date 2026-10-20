@@ -42,8 +42,8 @@ uint32_t passSet(uint32_t pass) {
 }
 
 void computeBarrier(VkCommandBuffer cmd) {
-  memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+  vulkanMemoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 }
 
 // Bind after each pipeline transition: MoltenVK/gfxstream otherwise retained stale
@@ -157,7 +157,7 @@ bool VulkanRadixSort::initialize() {
   const size_t sizes[] = {shaders::radix_prepare_comp_size, shaders::radix_histogram_comp_size,
                           shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size};
   for (uint32_t i = 0; i < kStageCount; ++i) {
-    const ShaderModule module(device, code[i], sizes[i]);
+    const VulkanShaderModule module(device, code[i], sizes[i]);
     if (!module) return false;
     VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
     pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -275,7 +275,7 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
   PushConstants push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
   bindStage(cmd, layout_, pipelines_[kPrepare], sets_[slot][0], push);
   vkCmdDispatch(cmd, 1, 1, 1);
-  memoryBarrier(
+  vulkanMemoryBarrier(
       cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   const VkBuffer state = slots_[slot].state->handle();
@@ -294,9 +294,10 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
     vkCmdDispatchIndirect(cmd, state, 0);
     computeBarrier(cmd);
   }
-  memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
-                kCompute | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
+  vulkanMemoryBarrier(
+      cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
+      kCompute | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
 }
 
 bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
@@ -305,9 +306,10 @@ bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& in
     return false;
   if (!acceptsInput(input)) return false;
   writeDescriptorSets(slot, input);
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
-                kCompute, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+  vulkanMemoryBarrier(
+      cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT, kCompute,
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
   recordSort(cmd, slot, input.keyBits);
   return true;
 }

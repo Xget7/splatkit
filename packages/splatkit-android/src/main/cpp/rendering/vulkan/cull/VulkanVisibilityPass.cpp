@@ -299,10 +299,10 @@ bool VulkanVisibilityPass::createPipelines() {
   if (vkCreatePipelineLayout(device, &prepareLayoutInfo, nullptr, &prepareLayout_) != VK_SUCCESS)
     return false;
 
-  const ShaderModule visibilityModule(device, shaders::visibility_comp,
-                                      shaders::visibility_comp_size);
-  const ShaderModule prepareModule(device, shaders::prepare_indirect_comp,
-                                   shaders::prepare_indirect_comp_size);
+  const VulkanShaderModule visibilityModule(device, shaders::visibility_comp,
+                                            shaders::visibility_comp_size);
+  const VulkanShaderModule prepareModule(device, shaders::prepare_indirect_comp,
+                                         shaders::prepare_indirect_comp_size);
   if (!visibilityModule || !prepareModule) return false;
   VkPipelineShaderStageCreateInfo visibilityStage{
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
