@@ -1,0 +1,26 @@
+# Vulkan GPU references
+
+Cited facts the [gpu-renderer-change](../../../.claude/skills/gpu-renderer-change/SKILL.md) skill grounds Vulkan plans in.
+Each fact names its source; refresh it in the pull request that relies on it.
+
+## Sources
+
+Precedence on availability: the header, then the specification, then the reference phone's reported capabilities.
+
+| Key | Source | Version |
+|---|---|---|
+| HDR | `vulkan/vulkan_core.h` in the NDK sysroot (`$ANDROID_HOME/ndk/<version>/toolchains/llvm/prebuilt/<host>/sysroot/usr/include`) | `VK_HEADER_VERSION` 275, NDK 27.1.12297006 |
+| SPEC | Vulkan specification, `https://docs.vulkan.org/spec/latest/` | latest, reachable 2026-10-20 |
+
+## Our floor
+
+- API: Vulkan 1.1 with `VK_KHR_swapchain` ([VulkanContext.cpp](../../../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanContext.cpp) `require_api_version(1, 1, 0)`).
+- OS: Android 10, API 29 (`minSdk` in [build.gradle.kts](../../../packages/splatkit-android/build.gradle.kts)).
+- GPU pipeline: a compute queue and subgroup basic, arithmetic and ballot operations in compute shaders, plus workgroup and storage-binding limits; a device without them sorts on the CPU ([VulkanVisibilityPass.cpp](../../../packages/splatkit-android/src/main/cpp/rendering/vulkan/cull/VulkanVisibilityPass.cpp) `queryCapabilities`, `VulkanSplatRenderer::sortsOnGpu`).
+- Reference phone: Xiaomi Mi 9, Adreno 640, Android 11, Vulkan 1.1.128, driver `0x801f6000` ([BENCHMARKS.md](../../BENCHMARKS.md)).
+  Its full limits are not captured yet.
+
+## Adreno 640 findings
+
+- Subgroup ballot loses keys in the radix histogram, so the histogram uses workgroup atomics ([ARCHITECTURE.md](../../ARCHITECTURE.md), Sort row).
+- An sRGB swapchain attachment cost about 40 % of the frame, so the swapchain is UNORM unless linear blending is on ([ARCHITECTURE.md](../../ARCHITECTURE.md), Present row).
