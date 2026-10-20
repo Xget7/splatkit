@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -30,6 +31,38 @@ class RecordingTest(unittest.TestCase):
         self.assertEqual(args[args.index(perf.EXTRA_HUD) + 1], "false")
         self.assertNotIn(perf.EXTRA_POSE, args)
         self.assertEqual(perf.launch_args(20, "low", "1,2,3,0,0")[-1], "1,2,3,0,0")
+
+
+class SceneAssetsTest(unittest.TestCase):
+    def test_missing_asset_is_rejected_with_its_path_and_the_fix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            assets = Path(directory)
+            (assets / perf.SCENE_ASSETS[0]).write_bytes(b"")
+            missing = assets / perf.SCENE_ASSETS[1]
+            with self.assertRaises(RuntimeError) as raised:
+                perf.require_scene_assets(assets)
+            message = str(raised.exception)
+            self.assertIn(str(missing), message)
+            self.assertNotIn(str(assets / perf.SCENE_ASSETS[0]), message)
+            self.assertIn("git-ignored", message)
+            self.assertNotIn("\n", message)
+
+    def test_every_missing_asset_is_named(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(RuntimeError) as raised:
+                perf.require_scene_assets(Path(directory))
+            for name in perf.SCENE_ASSETS:
+                self.assertIn(name, str(raised.exception))
+
+    def test_present_assets_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in perf.SCENE_ASSETS:
+                (Path(directory) / name).write_bytes(b"")
+            perf.require_scene_assets(Path(directory))
+
+    def test_scene_is_the_one_the_dev_app_bundles(self):
+        self.assertEqual(perf.ASSETS_DIR, perf.APP_DIR / "app" / "src" / "main" / "assets")
+        self.assertEqual(perf.SCENE_ASSETS, ("kitchen_500k.spz", "kitchen_collider.glb"))
 
 
 class AnalysisTest(unittest.TestCase):
