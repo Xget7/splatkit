@@ -85,6 +85,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);
   void applyPolicyToCompute();
+  void adoptWorld(std::unique_ptr<VulkanWorld> world, std::unique_ptr<VulkanFrameCompute> compute);
 
   VulkanContext& ctx_;
   VulkanFrameLoop& frameLoop_;

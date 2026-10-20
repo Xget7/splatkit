@@ -117,6 +117,16 @@ std::optional<GpuWorldInfo> VulkanSplatRenderer::world() const {
   return GpuWorldInfo{world_->count, world_->shDegree};
 }
 
+// Callers have waited for the GPU to finish with the world being replaced.
+void VulkanSplatRenderer::adoptWorld(std::unique_ptr<VulkanWorld> world,
+                                     std::unique_ptr<VulkanFrameCompute> compute) {
+  world_ = std::move(world);
+  compute_ = std::move(compute);
+  applyPolicyToCompute();
+  splats_->bindWorld(*world_);
+  worldFrameCompletion_.reset();
+}
+
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
@@ -130,11 +140,7 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   auto world = VulkanWorld::upload(ctx_, cloud, maxShDegree, false);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
-  world_ = std::move(world);
-  compute_ = std::move(compute.value());
-  applyPolicyToCompute();
-  splats_->bindWorld(*world_);
-  worldFrameCompletion_.reset();
+  adoptWorld(std::move(world), std::move(compute.value()));
   return true;
 }
 
@@ -159,11 +165,7 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   }
   auto world = VulkanWorld::upload(ctx_, tree.nodes, maxShDegree, false);
   if (!world) return false;
-  world_ = std::move(world);
-  compute_ = std::move(compute.value());
-  applyPolicyToCompute();
-  splats_->bindWorld(*world_);
-  worldFrameCompletion_.reset();
+  adoptWorld(std::move(world), std::move(compute.value()));
   return true;
 }
 
@@ -179,11 +181,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   auto world = VulkanWorld::createSlab(ctx_, capacity, shDegree, false);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
-  world_ = std::move(world);
-  compute_ = std::move(compute.value());
-  applyPolicyToCompute();
-  splats_->bindWorld(*world_);
-  worldFrameCompletion_.reset();
+  adoptWorld(std::move(world), std::move(compute.value()));
   return true;
 }
 
