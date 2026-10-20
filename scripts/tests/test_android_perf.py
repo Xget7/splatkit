@@ -34,6 +34,58 @@ class RecordingTest(unittest.TestCase):
         self.assertEqual(perf.launch_args(20, "low", "1,2,3,0,0")[-1], "1,2,3,0,0")
 
 
+class WorldAndValidationTest(unittest.TestCase):
+    def test_world_goes_to_the_extra_the_dev_app_reads(self):
+        args = perf.launch_args(20, "high", None, "house.spz")
+        self.assertEqual(args[args.index(perf.EXTRA_WORLD) + 1], "house.spz")
+        self.assertNotIn(perf.EXTRA_WORLD, perf.launch_args(20, "high", None))
+        activity = perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt"
+        self.assertIn(f'getStringExtra("{perf.EXTRA_WORLD}")', activity.read_text())
+
+    def test_relative_worlds_live_in_the_external_files_dir(self):
+        self.assertEqual(perf.device_world("house.spz"), f"/sdcard/Android/data/{perf.PACKAGE}/files/house.spz")
+        self.assertEqual(perf.device_world("/sdcard/house.spz"), "/sdcard/house.spz")
+
+    def test_validation_builds_and_installs_the_debug_apk(self):
+        self.assertEqual(perf.gradle_task(perf.VALIDATION_VARIANT), ":app:assembleDebug")
+        self.assertEqual(perf.gradle_task(perf.BUILD_VARIANT), ":app:assembleRelease")
+        self.assertEqual(perf.apk("debug").name, "app-debug.apk")
+
+    def test_a_validation_run_needs_the_layer_on(self):
+        self.assertIsNone(perf.validation_failure(f"x SplatKit: {perf.VALIDATION_ON}\n"))
+        self.assertIn("did not load", perf.validation_failure("x SplatKit: validation layers: off\n"))
+
+    def test_the_layer_status_line_is_what_vulkan_context_logs(self):
+        context = (perf.ROOT / "packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanContext.cpp")
+        self.assertIn('LOGI("validation layers: %s", validation ? "on" : "off")', context.read_text())
+
+    def test_a_missing_layer_names_the_fetch_script(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(RuntimeError) as raised:
+                perf.require_validation_layer(Path(directory) / "libVkLayer_khronos_validation.so")
+            self.assertIn("fetch-validation-layers.sh", str(raised.exception))
+
+
+class RotationTest(unittest.TestCase):
+    def setUp(self):
+        self.settings = {perf.AUTO_ROTATE: "1", perf.USER_ROTATION: "null"}
+        self.original = (perf.system_setting, perf.put_system_setting)
+        perf.system_setting = lambda serial, name: self.settings[name]
+        perf.put_system_setting = lambda serial, name, value: self.settings.__setitem__(name, value)
+
+    def tearDown(self):
+        perf.system_setting, perf.put_system_setting = self.original
+
+    def test_a_run_locks_landscape_and_restores_the_settings(self):
+        saved = perf.lock_rotation(None)
+        self.assertEqual(self.settings, {perf.AUTO_ROTATE: "0", perf.USER_ROTATION: perf.RUN_ROTATION})
+        perf.restore_rotation(None, saved)
+        self.assertEqual(self.settings[perf.AUTO_ROTATE], "1")
+        # Unset before the run, so nothing is written back; the lock's value stays harmless
+        # because auto-rotate is on again.
+        self.assertEqual(self.settings[perf.USER_ROTATION], perf.RUN_ROTATION)
+
+
 class SceneAssetsTest(unittest.TestCase):
     def test_missing_asset_is_rejected_with_its_path_and_the_fix(self):
         with tempfile.TemporaryDirectory() as directory:

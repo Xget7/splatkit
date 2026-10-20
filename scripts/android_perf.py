@@ -3,6 +3,8 @@
 
 Writes trace.perfetto-trace, logcat.txt and report.json to one run directory; open the trace
 at https://ui.perfetto.dev. Needs one adb device; the phone must stay awake and unlocked.
+--world names a file in the app's external files dir; --validation runs the debug build with the
+Khronos validation layer and fails on any message it logs.
 """
 
 import argparse
@@ -20,12 +22,16 @@ import perfetto_analysis  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "apps" / "android-dev"
 BUILD_VARIANT = "release"
-GRADLE_TASK = ":app:assembleRelease"
-APK = APP_DIR / "app" / "build" / "outputs" / "apk" / BUILD_VARIANT / f"app-{BUILD_VARIANT}.apk"
+# Only the debug build looks for the validation layer (VulkanContext wantValidation).
+VALIDATION_VARIANT = "debug"
+VALIDATION_LAYER = APP_DIR / "app" / "src" / "debug" / "jniLibs" / "arm64-v8a" / "libVkLayer_khronos_validation.so"
+VALIDATION_ON = "validation layers: on"
 ASSETS_DIR = APP_DIR / "app" / "src" / "main" / "assets"
 # The scene MainActivity loads from its assets when the launch carries no world extra.
 SCENE_ASSETS = ("kitchen_500k.spz", "kitchen_collider.glb")
 PACKAGE = perfetto_analysis.PACKAGE
+# MainActivity resolves a relative world path against getExternalFilesDir(null).
+DEVICE_FILES_DIR = f"/sdcard/Android/data/{PACKAGE}/files"
 ACTIVITY = f"{PACKAGE}/.MainActivity"
 DEVICE_TRACE = "/data/misc/perfetto-traces/splatkit-perf.perfetto-trace"
 RUNS_DIR = ROOT / "output" / "android-perf"
@@ -56,7 +62,14 @@ EXTRA_SECONDS = "seconds"
 EXTRA_QUALITY = "quality"
 EXTRA_HUD = "hud"
 EXTRA_POSE = "pose"
+EXTRA_WORLD = "world"
 QUALITY_PRESETS = ("low", "medium", "high", "ultra")
+# Every run draws in landscape, rotation 1 (Surface.ROTATION_90), whatever way the phone lies;
+# the previous settings come back afterwards.
+AUTO_ROTATE = "accelerometer_rotation"
+USER_ROTATION = "user_rotation"
+RUN_ROTATION = "1"
+ROTATION_OFF = "0"
 DEFAULT_QUALITY = "high"
 DEFAULT_SECONDS = 30
 MS_PER_S = 1000
@@ -98,13 +111,39 @@ duration_ms: {int(duration_s * MS_PER_S)}
 """
 
 
-def launch_args(seconds, quality, pose):
+def launch_args(seconds, quality, pose, world=None):
     """The am start command; --ez hud false keeps HUD redraws out of the measurement."""
     args = ["shell", "am", "start", "-n", ACTIVITY, "--ez", EXTRA_BENCHMARK, "true",
             "--ef", EXTRA_SECONDS, str(seconds), "--es", EXTRA_QUALITY, quality, "--ez", EXTRA_HUD, "false"]
     if pose:
         args += ["--es", EXTRA_POSE, pose]
+    if world:
+        args += ["--es", EXTRA_WORLD, world]
     return args
+
+
+def apk(variant):
+    return APP_DIR / "app" / "build" / "outputs" / "apk" / variant / f"app-{variant}.apk"
+
+
+def gradle_task(variant):
+    return f":app:assemble{variant.capitalize()}"
+
+
+def device_world(world):
+    return world if world.startswith("/") else f"{DEVICE_FILES_DIR}/{world}"
+
+
+def require_validation_layer(layer=VALIDATION_LAYER):
+    if not layer.is_file():
+        raise RuntimeError(f"missing {layer}: fetch it with scripts/fetch-validation-layers.sh")
+
+
+def validation_failure(log):
+    """Why a validation run does not count, or None; the messages themselves are report errors."""
+    if VALIDATION_ON not in log:
+        return "the validation layer did not load; see logcat.txt"
+    return None
 
 
 def adb(serial, *args, check=True, **kwargs):
@@ -120,6 +159,29 @@ def git_state():
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True).stdout
     return {"commit": sha, "dirty": bool(dirty.strip())}
+
+
+def system_setting(serial, name):
+    return adb(serial, "shell", "settings", "get", "system", name).stdout.strip()
+
+
+def put_system_setting(serial, name, value):
+    adb(serial, "shell", "settings", "put", "system", name, value)
+
+
+def lock_rotation(serial):
+    """Locks the display to RUN_ROTATION; returns the settings that restore_rotation puts back."""
+    saved = {name: system_setting(serial, name) for name in (AUTO_ROTATE, USER_ROTATION)}
+    put_system_setting(serial, AUTO_ROTATE, ROTATION_OFF)
+    put_system_setting(serial, USER_ROTATION, RUN_ROTATION)
+    return saved
+
+
+def restore_rotation(serial, saved):
+    for name, value in saved.items():
+        # An unset setting reads back as "null" and is left unset.
+        if value != "null":
+            put_system_setting(serial, name, value)
 
 
 def require_scene_assets(assets_dir=ASSETS_DIR):
@@ -155,13 +217,27 @@ def wait_for_exit(serial, pid, timeout_s):
 
 
 def run(args):
+    variant = VALIDATION_VARIANT if args.validation else BUILD_VARIANT
+    if args.validation:
+        require_validation_layer()
     if not args.skip_build:
-        require_scene_assets()
-        print(f"building the {BUILD_VARIANT} dev app", flush=True)
-        subprocess.run(["./gradlew", GRADLE_TASK, "-q"], cwd=APP_DIR, check=True)
+        if not args.world:
+            require_scene_assets()
+        print(f"building the {variant} dev app", flush=True)
+        subprocess.run(["./gradlew", gradle_task(variant), "-q"], cwd=APP_DIR, check=True)
+    if args.world and adb(args.serial, "shell", "test", "-f", device_world(args.world), check=False).returncode != 0:
+        raise RuntimeError(f"no world at {device_world(args.world)}; push it there with adb push")
     print("installing", flush=True)
-    adb(args.serial, "install", "-r", str(APK))
+    adb(args.serial, "install", "-r", str(apk(variant)))
 
+    saved_rotation = lock_rotation(args.serial)
+    try:
+        return record(args, variant)
+    finally:
+        restore_rotation(args.serial, saved_rotation)
+
+
+def record(args, variant):
     out = args.out or RUNS_DIR / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     out.mkdir(parents=True, exist_ok=True)
     adb(args.serial, "shell", "am", "force-stop", PACKAGE)
@@ -173,7 +249,7 @@ def run(args):
     started = adb(args.serial, "shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE, "--background",
                   input=perfetto_config(trace_seconds))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
-    adb(args.serial, *launch_args(args.seconds, args.quality, args.pose))
+    adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world))
 
     failure = None
     try:
@@ -193,13 +269,15 @@ def run(args):
         "device": device_property(args.serial, "ro.product.model"),
         "android": device_property(args.serial, "ro.build.version.release"),
         "soc": device_property(args.serial, "ro.board.platform"),
-        "build": BUILD_VARIANT, "quality": args.quality, "pose": args.pose, "seconds": args.seconds,
+        "build": variant, "quality": args.quality, "pose": args.pose, "world": args.world,
+        "seconds": args.seconds, "validation": args.validation, "rotation": int(RUN_ROTATION),
         **git_state(),
     }
     summary = (benchmark_report.summarize(log, ENVIRONMENT, int(app_pid), args.seconds)
                if app_pid.isdigit() else {"status": "failed", "runs": [], "errors": ["app not running"]})
     summary["run"] = environment
     summary["trace"] = {"path": str(trace), "app_slices_found": FRAME_SLICE in trace.read_bytes()}
+    failure = failure or (validation_failure(log) if args.validation else None)
     if failure:
         summary["status"] = "failed"
         summary.setdefault("errors", []).append(failure)
@@ -240,9 +318,13 @@ def main():
     parser.add_argument("--seconds", type=float, default=DEFAULT_SECONDS, help="length of the benchmark turn")
     parser.add_argument("--quality", default=DEFAULT_QUALITY, choices=QUALITY_PRESETS)
     parser.add_argument("--pose", help='"x,y,z,yaw,pitch"; the turn keeps the position, resets yaw')
+    parser.add_argument("--world", help=f"world file, relative to {DEVICE_FILES_DIR} or absolute; "
+                        "default the bundled kitchen_500k.spz")
+    parser.add_argument("--validation", action="store_true",
+                        help="debug build with the Khronos validation layer; the timings are then not comparable")
     parser.add_argument("--serial", help="adb device serial when more than one is attached")
     parser.add_argument("--out", type=Path, help=f"run directory; defaults under {RUNS_DIR.relative_to(ROOT)}")
-    parser.add_argument("--skip-build", action="store_true", help=f"install the last {BUILD_VARIANT} APK")
+    parser.add_argument("--skip-build", action="store_true", help="install the last APK of the build")
     args = parser.parse_args()
     try:
         return run(args)
