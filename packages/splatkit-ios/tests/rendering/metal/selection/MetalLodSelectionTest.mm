@@ -15,6 +15,7 @@
 #include "splat/lod/LodFile.h"
 #include "splatkit/camera/WalkCamera.h"
 #include "support/MetalTestContext.h"
+#include "support/MetalVisibilityRig.h"
 
 namespace splatkit {
 namespace {
@@ -110,10 +111,10 @@ TEST(MetalLodSelectionTest, DistanceChangesCutAndIndexedVisibilitySortsOnlyThatC
   EXPECT_EQ(select(lod, camera(1000000)).size(), 1u);
   auto world = MetalWorld::upload(gpu.device, tree.nodes, 0);
   ASSERT_TRUE(world);
-  MetalVisibilityPass visibility;
-  ASSERT_TRUE(visibility.create(gpu.device, gpu.library));
+  test::VisibilityRig visibility;
+  ASSERT_TRUE(visibility.create());
   ASSERT_TRUE(visibility.reserve(static_cast<uint32_t>(tree.nodeCount()), lod.budget()));
-  EXPECT_EQ(visibility.capacity(), 400u);
+  EXPECT_EQ(visibility.pass.capacity(), 400u);
   {
     auto rejected = [gpu.queue commandBuffer];
     const SplatRenderer::Range highIndex{static_cast<uint32_t>(tree.nodeCount()) - 1, 1};

@@ -12,21 +12,40 @@
 #include "splat/math/Mat4.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/MetalTestContext.h"
+#include "support/MetalVisibilityRig.h"
 
 namespace splatkit {
 namespace {
 
 using test::Gpu;
+using test::VisibilityRig;
 
 class MetalVisibilityPassTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NE(Gpu::get().device, nil);
     ASSERT_NE(Gpu::get().library, nil);
-    ASSERT_TRUE(visibility.create(Gpu::get().device, Gpu::get().library));
+    ASSERT_TRUE(visibility.create());
   }
-  MetalVisibilityPass visibility;
+  VisibilityRig visibility;
 };
+
+TEST(MetalVisibilityPassSizingTest, SlotsFollowTheActiveCapacityAndNeverDropBelowOne) {
+  EXPECT_EQ(MetalVisibilityPass::slotsFor(100), 100u);
+  EXPECT_EQ(MetalVisibilityPass::slotsFor(100, 40), 40u);
+  EXPECT_EQ(MetalVisibilityPass::slotsFor(100, 400), 100u);
+  EXPECT_EQ(MetalVisibilityPass::slotsFor(0), 1u);
+}
+
+TEST(MetalVisibilityPassSizingTest, ReconfigureKeepsTheReservationAndTheKeyWidthFollows) {
+  VisibilityRig rig;
+  ASSERT_TRUE(rig.create());
+  ASSERT_TRUE(rig.reserve(16));
+  EXPECT_EQ(rig.pass.depthBits(), MetalRadixSort::KeyBits::Full32);
+  EXPECT_TRUE(rig.pass.reconfigure(MetalRadixSort::KeyBits::Low16));
+  EXPECT_EQ(rig.pass.depthBits(), MetalRadixSort::KeyBits::Low16);
+  EXPECT_EQ(rig.pass.capacity(), 16u);
+}
 
 struct VisibilityInput {
   id<MTLBuffer> splats;
@@ -319,8 +338,8 @@ TEST(MetalVisibilityPassKeysTest, QuantizesCameraDepthAndSortsBothSourceAndLodIn
                                       options:MTLResourceStorageModeShared];
   for (bool indexed : {false, true}) {
     SCOPED_TRACE(indexed);
-    MetalVisibilityPass visibility;
-    ASSERT_TRUE(visibility.create(gpu.device, gpu.library, MetalRadixSort::KeyBits::Low16));
+    VisibilityRig visibility;
+    ASSERT_TRUE(visibility.create(MetalRadixSort::KeyBits::Low16));
     ASSERT_TRUE(visibility.reserve(n));
     const SplatRenderer::Range range{0, n};
     auto cmd = [gpu.queue commandBuffer];

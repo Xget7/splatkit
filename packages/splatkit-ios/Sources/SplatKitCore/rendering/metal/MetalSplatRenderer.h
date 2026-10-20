@@ -12,11 +12,10 @@
 #include <string>
 #include <vector>
 
-#include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "rendering/metal/device/MetalContext.h"
+#include "rendering/metal/frame/MetalFrameCompute.h"
 #include "rendering/metal/presentation/MetalFrameLoop.h"
 #include "rendering/metal/presentation/MetalSurface.h"
-#include "rendering/metal/selection/MetalLodSelection.h"
 #include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
@@ -63,7 +62,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t generation() const override { return surface_->generation(); }
 
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
-  bool selectsLodOnGpu() const override { return gpuSort_; }
+  bool selectsLodOnGpu() const override { return compute_->gpuSort(); }
   bool uploadLodWorld(const splat::LodTree& tree, int maxShDegree, uint32_t budget) override;
   bool createSlab(uint32_t capacity, int shDegree) override;
   bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) override;
@@ -82,40 +81,35 @@ class MetalSplatRenderer final : public SplatRenderer {
   // capture at a time; a request while one is pending replaces it.
   void captureNextFrame(CaptureHandler handler);
   double lastGpuMillis() const override { return frameLoop_.lastGpuMillis(); }
-  // The cull and the sort run as compute passes on the GPU (MetalVisibilityPass); the engine
+  // The cull and the sort run as compute passes on the GPU (MetalFrameCompute); the engine
   // hands over the ranges to draw and never sorts on the CPU for this renderer.
-  bool sortsOnGpu() const override { return gpuSort_; }
+  bool sortsOnGpu() const override { return compute_->gpuSort(); }
   double lastSortMillis() const override {
-    return frameLoop_.gpuFailed() ? 0 : lastSortMillis_.load();
+    return frameLoop_.gpuFailed() ? 0 : compute_->lastSortMillis();
   }
   uint32_t lastDrawCount() const override {
-    return frameLoop_.gpuFailed() ? 0 : lastDrawCount_.load();
+    return frameLoop_.gpuFailed() ? 0 : compute_->lastDrawCount();
   }
   uint32_t lastSelectedCount() const override {
-    return frameLoop_.gpuFailed() ? 0 : lastSelectedCount_.load();
+    return frameLoop_.gpuFailed() ? 0 : compute_->lastSelectedCount();
   }
   double lastSelectMillis() const override {
-    return frameLoop_.gpuFailed() ? 0 : lastSelectMillis_.load();
+    return frameLoop_.gpuFailed() ? 0 : compute_->lastSelectMillis();
   }
   // The threshold the next selection runs at, at least the policy's. Render thread.
-  float lodPixels() const { return lodPixels_; }
-  uint32_t lastLodLimitedCount() const { return lod_ ? lastLodLimitedCount_.load() : 0; }
-  uint32_t lastLodEvaluatedCount() const { return lod_ ? lastLodEvaluatedCount_.load() : 0; }
+  float lodPixels() const { return compute_->lodPixels(); }
+  uint32_t lastLodLimitedCount() const { return compute_->lastLodLimitedCount(); }
+  uint32_t lastLodEvaluatedCount() const { return compute_->lastLodEvaluatedCount(); }
   bool reportsPresentTimes() const override { return true; }
   uint32_t takePresentTimes(std::vector<int64_t>* times) override;
   const std::string& deviceDescription() const override { return context_->description(); }
 
-  static constexpr int kMaxShDegree = 3;
-  static constexpr uint32_t kFramesInFlight = MetalVisibilityPass::kSlots;
+  static constexpr uint32_t kFramesInFlight = MetalFrameCompute::kSlots;
 
  private:
   MetalSplatRenderer() = default;
   bool createPipelines();
 
-  void updateCameraUniforms(const Frame& frame, uint32_t slot);
-  // Encode only: draw() commits these in dependency order after validation succeeds.
-  id<MTLCommandBuffer> encodeSelection(uint32_t slot);
-  id<MTLCommandBuffer> encodeVisibilityAndSort(const Frame& frame, uint32_t slot);
   void encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture, const Frame& frame,
                     uint32_t slot, uint32_t drawCount, bool gpuOrder);
   id<MTLBuffer> encodeCapture(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture,
@@ -135,29 +129,10 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
   id<MTLDepthStencilState> maskDepth_ = nil;   // always write
   MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
-  std::array<id<MTLBuffer>, kFramesInFlight> uniforms_{};
 
+  std::unique_ptr<MetalFrameCompute> compute_;
   std::unique_ptr<MetalSurface> surface_;
   std::unique_ptr<MetalWorld> world_;
-  uint64_t frame_ = 0;
-  MetalVisibilityPass visibility_;
-  std::unique_ptr<MetalLodSelection> lod_;
-  std::array<id<MTLBuffer>, kFramesInFlight> lodReadback_{};
-  std::atomic<uint32_t> lastSelectedCount_{0};
-  std::atomic<uint32_t> lastLodLimitedCount_{0}, lastLodEvaluatedCount_{0};
-  std::atomic<double> lastSelectMillis_{0};
-  float lodErrorPixels_ = 1.0f;
-  uint32_t lodSplatLimit_ = 0;
-  // The threshold selection runs at: the policy's, raised while a cut would exceed the splat
-  // limit so detail thins evenly instead of stopping wherever traversal ran out of room.
-  float lodPixels_ = 1.0f;
-  std::atomic<uint32_t> lodReadbacks_{0};  // completed selections, so each adapts once
-  uint32_t lodAdaptedReadback_ = 0;
-  void adaptLodThreshold();
-  MetalRadixSort::KeyBits depthBits_ = MetalRadixSort::KeyBits::Full32;
-  bool gpuSort_ = false;
-  std::atomic<double> lastSortMillis_{0};
-  std::atomic<uint32_t> lastDrawCount_{0};
   CaptureHandler capture_;
 };
 
