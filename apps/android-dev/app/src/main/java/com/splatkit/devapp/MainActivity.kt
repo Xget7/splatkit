@@ -174,8 +174,8 @@ class MainActivity : Activity() {
             // --ef seconds 3 turns the full circle in 3 s: a fast turn, for the cull margin.
             splatView.startBenchmark(intent.getFloatExtra("seconds", 10f))
         } else {
-            // --ez gyro false keeps the gyroscope off, so a --es pose is held exactly.
-            splatView.setMotionEnabled(intent?.getBooleanExtra("gyro", true) != false)
+            // Off by default, so a --es pose is held exactly; --ez gyro true turns it on.
+            splatView.setMotionEnabled(intent?.getBooleanExtra("gyro", false) == true)
         }
     }
 
