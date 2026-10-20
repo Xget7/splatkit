@@ -1,7 +1,5 @@
 #include "rendering/metal/MetalSplatRenderer.h"
 
-#include <TargetConditionals.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -34,27 +32,18 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
        static_cast<uint32_t>(r->depthBits_), static_cast<uint32_t>(r->depthBits_) / 8);
   if (!r->gpuSort_) LOGW("GPU sort unavailable, sorting on the CPU");
-  r->inFlight_ = dispatch_semaphore_create(kFramesInFlight);
   LOGI("%s", r->context_->description().c_str());
   return r;
 }
 
 MetalSplatRenderer::~MetalSplatRenderer() {
-  waitIdle();
-}
-
-// Waits for every frame in flight: the order and world buffers may be released after.
-void MetalSplatRenderer::waitIdle() {
-  if (inFlight_ == nullptr) return;
-  for (uint32_t i = 0; i < kFramesInFlight; ++i) {
-    dispatch_semaphore_wait(inFlight_, DISPATCH_TIME_FOREVER);
-  }
-  for (uint32_t i = 0; i < kFramesInFlight; ++i) dispatch_semaphore_signal(inFlight_);
+  // The members destroyed after this body are what in-flight frames still use.
+  frameLoop_.waitIdle();
 }
 
 void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   if (layer == layer_) return;
-  waitIdle();
+  frameLoop_.waitIdle();
   layer_ = layer;
   if (layer_ == nil) return;
   layer_.device = context_->device();
@@ -74,7 +63,7 @@ void MetalSplatRenderer::setDrawableSize(uint32_t width, uint32_t height) {
   LOGI("drawable %ux%u, was %ux%u", width, height, width_, height_);
   width_ = width;
   height_ = height;
-  if (upscaler_->active()) waitIdle();
+  if (upscaler_->active()) frameLoop_.waitIdle();
   ++generation_;
   createTarget();
 }
@@ -83,7 +72,7 @@ void MetalSplatRenderer::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
-  if (upscaler_->active()) waitIdle();
+  if (upscaler_->active()) frameLoop_.waitIdle();
   ++generation_;
   createTarget();
 }
@@ -93,7 +82,7 @@ void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
   spatialUpscaling_ = enabled;
   // The scaler is not retained by the command buffers that encode it, so it must not be
   // replaced while one is in flight.
-  if (upscaler_->active()) waitIdle();
+  if (upscaler_->active()) frameLoop_.waitIdle();
   ++generation_;
   createTarget();
 }
@@ -101,7 +90,7 @@ void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
 void MetalSplatRenderer::setLinearBlending(bool linear) {
   if (linear == linearBlending_) return;
   linearBlending_ = linear;
-  waitIdle();
+  frameLoop_.waitIdle();
   if (layer_ != nil) layer_.pixelFormat = pixelFormat();
   ++generation_;
   const bool blitReady = upscaler_->setOutputFormat(pixelFormat());
@@ -167,7 +156,7 @@ bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::stri
     return false;
   }
   // Rebuilding pipelines or the target while frames may still encode against them is unsafe.
-  waitIdle();
+  frameLoop_.waitIdle();
   if (visibilityChanged && !visibility_.reconfigure(bits)) {
     if (reason != nullptr) *reason = "Metal visibility pipeline rebuild failed";
     return false;
@@ -312,11 +301,11 @@ std::optional<std::uint64_t> MetalSplatRenderer::availableMemory() const {
 bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   auto world = MetalWorld::upload(context_->device(), cloud, maxShDegree);
   if (!world) return false;
-  waitIdle();
+  frameLoop_.waitIdle();
   if (gpuSort_ && !visibility_.reserve(world->info().count)) return false;
   world_ = std::move(world);
   lod_.reset();
-  completedWorldFrame_.store(false);
+  frameLoop_.clearCompletedWorldFrame();
   lastSelectedCount_.store(0);
   lastSelectMillis_.store(0);
   return true;
@@ -325,7 +314,7 @@ bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDe
 bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
                                         uint32_t budget) {
   if (!gpuSort_) return false;
-  waitIdle();
+  frameLoop_.waitIdle();
   auto lod = std::make_unique<MetalLodSelection>();
   if (!lod->create(context_->device(), context_->library()) ||
       !lod->upload(tree, budget, lodErrorPixels_))
@@ -351,7 +340,7 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
   lastLodLimitedCount_.store(0);
   lastLodEvaluatedCount_.store(0);
   world_ = std::move(world);
-  completedWorldFrame_.store(false);
+  frameLoop_.clearCompletedWorldFrame();
   lastSelectedCount_.store(0);
   lastSelectMillis_.store(0);
   return true;
@@ -360,11 +349,11 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
 bool MetalSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   auto world = MetalWorld::slab(context_->device(), capacity, shDegree);
   if (!world) return false;
-  waitIdle();
+  frameLoop_.waitIdle();
   if (gpuSort_ && !visibility_.reserve(capacity)) return false;
   world_ = std::move(world);
   lod_.reset();
-  completedWorldFrame_.store(false);
+  frameLoop_.clearCompletedWorldFrame();
   lastSelectedCount_.store(0);
   lastSelectMillis_.store(0);
   return true;
@@ -398,26 +387,19 @@ void MetalSplatRenderer::adaptLodThreshold() {
 }
 
 uint32_t MetalSplatRenderer::takePresentTimes(std::vector<int64_t>* times) {
-  times->clear();
-  const std::lock_guard<std::mutex> lock(presents_->mutex);
-  times->swap(presents_->times);
-  return std::exchange(presents_->dropped, 0);
+  return frameLoop_.takePresentTimes(times);
 }
 
 bool MetalSplatRenderer::draw(const Frame& frame) {
-  if (gpuFailed_.load()) return false;
+  if (frameLoop_.gpuFailed()) return false;
   if (!ready() || splatPipelines_[0] == nil) return false;
-  dispatch_semaphore_wait(inFlight_, DISPATCH_TIME_FOREVER);
+  if (!frameLoop_.acquire()) return false;
   // Until submitFrame(), every failure returns the acquired slot synchronously.
-  if (gpuFailed_.load()) {
-    dispatch_semaphore_signal(inFlight_);
-    return false;
-  }
   // Capture requires a readable drawable before nextDrawable() acquires it.
   if (capture_) layer_.framebufferOnly = NO;
   id<CAMetalDrawable> drawable = [layer_ nextDrawable];
   if (drawable == nil) {
-    dispatch_semaphore_signal(inFlight_);
+    frameLoop_.release();
     return false;
   }
   const uint32_t slot = static_cast<uint32_t>(frame_ % kFramesInFlight);
@@ -426,7 +408,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   uint32_t drawCount = 0;
   if (world_) {
     if (frame.order != nullptr && !world_->writeOrder(frame.order, frame.orderCount)) {
-      dispatch_semaphore_signal(inFlight_);
+      frameLoop_.release();
       return false;
     }
     drawCount = std::min(frame.drawCount, world_->info().count);
@@ -438,7 +420,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   id<MTLCommandBuffer> sort = gpuOrder ? encodeVisibilityAndSort(frame, slot) : nil;
   if (gpuOrder && sort == nil) {
     // Selection has only been encoded, so no GPU work can still use this slot.
-    dispatch_semaphore_signal(inFlight_);
+    frameLoop_.release();
     return false;
   }
 
@@ -496,10 +478,10 @@ id<MTLCommandBuffer> MetalSplatRenderer::encodeSelection(uint32_t slot) {
   const bool logLod = frame_ % 120 == 0;
   std::atomic<uint32_t>* readbacks = &lodReadbacks_;
   const float pixels = lodPixels_;
-  std::atomic<bool>* failed = &gpuFailed_;
+  MetalFrameLoop* loop = &frameLoop_;
   [selection addCompletedHandler:^(id<MTLCommandBuffer> done) {
     if (done.status == MTLCommandBufferStatusError) {
-      failed->store(true);
+      loop->markFailed();
       LOGE("LOD command failed: %s", done.error.localizedDescription.UTF8String);
       return;
     }
@@ -530,10 +512,10 @@ id<MTLCommandBuffer> MetalSplatRenderer::encodeVisibilityAndSort(const Frame& fr
   std::atomic<double>* sortMillis = &lastSortMillis_;
   std::atomic<uint32_t>* drawn = &lastDrawCount_;
   id<MTLBuffer> countBuffer = visibility_.countBuffer(slot);
-  std::atomic<bool>* failed = &gpuFailed_;
+  MetalFrameLoop* loop = &frameLoop_;
   [sort addCompletedHandler:^(id<MTLCommandBuffer> done) {
     if (done.status == MTLCommandBufferStatusError) {
-      failed->store(true);
+      loop->markFailed();
       LOGE("visibility command failed: %s", done.error.localizedDescription.UTF8String);
       return;
     }
@@ -638,50 +620,25 @@ id<MTLBuffer> MetalSplatRenderer::encodeCapture(id<MTLCommandBuffer> cmd,
 void MetalSplatRenderer::submitFrame(id<MTLCommandBuffer> cmd, id<CAMetalDrawable> drawable,
                                      bool drewWorld, id<MTLBuffer> captured,
                                      CaptureHandler onCapture) {
-  // presentedTime is when the frame reached the display, zero when it was never shown.
-  // The simulator's Metal has no presentation handler, so it reports no present timing.
-#if !TARGET_OS_SIMULATOR
-  std::shared_ptr<PresentLog> presents = presents_;
-  [drawable addPresentedHandler:^(id<MTLDrawable> shown) {
-    const CFTimeInterval time = shown.presentedTime;
-    const std::lock_guard<std::mutex> lock(presents->mutex);
-    if (time <= 0) {
-      ++presents->dropped;
-    } else if (presents->times.size() < 1024) {
-      presents->times.push_back(static_cast<int64_t>(time * 1e9));
-    }
-  }];
-#endif
-  [cmd presentDrawable:drawable];
-  dispatch_semaphore_t inFlight = inFlight_;
-  std::atomic<double>* gpuMillis = &lastGpuMillis_;
-  std::atomic<bool>* failed = &gpuFailed_;
-  const uint32_t width = width_;
-  const uint32_t height = height_;
-  auto* worldFrame = &completedWorldFrame_;
-  [cmd addCompletedHandler:^(id<MTLCommandBuffer> done) {
-    if (done.status == MTLCommandBufferStatusError) {
-      failed->store(true);
-      LOGE("render command failed: %s", done.error.localizedDescription.UTF8String);
-      // Failed timestamps/capture bytes do not describe a presented frame.
-      gpuMillis->store(0.0);
-      if (onCapture) onCapture({}, 0, 0);
-      dispatch_semaphore_signal(inFlight);
-      return;
-    }
-    gpuMillis->store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
-    if (drewWorld && !failed->load()) worldFrame->store(true);
-    if (onCapture) {
+  std::function<void(id<MTLCommandBuffer>)> onCompleted;
+  if (onCapture) {
+    const uint32_t width = width_;
+    const uint32_t height = height_;
+    onCompleted = [captured, width, height,
+                   onCapture = std::move(onCapture)](id<MTLCommandBuffer> done) {
+      if (done.status == MTLCommandBufferStatusError) {
+        onCapture({}, 0, 0);
+        return;
+      }
       const auto* bytes = static_cast<const uint8_t*>(captured.contents);
       onCapture(std::vector<uint8_t>(bytes, bytes + size_t{width} * height * 4), width, height);
-    }
-    dispatch_semaphore_signal(inFlight);
-  }];
-  [cmd commit];
+    };
+  }
+  frameLoop_.submit(cmd, drawable, drewWorld, std::move(onCompleted));
 }
 
 void MetalSplatRenderer::captureNextFrame(CaptureHandler handler) {
-  if (gpuFailed_.load()) {
+  if (frameLoop_.gpuFailed()) {
     if (handler) handler({}, 0, 0);
     return;
   }
