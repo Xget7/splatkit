@@ -7,6 +7,7 @@ add_executable(splatkit_ios_tests
   rendering/metal/presentation/MetalRenderTargetTest.mm
   rendering/metal/presentation/MetalSurfaceTest.mm
   rendering/metal/presentation/MetalUpscalerTest.mm
+  rendering/metal/raster/MetalSplatPipelineTest.mm
   rendering/metal/selection/MetalLodSelectionTest.mm
   rendering/metal/sort/MetalRadixSortTest.mm
   rendering/metal/world/MetalWorldTest.mm
