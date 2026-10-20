@@ -7,7 +7,7 @@
  * keeps the measurement about rendering: no gravity, no step resolution, no input.
  */
 
-type Waypoint = Readonly<{ x: number; y: number; z: number }>;
+type Waypoint = Readonly<{x: number; y: number; z: number}>;
 
 type Pose = Readonly<{
   x: number;
@@ -33,32 +33,32 @@ const HEADING_SPAN = 0.9;
 const MAX_PITCH = 0.3;
 
 const ROUTE: readonly Waypoint[] = Object.freeze([
-  { x: -11.34, y: 1.11, z: 2.17 },
-  { x: -10.74, y: 1.11, z: 2.17 },
-  { x: -10.14, y: 1.11, z: 2.17 },
-  { x: -9.54, y: 1.11, z: 2.17 },
-  { x: -9.24, y: 1.41, z: 2.17 },
-  { x: -9.24, y: 2.01, z: 2.17 },
-  { x: -9.24, y: 2.01, z: 2.77 },
-  { x: -9.24, y: 2.01, z: 3.37 },
-  { x: -8.94, y: 2.01, z: 3.67 },
-  { x: -8.64, y: 2.01, z: 3.97 },
-  { x: -8.04, y: 2.01, z: 3.97 },
-  { x: -7.44, y: 2.01, z: 3.97 },
-  { x: -6.84, y: 2.01, z: 3.97 },
-  { x: -6.24, y: 2.01, z: 3.97 },
-  { x: -5.94, y: 2.01, z: 3.67 },
-  { x: -5.94, y: 2.31, z: 3.37 },
-  { x: -5.34, y: 2.31, z: 3.37 },
-  { x: -4.74, y: 2.31, z: 3.37 },
-  { x: -4.14, y: 2.31, z: 3.37 },
-  { x: -3.54, y: 2.31, z: 3.37 },
-  { x: -2.94, y: 2.31, z: 3.37 },
-  { x: -2.34, y: 2.31, z: 3.37 },
-  { x: -2.04, y: 2.31, z: 3.07 },
-  { x: -2.04, y: 2.31, z: 2.47 },
-  { x: -2.04, y: 2.31, z: 1.87 },
-  { x: -2.04, y: 2.31, z: 1.27 },
+  {x: -11.34, y: 1.11, z: 2.17},
+  {x: -10.74, y: 1.11, z: 2.17},
+  {x: -10.14, y: 1.11, z: 2.17},
+  {x: -9.54, y: 1.11, z: 2.17},
+  {x: -9.24, y: 1.41, z: 2.17},
+  {x: -9.24, y: 2.01, z: 2.17},
+  {x: -9.24, y: 2.01, z: 2.77},
+  {x: -9.24, y: 2.01, z: 3.37},
+  {x: -8.94, y: 2.01, z: 3.67},
+  {x: -8.64, y: 2.01, z: 3.97},
+  {x: -8.04, y: 2.01, z: 3.97},
+  {x: -7.44, y: 2.01, z: 3.97},
+  {x: -6.84, y: 2.01, z: 3.97},
+  {x: -6.24, y: 2.01, z: 3.97},
+  {x: -5.94, y: 2.01, z: 3.67},
+  {x: -5.94, y: 2.31, z: 3.37},
+  {x: -5.34, y: 2.31, z: 3.37},
+  {x: -4.74, y: 2.31, z: 3.37},
+  {x: -4.14, y: 2.31, z: 3.37},
+  {x: -3.54, y: 2.31, z: 3.37},
+  {x: -2.94, y: 2.31, z: 3.37},
+  {x: -2.34, y: 2.31, z: 3.37},
+  {x: -2.04, y: 2.31, z: 3.07},
+  {x: -2.04, y: 2.31, z: 2.47},
+  {x: -2.04, y: 2.31, z: 1.87},
+  {x: -2.04, y: 2.31, z: 1.27},
 ]);
 
 function distance(a: Waypoint, b: Waypoint): number {
@@ -134,7 +134,7 @@ function at(travelled: number): Waypoint {
   );
 }
 
-function heading(travelled: number): { yaw: number; pitch: number } {
+function heading(travelled: number): {yaw: number; pitch: number} {
   'worklet';
   // A central difference, so the ends of the route still have a heading: one side clamps
   // to the endpoint and the other supplies the direction.

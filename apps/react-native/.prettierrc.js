@@ -1,5 +1,1 @@
-module.exports = {
-  arrowParens: 'avoid',
-  singleQuote: true,
-  trailingComma: 'all',
-};
+module.exports = require('../../packages/react-native-splatkit/.prettierrc.json');

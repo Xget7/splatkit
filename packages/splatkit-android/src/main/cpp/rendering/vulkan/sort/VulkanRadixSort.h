@@ -59,7 +59,16 @@ class VulkanRadixSort {
   struct Slot {
     std::array<std::unique_ptr<VulkanBuffer>, 2> keys, values;
     std::unique_ptr<VulkanBuffer> histogram, totals, state, count, status;
+    bool owns(VkBuffer buffer) const;
   };
+  bool ownsBuffer(VkBuffer buffer) const;
+  // A bounds, alignment and aliasing check of one external input range.
+  bool acceptsRange(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize total,
+                    VkDeviceSize range) const;
+  bool acceptsInput(const Input& input) const;
+  void writeDescriptorSets(uint32_t slot, const Input& input) const;
+  // Prepare, then one histogram/scan/scatter round per digit of the key.
+  void recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits keyBits) const;
   const VulkanContext& ctx_;
   uint32_t capacity_ = 0;
   std::array<Slot, kSlots> slots_;

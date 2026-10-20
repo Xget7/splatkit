@@ -18,14 +18,28 @@ export const MAX_FIELD_OF_VIEW_DEGREES = 120;
  */
 export const MAX_DEPTH_RANGE_RATIO = 100_000;
 
-export function integer(name: string, value: number, min: number, max: number): void {
+export function integer(
+  name: string,
+  value: number,
+  min: number,
+  max: number,
+): void {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer in [${min}, ${max}]`);
+    throw new RangeError(
+      `${name} must be an integer in [${String(min)}, ${String(max)}]`,
+    );
   }
 }
 
-export function range(name: string, value: number, min: number, max: number): void {
+export function range(
+  name: string,
+  value: number,
+  min: number,
+  max: number,
+): void {
   if (!Number.isFinite(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be finite and in [${min}, ${max}]`);
+    throw new RangeError(
+      `${name} must be finite and in [${String(min)}, ${String(max)}]`,
+    );
   }
 }

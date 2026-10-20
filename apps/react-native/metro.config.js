@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
 
 // This example lives in the SplatKit monorepo and installs the package from ../../packages,
 // so npm links it instead of unpacking it. Metro only follows a symlink out of the project
@@ -32,7 +32,7 @@ const config = {
       const scope = moduleName.split('/')[0];
       if (single.has(scope)) {
         return context.resolveRequest(
-          { ...context, originModulePath: here },
+          {...context, originModulePath: here},
           moduleName,
           platform,
         );

@@ -8,8 +8,8 @@
  * @format
  */
 
-import { useMemo, useRef } from 'react';
-import { Animated, PanResponder, StyleSheet, View } from 'react-native';
+import {useMemo, useRef} from 'react';
+import {Animated, PanResponder, StyleSheet, View} from 'react-native';
 
 const RADIUS = 62;
 const KNOB = 52;
@@ -18,8 +18,8 @@ type Props = Readonly<{
   onChange: (forward: number, right: number) => void;
 }>;
 
-function Joystick({ onChange }: Props) {
-  const knob = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+function Joystick({onChange}: Props) {
+  const knob = useRef(new Animated.ValueXY({x: 0, y: 0})).current;
   const change = useRef(onChange);
   change.current = onChange;
 
@@ -29,18 +29,18 @@ function Joystick({ onChange }: Props) {
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderMove: (_event, gesture) => {
-          let { dx, dy } = gesture;
+          let {dx, dy} = gesture;
           const length = Math.hypot(dx, dy);
           if (length > RADIUS) {
             dx = (dx / length) * RADIUS;
             dy = (dy / length) * RADIUS;
           }
-          knob.setValue({ x: dx, y: dy });
+          knob.setValue({x: dx, y: dy});
           change.current(-dy / RADIUS, dx / RADIUS);
         },
         onPanResponderRelease: () => {
           Animated.spring(knob, {
-            toValue: { x: 0, y: 0 },
+            toValue: {x: 0, y: 0},
             useNativeDriver: true,
             speed: 24,
             bounciness: 6,
@@ -48,7 +48,7 @@ function Joystick({ onChange }: Props) {
           change.current(0, 0);
         },
         onPanResponderTerminate: () => {
-          knob.setValue({ x: 0, y: 0 });
+          knob.setValue({x: 0, y: 0});
           change.current(0, 0);
         },
       }),
@@ -58,7 +58,7 @@ function Joystick({ onChange }: Props) {
   return (
     <View style={styles.base} {...responder.panHandlers}>
       <Animated.View
-        style={[styles.knob, { transform: knob.getTranslateTransform() }]}
+        style={[styles.knob, {transform: knob.getTranslateTransform()}]}
       />
     </View>
   );

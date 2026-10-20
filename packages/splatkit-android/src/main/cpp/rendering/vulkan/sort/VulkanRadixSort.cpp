@@ -30,6 +30,31 @@ struct PushConstants {
 static_assert(sizeof(PushConstants) == 12, "must match the Push block of every radix shader");
 constexpr VkBufferUsageFlags kStorage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+VkDescriptorBufferInfo wholeBuffer(const std::unique_ptr<VulkanBuffer>& buffer) {
+  return {buffer->handle(), 0, buffer->size()};
+}
+
+// First pass reads the external input, then the two scratch sets alternate.
+uint32_t passSet(uint32_t pass) {
+  if (pass == 0) return 0;
+  return pass & 1 ? 1 : 2;
+}
+
+void computeBarrier(VkCommandBuffer cmd) {
+  memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+}
+
+// Bind after each pipeline transition: MoltenVK/gfxstream otherwise retained stale
+// encoded state when a different compute layout (visibility) preceded this pass.
+// VulkanFrameComputeTest covers the complete producer-to-sort chain.
+void bindStage(VkCommandBuffer cmd, VkPipelineLayout layout, VkPipeline pipeline,
+               VkDescriptorSet set, const PushConstants& push) {
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &set, 0, nullptr);
+  vkCmdPushConstants(cmd, layout, kShader, 0, sizeof(push), &push);
+}
 }  // namespace
 
 VulkanRadixSort::Capabilities VulkanRadixSort::queryCapabilities(const VulkanContext& ctx) {
@@ -183,50 +208,54 @@ VulkanRadixSort::Output VulkanRadixSort::output(uint32_t slot) const {
   return {s.keys[0]->handle(), s.values[0]->handle(), s.count->handle(), s.status->handle()};
 }
 
-bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
-  if (!cmd || slot >= kSlots || !capacity_ ||
-      (input.keyBits != KeyBits::full32 && input.keyBits != KeyBits::low16))
-    return false;
+bool VulkanRadixSort::Slot::owns(VkBuffer buffer) const {
+  return buffer == keys[0]->handle() || buffer == keys[1]->handle() ||
+         buffer == values[0]->handle() || buffer == values[1]->handle() ||
+         buffer == count->handle() || buffer == status->handle() || buffer == state->handle() ||
+         buffer == histogram->handle() || buffer == totals->handle();
+}
+
+bool VulkanRadixSort::ownsBuffer(VkBuffer buffer) const {
+  for (const auto& slot : slots_)
+    if (slot.owns(buffer)) return true;
+  return false;
+}
+
+bool VulkanRadixSort::acceptsRange(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize total,
+                                   VkDeviceSize range) const {
   const auto& limits = ctx_.vkbDevice().physical_device.properties.limits;
+  return buffer && offset <= total && range <= total - offset && offset % kWord == 0 &&
+         (!limits.minStorageBufferOffsetAlignment ||
+          offset % limits.minStorageBufferOffsetAlignment == 0) &&
+         !ownsBuffer(buffer);
+}
+
+bool VulkanRadixSort::acceptsInput(const Input& input) const {
   const VkDeviceSize bytes = VkDeviceSize{capacity_} * kWord;
-  const auto valid = [&](VkBuffer buffer, VkDeviceSize offset, VkDeviceSize total,
-                         VkDeviceSize range) {
-    if (!buffer || offset > total || range > total - offset || offset % kWord ||
-        (limits.minStorageBufferOffsetAlignment && offset % limits.minStorageBufferOffsetAlignment))
-      return false;
-    for (const auto& s : slots_) {
-      for (uint32_t i = 0; i < 2; ++i)
-        if (buffer == s.keys[i]->handle() || buffer == s.values[i]->handle()) return false;
-      if (buffer == s.count->handle() || buffer == s.status->handle() ||
-          buffer == s.state->handle() || buffer == s.histogram->handle() ||
-          buffer == s.totals->handle())
-        return false;
-    }
-    return true;
-  };
-  if (!valid(input.keys, input.keysOffset, input.keysBytes, bytes) ||
-      !valid(input.values, input.valuesOffset, input.valuesBytes, bytes) ||
-      !valid(input.count, input.countOffset, input.countBytes, kWord))
-    return false;
+  return acceptsRange(input.keys, input.keysOffset, input.keysBytes, bytes) &&
+         acceptsRange(input.values, input.valuesOffset, input.valuesBytes, bytes) &&
+         acceptsRange(input.count, input.countOffset, input.countBytes, kWord);
+}
+
+void VulkanRadixSort::writeDescriptorSets(uint32_t slot, const Input& input) const {
   const auto& s = slots_[slot];
-  auto info = [](const std::unique_ptr<VulkanBuffer>& buffer) {
-    return VkDescriptorBufferInfo{buffer->handle(), 0, buffer->size()};
-  };
+  const VkDeviceSize bytes = VkDeviceSize{capacity_} * kWord;
   for (uint32_t set = 0; set < kSets; ++set) {
     const uint32_t in = set == 1 ? 1 : 0;
     const uint32_t out = in ^ 1;
     const VkDescriptorBufferInfo infos[kBindings] = {
-        set == 0 ? VkDescriptorBufferInfo{input.keys, input.keysOffset, bytes} : info(s.keys[in]),
+        set == 0 ? VkDescriptorBufferInfo{input.keys, input.keysOffset, bytes}
+                 : wholeBuffer(s.keys[in]),
         set == 0 ? VkDescriptorBufferInfo{input.values, input.valuesOffset, bytes}
-                 : info(s.values[in]),
-        info(s.keys[out]),
-        info(s.values[out]),
+                 : wholeBuffer(s.values[in]),
+        wholeBuffer(s.keys[out]),
+        wholeBuffer(s.values[out]),
         {input.count, input.countOffset, kWord},
-        info(s.histogram),
-        info(s.totals),
-        info(s.state),
-        info(s.count),
-        info(s.status)};
+        wholeBuffer(s.histogram),
+        wholeBuffer(s.totals),
+        wholeBuffer(s.state),
+        wholeBuffer(s.count),
+        wholeBuffer(s.status)};
     VkWriteDescriptorSet writes[kBindings]{};
     for (uint32_t i = 0; i < kBindings; ++i) {
       writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -238,51 +267,47 @@ bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& in
     }
     vkUpdateDescriptorSets(ctx_.device(), kBindings, writes, 0, nullptr);
   }
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
-                kCompute, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+}
+
+void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits keyBits) const {
+  const auto& limits = ctx_.vkbDevice().physical_device.properties.limits;
   PushConstants push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
-  const auto bindSet = [&](uint32_t set) {
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &sets_[slot][set],
-                            0, nullptr);
-  };
-  // Bind after each pipeline transition: MoltenVK/gfxstream otherwise retained stale
-  // encoded state when a different compute layout (visibility) preceded this pass.
-  // VulkanFrameComputeTest covers the complete producer-to-sort chain.
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kPrepare]);
-  bindSet(0);
-  vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
+  bindStage(cmd, layout_, pipelines_[kPrepare], sets_[slot][0], push);
   vkCmdDispatch(cmd, 1, 1, 1);
   memoryBarrier(
       cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
-  const uint32_t passes = (input.keyBits == KeyBits::low16 ? 16 : 32) / kDigitBits;
+  const VkBuffer state = slots_[slot].state->handle();
+  const uint32_t passes = (keyBits == KeyBits::low16 ? 16 : 32) / kDigitBits;
   for (uint32_t pass = 0; pass < passes; ++pass) {
     push.shift = pass * kDigitBits;
-    const uint32_t set = pass == 0 ? 0 : (pass & 1 ? 1 : 2);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kHistogram]);
-    bindSet(set);
-    vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
-    vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
-    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
-                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kScan]);
-    bindSet(set);
-    vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
+    const VkDescriptorSet set = sets_[slot][passSet(pass)];
+    bindStage(cmd, layout_, pipelines_[kHistogram], set, push);
+    vkCmdDispatchIndirect(cmd, state, 0);
+    computeBarrier(cmd);
+    bindStage(cmd, layout_, pipelines_[kScan], set, push);
     const uint32_t scanX = std::min(kBuckets, push.maxGroupsX);
     vkCmdDispatch(cmd, scanX, (kBuckets + scanX - 1) / scanX, 1);
-    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
-                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_[kScatter]);
-    bindSet(set);
-    vkCmdPushConstants(cmd, layout_, kShader, 0, sizeof(push), &push);
-    vkCmdDispatchIndirect(cmd, s.state->handle(), 0);
-    memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute,
-                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    computeBarrier(cmd);
+    bindStage(cmd, layout_, pipelines_[kScatter], set, push);
+    vkCmdDispatchIndirect(cmd, state, 0);
+    computeBarrier(cmd);
   }
   memoryBarrier(cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT,
                 kCompute | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
+}
+
+bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
+  if (!cmd || slot >= kSlots || !capacity_ ||
+      (input.keyBits != KeyBits::full32 && input.keyBits != KeyBits::low16))
+    return false;
+  if (!acceptsInput(input)) return false;
+  writeDescriptorSets(slot, input);
+  memoryBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
+                kCompute, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+  recordSort(cmd, slot, input.keyBits);
   return true;
 }
 }  // namespace splatkit

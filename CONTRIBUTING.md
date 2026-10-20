@@ -52,6 +52,7 @@ The Objective-C++ sources build with warnings as errors; `scripts/lint-cpp.sh` f
 cd packages/react-native-splatkit
 npm ci
 npm run check                # TypeScript, contract tests and Fabric Codegen
+npm run lint                 # ESLint and the Prettier check
 ```
 
 `prepare` backports the [braces depth guard](packages/react-native-splatkit/scripts/patches/braces-3.0.3/validate-depth.js) for development tooling; `check` applies and verifies it even after `npm ci --ignore-scripts`.
@@ -77,12 +78,26 @@ Both tools come from the NDK the project pins, so a machine that builds the libr
 The script configures `splat-core`, `splatkit-engine` and `splatkit-android` for the Android target and lints tests and tools too.
 `git config core.hooksPath .githooks` installs a pre-push hook that runs `scripts/lint-cpp.sh --format-only`, the seconds-long formatting half of that check.
 VS Code's C/C++ extension reads the compile databases it leaves in `build/lint`, as [.vscode/settings.json](.vscode/settings.json) sets up.
+clang-tidy holds every function to its default cognitive complexity of 25, counting the source as written, so test assertion macros add nothing.
+
+## Lint the TypeScript
+
+```
+npm run lint                 # what CI runs: ESLint, then the Prettier check
+npm run lint:fix             # rewrite the formatting and apply the fixes ESLint can
+```
+
+`packages/react-native-splatkit` and `apps/react-native` both have these scripts; the example's type-aware rules read the package's declarations, so run `npx tsc` in the package first.
+ESLint runs typescript-eslint's strict type-checked rules and eslint-plugin-sonarjs's recommended rules, which hold every function to Sonar's cognitive complexity of 15.
+Prettier formats the code and JSON; Markdown and workflows keep their hand layout.
+[lint-ts.yml](.github/workflows/lint-ts.yml) runs both packages.
 
 ## What a pull request needs
 
 - Tests in `splat-core` for anything that touches decoding, sorting, math, navigation, loading or the visibility policy, and in `splatkit-engine` for the render policy or engine orchestration.
 - `scripts/lint-cpp.sh` clean; CI runs it.
 - `npm run check` passing for React Native package changes; CI runs it.
+- `npm run lint` clean in the React Native package and example; CI runs it.
 - A note in the description saying which device and driver it was tried on.
   Emulator only is fine for logic; renderer changes need a real GPU.
 - No planning or decision documents: explain decisions in the pull request text and in comments beside the code they shape.

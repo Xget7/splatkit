@@ -46,7 +46,7 @@ jobs:
         run: scripts/wait-for-checks.sh
         env:
           GH_TOKEN: ${{ github.token }}
-          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml rn-contract.yml
+          WAIT_WORKFLOWS: android.yml core.yml engine.yml ios.yml lint.yml lint-ts.yml rn-contract.yml
 
       - uses: actions/setup-java@v6
         if: steps.state.outputs.new == 'true'

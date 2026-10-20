@@ -125,42 +125,81 @@ export type WorldEvent = Readonly<{
 }>;
 
 function localPath(value: unknown): value is string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') &&
-    value !== '/' && !value.includes('\0');
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    value !== '/' &&
+    !value.includes('\0')
+  );
 }
 
-function validateTransaction(request: Readonly<{requestId: string; filePath: string}>): void {
-  if (typeof request.requestId !== 'string' || request.requestId.trim().length === 0) {
+function validateTransaction(
+  request: Readonly<{requestId: string; filePath: string}>,
+): void {
+  if (
+    typeof request.requestId !== 'string' ||
+    request.requestId.trim().length === 0
+  ) {
     throw new TypeError('requestId must be a nonempty string');
   }
   if (!localPath(request.filePath)) {
-    throw new TypeError('filePath must be an absolute local file path, not a URL');
+    throw new TypeError(
+      'filePath must be an absolute local file path, not a URL',
+    );
   }
 }
 
 /** Structural validation only: filesystem access and GPU limits remain native. */
-export function validateWorldRequest(request: WorldRequest, limits: SplatLimits): void {
+export function validateWorldRequest(
+  request: WorldRequest,
+  limits: SplatLimits,
+): void {
   validateTransaction(request);
-  if (request.kind !== undefined &&
-    !(Object.values(WorldKind) as unknown[]).includes(request.kind)) {
+  if (
+    request.kind !== undefined &&
+    !(Object.values(WorldKind) as unknown[]).includes(request.kind)
+  ) {
     throw new RangeError('kind must be a WorldKind');
   }
   integer('maxLodCapacitySplats', limits.maxLodCapacitySplats, 0, MAX_INT32);
-  integer('minResidencyCapacitySplats', limits.minResidencyCapacitySplats, 1, MAX_INT32);
-  integer('maxResidencyCapacitySplats', limits.maxResidencyCapacitySplats,
-    limits.minResidencyCapacitySplats, MAX_INT32);
+  integer(
+    'minResidencyCapacitySplats',
+    limits.minResidencyCapacitySplats,
+    1,
+    MAX_INT32,
+  );
+  integer(
+    'maxResidencyCapacitySplats',
+    limits.maxResidencyCapacitySplats,
+    limits.minResidencyCapacitySplats,
+    MAX_INT32,
+  );
   integer('maxShDegree', request.maxShDegree, 0, MAX_SH_DEGREE);
-  integer('lodCapacitySplats', request.lodCapacitySplats, 0, limits.maxLodCapacitySplats);
-  integer('residencyCapacitySplats', request.residencyCapacitySplats,
-    limits.minResidencyCapacitySplats, limits.maxResidencyCapacitySplats);
+  integer(
+    'lodCapacitySplats',
+    request.lodCapacitySplats,
+    0,
+    limits.maxLodCapacitySplats,
+  );
+  integer(
+    'residencyCapacitySplats',
+    request.residencyCapacitySplats,
+    limits.minResidencyCapacitySplats,
+    limits.maxResidencyCapacitySplats,
+  );
   validateLens(request);
 }
 
 // Native reads these as float32, and the wire carries zero for an absent field.
 function validateLens(request: WorldRequest): void {
   if (request.fieldOfViewDegrees !== undefined) {
-    range('fieldOfViewDegrees', request.fieldOfViewDegrees, MIN_FIELD_OF_VIEW_DEGREES,
-      MAX_FIELD_OF_VIEW_DEGREES);
+    range(
+      'fieldOfViewDegrees',
+      request.fieldOfViewDegrees,
+      MIN_FIELD_OF_VIEW_DEGREES,
+      MAX_FIELD_OF_VIEW_DEGREES,
+    );
   }
   const {nearPlane, farPlane} = request;
   if (nearPlane === undefined && farPlane === undefined) return;
@@ -169,12 +208,17 @@ function validateLens(request: WorldRequest): void {
   }
   const near = Math.fround(nearPlane);
   const far = Math.fround(farPlane);
-  if (!Number.isFinite(nearPlane) || !(near > 0)) {
+  if (!Number.isFinite(nearPlane) || near <= 0) {
     throw new RangeError('nearPlane must be finite and positive');
   }
-  if (!Number.isFinite(far) || !(far > near) || far / near > MAX_DEPTH_RANGE_RATIO) {
+  if (
+    !Number.isFinite(far) ||
+    far <= near ||
+    far / near > MAX_DEPTH_RANGE_RATIO
+  ) {
     throw new RangeError(
-      `farPlane must be finite, beyond nearPlane and at most ${MAX_DEPTH_RANGE_RATIO} times it`);
+      `farPlane must be finite, beyond nearPlane and at most ${String(MAX_DEPTH_RANGE_RATIO)} times it`,
+    );
   }
 }
 
@@ -188,22 +232,38 @@ export function validateCharacter(character: Character): void {
   if (!Number.isFinite(eyeHeight) || eyeHeight <= 0 || eyeHeight > 100) {
     throw new RangeError('eyeHeight must be finite and in (0, 100]');
   }
-  if (!Number.isFinite(bodyRadius) || bodyRadius < 0 || bodyRadius >= eyeHeight) {
-    throw new RangeError('bodyRadius must be finite, not negative and under eyeHeight');
+  if (
+    !Number.isFinite(bodyRadius) ||
+    bodyRadius < 0 ||
+    bodyRadius >= eyeHeight
+  ) {
+    throw new RangeError(
+      'bodyRadius must be finite, not negative and under eyeHeight',
+    );
   }
-  if (!Number.isFinite(stepHeight) || stepHeight < 0 || stepHeight >= eyeHeight) {
-    throw new RangeError('stepHeight must be finite, not negative and under eyeHeight');
+  if (
+    !Number.isFinite(stepHeight) ||
+    stepHeight < 0 ||
+    stepHeight >= eyeHeight
+  ) {
+    throw new RangeError(
+      'stepHeight must be finite, not negative and under eyeHeight',
+    );
   }
 }
 
 export function validateRenderOptions(options: RenderOptions): void {
-  if (typeof options.paused !== 'boolean') throw new TypeError('paused must be boolean');
+  if (typeof options.paused !== 'boolean')
+    throw new TypeError('paused must be boolean');
   range('renderScale', options.renderScale, MIN_RENDER_SCALE, MAX_RENDER_SCALE);
   integer('shDegree', options.shDegree, 0, MAX_SH_DEGREE);
 }
 
 /** Zero may be a real measurement; native availability must be explicit. */
-export function optionalTimingMillis(available: boolean, value: number): number | null {
+export function optionalTimingMillis(
+  available: boolean,
+  value: number,
+): number | null {
   return available && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
@@ -216,19 +276,20 @@ export type CameraPhase = (typeof CameraPhase)[keyof typeof CameraPhase];
 export type WorldPoint = Readonly<{x: number; y: number; z: number}>;
 
 /** Bump revision per change. Commands may move the camera until the next revision. */
-export type CameraRequest = Readonly<{revision: number}> & (
-  | Readonly<{mode: typeof CameraMode.firstPerson}>
-  | Readonly<{
-      mode: typeof CameraMode.orbit;
-      anchor: WorldPoint;
-      radius: number;
-      /** Radians. Native clamps elevation to its supported range. */
-      azimuth: number;
-      elevation: number;
-      /** Signed continuous azimuth rate; zero stops. Separate from animateOrbit. */
-      orbitRadiansPerSecond: number;
-    }>
-);
+export type CameraRequest = Readonly<{revision: number}> &
+  (
+    | Readonly<{mode: typeof CameraMode.firstPerson}>
+    | Readonly<{
+        mode: typeof CameraMode.orbit;
+        anchor: WorldPoint;
+        radius: number;
+        /** Radians. Native clamps elevation to its supported range. */
+        azimuth: number;
+        elevation: number;
+        /** Signed continuous azimuth rate; zero stops. Separate from animateOrbit. */
+        orbitRadiansPerSecond: number;
+      }>
+  );
 
 /** Flat Codegen transport; prefer toNativeCameraProp for constructing it. */
 export type NativeCameraRequest = Readonly<{
@@ -244,14 +305,15 @@ export type NativeCameraRequest = Readonly<{
 }>;
 
 /** Snapshot at application time, not a per-frame subscription. */
-export type CameraEvent = Omit<NativeCameraRequest, 'mode'> & Readonly<{
-  /** Codegen transports integer modes; compare with CameraMode. */
-  mode: number;
-  hasAnchor: boolean;
-  phase: CameraPhase;
-  errorCode: string;
-  message: string;
-}>;
+export type CameraEvent = Omit<NativeCameraRequest, 'mode'> &
+  Readonly<{
+    /** Codegen transports integer modes; compare with CameraMode. */
+    mode: number;
+    hasAnchor: boolean;
+    phase: CameraPhase;
+    errorCode: string;
+    message: string;
+  }>;
 
 function cameraNumber(name: string, value: number): void {
   if (!Number.isFinite(value) || !Number.isFinite(Math.fround(value))) {
@@ -262,29 +324,52 @@ function cameraNumber(name: string, value: number): void {
 /** Structural validation only; native owns transitions and effective limits. */
 export function validateCameraRequest(request: CameraRequest): void {
   integer('revision', request.revision, 1, MAX_INT32);
+  if (!(Object.values(CameraMode) as unknown[]).includes(request.mode)) {
+    throw new RangeError('invalid camera mode');
+  }
   if (request.mode === CameraMode.firstPerson) return;
-  if (request.mode !== CameraMode.orbit) throw new RangeError('invalid camera mode');
-  if (!request.anchor || typeof request.anchor !== 'object') {
+  // JavaScript callers bypass the type, so the anchor is checked as unknown data.
+  const anchor: unknown = request.anchor;
+  if (typeof anchor !== 'object' || anchor === null) {
     throw new TypeError('anchor must be a world point');
   }
   cameraNumber('anchor.x', request.anchor.x);
   cameraNumber('anchor.y', request.anchor.y);
   cameraNumber('anchor.z', request.anchor.z);
   cameraNumber('radius', request.radius);
-  if (Math.fround(request.radius) <= 0) throw new RangeError('radius must be positive');
+  if (Math.fround(request.radius) <= 0)
+    throw new RangeError('radius must be positive');
   cameraNumber('azimuth', request.azimuth);
   cameraNumber('elevation', request.elevation);
   cameraNumber('orbitRadiansPerSecond', request.orbitRadiansPerSecond);
 }
 
-export function toNativeCameraProp(request: CameraRequest): NativeCameraRequest {
+export function toNativeCameraProp(
+  request: CameraRequest,
+): NativeCameraRequest {
   validateCameraRequest(request);
   if (request.mode === CameraMode.firstPerson) {
-    return {revision: request.revision, mode: request.mode, anchorX: 0, anchorY: 0,
-      anchorZ: 0, radius: 1, azimuth: 0, elevation: 0, orbitRadiansPerSecond: 0};
+    return {
+      revision: request.revision,
+      mode: request.mode,
+      anchorX: 0,
+      anchorY: 0,
+      anchorZ: 0,
+      radius: 1,
+      azimuth: 0,
+      elevation: 0,
+      orbitRadiansPerSecond: 0,
+    };
   }
-  return {revision: request.revision, mode: request.mode,
-    anchorX: request.anchor.x, anchorY: request.anchor.y, anchorZ: request.anchor.z,
-    radius: request.radius, azimuth: request.azimuth, elevation: request.elevation,
-    orbitRadiansPerSecond: request.orbitRadiansPerSecond};
+  return {
+    revision: request.revision,
+    mode: request.mode,
+    anchorX: request.anchor.x,
+    anchorY: request.anchor.y,
+    anchorZ: request.anchor.z,
+    radius: request.radius,
+    azimuth: request.azimuth,
+    elevation: request.elevation,
+    orbitRadiansPerSecond: request.orbitRadiansPerSecond,
+  };
 }

@@ -51,6 +51,87 @@ uint32_t candidateBound(const VulkanVisibilityPass::Input& input) {
              : input.candidateCapacity;
 }
 
+bool validRange(VkDeviceSize offset, VkDeviceSize bytes, VkDeviceSize total) {
+  return offset <= total && bytes <= total - offset;
+}
+
+bool isAligned(VkDeviceSize offset, VkDeviceSize alignment) {
+  return alignment == 0 || offset % alignment == 0;
+}
+
+bool hasAllHandles(const VulkanVisibilityPass::Output& out) {
+  return out.indices && out.depthKeys && out.count && out.indirect && out.status;
+}
+
+VkDeviceSize sourceBytes(const VulkanVisibilityPass::Input& input) {
+  return VkDeviceSize{std::max(input.sourceCount, 1u)} * sizeof(GpuSplat);
+}
+
+bool acceptsCamera(const VulkanVisibilityPass::Input& input, const VkPhysicalDeviceLimits& limits) {
+  return isAligned(input.cameraOffset, limits.minUniformBufferOffsetAlignment) &&
+         sizeof(CameraUniform) <= limits.maxUniformBufferRange &&
+         input.cameraOffset <= std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform) &&
+         validRange(input.cameraOffset, sizeof(CameraUniform), input.cameraBytes);
+}
+
+bool acceptsSplats(const VulkanVisibilityPass::Input& input, VkDeviceSize storageAlignment,
+                   VkDeviceSize maxStorageRange) {
+  const VkDeviceSize bytes = sourceBytes(input);
+  return isAligned(input.splatsOffset, storageAlignment) &&
+         input.splatsOffset <= std::numeric_limits<VkDeviceSize>::max() - bytes &&
+         bytes <= maxStorageRange && validRange(input.splatsOffset, bytes, input.splatsBytes);
+}
+
+VkDeviceSize candidateBytes(const VulkanVisibilityPass::Input& input) {
+  if (input.mode == VulkanVisibilityPass::CandidateMode::indices)
+    return VkDeviceSize{std::max(candidateBound(input), 1u)} * sizeof(uint32_t);
+  return VkDeviceSize{std::max(input.rangeCount, 1u)} * sizeof(VulkanVisibilityPass::Range);
+}
+
+// Leaves `info` on the dummy range for prefix mode, which has no candidate list.
+bool describeCandidates(const VulkanVisibilityPass::Input& input, VkDeviceSize storageAlignment,
+                        VkDeviceSize maxStorageRange, VkDescriptorBufferInfo& info) {
+  if (input.mode == VulkanVisibilityPass::CandidateMode::prefix) return true;
+  const VkDeviceSize bytes = candidateBytes(input);
+  if (!input.candidates || bytes > maxStorageRange ||
+      !isAligned(input.candidatesOffset, storageAlignment) ||
+      !validRange(input.candidatesOffset, bytes, input.candidatesBytes))
+    return false;
+  info = {input.candidates, input.candidatesOffset, bytes};
+  return true;
+}
+
+// Only indices mode reads a GPU candidate count.
+bool describeCandidateCount(const VulkanVisibilityPass::Input& input, VkDeviceSize storageAlignment,
+                            VkDescriptorBufferInfo& info) {
+  if (input.mode != VulkanVisibilityPass::CandidateMode::indices) return true;
+  if (!input.candidateCount || !isAligned(input.candidateCountOffset, storageAlignment) ||
+      !validRange(input.candidateCountOffset, sizeof(uint32_t), input.candidateCountBytes))
+    return false;
+  info = {input.candidateCount, input.candidateCountOffset, sizeof(uint32_t)};
+  return true;
+}
+
+// Binding 0 takes `firstType`, every other binding is a storage buffer.
+template <size_t N>
+void writeBindings(VkDevice device, VkDescriptorSet set,
+                   const std::array<VkDescriptorBufferInfo, N>& infos, VkDescriptorType firstType) {
+  std::array<VkWriteDescriptorSet, N> writes{};
+  for (uint32_t binding = 0; binding < N; ++binding) {
+    writes[binding] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                       nullptr,
+                       set,
+                       binding,
+                       0,
+                       1,
+                       binding == 0 ? firstType : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                       nullptr,
+                       &infos[binding],
+                       nullptr};
+  }
+  vkUpdateDescriptorSets(device, N, writes.data(), 0, nullptr);
+}
+
 static_assert(sizeof(CameraUniform) == 176, "visibility camera layout must match splat.vert");
 static_assert(sizeof(VkDrawIndirectCommand) == 16,
               "visibility indirect output must match native Vulkan draw arguments");
@@ -306,80 +387,29 @@ VulkanVisibilityPass::Output VulkanVisibilityPass::output(uint32_t slot) const {
 
 bool VulkanVisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const {
   const Output out = output(slot);
-  if (!input.camera || !input.splats || !out.indices || !out.depthKeys || !out.count ||
-      !out.indirect || !out.status)
-    return false;
-  const VkPhysicalDeviceProperties& properties = ctx_.vkbDevice().physical_device.properties;
-  const VkDeviceSize uniformAlignment = properties.limits.minUniformBufferOffsetAlignment;
-  const VkDeviceSize storageAlignment = properties.limits.minStorageBufferOffsetAlignment;
-  if ((uniformAlignment != 0 && input.cameraOffset % uniformAlignment != 0) ||
-      (storageAlignment != 0 && input.splatsOffset % storageAlignment != 0) ||
-      sizeof(CameraUniform) > properties.limits.maxUniformBufferRange ||
-      input.cameraOffset > std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform))
-    return false;
-  const VkDeviceSize sourceBytes = VkDeviceSize{std::max(input.sourceCount, 1u)} * sizeof(GpuSplat);
-  if (input.splatsOffset > std::numeric_limits<VkDeviceSize>::max() - sourceBytes ||
-      sourceBytes > capabilities_.maxStorageBufferRange)
-    return false;
-  auto validRange = [](VkDeviceSize offset, VkDeviceSize bytes, VkDeviceSize total) {
-    return offset <= total && bytes <= total - offset;
-  };
-  if (!validRange(input.cameraOffset, sizeof(CameraUniform), input.cameraBytes) ||
-      !validRange(input.splatsOffset, sourceBytes, input.splatsBytes))
-    return false;
-  const uint32_t bound = candidateBound(input);
+  if (!input.camera || !input.splats || !hasAllHandles(out)) return false;
+  const VkPhysicalDeviceLimits& limits = ctx_.vkbDevice().physical_device.properties.limits;
+  const VkDeviceSize storageAlignment = limits.minStorageBufferOffsetAlignment;
+  const VkDeviceSize maxStorageRange = capabilities_.maxStorageBufferRange;
   VkDescriptorBufferInfo candidateInfo{dummy_->handle(), 0, dummy_->size()};
   VkDescriptorBufferInfo candidateCountInfo{dummy_->handle(), 0, sizeof(uint32_t)};
-  if (input.mode != CandidateMode::prefix) {
-    const VkDeviceSize bytes = input.mode == CandidateMode::indices
-                                   ? VkDeviceSize{std::max(bound, 1u)} * sizeof(uint32_t)
-                                   : VkDeviceSize{std::max(input.rangeCount, 1u)} * sizeof(Range);
-    if (!input.candidates || bytes > capabilities_.maxStorageBufferRange ||
-        (storageAlignment && input.candidatesOffset % storageAlignment != 0) ||
-        !validRange(input.candidatesOffset, bytes, input.candidatesBytes))
-      return false;
-    candidateInfo = {input.candidates, input.candidatesOffset, bytes};
-  }
-  if (input.mode == CandidateMode::indices) {
-    if (!input.candidateCount ||
-        (storageAlignment && input.candidateCountOffset % storageAlignment != 0) ||
-        !validRange(input.candidateCountOffset, sizeof(uint32_t), input.candidateCountBytes))
-      return false;
-    candidateCountInfo = {input.candidateCount, input.candidateCountOffset, sizeof(uint32_t)};
-  }
+  if (!acceptsCamera(input, limits) || !acceptsSplats(input, storageAlignment, maxStorageRange) ||
+      !describeCandidates(input, storageAlignment, maxStorageRange, candidateInfo) ||
+      !describeCandidateCount(input, storageAlignment, candidateCountInfo))
+    return false;
   const VkDescriptorBufferInfo camera{input.camera, input.cameraOffset, sizeof(CameraUniform)};
-  const VkDescriptorBufferInfo splats{input.splats, input.splatsOffset, sourceBytes};
+  const VkDescriptorBufferInfo splats{input.splats, input.splatsOffset, sourceBytes(input)};
   const VkDescriptorBufferInfo indices{out.indices, 0, VK_WHOLE_SIZE};
   const VkDescriptorBufferInfo depthKeys{out.depthKeys, 0, VK_WHOLE_SIZE};
   const VkDescriptorBufferInfo count{out.count, 0, sizeof(uint32_t)};
   const VkDescriptorBufferInfo indirect{out.indirect, 0, sizeof(VkDrawIndirectCommand)};
   const VkDescriptorBufferInfo status{out.status, 0, sizeof(uint32_t)};
-  const VkDescriptorBufferInfo visibilityInfos[kVisibilityBindings] = {
-      camera, splats, indices, depthKeys, count, status, candidateInfo, candidateCountInfo};
-  VkWriteDescriptorSet writes[kVisibilityBindings]{};
-  for (uint32_t binding = 0; binding < kVisibilityBindings; ++binding) {
-    writes[binding] = {
-        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        nullptr,
-        visibilitySets_[slot],
-        binding,
-        0,
-        1,
-        binding == 0 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        nullptr,
-        &visibilityInfos[binding],
-        nullptr};
-  }
-  vkUpdateDescriptorSets(ctx_.device(), kVisibilityBindings, writes, 0, nullptr);
-
-  const VkDescriptorBufferInfo prepareInfos[kPrepareBindings] = {count, indirect, status};
-  VkWriteDescriptorSet prepareWrites[kPrepareBindings]{};
-  for (uint32_t binding = 0; binding < kPrepareBindings; ++binding) {
-    prepareWrites[binding] = {
-        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, prepareSets_[slot],     binding, 0, 1,
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,      nullptr, &prepareInfos[binding], nullptr};
-  }
-  vkUpdateDescriptorSets(ctx_.device(), kPrepareBindings, prepareWrites, 0, nullptr);
+  writeBindings<kVisibilityBindings>(
+      ctx_.device(), visibilitySets_[slot],
+      {camera, splats, indices, depthKeys, count, status, candidateInfo, candidateCountInfo},
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  writeBindings<kPrepareBindings>(ctx_.device(), prepareSets_[slot], {count, indirect, status},
+                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
   return true;
 }
 

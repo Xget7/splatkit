@@ -18,10 +18,14 @@ const {execFileSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const destination = path.join(root, 'ios', 'SplatKitCore.xcframework');
+// macOS and the Linux CI runners both ship it here; a PATH lookup could run any unzip.
+const UNZIP = '/usr/bin/unzip';
 
 function unzip(zipPath, destDir) {
   fs.mkdirSync(destDir, {recursive: true});
-  execFileSync('unzip', ['-q', '-o', zipPath, '-d', destDir], {stdio: 'inherit'});
+  execFileSync(UNZIP, ['-q', '-o', zipPath, '-d', destDir], {
+    stdio: 'inherit',
+  });
 }
 
 /** Moves the sole `*.xcframework` found directly under `dir` to `destination`. */
@@ -34,14 +38,19 @@ function installXcframeworkFrom(dir) {
 
 function fromLocalOverride(overridePath) {
   const resolved = path.resolve(overridePath);
-  if (!fs.existsSync(resolved)) throw new Error(`SPLATKIT_IOS_XCFRAMEWORK_PATH not found: ${resolved}`);
-  console.warn(`fetch-ios-xcframework: using local override ${resolved} (checksum not verified)`);
+  if (!fs.existsSync(resolved))
+    throw new Error(`SPLATKIT_IOS_XCFRAMEWORK_PATH not found: ${resolved}`);
+  console.warn(
+    `fetch-ios-xcframework: using local override ${resolved} (checksum not verified)`,
+  );
   if (resolved.endsWith('.xcframework')) {
     fs.rmSync(destination, {recursive: true, force: true});
     fs.cpSync(resolved, destination, {recursive: true});
     return {source: 'local-directory', path: resolved};
   }
-  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'splatkit-ios-xcframework-'));
+  const staging = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'splatkit-ios-xcframework-'),
+  );
   unzip(resolved, staging);
   installXcframeworkFrom(staging);
   fs.rmSync(staging, {recursive: true, force: true});
@@ -49,24 +58,33 @@ function fromLocalOverride(overridePath) {
 }
 
 async function fromRelease() {
-  const {version, sha256} = JSON.parse(fs.readFileSync(path.join(__dirname, 'ios-xcframework.json'), 'utf8'));
+  const {version, sha256} = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'ios-xcframework.json'), 'utf8'),
+  );
   if (!sha256) {
     throw new Error(
       `scripts/ios-xcframework.json has no sha256 for splatkit-ios v${version}: that release has not ` +
-      'been cut yet. Fill it in (swift package compute-checksum, from scripts/package-ios.sh) after ' +
-      'cutting it, or set SPLATKIT_IOS_XCFRAMEWORK_PATH to a local build for development.'
+        'been cut yet. Fill it in (swift package compute-checksum, from scripts/package-ios.sh) after ' +
+        'cutting it, or set SPLATKIT_IOS_XCFRAMEWORK_PATH to a local build for development.',
     );
   }
   const url = `https://github.com/Xget7/splatkit-ios/releases/download/v${version}/SplatKitCore.xcframework.zip`;
   console.warn(`fetch-ios-xcframework: downloading ${url}`);
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`fetch-ios-xcframework: ${url} responded ${response.status}`);
+  if (!response.ok)
+    throw new Error(
+      `fetch-ios-xcframework: ${url} responded ${response.status}`,
+    );
   const bytes = Buffer.from(await response.arrayBuffer());
   const actual = crypto.createHash('sha256').update(bytes).digest('hex');
   if (actual !== sha256) {
-    throw new Error(`fetch-ios-xcframework: checksum mismatch for ${url}\nexpected ${sha256}\nactual   ${actual}`);
+    throw new Error(
+      `fetch-ios-xcframework: checksum mismatch for ${url}\nexpected ${sha256}\nactual   ${actual}`,
+    );
   }
-  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'splatkit-ios-xcframework-'));
+  const staging = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'splatkit-ios-xcframework-'),
+  );
   const zipPath = path.join(staging, 'SplatKitCore.xcframework.zip');
   fs.writeFileSync(zipPath, bytes);
   unzip(zipPath, staging);
@@ -79,7 +97,10 @@ async function main() {
   const override = process.env.SPLATKIT_IOS_XCFRAMEWORK_PATH;
   const result = override ? fromLocalOverride(override) : await fromRelease();
   const infoPlist = path.join(destination, 'Info.plist');
-  if (!fs.existsSync(infoPlist)) throw new Error(`fetch-ios-xcframework: ${infoPlist} missing after install`);
+  if (!fs.existsSync(infoPlist))
+    throw new Error(
+      `fetch-ios-xcframework: ${infoPlist} missing after install`,
+    );
   console.log(JSON.stringify({status: 'installed', destination, ...result}));
 }
 

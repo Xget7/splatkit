@@ -11,7 +11,11 @@ const {
 } = require('../build/performance');
 const {WorldKind} = require('../build/contracts');
 
-const world = {requestId: 'world-1', filePath: '/tmp/world.spz', maxShDegree: 3};
+const world = {
+  requestId: 'world-1',
+  filePath: '/documents/world.spz',
+  maxShDegree: 3,
+};
 const capabilities = {
   limits: {
     maxLodCapacitySplats: 5_000_000,
@@ -30,10 +34,12 @@ function build(configure = builder => builder) {
 
 test('presets have real values and later manual options predictably override them', () => {
   const high = build(builder => builder.withPreset('high'));
-  const manual = build(builder => builder.withPreset('high').withPerformance({
-    renderScale: 0.9,
-    lodBudgetSplats: 1_500_000,
-  }));
+  const manual = build(builder =>
+    builder.withPreset('high').withPerformance({
+      renderScale: 0.9,
+      lodBudgetSplats: 1_500_000,
+    }),
+  );
 
   assert.equal(high.performance.requested.mode, 'auto');
   assert.equal(high.performance.requested.renderScale, 1);
@@ -47,15 +53,17 @@ test('presets have real values and later manual options predictably override the
 });
 
 test('requested policy resolves to only values the current Fabric contract can apply', () => {
-  const config = build(builder => builder.withPerformance({
-    raster: 'computeTile',
-    tileSize: 32,
-    renderScale: 1.1,
-    shDegree: 2,
-    lodBudgetSplats: 2_500_000,
-    residencyCapacitySplats: 3_500_000,
-    targetFps: 90,
-  }));
+  const config = build(builder =>
+    builder.withPerformance({
+      raster: 'computeTile',
+      tileSize: 32,
+      renderScale: 1.1,
+      shDegree: 2,
+      lodBudgetSplats: 2_500_000,
+      residencyCapacitySplats: 3_500_000,
+      targetFps: 90,
+    }),
+  );
 
   assert.equal(config.performance.requested.raster, 'computeTile');
   assert.equal(config.performance.requested.targetFps, 90);
@@ -75,24 +83,45 @@ test('requested policy resolves to only values the current Fabric contract can a
     residencyCapacitySplats: 3_500_000,
     targetFps: null,
   });
-  assert(config.performance.diagnostics.some(diagnostic =>
-    diagnostic.option === 'targetFps' && diagnostic.code === 'fabric-option-unavailable'));
+  assert(
+    config.performance.diagnostics.some(
+      diagnostic =>
+        diagnostic.option === 'targetFps' &&
+        diagnostic.code === 'fabric-option-unavailable',
+    ),
+  );
   // Without native capabilities, changed policy fields say support is unknown, not inexpressible.
-  assert(config.performance.diagnostics.some(diagnostic =>
-    diagnostic.option === 'tileSize' && diagnostic.code === 'native-support-unknown'));
-  assert(!config.performance.diagnostics.some(diagnostic =>
-    diagnostic.option === 'enableFrustumCulling'));
-  assert.equal(new Set(config.performance.diagnostics.map(diagnostic =>
-    `${diagnostic.code}:${diagnostic.option}`)).size, config.performance.diagnostics.length);
+  assert(
+    config.performance.diagnostics.some(
+      diagnostic =>
+        diagnostic.option === 'tileSize' &&
+        diagnostic.code === 'native-support-unknown',
+    ),
+  );
+  assert(
+    !config.performance.diagnostics.some(
+      diagnostic => diagnostic.option === 'enableFrustumCulling',
+    ),
+  );
+  assert.equal(
+    new Set(
+      config.performance.diagnostics.map(
+        diagnostic => `${diagnostic.code}:${diagnostic.option}`,
+      ),
+    ).size,
+    config.performance.diagnostics.length,
+  );
 });
 
 test('maps scale, SH and splat capacities to actual Fabric props', () => {
-  const config = build(builder => builder.withRender({paused: true}).withPerformance({
-    renderScale: 0.75,
-    shDegree: 1,
-    lodBudgetSplats: 750_000,
-    residencyCapacitySplats: 900_000,
-  }));
+  const config = build(builder =>
+    builder.withRender({paused: true}).withPerformance({
+      renderScale: 0.75,
+      shDegree: 1,
+      lodBudgetSplats: 750_000,
+      residencyCapacitySplats: 900_000,
+    }),
+  );
 
   assert.deepEqual(toNativeViewProps(config), {
     world: {
@@ -109,7 +138,11 @@ test('maps scale, SH and splat capacities to actual Fabric props', () => {
 
 test('a world is one file unless it names a tileset, which keeps its residency budget', () => {
   const tileset = new SplatKitBuilder()
-    .withWorld({...world, filePath: '/tmp/city/tileset.json', kind: WorldKind.tileset})
+    .withWorld({
+      ...world,
+      filePath: '/documents/city/tileset.json',
+      kind: WorldKind.tileset,
+    })
     .withPerformance({residencyCapacitySplats: 1_500_000})
     .build(capabilities);
   assert.equal(build().world.kind, WorldKind.file);
@@ -117,24 +150,42 @@ test('a world is one file unless it names a tileset, which keeps its residency b
   assert.equal(tileset.world.residencyCapacitySplats, 1_500_000);
   assert.equal(toNativeViewProps(tileset).world.kind, WorldKind.tileset);
   for (const kind of [2, -1, 'tileset', 0.5, null]) {
-    assert.throws(() => new SplatKitBuilder().withWorld({...world, kind}).build(capabilities),
-      RangeError);
+    assert.throws(
+      () =>
+        new SplatKitBuilder().withWorld({...world, kind}).build(capabilities),
+      RangeError,
+    );
   }
 });
 
 test('a world carries its lens to the native props and the build validates it', () => {
   const lens = {fieldOfViewDegrees: 30, nearPlane: 0.05, farPlane: 4};
-  const config = new SplatKitBuilder().withWorld({...world, ...lens}).build(capabilities);
+  const config = new SplatKitBuilder()
+    .withWorld({...world, ...lens})
+    .build(capabilities);
   assert.deepEqual(
-    {fieldOfViewDegrees: config.world.fieldOfViewDegrees, nearPlane: config.world.nearPlane,
-      farPlane: config.world.farPlane}, lens);
+    {
+      fieldOfViewDegrees: config.world.fieldOfViewDegrees,
+      nearPlane: config.world.nearPlane,
+      farPlane: config.world.farPlane,
+    },
+    lens,
+  );
   assert.equal(toNativeViewProps(config).world.farPlane, lens.farPlane);
   assert.throws(
-    () => new SplatKitBuilder().withWorld({...world, fieldOfViewDegrees: 5}).build(capabilities),
-    RangeError);
+    () =>
+      new SplatKitBuilder()
+        .withWorld({...world, fieldOfViewDegrees: 5})
+        .build(capabilities),
+    RangeError,
+  );
   assert.throws(
-    () => new SplatKitBuilder().withWorld({...world, nearPlane: 0.05}).build(capabilities),
-    TypeError);
+    () =>
+      new SplatKitBuilder()
+        .withWorld({...world, nearPlane: 0.05})
+        .build(capabilities),
+    TypeError,
+  );
 });
 
 test('clamps valid requests to supplied limits and reports each fallback', () => {
@@ -162,17 +213,30 @@ test('clamps valid requests to supplied limits and reports each fallback', () =>
     lodCapacitySplats: 800_000,
     residencyCapacitySplats: 900_000,
   });
-  for (const option of ['lodBudgetSplats', 'residencyCapacitySplats', 'shDegree']) {
-    assert(config.performance.diagnostics.some(diagnostic =>
-      diagnostic.option === option && diagnostic.code === 'limit-clamped'));
+  for (const option of [
+    'lodBudgetSplats',
+    'residencyCapacitySplats',
+    'shDegree',
+  ]) {
+    assert(
+      config.performance.diagnostics.some(
+        diagnostic =>
+          diagnostic.option === option && diagnostic.code === 'limit-clamped',
+      ),
+    );
   }
 });
 
 test('hardware-only snapshot suggests but does not claim a raster fallback', () => {
-  const config = new SplatKitBuilder().withWorld(world).withPerformance({
-    raster: 'computeTile',
-  }).build({...capabilities, supportsComputeTiles: false});
-  const diagnostic = config.performance.diagnostics.find(item => item.option === 'raster');
+  const config = new SplatKitBuilder()
+    .withWorld(world)
+    .withPerformance({
+      raster: 'computeTile',
+    })
+    .build({...capabilities, supportsComputeTiles: false});
+  const diagnostic = config.performance.diagnostics.find(
+    item => item.option === 'raster',
+  );
 
   assert.equal(config.performance.effective.raster, null);
   assert.equal(diagnostic.code, 'capability-fallback-unavailable');
@@ -194,10 +258,12 @@ test('rejects malformed numeric, enum and duplicate-authority inputs', () => {
     assert.throws(() => new SplatKitBuilder().withPerformance(options));
   }
   assert.throws(() => new SplatKitBuilder().withPerformance({mystery: true}));
-  assert.throws(() => new SplatKitBuilder().withWorld({
-    ...world,
-    lodCapacitySplats: 10,
-  }));
+  assert.throws(() =>
+    new SplatKitBuilder().withWorld({
+      ...world,
+      lodCapacitySplats: 10,
+    }),
+  );
   assert.throws(() => new SplatKitBuilder().withRender({renderScale: 1}));
   assert.throws(() => new SplatKitBuilder().withPreset('ultra'));
   assert.throws(() => new SplatKitBuilder().withPreset('constructor'));
@@ -216,21 +282,35 @@ test('returns immutable snapshots isolated from caller mutation', () => {
   assert(Object.isFrozen(config.performance.requested));
   assert(Object.isFrozen(config.performance.effective));
   assert(Object.isFrozen(config.performance.diagnostics));
-  assert.throws(() => { config.performance.effective.renderScale = 2; });
+  assert.throws(() => {
+    config.performance.effective.renderScale = 2;
+  });
 });
 
 test('classifies only operations represented by the Fabric contract', () => {
   const policy = build().performance.requested;
   assert.equal(classifyPolicyChange(policy, policy), 'none');
-  assert.equal(classifyPolicyChange(policy, {...policy, renderScale: 0.75}),
-    'nativePropUpdate');
-  assert.equal(classifyPolicyChange(policy, {...policy, lodBudgetSplats: 1_000_000}),
-    'worldReload');
+  assert.equal(
+    classifyPolicyChange(policy, {...policy, renderScale: 0.75}),
+    'nativePropUpdate',
+  );
+  assert.equal(
+    classifyPolicyChange(policy, {...policy, lodBudgetSplats: 1_000_000}),
+    'worldReload',
+  );
   // Renderer policy fields travel in the versioned policy prop, not a world reload.
-  assert.equal(classifyPolicyChange(policy, {...policy, raster: 'hybrid'}),
-    'nativePropUpdate');
-  assert.equal(classifyPolicyChange(policy, {...policy, sortDepth: 32}), 'nativePropUpdate');
-  assert.equal(classifyPolicyChange(policy, {...policy, targetFps: 60}), 'unavailable');
+  assert.equal(
+    classifyPolicyChange(policy, {...policy, raster: 'hybrid'}),
+    'nativePropUpdate',
+  );
+  assert.equal(
+    classifyPolicyChange(policy, {...policy, sortDepth: 32}),
+    'nativePropUpdate',
+  );
+  assert.equal(
+    classifyPolicyChange(policy, {...policy, targetFps: 60}),
+    'unavailable',
+  );
 });
 
 const nativeCapabilitiesEvent = Object.freeze({
@@ -255,12 +335,15 @@ const nativeCapabilitiesEvent = Object.freeze({
 const nativeCapabilities = nativeCapabilitiesFromEvent(nativeCapabilitiesEvent);
 
 test('native capabilities resolve the requested policy against what the adapter accepts', () => {
-  const config = new SplatKitBuilder().withWorld(world).withPerformance({
-    raster: 'hybrid',
-    sortDepth: 16,
-    subpixelThreshold: 0.75,
-    alphaThreshold: 0.5,
-  }).build(nativeCapabilities);
+  const config = new SplatKitBuilder()
+    .withWorld(world)
+    .withPerformance({
+      raster: 'hybrid',
+      sortDepth: 16,
+      subpixelThreshold: 0.75,
+      alphaThreshold: 0.5,
+    })
+    .build(nativeCapabilities);
 
   // Supported fields reach the effective policy with their real values, not null.
   assert.equal(config.performance.effective.sortDepth, 16);
@@ -271,8 +354,13 @@ test('native capabilities resolve the requested policy against what the adapter 
   assert.equal(config.performance.effective.alphaThreshold, null);
   assert.equal(config.performance.effective.subpixelThreshold, null);
   for (const option of ['raster', 'alphaThreshold', 'subpixelThreshold']) {
-    assert(config.performance.diagnostics.some(diagnostic =>
-      diagnostic.option === option && diagnostic.code === 'native-option-fallback'));
+    assert(
+      config.performance.diagnostics.some(
+        diagnostic =>
+          diagnostic.option === option &&
+          diagnostic.code === 'native-option-fallback',
+      ),
+    );
   }
 });
 
@@ -280,28 +368,44 @@ test('every preset rasterizes in hardware; hybrid tiles are an explicit choice',
   for (const preset of ['highEnd', 'high', 'balanced', 'performance']) {
     const config = build(builder => builder.withPreset(preset));
     assert.equal(config.performance.requested.raster, 'hardware', preset);
-    assert(!config.performance.diagnostics.some(item => item.option === 'raster'), preset);
+    assert(
+      !config.performance.diagnostics.some(item => item.option === 'raster'),
+      preset,
+    );
   }
 });
 
 test('a hardware-only raster mask resolves every other strategy to the fallback', () => {
-  const metal = nativeCapabilitiesFromEvent({...nativeCapabilitiesEvent, policyRaster: true,
-    policyRasterMask: 0b001});
+  const metal = nativeCapabilitiesFromEvent({
+    ...nativeCapabilitiesEvent,
+    policyRaster: true,
+    policyRasterMask: 0b001,
+  });
   assert.deepEqual(metal.policy.rasterStrategies, ['hardware']);
   for (const raster of ['hybrid', 'computeTile']) {
-    const config = new SplatKitBuilder().withWorld(world).withPerformance({raster}).build(metal);
+    const config = new SplatKitBuilder()
+      .withWorld(world)
+      .withPerformance({raster})
+      .build(metal);
     assert.equal(config.performance.effective.raster, null, raster);
-    assert(config.performance.diagnostics.some(item =>
-      item.option === 'raster' && item.code === 'native-option-fallback'), raster);
+    assert(
+      config.performance.diagnostics.some(
+        item =>
+          item.option === 'raster' && item.code === 'native-option-fallback',
+      ),
+      raster,
+    );
   }
 });
 
 test('builds the versioned native policy prop from the requested values', () => {
-  const config = build(builder => builder.withPerformance({
-    raster: 'computeTile',
-    sortDepth: 16,
-    subpixelThreshold: 0.25,
-  }));
+  const config = build(builder =>
+    builder.withPerformance({
+      raster: 'computeTile',
+      sortDepth: 16,
+      subpixelThreshold: 0.25,
+    }),
+  );
   assert.deepEqual(toNativePolicyProp(config, 7), {
     revision: 7,
     raster: 1,
@@ -319,7 +423,11 @@ test('builds the versioned native policy prop from the requested values', () => 
 test('the policy revision is a positive Int32, because native treats 0 or less as no policy', () => {
   const config = build();
   for (const revision of [0, -1, 1.5, Number.NaN, 2 ** 31]) {
-    assert.throws(() => toNativePolicyProp(config, revision), RangeError, String(revision));
+    assert.throws(
+      () => toNativePolicyProp(config, revision),
+      RangeError,
+      String(revision),
+    );
   }
   assert.equal(toNativePolicyProp(config, 2 ** 31 - 1).revision, 2 ** 31 - 1);
 });

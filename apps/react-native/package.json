@@ -6,7 +6,8 @@
     "android": "react-native run-android --mode release",
     "ios": "react-native run-ios --mode Release --buildFolder build/dd --extra-params ONLY_ACTIVE_ARCH=YES",
     "ios:build": "react-native build-ios --mode Release --buildFolder build/dd --extra-params ONLY_ACTIVE_ARCH=YES",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "prettier --write . && eslint --fix .",
     "typecheck": "tsc --noEmit",
     "patch:tooling": "node ../../packages/react-native-splatkit/scripts/patch-braces.cjs --node-modules node_modules",
     "postinstall": "npm run patch:tooling",
@@ -34,11 +35,17 @@
     "@react-native/metro-config": "0.87.1",
     "@react-native/typescript-config": "0.87.1",
     "@types/react": "^19.2.0",
-    "eslint": "^8.19.0",
-    "prettier": "2.8.8",
-    "typescript": "^6.0.3"
+    "eslint": "^9.39.5",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "hermes-eslint": "^0.37.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0"
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "overrides": {
+    "eslint-plugin-ft-flow": "^3.0.11"
   }
 }

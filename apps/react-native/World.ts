@@ -6,7 +6,7 @@
  * @format
  */
 
-import { WorldKind } from '@splatkit/react-native';
+import {WorldKind} from '@splatkit/react-native';
 
 /** Relative to the files directory. */
 export const WORLD_PATH = 'world.lodsplat';

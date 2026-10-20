@@ -27,6 +27,7 @@ npm ci
 
 ```sh
 npm run check
+npm run lint
 ```
 
 `npm run check` runs, in order:
@@ -35,7 +36,10 @@ npm run check
 - `npm test` - compiles, then runs the contract tests in `tests/` with `node --test`.
 - `npm run codegen` - Fabric Codegen against the real, pinned generators.
 
-The [contract workflow](.github/workflows/contract.yml) runs the same command on every pull request, so a local pass is the expected baseline.
+`npm run lint` runs ESLint, with typescript-eslint's strict type-checked rules and eslint-plugin-sonarjs's recommended rules, then checks the Prettier formatting.
+`npm run lint:fix` rewrites the formatting and applies the fixes ESLint can.
+
+The [contract workflow](.github/workflows/contract.yml) runs both commands on every pull request, so a local pass is the expected baseline.
 
 ## Native adapter changes
 

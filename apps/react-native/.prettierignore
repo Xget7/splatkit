@@ -1,0 +1,7 @@
+# Markdown keeps its hand layout; the native projects are not JavaScript.
+android/
+ios/
+build/
+vendor/
+package-lock.json
+*.md

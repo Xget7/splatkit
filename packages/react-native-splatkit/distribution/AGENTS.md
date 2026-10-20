@@ -22,9 +22,11 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before editing, and keep GPU internals n
 ```sh
 npm ci
 npm run check
+npm run lint
 ```
 
-`npm run check` is `typecheck`, the `tests/` suite and Fabric Codegen, and the [contract workflow](.github/workflows/contract.yml) runs it on every pull request.
+`npm run check` is `typecheck`, the `tests/` suite and Fabric Codegen; `npm run lint` is ESLint and the Prettier check, and `npm run lint:fix` applies them.
+The [contract workflow](.github/workflows/contract.yml) runs both on every pull request.
 Native adapter changes are verified upstream in SplatKit, where the adapter host tests and the React Native example live:
 
 ```sh
