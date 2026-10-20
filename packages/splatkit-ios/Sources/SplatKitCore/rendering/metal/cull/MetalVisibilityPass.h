@@ -21,8 +21,7 @@ class MetalVisibilityPass {
  public:
   // Both widths sort by linear view depth: Full32 by its float bits, Low16 quantized between
   // finite forward-Z Mat4::perspective planes. Shader key width and radix passes agree.
-  bool create(id<MTLDevice> device, id<MTLLibrary> library,
-              KeyBits depthBits = KeyBits::Full32);
+  bool create(id<MTLDevice> device, id<MTLLibrary> library, KeyBits depthBits = KeyBits::Full32);
   // Rebuilds the visibility pipelines for a new key width, keeping every reserved buffer
   // and the radix scratch. The key width and the shader's quantized flag must agree, so
   // both move together. Render thread, while idle. On failure the previous key width is

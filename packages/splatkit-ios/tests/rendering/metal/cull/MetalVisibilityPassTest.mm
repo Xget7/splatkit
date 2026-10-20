@@ -121,8 +121,8 @@ TEST_F(MetalVisibilityPassTest, RejectsRangesOutsideANewerSmallerWorld) {
   id<MTLCommandBuffer> cmd = [Gpu::get().queue commandBuffer];
   EXPECT_FALSE(visibility.encode(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1));
   EXPECT_FALSE(visibility.encode(cmd, 0, input.uniforms, input.splats, nil, 0, nullptr, 1));
-  EXPECT_FALSE(visibility.encode(cmd, kFramesInFlight, input.uniforms, input.splats,
-                                 nil, 0, nullptr, 0));
+  EXPECT_FALSE(
+      visibility.encode(cmd, kFramesInFlight, input.uniforms, input.splats, nil, 0, nullptr, 0));
   [cmd commit];
   [cmd waitUntilCompleted];
 }

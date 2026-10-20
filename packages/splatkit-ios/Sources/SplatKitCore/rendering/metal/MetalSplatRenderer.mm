@@ -96,9 +96,8 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.lodErrorPixels = 1.0f;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = kMinPixelRadius;
-  policy.fallback.sortDepth = compute_->depthBits() == KeyBits::Low16
-                                  ? SortKeyBits::low16
-                                  : SortKeyBits::full32;
+  policy.fallback.sortDepth =
+      compute_->depthBits() == KeyBits::Low16 ? SortKeyBits::low16 : SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
   policy.fallback.enableEarlyTermination = true;
   // The key width is a public per-instance control. The raster strategy, sub-pixel radius,

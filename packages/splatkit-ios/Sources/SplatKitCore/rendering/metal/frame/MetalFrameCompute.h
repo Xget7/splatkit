@@ -97,8 +97,7 @@ class MetalFrameCompute {
     std::atomic<double> sortMillis{0};
   };
 
-  bool createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort,
-                      KeyBits bits) const;
+  bool createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort, KeyBits bits) const;
   void adaptLodThreshold();
 
   id<MTLDevice> device_ = nil;

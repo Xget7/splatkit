@@ -35,12 +35,12 @@ std::vector<uint8_t> decode(NSString* path, size_t* width, size_t* height) {
     *height = CGImageGetHeight(image);
     rgba.assign(*width * *height * kBytesPerPixel, 0);
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(rgba.data(), *width, *height, 8,
-                                                 *width * kBytesPerPixel, space,
-                                                 kCGImageAlphaPremultipliedLast);
-    CGContextDrawImage(context, CGRectMake(0, 0, static_cast<CGFloat>(*width),
-                                           static_cast<CGFloat>(*height)),
-                       image);
+    CGContextRef context =
+        CGBitmapContextCreate(rgba.data(), *width, *height, 8, *width * kBytesPerPixel, space,
+                              kCGImageAlphaPremultipliedLast);
+    CGContextDrawImage(
+        context, CGRectMake(0, 0, static_cast<CGFloat>(*width), static_cast<CGFloat>(*height)),
+        image);
     CGContextRelease(context);
     CGColorSpaceRelease(space);
     CGImageRelease(image);
@@ -53,10 +53,12 @@ TEST_F(SKPngWriterTest, WritesADecodablePngOfTheRequestedSizeWithTheSamePixels) 
   constexpr uint32_t kWidth = 3;
   constexpr uint32_t kHeight = 2;
   // BGRA, top row first: blue, green, red / white, black, mid grey.
+  // clang-format off
   const std::vector<uint8_t> bgra = {
-      255, 0,   0,   255, 0,   255, 0,   255, 0,   0,   255, 255,
-      255, 255, 255, 255, 0,   0,   0,   255, 128, 128, 128, 255,
+      255, 0,   0,   255,   0, 255,   0, 255,   0,   0, 255, 255,
+      255, 255, 255, 255,   0,   0,   0, 255, 128, 128, 128, 255,
   };
+  // clang-format on
   ASSERT_EQ(bgra.size(), size_t{kWidth} * kHeight * kBytesPerPixel);
   ASSERT_TRUE(writePng(path_, bgra, kWidth, kHeight));
 

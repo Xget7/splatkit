@@ -8,8 +8,7 @@
 
 namespace splatkit {
 
-bool MetalVisibilityPass::create(id<MTLDevice> device, id<MTLLibrary> library,
-                                 KeyBits depthBits) {
+bool MetalVisibilityPass::create(id<MTLDevice> device, id<MTLLibrary> library, KeyBits depthBits) {
   device_ = device;
   library_ = library;
   depthBits_ = depthBits;

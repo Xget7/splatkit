@@ -54,9 +54,7 @@ bool MetalFrameCompute::create() {
 }
 
 bool MetalFrameCompute::configure(const RenderPolicy& policy, std::string* reason) {
-  const KeyBits bits = policy.sortDepth == SortKeyBits::low16
-                                           ? KeyBits::Low16
-                                           : KeyBits::Full32;
+  const KeyBits bits = policy.sortDepth == SortKeyBits::low16 ? KeyBits::Low16 : KeyBits::Full32;
   const bool visibilityChanged = bits != depthBits();
   const bool lodChanged =
       policy.lodErrorPixels != lodErrorPixels_ || policy.lodSplatLimit != lodSplatLimit_;
