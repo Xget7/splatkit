@@ -78,6 +78,7 @@ Both tools come from the NDK the project pins, so a machine that builds the libr
 The script configures `splat-core`, `splatkit-engine` and `splatkit-android` for the Android target and lints tests and tools too.
 `git config core.hooksPath .githooks` installs a pre-push hook that runs `scripts/lint-cpp.sh --format-only`, the seconds-long formatting half of that check.
 VS Code's C/C++ extension reads the compile databases it leaves in `build/lint`, as [.vscode/settings.json](.vscode/settings.json) sets up.
+clang-tidy holds every function to its default cognitive complexity of 25, counting the source as written, so test assertion macros add nothing.
 
 ## Lint the TypeScript
 
