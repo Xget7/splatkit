@@ -15,27 +15,27 @@ target_compile_options(splatkit_vulkan_test_support PRIVATE
 target_link_libraries(splatkit_vulkan_test_support PUBLIC
   splatkit_engine vk-bootstrap::vk-bootstrap GPUOpen::VulkanMemoryAllocator vulkan android log)
 
-add_executable(splatkit_gpu_buffer_test rendering/vulkan/device/VulkanBufferTest.cpp)
-target_link_libraries(splatkit_gpu_buffer_test PRIVATE splatkit_vulkan_test_support)
-add_executable(splatkit_gpu_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
-target_link_libraries(splatkit_gpu_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
-add_executable(splatkit_world_test rendering/vulkan/world/VulkanWorldTest.cpp
+add_executable(splatkit_vulkan_buffer_test rendering/vulkan/device/VulkanBufferTest.cpp)
+target_link_libraries(splatkit_vulkan_buffer_test PRIVATE splatkit_vulkan_test_support)
+add_executable(splatkit_vulkan_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
+target_link_libraries(splatkit_vulkan_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
+add_executable(splatkit_vulkan_world_test rendering/vulkan/world/VulkanWorldTest.cpp
   ${vulkan_source_dir}/world/VulkanWorld.cpp)
-target_link_libraries(splatkit_world_test PRIVATE splatkit_vulkan_test_support)
-add_executable(splatkit_lod_selection_test rendering/vulkan/selection/VulkanLodSelectionTest.cpp
+target_link_libraries(splatkit_vulkan_world_test PRIVATE splatkit_vulkan_test_support)
+add_executable(splatkit_vulkan_lod_selection_test rendering/vulkan/selection/VulkanLodSelectionTest.cpp
   ${vulkan_source_dir}/selection/VulkanLodSelection.cpp)
-target_link_libraries(splatkit_lod_selection_test PRIVATE
+target_link_libraries(splatkit_vulkan_lod_selection_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
-add_executable(splatkit_visibility_test rendering/vulkan/cull/VulkanVisibilityPassTest.cpp
+add_executable(splatkit_vulkan_visibility_pass_test rendering/vulkan/cull/VulkanVisibilityPassTest.cpp
   ${vulkan_source_dir}/cull/VulkanVisibilityPass.cpp)
-target_link_libraries(splatkit_visibility_test PRIVATE
+target_link_libraries(splatkit_vulkan_visibility_pass_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
-add_executable(splatkit_vulkan_frame_test rendering/vulkan/frame/VulkanFrameComputeTest.cpp
+add_executable(splatkit_vulkan_frame_compute_test rendering/vulkan/frame/VulkanFrameComputeTest.cpp
   ${vulkan_source_dir}/frame/VulkanFrameCompute.cpp ${vulkan_source_dir}/selection/VulkanLodSelection.cpp
   ${vulkan_source_dir}/cull/VulkanVisibilityPass.cpp ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
-target_link_libraries(splatkit_vulkan_frame_test PRIVATE
+target_link_libraries(splatkit_vulkan_frame_compute_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
-add_executable(splatkit_radix_sort_test rendering/vulkan/sort/VulkanRadixSortTest.cpp
+add_executable(splatkit_vulkan_radix_sort_test rendering/vulkan/sort/VulkanRadixSortTest.cpp
   ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
-target_link_libraries(splatkit_radix_sort_test PRIVATE
+target_link_libraries(splatkit_vulkan_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)

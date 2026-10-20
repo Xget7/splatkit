@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   try {
     const bool small = argc == 2 && std::strcmp(argv[1], "--small") == 0;
-    require(argc == 1 || small, "usage: splatkit_gpu_upload_pressure_test [--small]");
+    require(argc == 1 || small, "usage: splatkit_vulkan_upload_pressure_test [--small]");
     splatkit::test::VulkanTestContext gpu;
     const uint32_t capacity = small ? 262145 : 3000000;
     std::printf("upload-pressure GPU=%s capacity=%u validation=%s\n",
