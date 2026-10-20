@@ -34,6 +34,7 @@ splatkit_embed_text(splatkit_ios_shaders
 add_library(splatkit_ios STATIC
   Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
   Sources/SplatKitCore/rendering/metal/cull/MetalVisibilityPass.mm
+  Sources/SplatKitCore/rendering/metal/device/MetalContext.mm
   Sources/SplatKitCore/rendering/metal/selection/MetalLodSelection.mm
   Sources/SplatKitCore/rendering/metal/sort/MetalRadixSort.mm
   Sources/SplatKitCore/rendering/metal/world/MetalWorld.mm

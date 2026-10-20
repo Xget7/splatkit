@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
+#include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/selection/MetalLodSelection.h"
 #include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -27,7 +28,7 @@
 
 namespace splatkit {
 
-// Everything between a CAMetalLayer and a presented frame: the device and queue, the
+// Everything between a CAMetalLayer and a presented frame: the Metal context, the
 // pipelines built for the layer's pixel format, the offscreen target a render scale
 // needs, and the world bound to them. The layer is attached and sized by the view; the
 // world stays through a detach. Render thread only, except where noted.
@@ -102,7 +103,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t lastLodEvaluatedCount() const { return lod_ ? lastLodEvaluatedCount_.load() : 0; }
   bool reportsPresentTimes() const override { return true; }
   uint32_t takePresentTimes(std::vector<int64_t>* times) override;
-  const std::string& deviceDescription() const override { return description_; }
+  const std::string& deviceDescription() const override { return context_->description(); }
 
   static constexpr int kMaxShDegree = 3;
   static constexpr uint32_t kFramesInFlight = MetalVisibilityPass::kSlots;
@@ -132,9 +133,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   void submitFrame(id<MTLCommandBuffer> cmd, id<CAMetalDrawable> drawable, bool drewWorld,
                    id<MTLBuffer> captured, CaptureHandler onCapture);
 
-  id<MTLDevice> device_ = nil;
-  id<MTLCommandQueue> queue_ = nil;
-  id<MTLLibrary> library_ = nil;
+  std::unique_ptr<MetalContext> context_;
   std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
   id<MTLRenderPipelineState> blitPipeline_ = nil;
   // The GPU order path: front to back in batches, a saturation mask between them, the
@@ -196,7 +195,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   std::atomic<double> lastSortMillis_{0};
   std::atomic<uint32_t> lastDrawCount_{0};
   CaptureHandler capture_;
-  std::string description_;
 };
 
 }  // namespace splatkit

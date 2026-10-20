@@ -7,9 +7,6 @@ asm(".linker_option \"-framework\", \"MetalFX\"");
 #endif
 
 #include <TargetConditionals.h>
-#if TARGET_OS_IPHONE
-#include <os/proc.h>
-#endif
 
 #include <algorithm>
 #include <cmath>
@@ -31,36 +28,19 @@ constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
 
 std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
   std::unique_ptr<MetalSplatRenderer> r(new MetalSplatRenderer());
-  r->device_ = MTLCreateSystemDefaultDevice();
-  if (r->device_ == nil) {
-    LOGE("no Metal device");
-    return nullptr;
-  }
-  // The embedded library uses SIMD reductions; reject unsupported GPUs before compiling it.
-  if (![r->device_ supportsFamily:MTLGPUFamilyApple7]) {
-    LOGE("SplatKit requires Apple GPU family 7 or newer (A14/M1+)");
-    return nullptr;
-  }
-  r->queue_ = [r->device_ newCommandQueue];
-  NSError* error = nil;
-  r->library_ = metal::shaderLibrary(r->device_, &error);
-  if (r->library_ == nil) {
-    LOGE("shader compilation failed: %s", error.localizedDescription.UTF8String);
-    return nullptr;
-  }
-  if (r->queue_ == nil) return nullptr;
+  r->context_ = MetalContext::create();
+  if (r->context_ == nullptr) return nullptr;
   for (auto& uniform : r->uniforms_) {
-    uniform = metal::buffer(r->device_, sizeof(CameraUniform));
+    uniform = metal::buffer(r->context_->device(), sizeof(CameraUniform));
     if (uniform == nil) return nullptr;
   }
   r->depthBits_ = MetalRadixSort::KeyBits::Full32;
-  r->gpuSort_ = r->visibility_.create(r->device_, r->library_, r->depthBits_);
+  r->gpuSort_ = r->visibility_.create(r->context_->device(), r->context_->library(), r->depthBits_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
        static_cast<uint32_t>(r->depthBits_), static_cast<uint32_t>(r->depthBits_) / 8);
   if (!r->gpuSort_) LOGW("GPU sort unavailable, sorting on the CPU");
   r->inFlight_ = dispatch_semaphore_create(kFramesInFlight);
-  r->description_ = std::string(r->device_.name.UTF8String) + ", Metal";
-  LOGI("%s", r->description_.c_str());
+  LOGI("%s", r->context_->description().c_str());
   return r;
 }
 
@@ -82,7 +62,7 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   waitIdle();
   layer_ = layer;
   if (layer_ == nil) return;
-  layer_.device = device_;
+  layer_.device = context_->device();
   layer_.pixelFormat = pixelFormat();
   layer_.framebufferOnly = YES;
   ++generation_;
@@ -152,7 +132,7 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   caps.supportsSubgroups = gpuSort_;
   // Metal exposes no texture-dimension query; Apple family 7, the minimum this renderer
   // accepts, supports 16384x16384.
-  caps.maxTextureDimension = device_ != nil ? 16384u : 0u;
+  caps.maxTextureDimension = context_->device() != nil ? 16384u : 0u;
   RenderPolicySupport& policy = caps.policy;
   policy.fallback.raster = RasterStrategy::hardware;
   policy.fallback.tileSize = 16;
@@ -231,7 +211,7 @@ bool MetalSplatRenderer::createDepth(NSUInteger width, NSUInteger height) {
                                                                               mipmapped:NO];
   desc.usage = MTLTextureUsageRenderTarget;
   desc.storageMode = MTLStorageModePrivate;
-  depth_ = [device_ newTextureWithDescriptor:desc];
+  depth_ = [context_->device() newTextureWithDescriptor:desc];
   if (depth_ == nil)
     LOGE("depth buffer %lux%lu failed", (unsigned long)width, (unsigned long)height);
   return depth_ != nil;
@@ -253,7 +233,7 @@ bool MetalSplatRenderer::createTarget() {
                                mipmapped:NO];
   desc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   desc.storageMode = MTLStorageModePrivate;
-  target_ = [device_ newTextureWithDescriptor:desc];
+  target_ = [context_->device() newTextureWithDescriptor:desc];
   if (target_ == nil) {
     LOGE("render target %lux%lu failed", static_cast<unsigned long>(desc.width),
          static_cast<unsigned long>(desc.height));
@@ -270,7 +250,7 @@ bool MetalSplatRenderer::createScaler() {
   const bool wanted = spatialUpscaling_ && target_ != nil && renderScale_ < 1.0f;
 #if SPLATKIT_HAS_METALFX
   if (wanted) {
-    if (![MTLFXSpatialScalerDescriptor supportsDevice:device_]) {
+    if (![MTLFXSpatialScalerDescriptor supportsDevice:context_->device()]) {
       LOGI("MetalFX spatial scaler unsupported here; the scaled frame is blitted");
     } else {
       MTLFXSpatialScalerDescriptor* desc = [MTLFXSpatialScalerDescriptor new];
@@ -282,7 +262,7 @@ bool MetalSplatRenderer::createScaler() {
       desc.outputTextureFormat = pixelFormat();
       desc.colorProcessingMode = linearBlending_ ? MTLFXSpatialScalerColorProcessingModeLinear
                                                  : MTLFXSpatialScalerColorProcessingModePerceptual;
-      scaler_ = [desc newSpatialScalerWithDevice:device_];
+      scaler_ = [desc newSpatialScalerWithDevice:context_->device()];
       if (scaler_ == nil) {
         LOGE("MetalFX spatial scaler %lux%lu to %ux%u failed; the scaled frame is blitted",
              static_cast<unsigned long>(target_.width), static_cast<unsigned long>(target_.height),
@@ -298,7 +278,7 @@ bool MetalSplatRenderer::createScaler() {
         out.usage =
             MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite | MTLTextureUsageRenderTarget;
         out.storageMode = MTLStorageModePrivate;
-        upscaled_ = [device_ newTextureWithDescriptor:out];
+        upscaled_ = [context_->device() newTextureWithDescriptor:out];
         if (upscaled_ == nil) {
           LOGE("MetalFX output %ux%u failed; the scaled frame is blitted", width_, height_);
           scaler_ = nil;
@@ -320,14 +300,14 @@ bool MetalSplatRenderer::createScaler() {
 bool MetalSplatRenderer::createPipelines() {
   pipelineFormat_ = targetFormat();
   NSError* error = nil;
-  id<MTLFunction> fragment = [library_ newFunctionWithName:@"splatFragment"];
+  id<MTLFunction> fragment = [context_->library() newFunctionWithName:@"splatFragment"];
   for (int degree = 0; degree <= kMaxShDegree; ++degree) {
     MTLFunctionConstantValues* constants = [MTLFunctionConstantValues new];
     uint32_t value = static_cast<uint32_t>(degree);
     [constants setConstantValue:&value type:MTLDataTypeUInt atIndex:kFnShDegree];
-    id<MTLFunction> vertex = [library_ newFunctionWithName:@"splatVertex"
-                                            constantValues:constants
-                                                     error:&error];
+    id<MTLFunction> vertex = [context_->library() newFunctionWithName:@"splatVertex"
+                                                       constantValues:constants
+                                                                error:&error];
     if (vertex == nil) {
       LOGE("splat vertex function: %s", error.localizedDescription.UTF8String);
       return false;
@@ -343,8 +323,8 @@ bool MetalSplatRenderer::createPipelines() {
     desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
     desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
     desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    id<MTLRenderPipelineState> state = [device_ newRenderPipelineStateWithDescriptor:desc
-                                                                               error:&error];
+    id<MTLRenderPipelineState> state =
+        [context_->device() newRenderPipelineStateWithDescriptor:desc error:&error];
     if (state == nil) {
       LOGE("splat pipeline degree %d: %s", degree, error.localizedDescription.UTF8String);
       return false;
@@ -356,8 +336,8 @@ bool MetalSplatRenderer::createPipelines() {
   // back with "under" compositing of premultiplied colour onto a clear of zero:
   // out = (1 - dst.a) * src + dst, for colour and coverage alike.
   MTLRenderPipelineDescriptor* under = [MTLRenderPipelineDescriptor new];
-  under.vertexFunction = [library_ newFunctionWithName:@"projectedVertex"];
-  under.fragmentFunction = [library_ newFunctionWithName:@"splatFragmentUnder"];
+  under.vertexFunction = [context_->library() newFunctionWithName:@"projectedVertex"];
+  under.fragmentFunction = [context_->library() newFunctionWithName:@"splatFragmentUnder"];
   under.colorAttachments[0].pixelFormat = pipelineFormat_;
   under.depthAttachmentPixelFormat = kDepthFormat;
   under.colorAttachments[0].blendingEnabled = YES;
@@ -365,27 +345,28 @@ bool MetalSplatRenderer::createPipelines() {
   under.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
   under.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOneMinusDestinationAlpha;
   under.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOne;
-  projectedPipeline_ = [device_ newRenderPipelineStateWithDescriptor:under error:&error];
+  projectedPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:under error:&error];
   if (projectedPipeline_ == nil) {
     LOGE("projected pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
   // The background goes under whatever coverage is left, with the same blend.
-  under.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
-  under.fragmentFunction = [library_ newFunctionWithName:@"backgroundFragment"];
-  backgroundPipeline_ = [device_ newRenderPipelineStateWithDescriptor:under error:&error];
+  under.vertexFunction = [context_->library() newFunctionWithName:@"blitVertex"];
+  under.fragmentFunction = [context_->library() newFunctionWithName:@"backgroundFragment"];
+  backgroundPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:under
+                                                                           error:&error];
   if (backgroundPipeline_ == nil) {
     LOGE("background pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
   // The saturation mask touches the depth buffer only.
   MTLRenderPipelineDescriptor* mask = [MTLRenderPipelineDescriptor new];
-  mask.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
-  mask.fragmentFunction = [library_ newFunctionWithName:@"saturationMask"];
+  mask.vertexFunction = [context_->library() newFunctionWithName:@"blitVertex"];
+  mask.fragmentFunction = [context_->library() newFunctionWithName:@"saturationMask"];
   mask.colorAttachments[0].pixelFormat = pipelineFormat_;
   mask.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
   mask.depthAttachmentPixelFormat = kDepthFormat;
-  maskPipeline_ = [device_ newRenderPipelineStateWithDescriptor:mask error:&error];
+  maskPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:mask error:&error];
   if (maskPipeline_ == nil) {
     LOGE("saturation mask pipeline: %s", error.localizedDescription.UTF8String);
     return false;
@@ -393,16 +374,16 @@ bool MetalSplatRenderer::createPipelines() {
   MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
   depth.depthCompareFunction = MTLCompareFunctionLessEqual;
   depth.depthWriteEnabled = NO;
-  splatDepth_ = [device_ newDepthStencilStateWithDescriptor:depth];
+  splatDepth_ = [context_->device() newDepthStencilStateWithDescriptor:depth];
   depth.depthCompareFunction = MTLCompareFunctionAlways;
   depth.depthWriteEnabled = YES;
-  maskDepth_ = [device_ newDepthStencilStateWithDescriptor:depth];
+  maskDepth_ = [context_->device() newDepthStencilStateWithDescriptor:depth];
 
   MTLRenderPipelineDescriptor* blit = [MTLRenderPipelineDescriptor new];
-  blit.vertexFunction = [library_ newFunctionWithName:@"blitVertex"];
-  blit.fragmentFunction = [library_ newFunctionWithName:@"blitFragment"];
+  blit.vertexFunction = [context_->library() newFunctionWithName:@"blitVertex"];
+  blit.fragmentFunction = [context_->library() newFunctionWithName:@"blitFragment"];
   blit.colorAttachments[0].pixelFormat = pixelFormat();
-  blitPipeline_ = [device_ newRenderPipelineStateWithDescriptor:blit error:&error];
+  blitPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:blit error:&error];
   if (blitPipeline_ == nil) {
     LOGE("blit pipeline: %s", error.localizedDescription.UTF8String);
     return false;
@@ -411,21 +392,14 @@ bool MetalSplatRenderer::createPipelines() {
   return true;
 }
 
-// iOS ends an app whose dirty footprint, GPU buffers included, reaches its limit; what is left
-// below it is what a load may use. Zero means the process has no limit to report. A Mac pages
-// instead, so its loads are not guarded.
 std::optional<std::uint64_t> MetalSplatRenderer::availableMemory() const {
-#if TARGET_OS_IPHONE
-  const std::size_t available = os_proc_available_memory();
-  if (available > 0) return available;
-#endif
-  return std::nullopt;
+  return context_->availableMemory();
 }
 
 // Worlds.
 
 bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
-  auto world = MetalWorld::upload(device_, cloud, maxShDegree);
+  auto world = MetalWorld::upload(context_->device(), cloud, maxShDegree);
   if (!world) return false;
   waitIdle();
   if (gpuSort_ && !visibility_.reserve(world->info().count)) return false;
@@ -442,19 +416,21 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
   if (!gpuSort_) return false;
   waitIdle();
   auto lod = std::make_unique<MetalLodSelection>();
-  if (!lod->create(device_, library_) || !lod->upload(tree, budget, lodErrorPixels_)) return false;
+  if (!lod->create(context_->device(), context_->library()) ||
+      !lod->upload(tree, budget, lodErrorPixels_))
+    return false;
   lod->setSplatLimit(lodSplatLimit_);
   // Compact projections and radix scratch scale with the cut, not all resident nodes.
   MetalVisibilityPass visibility;
-  if (!visibility.create(device_, library_, depthBits_) ||
+  if (!visibility.create(context_->device(), context_->library(), depthBits_) ||
       !visibility.reserve(static_cast<uint32_t>(tree.nodeCount()), lod->budget()))
     return false;
   std::array<id<MTLBuffer>, kFramesInFlight> readback{};
   for (auto& buffer : readback) {
-    buffer = metal::buffer(device_, 6 * sizeof(uint32_t));
+    buffer = metal::buffer(context_->device(), 6 * sizeof(uint32_t));
     if (!buffer) return false;
   }
-  auto world = MetalWorld::upload(device_, tree.nodes, maxShDegree);
+  auto world = MetalWorld::upload(context_->device(), tree.nodes, maxShDegree);
   if (!world) return false;
   visibility_ = std::move(visibility);
   lod_ = std::move(lod);
@@ -471,7 +447,7 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
 }
 
 bool MetalSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
-  auto world = MetalWorld::slab(device_, capacity, shDegree);
+  auto world = MetalWorld::slab(context_->device(), capacity, shDegree);
   if (!world) return false;
   waitIdle();
   if (gpuSort_ && !visibility_.reserve(capacity)) return false;
@@ -555,7 +531,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
     return false;
   }
 
-  id<MTLCommandBuffer> cmd = [queue_ commandBuffer];
+  id<MTLCommandBuffer> cmd = [context_->queue() commandBuffer];
   encodeRaster(cmd, drawable.texture, frame, slot, drawCount, gpuOrder);
   encodeOutput(cmd, drawable.texture);
   CaptureHandler onCapture;
@@ -591,7 +567,7 @@ void MetalSplatRenderer::updateCameraUniforms(const Frame& frame, uint32_t slot)
 
 id<MTLCommandBuffer> MetalSplatRenderer::encodeSelection(uint32_t slot) {
   adaptLodThreshold();
-  auto selection = [queue_ commandBuffer];
+  auto selection = [context_->queue() commandBuffer];
   selection.label = @"GPU LOD selection";
   lod_->encode(selection, uniforms_[slot]);
   id<MTLBuffer> selectedCount = lodReadback_[slot];
@@ -632,7 +608,7 @@ id<MTLCommandBuffer> MetalSplatRenderer::encodeSelection(uint32_t slot) {
 
 id<MTLCommandBuffer> MetalSplatRenderer::encodeVisibilityAndSort(const Frame& frame,
                                                                  uint32_t slot) {
-  id<MTLCommandBuffer> sort = [queue_ commandBuffer];
+  id<MTLCommandBuffer> sort = [context_->queue() commandBuffer];
   const int degree = std::clamp(std::min(frame.shDegree, world_->info().shDegree), 0, kMaxShDegree);
   if (!visibility_.encode(sort, slot, uniforms_[slot], world_->splats(), world_->harmonics(),
                           degree, lod_ ? nullptr : frame.ranges, lod_ ? 0 : frame.rangeCount,
@@ -749,8 +725,8 @@ id<MTLBuffer> MetalSplatRenderer::encodeCapture(id<MTLCommandBuffer> cmd,
       LOGW("capture skipped: the drawable is not readable yet");
     } else {
       const NSUInteger bytesPerRow = NSUInteger{width_} * 4;
-      captured = [device_ newBufferWithLength:bytesPerRow * height_
-                                      options:MTLResourceStorageModeShared];
+      captured = [context_->device() newBufferWithLength:bytesPerRow * height_
+                                                 options:MTLResourceStorageModeShared];
       id<MTLBlitCommandEncoder> copy = [cmd blitCommandEncoder];
       [copy copyFromTexture:drawableTexture
                        sourceSlice:0
