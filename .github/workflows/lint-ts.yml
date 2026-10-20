@@ -12,7 +12,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests run only the jobs their files reach (.github/ci-filters.yml); main runs all.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rn-package: ${{ steps.changes.outputs.rn-package }}
+      rn-app: ${{ steps.changes.outputs.rn-app }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+      - id: changes
+        uses: ./.github/actions/changes
+
   package:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-package == 'true') }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -28,6 +47,8 @@ jobs:
       - run: npm run lint
 
   example:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-app == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

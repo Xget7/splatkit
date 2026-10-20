@@ -44,14 +44,19 @@ class PublishedPathTest(unittest.TestCase):
             "src/distribution/a.ts")
 
 
+def export_tree(platform, scratch):
+    """Run the export into scratch and return the exported directory."""
+    result = subprocess.check_output(
+        [sys.executable, str(SCRIPT), "--platform", platform],
+        env={**os.environ, "TMPDIR": scratch}, text=True)
+    return Path(json.loads(result)["directory"])
+
+
 class ExportedWorkflowTest(unittest.TestCase):
     def test_native_core_workflow_inputs_are_exported(self):
         for platform in ("ios", "android"):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as scratch:
-                result = subprocess.check_output(
-                    [sys.executable, str(SCRIPT), "--platform", platform],
-                    env={**os.environ, "TMPDIR": scratch}, text=True)
-                directory = Path(json.loads(result)["directory"])
+                directory = export_tree(platform, scratch)
                 manifest = json.loads((directory / "source-manifest.json").read_text())
                 workflow = (directory / ".github/workflows/core.yml").read_text()
                 # Check the paths the exported job actually consumes, including npm's
@@ -65,6 +70,20 @@ class ExportedWorkflowTest(unittest.TestCase):
                     self.assertTrue(name in manifest, f"{platform} workflow dependency missing: {name}")
                     self.assertEqual((directory / name).read_bytes(), (export.ROOT / name).read_bytes())
                 self.assertFalse(any("node_modules" in Path(name).parts for name in manifest))
+
+    def test_exported_workflows_find_their_local_actions_and_filters(self):
+        for platform in ("ios", "android"):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as scratch:
+                directory = export_tree(platform, scratch)
+                actions = set()
+                for workflow in (directory / ".github/workflows").glob("*.yml"):
+                    actions.update(re.findall(r"uses:\s+\./([\w./-]+)", workflow.read_text()))
+                self.assertIn(".github/actions/changes", actions)
+                for action in sorted(actions):
+                    action_file = directory / action / "action.yml"
+                    self.assertTrue(action_file.is_file(), f"{platform} export misses {action}")
+                    for name in re.findall(r"filters:\s+(\.github/[\w./-]+)", action_file.read_text()):
+                        self.assertTrue((directory / name).is_file(), f"{platform} export misses {name}")
 
 
 @unittest.skipUnless((export.ROOT / ".github/workflows/mirror.yml").is_file(),
