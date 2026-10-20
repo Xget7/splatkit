@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import re
 import tempfile
 import unittest
 
@@ -60,9 +61,10 @@ class SceneAssetsTest(unittest.TestCase):
                 (Path(directory) / name).write_bytes(b"")
             perf.require_scene_assets(Path(directory))
 
-    def test_scene_is_the_one_the_dev_app_bundles(self):
-        self.assertEqual(perf.ASSETS_DIR, perf.APP_DIR / "app" / "src" / "main" / "assets")
-        self.assertEqual(perf.SCENE_ASSETS, ("kitchen_500k.spz", "kitchen_collider.glb"))
+    def test_scene_is_the_one_the_dev_app_opens_from_its_assets(self):
+        activity = perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt"
+        opened = tuple(re.findall(r'assets\.open\("([^"]+)"\)', activity.read_text()))
+        self.assertEqual(perf.SCENE_ASSETS, opened)
 
 
 class AnalysisTest(unittest.TestCase):
