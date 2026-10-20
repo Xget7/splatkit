@@ -91,8 +91,8 @@ cmake -S "$android" -B "$build/android" "${toolchain[@]}" \
   -DSPLATKIT_ANDROID_BUILD_TESTS=ON > /dev/null
 # The splat pipeline includes the generated shader headers.
 cmake --build "$build/android" --target splatkit_shaders_generate > /dev/null
-# Linking the device tests catches a wrong source path or an undefined reference that
-# clang-tidy, which only parses, would let through to a phone.
+# Linking the device tests catches an undefined reference that clang-tidy, which only parses,
+# would let through to a phone.
 echo "link splatkit-android tests"
 if ! tests_log="$(cmake --build "$build/android" --target splatkit_android_tests 2>&1)"; then
   printf '%s\n' "$tests_log" >&2
