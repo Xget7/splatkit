@@ -11,7 +11,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests run only the jobs their files reach (.github/ci-filters.yml); main runs all.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      scripts: ${{ steps.changes.outputs.scripts }}
+      android: ${{ steps.changes.outputs.android }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+      - id: changes
+        uses: ./.github/actions/changes
+
   tooling:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.scripts == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -22,6 +41,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests
 
   build:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.android == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

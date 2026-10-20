@@ -94,6 +94,9 @@ Prettier formats the code and JSON; Markdown and workflows keep their hand layou
 
 ## What a pull request needs
 
+CI runs only the jobs a pull request's files reach, per [ci-filters.yml](.github/ci-filters.yml); a merge to `main` runs them all.
+Markdown runs no job, and a file in no filter runs every job unless that file's `unknown` filter exempts it.
+
 - Tests in `splat-core` for anything that touches decoding, sorting, math, navigation, loading or the visibility policy, and in `splatkit-engine` for the render policy or engine orchestration.
 - `scripts/lint-cpp.sh` clean; CI runs it.
 - `npm run check` passing for React Native package changes; CI runs it.

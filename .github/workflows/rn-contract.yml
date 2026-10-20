@@ -11,7 +11,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests run only the jobs their files reach (.github/ci-filters.yml); main runs all.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rn-package: ${{ steps.changes.outputs.rn-package }}
+      rn-mirror: ${{ steps.changes.outputs.rn-mirror }}
+      rn-android: ${{ steps.changes.outputs.rn-android }}
+      rn-app: ${{ steps.changes.outputs.rn-app }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+      - id: changes
+        uses: ./.github/actions/changes
+
   contract:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-package == 'true') }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -29,6 +50,8 @@ jobs:
   # npm publishes from the mirror, where the package sits alone: a check that reaches into the
   # monorepo passes above and fails only at publish. Run it on the tree the mirror receives.
   mirror-tree:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-mirror == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -50,6 +73,8 @@ jobs:
 
   # JS contract checks do not compile the Kotlin adapter or execute its lifecycle state tests.
   android-adapter:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-android == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -85,6 +110,8 @@ jobs:
           retention-days: 14
 
   metro-tooling:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rn-app == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
