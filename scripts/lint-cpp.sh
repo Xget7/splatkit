@@ -44,6 +44,7 @@ clang_tidy="$bin/clang-tidy"
 core="$root/packages/splat-core"
 engine="$root/packages/splatkit-engine"
 android="$root/packages/splatkit-android/src/main/cpp"
+android_tests="$root/packages/splatkit-android/tests"
 ios="$root/packages/splatkit-ios/Sources/SplatKitCore"
 build="$root/build/lint"
 
@@ -52,7 +53,8 @@ build="$root/build/lint"
 # warnings as errors, by scripts/build-ios.sh.
 sources() {
   find "$core/include" "$core/src" "$core/tests" "$core/tools" \
-    "$engine/include" "$engine/src" "$engine/tests" "$android" "$ios" \
+    "$engine/include" "$engine/src" "$engine/tests" "$android" "$android_tests" \
+    "$ios" \
     -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) | sort
 }
 
@@ -102,7 +104,7 @@ tidy "$build/core" $(find "$core/src" "$core/tests" "$core/tools" -name '*.cpp' 
 echo "clang-tidy splatkit-engine"
 tidy "$build/engine" $(find "$engine/src" "$engine/tests" -name '*.cpp' | sort)
 echo "clang-tidy splatkit-android"
-tidy "$build/android" $(find "$android" -name '*.cpp' | sort)
+tidy "$build/android" $(find "$android" "$android_tests" -name '*.cpp' | sort)
 # clang-tidy's fixes do not keep the formatting.
 (( fix )) && sources | xargs "$clang_format" -i
 if (( failed )); then
