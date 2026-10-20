@@ -109,16 +109,19 @@ Prettier formats the code and JSON; Markdown and workflows keep their hand layou
 
 `packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, tile streaming, navigation, file mapping, the world loader and the visibility policy, each with tests.
 `packages/splatkit-engine` is the engine without a graphics API: one `SplatEngine` that owns the camera, the streamer for a tiled world, a `Benchmark` and a `StatsPublisher`, and draws through the `SplatRenderer` interface, which sorts and culls on the GPU; the GPU record layout (`GpuSplat` and the packing) lives here so every renderer uploads the same bytes.
-`packages/splatkit-android` owns everything Vulkan and Android: `VulkanSplatRenderer` (surface, swapchain, pipelines, the world on the GPU) implements the interface, `AndroidEngine` wires it under the engine, and `jni/` is the boundary to Kotlin and knows nothing else.
+`packages/splatkit-android` owns everything Vulkan and Android: `VulkanSplatRenderer` implements the interface, `AndroidEngine` wires it under the engine, and `jni/` is the boundary to Kotlin and knows nothing else.
+`VulkanSplatRenderer` runs the frame and leaves each job to one folder of `rendering/vulkan/`: `device/` (GPU, memory, shader modules), `presentation/` (surface, swapchain, render target, frame loop), `world/` (the splats on the GPU), `frame/` (camera uniforms and the per-frame compute), `selection/` (level of detail), `cull/`, `sort/`, `raster/` and `layout/` (records shared with the shaders).
 Its Kotlin has four packages: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope, and `com.splatkit.ui` the optional HUD and joystick views.
-`packages/splatkit-ios` owns everything Metal and iOS: `MetalSplatRenderer` implements the interface over a `CAMetalLayer`, `SKSplatEngine` is the Objective-C boundary to Swift, and `Sources/SplatKit` is the Swift layer (render thread, motion, `SplatMetalView`).
+`packages/splatkit-ios` owns everything Metal and iOS: `MetalSplatRenderer` implements the interface over a `CAMetalLayer` with the same job folders under `rendering/metal/`, plus `diagnostics/` for frame capture, and `engine/SKSplatEngine` is the Objective-C boundary to Swift.
+`Sources/SplatKit` is the Swift layer, laid out like the Kotlin: `engine/` holds the render thread, `input/` touch and motion, and the top level the public API (`SplatMetalView` and one file per value type).
+Each native package's `tests/` mirrors its source folders, so a class's test sits at the same path under `tests/`.
 `packages/react-native-splatkit` is the Fabric package: the builder, contracts and Codegen spec in `src`, a Kotlin adapter over `SplatSurfaceView` in `android` and an Objective-C++ adapter over `SKSplatEngine` in `ios`.
 `apps/` holds the `android-dev` and `ios-dev` dev apps and the `react-native` example, which installs the published package.
 The engine does not know what is hosting it.
 
 ## Names
 
-The root object of each layer carries the domain in its name, so a reader who sees it anywhere knows what project it belongs to: `SplatEngine` in C++ and Kotlin, `VulkanSplatRenderer`, `SplatWorldLoader`, `SplatSurfaceView`, `SplatPipeline`.
+The root object of each layer carries the domain in its name, so a reader who sees it anywhere knows what project it belongs to: `SplatEngine` in C++ and Kotlin, `VulkanSplatRenderer`, `SplatWorldLoader`, `SplatSurfaceView`, `VulkanSplatPipeline`.
 The same thing has the same name on both sides of a boundary: the Kotlin `SplatEngine` wraps the C++ `SplatEngine`, and the JNI symbols are derived from that one name.
 Objects below the root are named for their one job and live in the directory of that job, `rendering/vulkan`, `diagnostics`, `camera`, `jni`, `loading`, `sorting`; nothing sits loose at the root of `cpp/`.
 A name that only says what something is, `Engine`, `Renderer`, `Loader`, is not enough; a name that repeats the directory, `VulkanVulkanContext`, is too much.
