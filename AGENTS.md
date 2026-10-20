@@ -2,6 +2,7 @@
 
 SDK integration or verification: read [the harness](docs/AGENT_HARNESS.md).
 Implementation: follow [CONTRIBUTING.md](CONTRIBUTING.md); terminology lives in [CONTEXT.md](CONTEXT.md).
+Architecture (packages, load and frame pipeline on Metal and Vulkan): read [ARCHITECTURE.md](docs/ARCHITECTURE.md) before exploring; a change to a stage, GPU layout or package dependency updates it in the same PR.
 Keep documentation terse; link code/contracts instead of duplicating them.
 Report skipped checks, approximation limits and emulator/physical-device provenance explicitly.
 
