@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/presentation/SurfaceSizeWait.h"
 #include "rendering/vulkan/presentation/VulkanFrameLoop.h"
 #include "rendering/vulkan/presentation/VulkanRenderTarget.h"
 #include "rendering/vulkan/presentation/VulkanSwapchain.h"
@@ -23,9 +24,6 @@ class VulkanSurface {
  public:
   static constexpr float kMinRenderScale = 0.1f;
   static constexpr float kMaxRenderScale = 2.0f;
-  // Frames a rebuild waits for the surface to report the window's size. A surface that never
-  // does (a fixed-size buffer) is built at the size it reports instead of redrawing forever.
-  static constexpr uint32_t kMaxStaleChecks = 60;
 
   // `beforeTeardown` runs while the device is idle, before the target, swapchain and
   // surface are destroyed, so the owner can release what draws into them.
@@ -87,8 +85,7 @@ class VulkanSurface {
   VulkanFrameLoop& frameLoop_;
   std::function<void()> beforeTeardown_;
   ANativeWindow* window_ = nullptr;
-  VkExtent2D windowExtent_{};  // the size the swapchain must reach
-  uint32_t staleChecks_ = 0;
+  SurfaceSizeWait sizeWait_;  // the size the swapchain must reach, and how long to wait for it
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanSwapchain> swapchain_;
   std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1

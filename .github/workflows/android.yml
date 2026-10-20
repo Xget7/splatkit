@@ -74,6 +74,14 @@ jobs:
             packages/splatkit-android/tests/rendering/vulkan/presentation/WorldFrameCompletionTest.cpp \
             -o build/native-contracts/world-frame-completion
           build/native-contracts/world-frame-completion
+      - name: Check surface size wait on host
+        run: |
+          mkdir -p build/native-contracts
+          c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+            -I packages/splatkit-android/src/main/cpp \
+            packages/splatkit-android/tests/rendering/vulkan/presentation/SurfaceSizeWaitTest.cpp \
+            -o build/native-contracts/surface-size-wait
+          build/native-contracts/surface-size-wait
       - name: Keep the AAR
         uses: actions/upload-artifact@v7
         with:
