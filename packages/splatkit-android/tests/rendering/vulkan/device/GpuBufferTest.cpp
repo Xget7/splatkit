@@ -1,6 +1,6 @@
 #include <cstdio>
 
-#include "tests/VulkanTestContext.h"
+#include "support/VulkanTestContext.h"
 
 int main(int argc, char** argv) {
   using splatkit::GpuBuffer;

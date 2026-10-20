@@ -8,7 +8,7 @@
 #include "rendering/vulkan/VulkanShaderTypes.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/RenderPolicy.h"
-#include "tests/VulkanTestContext.h"
+#include "support/VulkanTestContext.h"
 
 namespace {
 using splatkit::CameraUniform;

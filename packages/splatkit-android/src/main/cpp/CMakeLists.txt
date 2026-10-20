@@ -87,37 +87,6 @@ target_link_libraries(splatkit PRIVATE
 
 option(SPLATKIT_ANDROID_BUILD_TESTS "Build no-surface Vulkan tests (run through adb)" OFF)
 if(SPLATKIT_ANDROID_BUILD_TESTS)
-  add_library(splatkit_vulkan_test_support STATIC
-    rendering/vulkan/VulkanContext.cpp
-    rendering/vulkan/GpuBuffer.cpp
-    rendering/vulkan/Vma.cpp
-  )
-  target_include_directories(splatkit_vulkan_test_support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-  target_include_directories(splatkit_vulkan_test_support SYSTEM PUBLIC ${vma_include} ${vkb_include})
-  target_compile_definitions(splatkit_vulkan_test_support PUBLIC VK_USE_PLATFORM_ANDROID_KHR)
-  target_compile_options(splatkit_vulkan_test_support PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers)
-  target_link_libraries(splatkit_vulkan_test_support PUBLIC
-    splatkit_engine vk-bootstrap::vk-bootstrap GPUOpen::VulkanMemoryAllocator vulkan android log)
-  add_executable(splatkit_gpu_buffer_test tests/GpuBufferTest.cpp)
-  target_link_libraries(splatkit_gpu_buffer_test PRIVATE splatkit_vulkan_test_support)
-  add_executable(splatkit_gpu_upload_pressure_test tests/GpuUploadPressureTest.cpp)
-  target_link_libraries(splatkit_gpu_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
-  add_executable(splatkit_lod_selection_test tests/LodSelectionTest.cpp
-    rendering/vulkan/LodSelection.cpp)
-  target_link_libraries(splatkit_lod_selection_test PRIVATE
-    splatkit_vulkan_test_support splatkit_shaders)
-  add_executable(splatkit_visibility_test tests/VisibilityPassTest.cpp
-    rendering/vulkan/VisibilityPass.cpp)
-  target_link_libraries(splatkit_visibility_test PRIVATE
-    splatkit_vulkan_test_support splatkit_shaders)
-  add_executable(splatkit_vulkan_frame_test tests/VulkanFrameComputeTest.cpp
-    rendering/vulkan/VulkanFrameCompute.cpp rendering/vulkan/LodSelection.cpp
-    rendering/vulkan/VisibilityPass.cpp rendering/vulkan/RadixSort.cpp)
-  target_link_libraries(splatkit_vulkan_frame_test PRIVATE
-    splatkit_vulkan_test_support splatkit_shaders)
-  add_executable(splatkit_radix_sort_test tests/RadixSortTest.cpp
-    rendering/vulkan/RadixSort.cpp)
-  target_link_libraries(splatkit_radix_sort_test PRIVATE
-    splatkit_vulkan_test_support splatkit_shaders)
+  set(SPLATKIT_ANDROID_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../tests tests)
 endif()

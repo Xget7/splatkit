@@ -48,8 +48,9 @@ jobs:
           mkdir -p build/native-contracts
           c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
             -I packages/splatkit-android/src/main/cpp \
+            -I packages/splatkit-android/tests \
             -I packages/splatkit-engine/include -I packages/splat-core/include \
-            packages/splatkit-android/src/main/cpp/tests/WorldFrameCompletionTest.cpp \
+            packages/splatkit-android/tests/rendering/vulkan/presentation/WorldFrameCompletionTest.cpp \
             -o build/native-contracts/world-frame-completion
           build/native-contracts/world-frame-completion
       - name: Keep the AAR

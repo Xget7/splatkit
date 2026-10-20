@@ -9,7 +9,7 @@
 #include "rendering/vulkan/LodSelection.h"
 #include "rendering/vulkan/VulkanShaderTypes.h"
 #include "splat/lod/LodFile.h"
-#include "tests/VulkanTestContext.h"
+#include "support/VulkanTestContext.h"
 
 namespace {
 using splatkit::CameraUniform;

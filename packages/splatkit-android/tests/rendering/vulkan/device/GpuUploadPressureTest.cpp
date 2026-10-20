@@ -1,7 +1,7 @@
 #include <array>
 #include <cstdio>
 
-#include "tests/VulkanTestContext.h"
+#include "support/VulkanTestContext.h"
 
 // No shaders or pipelines: reproduce RadixSort::reserve's allocation pressure,
 // then the first four-byte input upload. Keep the pressure live during readback.
