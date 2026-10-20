@@ -8,7 +8,7 @@
  * @format
  */
 
-import { memo } from 'react';
+import {memo} from 'react';
 import {
   PixelRatio,
   Platform,
@@ -18,11 +18,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import {
-  QualityPreset,
-  WorldKind,
-  qualityPresets,
-} from '@splatkit/react-native';
+import {QualityPreset, WorldKind, qualityPresets} from '@splatkit/react-native';
 
 export type RenderStats = Readonly<{
   loadedSplats: number;
@@ -49,7 +45,7 @@ const PRESET_TITLES: Readonly<Record<QualityPreset, string>> = Object.freeze({
   [QualityPreset.performance]: 'Fast',
 });
 
-const BACKEND = Platform.select({ ios: 'Metal', android: 'Vulkan' }) ?? 'GPU';
+const BACKEND = Platform.select({ios: 'Metal', android: 'Vulkan'}) ?? 'GPU';
 
 /** Above this the frame rate reads as smooth, below the lower one as a problem. */
 const SMOOTH_FPS = 50;
@@ -90,7 +86,7 @@ function barHeight(fps: number | null): number {
   return Math.max(1, Math.min(1, fps / GRAPH_MAX_FPS) * GRAPH_HEIGHT);
 }
 
-function Cell({ label, value }: { label: string; value: string }) {
+function Cell({label, value}: {label: string; value: string}) {
   return (
     <View style={styles.cell}>
       <Text style={styles.cellLabel}>{label}</Text>
@@ -99,7 +95,7 @@ function Cell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Graph({ samples }: { samples: readonly number[] }) {
+function Graph({samples}: {samples: readonly number[]}) {
   const recent = samples.slice(-GRAPH_SAMPLES);
   const slots: readonly (number | null)[] = [
     ...new Array<null>(GRAPH_SAMPLES - recent.length).fill(null),
@@ -113,7 +109,7 @@ function Graph({ samples }: { samples: readonly number[] }) {
             key={guide}
             style={[
               styles.guide,
-              { top: GRAPH_HEIGHT * (1 - guide / GRAPH_MAX_FPS) },
+              {top: GRAPH_HEIGHT * (1 - guide / GRAPH_MAX_FPS)},
             ]}
           />
         ))}
@@ -125,7 +121,7 @@ function Graph({ samples }: { samples: readonly number[] }) {
               style={[
                 styles.bar,
                 fps !== null && paceStyle(fps),
-                { height: barHeight(fps) },
+                {height: barHeight(fps)},
               ]}
             />
           ))}
@@ -137,9 +133,8 @@ function Graph({ samples }: { samples: readonly number[] }) {
             key={guide}
             style={[
               styles.scaleText,
-              { top: GRAPH_HEIGHT * (1 - guide / GRAPH_MAX_FPS) - 4 },
-            ]}
-          >
+              {top: GRAPH_HEIGHT * (1 - guide / GRAPH_MAX_FPS) - 4},
+            ]}>
             {guide}
           </Text>
         ))}
@@ -154,7 +149,7 @@ type PanelProps = Readonly<{
   settings: RenderSettings;
 }>;
 
-function Panel({ stats, samples, settings }: PanelProps) {
+function Panel({stats, samples, settings}: PanelProps) {
   const window = useWindowDimensions();
   // The engine skips frames while nothing moves, so no frame time is a still view, not 0 fps.
   const frameMillis =
@@ -252,26 +247,21 @@ function Hud({
 }: Props) {
   return (
     <>
-      <View
-        style={[styles.panelSlot, { top: top + 8 }]}
-        pointerEvents="box-none"
-      >
+      <View style={[styles.panelSlot, {top: top + 8}]} pointerEvents="box-none">
         <Panel stats={stats} samples={samples} settings={settings} />
       </View>
-      <View style={[styles.presets, { bottom: bottom + 34 }]}>
+      <View style={[styles.presets, {bottom: bottom + 34}]}>
         {qualityPresets.map(value => {
           const active = value === preset;
           return (
             <Pressable
               key={value}
               accessibilityRole="button"
-              accessibilityState={{ selected: active }}
+              accessibilityState={{selected: active}}
               onPress={() => onPreset(value)}
-              style={[styles.preset, active && styles.presetActive]}
-            >
+              style={[styles.preset, active && styles.presetActive]}>
               <Text
-                style={[styles.presetText, active && styles.presetTextActive]}
-              >
+                style={[styles.presetText, active && styles.presetTextActive]}>
                 {PRESET_TITLES[value]}
               </Text>
             </Pressable>
@@ -280,9 +270,8 @@ function Hud({
       </View>
       {credit !== null && (
         <View
-          style={[styles.creditSlot, { bottom: bottom + 10 }]}
-          pointerEvents="none"
-        >
+          style={[styles.creditSlot, {bottom: bottom + 10}]}
+          pointerEvents="none">
           <Text style={styles.credit} numberOfLines={1}>
             {credit}
           </Text>

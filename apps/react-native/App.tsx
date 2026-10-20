@@ -9,7 +9,7 @@
  * @format
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Platform,
   Pressable,
@@ -46,7 +46,7 @@ import Animated, {
   useFrameCallback,
   useSharedValue,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
+import {scheduleOnRN} from 'react-native-worklets';
 import Hud, {
   GRAPH_SAMPLES,
   MILLIS_PER_SECOND,
@@ -54,8 +54,8 @@ import Hud, {
   RenderStats,
 } from './Hud';
 import Joystick from './Joystick';
-import { ROUTE_SECONDS, poseAt } from './Flythrough';
-import { COLLIDER_PATH, WORLD_KIND, WORLD_PATH } from './World';
+import {ROUTE_SECONDS, poseAt} from './Flythrough';
+import {COLLIDER_PATH, WORLD_KIND, WORLD_PATH} from './World';
 
 const AnimatedSplatKitView = Animated.createAnimatedComponent(SplatKitView);
 
@@ -76,7 +76,7 @@ const FIRST_REVISION = 1;
 const WALK_SPEED = 1.4;
 
 /** The walker: eye height, shoulder width and the rise it can climb, in meters. */
-const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
+const WALKER = {eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35} as const;
 
 /**
  * An orbit is a fly mode the collider does not constrain, so this circle, in the living
@@ -84,7 +84,7 @@ const WALKER = { eyeHeight: 1.5, bodyRadius: 0.35, stepHeight: 0.35 } as const;
  * 1.8 m used. Another world needs its own; the three formats are one world, so they share it.
  */
 const ORBIT = {
-  anchor: { x: -7.25, y: 1.6, z: 5.25 },
+  anchor: {x: -7.25, y: 1.6, z: 5.25},
   radius: 1.8,
   azimuth: 0,
   elevation: 0.2,
@@ -200,7 +200,7 @@ function App(props: Props) {
   );
 }
 
-function Splat({ filesPath }: Props) {
+function Splat({filesPath}: Props) {
   const insets = useSafeAreaInsets();
   const view = useAnimatedRef<React.ComponentRef<typeof SplatKitView>>();
   // Every new configuration needs a new policy revision. The engine reports its own limits
@@ -243,8 +243,8 @@ function Splat({ filesPath }: Props) {
     [filesPath, preset, capabilities.value],
   );
 
-  const { effective } = configuration.performance;
-  const { renderScale, lodErrorPixels, sortDepth } = effective;
+  const {effective} = configuration.performance;
+  const {renderScale, lodErrorPixels, sortDepth} = effective;
   const budgetSplats = effective.lodBudgetSplats;
   const settings = useMemo<RenderSettings>(
     () => ({
@@ -261,7 +261,7 @@ function Splat({ filesPath }: Props) {
   // needs a new request. Only the requested budget makes one: the real
   // limits arriving with the engine never do, because reloading a world this size is seconds
   // of tree build and a second memory peak. Every other policy field reaches the engine live.
-  const { requested } = configuration.performance;
+  const {requested} = configuration.performance;
   const key = `${requested.lodBudgetSplats}`;
   const request = useRef<{
     key: string;
@@ -280,12 +280,12 @@ function Splat({ filesPath }: Props) {
 
   const onCapabilities = useCallback((event: EventOf<'onCapabilities'>) => {
     const value = nativeCapabilitiesFromEvent(event.nativeEvent);
-    setCapabilities(previous => ({ value, revision: previous.revision + 1 }));
+    setCapabilities(previous => ({value, revision: previous.revision + 1}));
   }, []);
 
   const onWorldEvent = useCallback(
     (event: EventOf<'onWorldEvent'>) => {
-      const { phase, loadedSplats, message } = event.nativeEvent;
+      const {phase, loadedSplats, message} = event.nativeEvent;
       if (phase === WorldPhase.failed) {
         setStatus(`Could not load ${WORLD_PATH}: ${message}`);
         return;
@@ -304,7 +304,7 @@ function Splat({ filesPath }: Props) {
   );
 
   const onColliderEvent = useCallback((event: EventOf<'onColliderEvent'>) => {
-    const { phase, message } = event.nativeEvent;
+    const {phase, message} = event.nativeEvent;
     setWalking(phase === ColliderPhase.ready);
     if (phase === ColliderPhase.failed)
       setStatus(`Collider failed: ${message}`);
@@ -338,7 +338,7 @@ function Splat({ filesPath }: Props) {
   }, []);
 
   const onPolicyEvent = useCallback((event: EventOf<'onPolicyEvent'>) => {
-    const { phase, message } = event.nativeEvent;
+    const {phase, message} = event.nativeEvent;
     if (phase === PolicyPhase.rejected)
       console.warn(`SplatKit policy rejected: ${message}`);
   }, []);
@@ -346,7 +346,7 @@ function Splat({ filesPath }: Props) {
   const flightRunning = useSharedValue(false);
   const flightStarted = useSharedValue(-1);
   const finishFlight = useCallback(() => setFlying(false), []);
-  const flightFrame = useFrameCallback(({ timestamp }) => {
+  const flightFrame = useFrameCallback(({timestamp}) => {
     if (!flightRunning.value) return;
     if (flightStarted.value < 0) flightStarted.value = timestamp;
     const elapsed = (timestamp - flightStarted.value) / MILLIS_PER_SECOND;
@@ -445,16 +445,15 @@ function Splat({ filesPath }: Props) {
         bottom={insets.bottom}
       />
       {walking && (
-        <View style={[styles.stick, { bottom: insets.bottom + STICK_LIFT }]}>
+        <View style={[styles.stick, {bottom: insets.bottom + STICK_LIFT}]}>
           <Joystick onChange={onStick} />
         </View>
       )}
       {!control && status === null && (
-        <View style={[styles.modes, { bottom: insets.bottom + STATUS_LIFT }]}>
+        <View style={[styles.modes, {bottom: insets.bottom + STATUS_LIFT}]}>
           <Pressable
             onPress={() => setFlying(current => !current)}
-            style={styles.fly}
-          >
+            style={styles.fly}>
             <Text style={styles.flyText}>{flying ? 'Stop' : 'Fly route'}</Text>
           </Pressable>
           <Pressable
@@ -472,8 +471,7 @@ function Splat({ filesPath }: Props) {
                 }),
               );
             }}
-            style={styles.fly}
-          >
+            style={styles.fly}>
             <Text style={styles.flyText}>Orbit</Text>
           </Pressable>
           <Pressable
@@ -481,8 +479,7 @@ function Splat({ filesPath }: Props) {
               setFlying(false);
               onCloser();
             }}
-            style={styles.fly}
-          >
+            style={styles.fly}>
             <Text style={styles.flyText}>Closer</Text>
           </Pressable>
           <Pressable
@@ -496,8 +493,7 @@ function Splat({ filesPath }: Props) {
               );
               setControl(true);
             }}
-            style={styles.fly}
-          >
+            style={styles.fly}>
             <Text style={styles.flyText}>Walk</Text>
           </Pressable>
         </View>
@@ -505,8 +501,7 @@ function Splat({ filesPath }: Props) {
       {status !== null && (
         <View
           pointerEvents="none"
-          style={[styles.statusCard, { bottom: insets.bottom + STATUS_LIFT }]}
-        >
+          style={[styles.statusCard, {bottom: insets.bottom + STATUS_LIFT}]}>
           <Text style={styles.status}>{status}</Text>
         </View>
       )}
