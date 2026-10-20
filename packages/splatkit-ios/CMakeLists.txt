@@ -35,6 +35,7 @@ add_library(splatkit_ios STATIC
   Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
   Sources/SplatKitCore/rendering/metal/cull/MetalVisibilityPass.mm
   Sources/SplatKitCore/rendering/metal/device/MetalContext.mm
+  Sources/SplatKitCore/rendering/metal/diagnostics/MetalFrameCapture.mm
   Sources/SplatKitCore/rendering/metal/frame/MetalFrameCompute.mm
   Sources/SplatKitCore/rendering/metal/presentation/MetalFrameLoop.mm
   Sources/SplatKitCore/rendering/metal/presentation/MetalRenderTarget.mm
