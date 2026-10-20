@@ -50,8 +50,4 @@ Facts we already cite live in [docs/gpu-refs/metal/README.md](../../../docs/gpu-
 
 ## Reading the numbers
 
-- The engine's stats line (every half second through `NSLog`, prefix `SplatKit I:`) carries fps, gpu, sort, cull and select milliseconds, drawn and selected counts, p95 and dropped frames.
-- Each figure is `GPUEndTime - GPUStartTime` of one command buffer: `gpu` is the render buffer only, `sort` the visibility plus sort buffer, `select` the LOD buffer.
-  They are separate buffers on one queue, so `sort` can exceed `gpu`, and the frame's GPU cost is up to their sum, less any overlap Metal System Trace shows.
-  A pass inside one buffer has no time of its own; Metal System Trace in Instruments splits it.
-- The frame budget is the display interval: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz.
+[ios-perf](../ios-perf/SKILL.md) says which command buffer each figure times and when a pass needs Metal System Trace.
