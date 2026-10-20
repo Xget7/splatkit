@@ -1,13 +1,10 @@
 #import "SplatKit/SKSplatEngine.h"
 
-#import <CoreGraphics/CoreGraphics.h>
-#import <ImageIO/ImageIO.h>
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "diagnostics/SKPngWriter.h"
 #include "rendering/metal/MetalSplatRenderer.h"
 #include "splatkit/Log.h"
 #include "splatkit/engine/SplatEngine.h"
@@ -20,32 +17,6 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
                     : level == splatkit::LogLevel::warn ? "W"
                                                         : "I";
   NSLog(@"SplatKit %s: %s", tag, message);
-}
-
-// BGRA rows, top down, to a PNG file. Colours are written as they were presented.
-bool writePng(NSString* path, const std::vector<uint8_t>& bgra, uint32_t width, uint32_t height) {
-  if (width == 0 || height == 0 || bgra.size() != size_t{width} * height * 4) return false;
-  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-  CGDataProviderRef provider =
-      CGDataProviderCreateWithData(nullptr, bgra.data(), bgra.size(), nullptr);
-  const CGBitmapInfo info = kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst;
-  CGImageRef image = CGImageCreate(width, height, 8, 32, size_t{width} * 4, space, info, provider,
-                                   nullptr, false, kCGRenderingIntentDefault);
-  bool ok = false;
-  if (image != nullptr) {
-    NSURL* url = [NSURL fileURLWithPath:path];
-    CGImageDestinationRef dest = CGImageDestinationCreateWithURL(
-        (__bridge CFURLRef)url, (__bridge CFStringRef)UTTypePNG.identifier, 1, nullptr);
-    if (dest != nullptr) {
-      CGImageDestinationAddImage(dest, image, nullptr);
-      ok = CGImageDestinationFinalize(dest);
-      CFRelease(dest);
-    }
-    CGImageRelease(image);
-  }
-  CGDataProviderRelease(provider);
-  CGColorSpaceRelease(space);
-  return ok;
 }
 
 // Bridge between the C++ policy types and their C mirror imported by Swift.
@@ -379,7 +350,7 @@ splatkit::LensSettings lensSettings(const SKLensSettings& s) {
 - (void)captureFrameToFile:(NSString*)path completion:(void (^)(BOOL ok))completion {
   _renderer->captureNextFrame(
       [path, completion](std::vector<uint8_t> bgra, uint32_t width, uint32_t height) {
-        const bool ok = writePng(path, bgra, width, height);
+        const bool ok = splatkit::writePng(path, bgra, width, height);
         if (ok) {
           LOGI("captured %ux%u to %s", width, height, path.UTF8String);
         } else {
