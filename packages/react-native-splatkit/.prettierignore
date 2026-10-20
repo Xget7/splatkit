@@ -1,0 +1,6 @@
+# Third-party sources backported verbatim; Markdown and workflows keep their hand layout.
+build/
+scripts/patches/
+package-lock.json
+*.md
+*.yml
