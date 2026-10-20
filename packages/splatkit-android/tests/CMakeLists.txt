@@ -39,3 +39,14 @@ add_executable(splatkit_vulkan_radix_sort_test rendering/vulkan/sort/VulkanRadix
   ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_vulkan_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
+
+# Building this target links every device test; scripts/lint-cpp.sh does so in CI.
+add_custom_target(splatkit_android_tests DEPENDS
+  splatkit_vulkan_buffer_test
+  splatkit_vulkan_upload_pressure_test
+  splatkit_vulkan_world_test
+  splatkit_vulkan_lod_selection_test
+  splatkit_vulkan_visibility_pass_test
+  splatkit_vulkan_frame_compute_test
+  splatkit_vulkan_radix_sort_test
+)
