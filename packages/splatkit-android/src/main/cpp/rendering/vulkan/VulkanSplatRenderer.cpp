@@ -117,7 +117,9 @@ std::optional<GpuWorldInfo> VulkanSplatRenderer::world() const {
   return GpuWorldInfo{world_->count, world_->shDegree};
 }
 
-// Callers have waited for the GPU to finish with the world being replaced.
+// Relies on the waitIdle each caller makes on entry: uploads run on the render thread between
+// draws, and the copies they make are fenced, so nothing is in flight on the world replaced here.
+// The second waitIdle in uploadWorld and createSlab is not needed for that.
 void VulkanSplatRenderer::adoptWorld(std::unique_ptr<VulkanWorld> world,
                                      std::unique_ptr<VulkanFrameCompute> compute) {
   world_ = std::move(world);
@@ -139,7 +141,7 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   }
   auto world = VulkanWorld::upload(ctx_, cloud, maxShDegree, false);
   if (!world) return false;
-  ctx_.waitIdle();  // the previous world may still be in flight
+  ctx_.waitIdle();
   adoptWorld(std::move(world), std::move(compute.value()));
   return true;
 }
@@ -180,7 +182,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   }
   auto world = VulkanWorld::createSlab(ctx_, capacity, shDegree, false);
   if (!world) return false;
-  ctx_.waitIdle();  // the previous world may still be in flight
+  ctx_.waitIdle();
   adoptWorld(std::move(world), std::move(compute.value()));
   return true;
 }
