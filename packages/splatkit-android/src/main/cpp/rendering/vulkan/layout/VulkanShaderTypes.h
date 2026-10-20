@@ -16,7 +16,8 @@ struct alignas(16) CameraUniform {
   float tanHalfFov[2];
   float screenSize[2];
   uint32_t outputLinear;
-  uint32_t pad;
+  // Clockwise, 0 to 3; only splat.vert reads it (VulkanSwapchain::quarterTurns).
+  uint32_t quarterTurns;
   float cameraPosition[4];
 };
 static_assert(sizeof(CameraUniform) == 176);
@@ -25,6 +26,7 @@ static_assert(offsetof(CameraUniform, focal) == 128);
 static_assert(offsetof(CameraUniform, tanHalfFov) == 136);
 static_assert(offsetof(CameraUniform, screenSize) == 144);
 static_assert(offsetof(CameraUniform, outputLinear) == 152);
+static_assert(offsetof(CameraUniform, quarterTurns) == 156);
 static_assert(offsetof(CameraUniform, cameraPosition) == 160);
 
 }  // namespace splatkit

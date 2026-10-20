@@ -26,9 +26,10 @@ class VulkanCameraUniforms {
   VulkanCameraUniforms& operator=(const VulkanCameraUniforms&) = delete;
 
   // After the frame-slot fence, before compute/draw. Borrowed uniform stays valid until
-  // this object is destroyed.
+  // this object is destroyed. `extent` is in the window's orientation (VulkanSurface::viewExtent).
   VkBuffer update(uint32_t frameSlot, const splat::Mat4& view, const splat::Mat4& proj,
-                  const splat::Vec3& cameraPosition, VkExtent2D extent, bool outputLinear);
+                  const splat::Vec3& cameraPosition, VkExtent2D extent, bool outputLinear,
+                  uint32_t quarterTurns);
   VkBuffer buffer(uint32_t frameSlot) const { return uniforms_[frameSlot]->handle(); }
 
  private:

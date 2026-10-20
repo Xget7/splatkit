@@ -46,8 +46,9 @@ class VulkanSurface {
   // Flips the swapchain format.
   bool setLinearBlending(bool linear);
   bool setVsync(bool vsync);
-  // Rebuilds the swapchain after a frame: always when out of date, and when it is not the
-  // window's size once the surface reports the window's size. Other statuses change nothing.
+  // Rebuilds the swapchain after a frame: always when out of date, when suboptimal because
+  // the display turned, and when it is not the window's size once the surface reports the
+  // window's size. Other statuses change nothing.
   bool rebuildIfChanged(VulkanFrameLoop::Status status);
   // For a rebuild the owner failed after the surface succeeded: logs and drops it.
   void drop();
@@ -68,7 +69,12 @@ class VulkanSurface {
   VkRenderPass activeRenderPass() const;
   VkFramebuffer framebuffer(uint32_t imageIndex) const;
   // The target's size with a render scale, else the swapchain's; zero without a swapchain.
+  // In the display's native orientation: the render pass, viewport and scissor.
   VkExtent2D drawExtent() const;
+  // `drawExtent` in the window's orientation: the camera and everything sized in pixels.
+  VkExtent2D viewExtent() const;
+  // Clockwise quarter turns the frame is drawn with (VulkanSwapchain::quarterTurns).
+  uint32_t quarterTurns() const;
   // Records the upscale into the swapchain image when a render scale is active.
   void blitIfScaled(VkCommandBuffer cmd, uint32_t imageIndex) const;
 
@@ -78,6 +84,7 @@ class VulkanSurface {
   bool createRenderTarget();
   bool rebuildOrDrop();
   bool rebuildWhenSurfaceReportsWindowSize();
+  bool rotationChanged() const;
   void teardown();
   void destroySwapchainAndSurface();
 
