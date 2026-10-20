@@ -84,7 +84,6 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);
-  void keepSurfaceIf(bool rebuilt);
   void applyPolicyToCompute();
 
   VulkanContext& ctx_;

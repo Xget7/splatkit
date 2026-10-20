@@ -108,14 +108,6 @@ void VulkanSurface::blitIfScaled(VkCommandBuffer cmd, uint32_t imageIndex) const
   if (target_) target_->blitTo(cmd, swapchain_->image(imageIndex), swapchain_->extent());
 }
 
-bool VulkanSurface::formatChanged() {
-  if (!swapchain_) return false;
-  const VkFormat active = activeFormat();
-  if (active == pipelineFormat_) return false;
-  pipelineFormat_ = active;
-  return true;
-}
-
 bool VulkanSurface::createSurface() {
   VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
   info.window = window_;
@@ -133,8 +125,8 @@ bool VulkanSurface::createSurface() {
 // Viewport and scissor are dynamic, so a resize or rotation does not touch the owner's
 // pipelines. A render pass with the same attachment format is compatible with the one
 // they were built against (Vulkan 1.1, 8.2 "Render Pass Compatibility"). Only a format
-// change, which also flips the sRGB output path, forces the owner to rebuild them; see
-// `formatChanged`.
+// change, which also flips the sRGB output path, forces the owner to rebuild them; the
+// owner compares `activeFormat()` after each call.
 bool VulkanSurface::recreateSwapchain() {
   ++generation_;
   ctx_.waitIdle();
@@ -206,7 +198,6 @@ void VulkanSurface::destroySwapchainAndSurface() {
     vkDestroySurfaceKHR(ctx_.instance(), surface_, nullptr);
     surface_ = VK_NULL_HANDLE;
   }
-  pipelineFormat_ = VK_FORMAT_UNDEFINED;
 }
 
 }  // namespace splatkit

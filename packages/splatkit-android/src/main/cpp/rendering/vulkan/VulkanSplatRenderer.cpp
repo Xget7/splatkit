@@ -270,8 +270,7 @@ bool VulkanSplatRenderer::createPipelines() {
   splats_.reset();
   pipelineFormat_ = surface_.activeFormat();
   const VkRenderPass pass = surface_.activeRenderPass();
-  LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_),
-       surface_.offscreen() ? 1 : 0);
+  LOGI("pipelines for format %d", static_cast<int>(pipelineFormat_));
 
   if (!camera_) {
     auto camera = VulkanCameraUniforms::create(ctx_);
@@ -292,19 +291,18 @@ bool VulkanSplatRenderer::createPipelines() {
 }
 
 // After a surface call that left a swapchain up: only a changed format, or a surface that
-// just came back, needs new pipelines.
+// just came back (teardown cleared `splats_`), needs new pipelines. A failed build leaves
+// no pipeline to draw with, so the surface is dropped and the view stays blank until the
+// host attaches a surface again; the failure is logged.
 void VulkanSplatRenderer::rebuildPipelinesIfNeeded() {
-  if (surface_.formatChanged()) keepSurfaceIf(createPipelines());
+  if (!surface_.ready()) return;
+  if (splats_ && pipelineFormat_ == surface_.activeFormat()) return;
+  if (!createPipelines()) surface_.drop();
 }
 
+// Runs every frame; a few comparisons when nothing was rebuilt.
 void VulkanSplatRenderer::rebuildSurface(VulkanFrameLoop::Status status) {
   if (surface_.rebuildIfChanged(status)) rebuildPipelinesIfNeeded();
-}
-
-// A rebuild that fails leaves no pipeline to draw with, so the surface is dropped and
-// the view stays blank until the host attaches a surface again; the failure is logged.
-void VulkanSplatRenderer::keepSurfaceIf(bool rebuilt) {
-  if (!rebuilt) surface_.drop();
 }
 
 }  // namespace splatkit

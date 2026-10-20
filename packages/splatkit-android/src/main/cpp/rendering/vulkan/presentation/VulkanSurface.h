@@ -28,7 +28,8 @@ class VulkanSurface {
   // surface are destroyed, so the owner can release what draws into them.
   VulkanSurface(VulkanContext& ctx, VulkanFrameLoop& frameLoop,
                 std::function<void()> beforeTeardown);
-  // The owner detaches first (`attach(nullptr)`), so `beforeTeardown` has run by then.
+  // The owner detaches first (`attach(nullptr)`), so `beforeTeardown` has run by then; the
+  // codebase has no runtime asserts, so nothing checks it.
   ~VulkanSurface();
 
   VulkanSurface(const VulkanSurface&) = delete;
@@ -51,8 +52,6 @@ class VulkanSurface {
 
   // True when `attach` and the rebuilds left a swapchain to draw into.
   bool ready() const { return swapchain_ != nullptr; }
-  // True when frames draw into the render-scale target and blit to the swapchain.
-  bool offscreen() const { return target_ != nullptr; }
   float renderScale() const { return renderScale_; }
   bool linearBlending() const { return linearBlending_; }
   // Counts the rebuilds of the swapchain or the target.
@@ -67,12 +66,6 @@ class VulkanSurface {
   VkExtent2D drawExtent() const;
   // Records the upscale into the swapchain image when a render scale is active.
   void blitIfScaled(VkCommandBuffer cmd, uint32_t imageIndex) const;
-
-  // True once per change of the active format since the owner last built its pipelines,
-  // and always after the surface came back from being down. The call consumes the change:
-  // it records the format as the one the owner is about to build for, so the owner must
-  // build pipelines when it returns true and `drop()` when that build fails.
-  bool formatChanged();
 
  private:
   bool createSurface();
@@ -90,8 +83,6 @@ class VulkanSurface {
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanSwapchain> swapchain_;
   std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1
-  // The format the owner's pipelines target; undefined while it has none.
-  VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;
   float renderScale_ = 1.0f;
   bool linearBlending_ = false;
   bool vsync_ = true;
