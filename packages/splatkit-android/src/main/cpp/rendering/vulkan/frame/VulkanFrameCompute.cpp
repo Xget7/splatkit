@@ -7,13 +7,13 @@
 #include <utility>
 
 #include "rendering/vulkan/device/VulkanHelpers.h"
-#include "rendering/vulkan/sort/RadixSort.h"
+#include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "splatkit/Log.h"
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
 namespace {
-static_assert(VulkanFrameCompute::kMaxVisible <= RadixSort::kMaxCapacity,
+static_assert(VulkanFrameCompute::kMaxVisible <= VulkanRadixSort::kMaxCapacity,
               "the sort must hold every visible splat");
 constexpr uint32_t kTimestampCount = 4;
 // Words of the diagnostics readback, in the order collect() reads them. Two are spare.
@@ -32,7 +32,8 @@ constexpr VkDeviceSize wordOffset(ReadbackWord word) {
 }
 // The sort status rides above the visibility status in one combined word.
 constexpr uint32_t kSortStatusShift = 16;
-static_assert(LodSelection::kEvaluatedOffset == LodSelection::kLimitedOffset + sizeof(uint32_t) &&
+static_assert(VulkanLodSelection::kEvaluatedOffset ==
+                      VulkanLodSelection::kLimitedOffset + sizeof(uint32_t) &&
                   kEvaluated == kLimited + 1,
               "limited and evaluated are copied from the LOD state as one pair");
 }  // namespace
@@ -50,7 +51,7 @@ splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
 bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* tree,
                                     uint32_t budget) {
   sourceCount_ = sourceCount;
-  auto visibility = VisibilityPass::create(ctx_);
+  auto visibility = VulkanVisibilityPass::create(ctx_);
   if (!visibility) return false;
   visibility_ = std::move(visibility.value());
   if (VkDeviceSize{std::max(1u, sourceCount)} * sizeof(GpuSplat) >
@@ -59,12 +60,12 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   capacity_ = std::max(1u, std::min(sourceCount, kMaxVisible));
   if (tree) {
     if (tree->nodeCount() != sourceCount) return false;
-    auto lod = LodSelection::create(ctx_);
+    auto lod = VulkanLodSelection::create(ctx_);
     if (!lod || !lod.value()->upload(*tree, budget)) return false;
     lod_ = std::move(lod.value());
     capacity_ = lod_->capacity();
   }
-  auto radix = RadixSort::create(ctx_);
+  auto radix = VulkanRadixSort::create(ctx_);
   if (!radix || !radix.value()->reserve(capacity_) || !visibility_->reserve(capacity_))
     return false;
   radix_ = std::move(radix.value());
@@ -79,10 +80,10 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   timestampPeriod_ = properties.limits.timestampPeriod;
   if (!properties.limits.timestampComputeAndGraphics) timestampBits_ = 0;
   for (uint32_t slot = 0; slot < kSlots; ++slot) {
-    ranges_[slot] = GpuBuffer::hostVisible(ctx_, kMaxRanges * sizeof(RangeRecord),
-                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    ranges_[slot] = VulkanBuffer::hostVisible(ctx_, kMaxRanges * sizeof(RangeRecord),
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     readback_[slot] =
-        GpuBuffer::hostVisible(ctx_, kReadbackBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        VulkanBuffer::hostVisible(ctx_, kReadbackBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     if (!ranges_[slot] || !readback_[slot]) return false;
     if (timestampBits_) {
       VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
@@ -118,7 +119,7 @@ VulkanFrameCompute::~VulkanFrameCompute() {
 }
 
 bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame& frame,
-                                       VisibilityPass::Input& input) {
+                                       VulkanVisibilityPass::Input& input) {
   if (frame.rangeCount > kMaxRanges || (frame.rangeCount && !frame.ranges)) return false;
   rangeRecords_.clear();
   for (uint32_t i = 0; i < frame.rangeCount; ++i) {
@@ -141,7 +142,7 @@ bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame
     std::memcpy(ranges_[slot]->mapped(), rangeRecords_.data(), bytes);
     ranges_[slot]->flush(0, bytes);
   }
-  input.mode = VisibilityPass::CandidateMode::ranges;
+  input.mode = VulkanVisibilityPass::CandidateMode::ranges;
   input.candidates = ranges_[slot]->handle();
   input.candidatesBytes = ranges_[slot]->size();
   input.candidateCapacity = count;
@@ -189,7 +190,7 @@ void VulkanFrameCompute::collect(uint32_t slot) {
 }
 
 void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
-                                         const VisibilityPass::Output& visible,
+                                         const VulkanVisibilityPass::Output& visible,
                                          uint32_t candidates) {
   auto* target = readback_[slot]->handle();
   uint32_t words[kReadbackWords]{};
@@ -208,8 +209,9 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
   copy(visible.status, 0, wordOffset(kVisibilityStatus), sizeof(uint32_t));
   copy(sorted.status, 0, wordOffset(kSortStatus), sizeof(uint32_t));
   if (lod_) {
-    copy(lod_->output().state, LodSelection::kCountOffset, wordOffset(kSelected), sizeof(uint32_t));
-    copy(lod_->output().state, LodSelection::kLimitedOffset, wordOffset(kLimited),
+    copy(lod_->output().state, VulkanLodSelection::kCountOffset, wordOffset(kSelected),
+         sizeof(uint32_t));
+    copy(lod_->output().state, VulkanLodSelection::kLimitedOffset, wordOffset(kLimited),
          2 * sizeof(uint32_t));
   }
   memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -219,19 +221,19 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
 }
 
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
-    VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const GpuBuffer& splats,
+    VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const VulkanBuffer& splats,
     const SplatRenderer::Frame& frame) {
   if (!cmd || slot >= kSlots || !camera || frame.orderSource != SplatRenderer::OrderSource::gpu)
     return std::nullopt;
   collect(slot);
-  VisibilityPass::Input input;
+  VulkanVisibilityPass::Input input;
   input.camera = camera;
   input.splats = splats.handle();
   input.splatsBytes = splats.size();
   input.sourceCount = sourceCount_;
-  input.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VisibilityPass::KeyBits::low16
-                                                     : VisibilityPass::KeyBits::full32;
-  input.keyOrder = VisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
+  input.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanVisibilityPass::KeyBits::low16
+                                                     : VulkanVisibilityPass::KeyBits::full32;
+  input.keyOrder = VulkanVisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
   memoryBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -246,25 +248,25 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   if (lod_) {
     if (!lod_->encode(cmd, slot, {camera, 0})) return std::nullopt;
     const auto selected = lod_->output();
-    input.mode = VisibilityPass::CandidateMode::indices;
+    input.mode = VulkanVisibilityPass::CandidateMode::indices;
     input.candidates = selected.indices;
     input.candidatesBytes = VkDeviceSize{selected.capacity} * sizeof(uint32_t);
     input.candidateCount = selected.state;
-    input.candidateCountBytes = LodSelection::kDiagnosticBytes;
+    input.candidateCountBytes = VulkanLodSelection::kDiagnosticBytes;
     input.candidateCapacity = selected.capacity;
   }
   timestamp(1);
   if (!visibility_->encode(cmd, slot, input)) return std::nullopt;
   const auto visible = visibility_->output(slot);
   timestamp(2);
-  RadixSort::Input sort;
+  VulkanRadixSort::Input sort;
   sort.keys = visible.depthKeys;
   sort.values = visible.indices;
   sort.count = visible.count;
   sort.keysBytes = sort.valuesBytes = VkDeviceSize{capacity_} * sizeof(uint32_t);
   sort.countBytes = sizeof(uint32_t);
-  sort.keyBits =
-      sortKeyBits_ == SortKeyBits::low16 ? RadixSort::KeyBits::low16 : RadixSort::KeyBits::full32;
+  sort.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanRadixSort::KeyBits::low16
+                                                    : VulkanRadixSort::KeyBits::full32;
   if (!radix_->encode(cmd, slot, sort)) return std::nullopt;
   timestamp(3);
   // The sorter's checked GPU count is authoritative even if visibility succeeded.

@@ -3,10 +3,10 @@
 
 #include "support/VulkanTestContext.h"
 
-// No shaders or pipelines: reproduce RadixSort::reserve's allocation pressure,
+// No shaders or pipelines: reproduce VulkanRadixSort::reserve's allocation pressure,
 // then the first four-byte input upload. Keep the pressure live during readback.
 int main(int argc, char** argv) {
-  using splatkit::GpuBuffer;
+  using splatkit::VulkanBuffer;
   using splatkit::test::require;
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   try {
@@ -23,24 +23,24 @@ int main(int argc, char** argv) {
       std::printf("memory-type=%u flags=0x%x heap=%u\n", i, memory.memoryTypes[i].propertyFlags,
                   memory.memoryTypes[i].heapIndex);
     constexpr auto kUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    std::vector<std::unique_ptr<GpuBuffer>> pressure;
+    std::vector<std::unique_ptr<VulkanBuffer>> pressure;
     const VkDeviceSize pairBytes = VkDeviceSize{capacity} * 4;
     const VkDeviceSize histogramBytes = VkDeviceSize{(capacity + 2047) / 2048} * 1024;
     const std::array<VkDeviceSize, 9> sizes{
         pairBytes, pairBytes, pairBytes, pairBytes, histogramBytes, 1024, 16, 4, 4};
     for (unsigned slot = 0; slot < 2; ++slot) {
       for (auto size : sizes) {
-        auto buffer = GpuBuffer::deviceLocal(*gpu.context, size, kUsage);
+        auto buffer = VulkanBuffer::deviceLocal(*gpu.context, size, kUsage);
         require(static_cast<bool>(buffer), "pressure allocation");
         pressure.push_back(std::move(buffer));
       }
     }
     for (unsigned i = 0; i < 2; ++i) {
-      auto buffer = GpuBuffer::deviceLocal(*gpu.context, pairBytes, kUsage);
+      auto buffer = VulkanBuffer::deviceLocal(*gpu.context, pairBytes, kUsage);
       require(static_cast<bool>(buffer), "input allocation");
       pressure.push_back(std::move(buffer));
     }
-    auto count = GpuBuffer::deviceLocal(*gpu.context, 4, kUsage);
+    auto count = VulkanBuffer::deviceLocal(*gpu.context, 4, kUsage);
     require(static_cast<bool>(count), "count allocation");
     const std::array<uint8_t, 4> countBytes{0x13, 0x57, 0x9b, 0xdf};
     std::puts("upload-pressure stage=first-four-byte-upload (no shader executed)");
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     constexpr size_t kPayloadBytes = 2 * 1024 * 1024 + 28;
     constexpr size_t kGuardBytes = 16;
     std::vector<uint8_t> expected(kPayloadBytes + 2 * kGuardBytes, 0xa5);
-    auto destination = GpuBuffer::deviceLocal(*gpu.context, expected.size(), kUsage);
+    auto destination = VulkanBuffer::deviceLocal(*gpu.context, expected.size(), kUsage);
     require(static_cast<bool>(destination), "guarded allocation");
     std::puts("upload-pressure stage=guarded-window-upload");
     require(destination->upload(expected.data(), expected.size()), "initialize guards");

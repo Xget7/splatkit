@@ -12,12 +12,12 @@
 
 namespace {
 using splatkit::CameraUniform;
-using splatkit::GpuBuffer;
 using splatkit::GpuSplat;
 using splatkit::packSplats;
 using splatkit::RenderPolicy;
 using splatkit::SortKeyBits;
 using splatkit::SplatRenderer;
+using splatkit::VulkanBuffer;
 using splatkit::VulkanFrameCompute;
 namespace test = splatkit::test;
 using test::require;
@@ -35,12 +35,12 @@ splat::SplatCloud cloud(uint32_t count) {
 
 struct Inputs {
   Inputs(const test::VulkanTestContext& gpu, const splat::SplatCloud& source) {
-    camera = GpuBuffer::hostVisible(*gpu.context, sizeof(CameraUniform),
-                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    camera = VulkanBuffer::hostVisible(*gpu.context, sizeof(CameraUniform),
+                                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     auto packed = packSplats(source);
     if (packed.empty()) packed.resize(1);
-    splats = GpuBuffer::deviceLocal(*gpu.context, packed.size() * sizeof(GpuSplat),
-                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    splats = VulkanBuffer::deviceLocal(*gpu.context, packed.size() * sizeof(GpuSplat),
+                                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     require(camera && splats && splats->upload(packed.data(), packed.size() * sizeof(GpuSplat)),
             "frame input allocation/upload");
     setView(0);
@@ -56,14 +56,14 @@ struct Inputs {
     std::memcpy(camera->mapped(), &u, sizeof(u));
     camera->flush(0, sizeof(u));
   }
-  std::unique_ptr<GpuBuffer> camera, splats;
+  std::unique_ptr<VulkanBuffer> camera, splats;
 };
 
 std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute& pass,
                           const Inputs& inputs, uint32_t slot, uint32_t capacity,
                           const std::vector<SplatRenderer::Range>& ranges) {
   const VkDeviceSize bytes = sizeof(VkDrawIndirectCommand) + std::max(1u, capacity) * 4ull;
-  auto copy = GpuBuffer::deviceLocal(*gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  auto copy = VulkanBuffer::deviceLocal(*gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   require(copy != nullptr, "frame result allocation");
   gpu.submit([&](VkCommandBuffer cmd) {
     SplatRenderer::Frame frame;

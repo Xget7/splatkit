@@ -43,14 +43,14 @@ splatkit_compile_shaders(splatkit_shaders
 
 add_library(splatkit SHARED
   rendering/vulkan/device/VulkanContext.cpp
-  rendering/vulkan/presentation/Swapchain.cpp
-  rendering/vulkan/presentation/RenderTarget.cpp
-  rendering/vulkan/presentation/FrameLoop.cpp
-  rendering/vulkan/device/GpuBuffer.cpp
-  rendering/vulkan/raster/SplatPipeline.cpp
-  rendering/vulkan/cull/VisibilityPass.cpp
-  rendering/vulkan/selection/LodSelection.cpp
-  rendering/vulkan/sort/RadixSort.cpp
+  rendering/vulkan/presentation/VulkanSwapchain.cpp
+  rendering/vulkan/presentation/VulkanRenderTarget.cpp
+  rendering/vulkan/presentation/VulkanFrameLoop.cpp
+  rendering/vulkan/device/VulkanBuffer.cpp
+  rendering/vulkan/raster/VulkanSplatPipeline.cpp
+  rendering/vulkan/cull/VulkanVisibilityPass.cpp
+  rendering/vulkan/selection/VulkanLodSelection.cpp
+  rendering/vulkan/sort/VulkanRadixSort.cpp
   rendering/vulkan/frame/VulkanFrameCompute.cpp
   rendering/vulkan/VulkanSplatRenderer.cpp
   rendering/vulkan/device/Vma.cpp

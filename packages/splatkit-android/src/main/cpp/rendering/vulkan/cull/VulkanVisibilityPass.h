@@ -8,7 +8,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "splat/core/Result.h"
 
@@ -16,7 +16,7 @@ namespace splatkit {
 
 // The capability gate for the first Vulkan visibility seam.  The implementation deliberately
 // requires subgroup arithmetic in the compute stage: a device without it keeps the CPU path.
-struct VisibilityCapabilities {
+struct VulkanVisibilityCapabilities {
   bool supported = false;
   uint32_t subgroupSize = 0;
   VkShaderStageFlags supportedStages = 0;
@@ -32,15 +32,15 @@ struct VisibilityCapabilities {
 // GPU visibility/compaction; sorting must consume its output before rasterization.
 // Render-thread only. Context and inputs outlive submitted work. Reserve/destroy while all
 // consumers are idle; fence before reusing a descriptor slot. No implicit submit/count readback.
-class VisibilityPass {
+class VulkanVisibilityPass {
  public:
-  static VisibilityCapabilities queryCapabilities(const VulkanContext& ctx);
-  static splat::Result<std::unique_ptr<VisibilityPass>> create(const VulkanContext& ctx,
-                                                               float minPixelRadius = 0.5f);
-  ~VisibilityPass();
+  static VulkanVisibilityCapabilities queryCapabilities(const VulkanContext& ctx);
+  static splat::Result<std::unique_ptr<VulkanVisibilityPass>> create(const VulkanContext& ctx,
+                                                                     float minPixelRadius = 0.5f);
+  ~VulkanVisibilityPass();
 
-  VisibilityPass(const VisibilityPass&) = delete;
-  VisibilityPass& operator=(const VisibilityPass&) = delete;
+  VulkanVisibilityPass(const VulkanVisibilityPass&) = delete;
+  VulkanVisibilityPass& operator=(const VulkanVisibilityPass&) = delete;
 
   // Transactional output allocation, 1..kMaxCapacity. Independent of resident source count.
   bool reserve(uint32_t capacity);
@@ -48,7 +48,7 @@ class VisibilityPass {
   float minPixelRadius() const { return minPixelRadius_; }
   // Per-instance policy; render thread while the pass is idle. Finite and >= 0 or false.
   bool setMinPixelRadius(float radius);
-  const VisibilityCapabilities& capabilities() const { return capabilities_; }
+  const VulkanVisibilityCapabilities& capabilities() const { return capabilities_; }
 
   enum class CandidateMode : uint32_t { prefix, indices, ranges };
   enum class KeyBits : uint32_t { full32, low16 };
@@ -111,8 +111,8 @@ class VisibilityPass {
   static constexpr uint32_t kInvalidProjection = 16u;
 
  private:
-  explicit VisibilityPass(const VulkanContext& ctx, VisibilityCapabilities capabilities,
-                          float minPixelRadius)
+  explicit VulkanVisibilityPass(const VulkanContext& ctx, VulkanVisibilityCapabilities capabilities,
+                                float minPixelRadius)
       : ctx_(ctx), capabilities_(std::move(capabilities)), minPixelRadius_(minPixelRadius) {}
 
   bool createDescriptors();
@@ -123,7 +123,7 @@ class VisibilityPass {
                       VkAccessFlags dstAccess, const Output& output);
 
   const VulkanContext& ctx_;
-  VisibilityCapabilities capabilities_;
+  VulkanVisibilityCapabilities capabilities_;
   float minPixelRadius_ = 0.5f;
   uint32_t capacity_ = 0;
 
@@ -137,12 +137,12 @@ class VisibilityPass {
   VkPipeline visibilityPipeline_ = VK_NULL_HANDLE;
   VkPipeline preparePipeline_ = VK_NULL_HANDLE;
 
-  std::unique_ptr<GpuBuffer> dummy_;  // immutable zero words for inactive input descriptors
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> indices_{};
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> depthKeys_{};
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> counts_{};
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> indirect_{};
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> status_{};
+  std::unique_ptr<VulkanBuffer> dummy_;  // immutable zero words for inactive input descriptors
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indices_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> depthKeys_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> counts_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indirect_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> status_{};
 };
 
 }  // namespace splatkit

@@ -6,15 +6,15 @@
 #include <limits>
 #include <set>
 
-#include "rendering/vulkan/selection/LodSelection.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "rendering/vulkan/selection/VulkanLodSelection.h"
 #include "splat/lod/LodFile.h"
 #include "support/VulkanTestContext.h"
 
 namespace {
 using splatkit::CameraUniform;
-using splatkit::GpuBuffer;
-using splatkit::LodSelection;
+using splatkit::VulkanBuffer;
+using splatkit::VulkanLodSelection;
 namespace test = splatkit::test;
 using test::require;
 
@@ -75,22 +75,22 @@ struct Selection {
   std::vector<uint32_t> cut;
   std::array<uint32_t, 6> stats{};
 };
-Selection select(const test::VulkanTestContext& gpu, const LodSelection& lod,
+Selection select(const test::VulkanTestContext& gpu, const VulkanLodSelection& lod,
                  const CameraUniform& cam, bool doubleFrame = false) {
   auto uniforms =
-      GpuBuffer::hostVisible(*gpu.context, sizeof(cam), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+      VulkanBuffer::hostVisible(*gpu.context, sizeof(cam), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
   require(uniforms != nullptr, "camera allocation");
   std::memcpy(uniforms->mapped(), &cam, sizeof(cam));
   uniforms->flush(0, sizeof(cam));
   auto output = lod.output();
-  const VkDeviceSize bytes = LodSelection::kDiagnosticBytes + output.capacity * 4ull;
-  auto copy = GpuBuffer::deviceLocal(
+  const VkDeviceSize bytes = VulkanLodSelection::kDiagnosticBytes + output.capacity * 4ull;
+  auto copy = VulkanBuffer::deviceLocal(
       *gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   require(copy != nullptr, "result copy allocation");
   gpu.submit([&](VkCommandBuffer cmd) {
     require(lod.encode(cmd, 0, {uniforms->handle(), 0}), "encode selection");
-    const VkBufferCopy state{0, 0, LodSelection::kDiagnosticBytes};
-    const VkBufferCopy indices{0, LodSelection::kDiagnosticBytes, output.capacity * 4ull};
+    const VkBufferCopy state{0, 0, VulkanLodSelection::kDiagnosticBytes};
+    const VkBufferCopy indices{0, VulkanLodSelection::kDiagnosticBytes, output.capacity * 4ull};
     vkCmdCopyBuffer(cmd, output.state, copy->handle(), 1, &state);
     vkCmdCopyBuffer(cmd, output.indices, copy->handle(), 1, &indices);
     if (doubleFrame) {
@@ -108,17 +108,17 @@ Selection select(const test::VulkanTestContext& gpu, const LodSelection& lod,
   });
   const auto raw = gpu.readback(*copy, bytes);
   Selection result;
-  std::memcpy(result.stats.data(), raw.data(), LodSelection::kDiagnosticBytes);
+  std::memcpy(result.stats.data(), raw.data(), VulkanLodSelection::kDiagnosticBytes);
   require(result.stats[0] <= output.capacity, "selected count bounded");
   result.cut.resize(result.stats[0]);
   if (!result.cut.empty())
-    std::memcpy(result.cut.data(), raw.data() + LodSelection::kDiagnosticBytes,
+    std::memcpy(result.cut.data(), raw.data() + VulkanLodSelection::kDiagnosticBytes,
                 result.cut.size() * 4);
   return result;
 }
 
 void tests(const test::VulkanTestContext& gpu) {
-  auto created = LodSelection::create(*gpu.context);
+  auto created = VulkanLodSelection::create(*gpu.context);
   require(static_cast<bool>(created), "LOD pipeline creation");
   auto lod = std::move(created.value());
   const auto tree = binary(512);
@@ -171,7 +171,7 @@ void tests(const test::VulkanTestContext& gpu) {
   require(select(gpu, *lod, camera()).cut == denied.cut, "old world survives failed upload");
   require(!lod->encode(VK_NULL_HANDLE, 0, {}), "reject null command");
   gpu.submit([&](VkCommandBuffer cmd) {
-    require(!lod->encode(cmd, LodSelection::kSlots, {}), "reject invalid slot");
+    require(!lod->encode(cmd, VulkanLodSelection::kSlots, {}), "reject invalid slot");
     require(!lod->encode(cmd, 0, {}), "reject null camera");
   });
   std::puts("PASS invalid inputs and transactional upload");

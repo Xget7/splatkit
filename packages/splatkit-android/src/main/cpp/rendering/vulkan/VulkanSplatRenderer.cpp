@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan_android.h>
 
-#include "rendering/vulkan/sort/RadixSort.h"
+#include "rendering/vulkan/sort/VulkanRadixSort.h"
 
 #include "splatkit/Log.h"
 
@@ -22,7 +22,7 @@ bool isSrgb(VkFormat format) {
 
 }  // namespace
 
-VulkanSplatRenderer::VulkanSplatRenderer(VulkanContext& ctx, FrameLoop& frameLoop)
+VulkanSplatRenderer::VulkanSplatRenderer(VulkanContext& ctx, VulkanFrameLoop& frameLoop)
     : ctx_(ctx), frameLoop_(frameLoop) {}
 
 VulkanSplatRenderer::~VulkanSplatRenderer() {
@@ -85,7 +85,7 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   DeviceCapabilities caps;
   // GpuLOD clamps a hierarchy at 2.2M nodes; the Android adapter caps residency at 8M.
-  caps.limits.maxLodCapacitySplats = LodSelection::kMaxBudget;
+  caps.limits.maxLodCapacitySplats = VulkanLodSelection::kMaxBudget;
   caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
   caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;
   // Vulkan has no screen-tile rasterization and conservative occlusion is unimplemented.
@@ -177,8 +177,8 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
 }
 
 bool VulkanSplatRenderer::selectsLodOnGpu() const {
-  return VisibilityPass::queryCapabilities(ctx_).supported &&
-         RadixSort::queryCapabilities(ctx_).supported;
+  return VulkanVisibilityPass::queryCapabilities(ctx_).supported &&
+         VulkanRadixSort::queryCapabilities(ctx_).supported;
 }
 
 bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
@@ -226,12 +226,12 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!ready()) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  FrameLoop::Status status = frameLoop_.beginFrame(*swapchain_, imageIndex, cmd);
-  if (status == FrameLoop::Status::swapchainOutOfDate) {
+  VulkanFrameLoop::Status status = frameLoop_.beginFrame(*swapchain_, imageIndex, cmd);
+  if (status == VulkanFrameLoop::Status::swapchainOutOfDate) {
     keepSurfaceIf(recreateSwapchain());
     return false;
   }
-  if (status != FrameLoop::Status::ok) return false;
+  if (status != VulkanFrameLoop::Status::ok) return false;
 
   const Extent size = drawExtent();
   const VkExtent2D extent{size.width, size.height};
@@ -289,12 +289,12 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const bool drewWorld =
       world_ && (gpuDraw || (!compute_ && frame.orderSource == OrderSource::cpu &&
                              std::min(frame.drawCount, world_->count) > 0));
-  if (drewWorld &&
-      (status == FrameLoop::Status::ok || status == FrameLoop::Status::swapchainSuboptimal)) {
+  if (drewWorld && (status == VulkanFrameLoop::Status::ok ||
+                    status == VulkanFrameLoop::Status::swapchainSuboptimal)) {
     worldFrameCompletion_.submitted(frameLoop_.lastSubmission());
   }
-  if (status == FrameLoop::Status::swapchainOutOfDate ||
-      (status == FrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
+  if (status == VulkanFrameLoop::Status::swapchainOutOfDate ||
+      (status == VulkanFrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
     keepSurfaceIf(recreateSwapchain());
   }
   return true;
@@ -325,7 +325,7 @@ bool VulkanSplatRenderer::recreateSwapchain() {
   const VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
   swapchain_.reset();
 
-  auto swapchain = Swapchain::create(ctx_, surface_, previous, vsync_, linearBlending_);
+  auto swapchain = VulkanSwapchain::create(ctx_, surface_, previous, vsync_, linearBlending_);
   if (previous != VK_NULL_HANDLE) vkDestroySwapchainKHR(ctx_.device(), previous, nullptr);
   if (!swapchain) {
     LOGE("%s", swapchain.error().message.c_str());
@@ -350,7 +350,7 @@ bool VulkanSplatRenderer::createRenderTarget() {
   const VkExtent2D full = swapchain_->extent();
   const VkExtent2D scaled{std::max(1u, static_cast<uint32_t>(full.width * renderScale_)),
                           std::max(1u, static_cast<uint32_t>(full.height * renderScale_))};
-  auto target = RenderTarget::create(ctx_, swapchain_->format(), scaled);
+  auto target = VulkanRenderTarget::create(ctx_, swapchain_->format(), scaled);
   if (!target) {
     LOGE("%s", target.error().message.c_str());
     return false;
@@ -365,7 +365,7 @@ bool VulkanSplatRenderer::createPipelines() {
   const VkRenderPass pass = activeRenderPass();
   LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_), target_ ? 1 : 0);
 
-  auto splats = SplatPipeline::create(ctx_, pass, isSrgb(pipelineFormat_));
+  auto splats = VulkanSplatPipeline::create(ctx_, pass, isSrgb(pipelineFormat_));
   if (!splats) {
     LOGE("%s", splats.error().message.c_str());
     return false;

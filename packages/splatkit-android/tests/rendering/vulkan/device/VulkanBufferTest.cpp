@@ -3,7 +3,7 @@
 #include "support/VulkanTestContext.h"
 
 int main(int argc, char** argv) {
-  using splatkit::GpuBuffer;
+  using splatkit::VulkanBuffer;
   namespace test = splatkit::test;
   using test::require;
   try {
@@ -17,11 +17,12 @@ int main(int argc, char** argv) {
       pattern = pattern * 1664525U + 1013904223U;
       byte = pattern >> 24;
     }
-    auto buffer = GpuBuffer::deviceLocal(
+    auto buffer = VulkanBuffer::deviceLocal(
         *gpu.context, expected.size(),
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     require(buffer != nullptr, "allocate device buffer");
-    auto order0 = GpuBuffer::hostVisible(*gpu.context, 2000000, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    auto order0 =
+        VulkanBuffer::hostVisible(*gpu.context, 2000000, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     require(order0 && order0->mapped(), "allocate live mapped buffer before staging");
     std::printf("upload %zu bytes\n", expected.size());
     std::fflush(stdout);
@@ -40,9 +41,9 @@ int main(int argc, char** argv) {
     require(!buffer->upload(1, patch.data(), UINT64_MAX), "reject overflowing size");
     require(buffer->upload(buffer->size(), nullptr, 0), "empty upload at end");
     require(!buffer->upload(buffer->size() + 1, nullptr, 0), "reject empty upload past end");
-    require(!GpuBuffer::deviceLocal(*gpu.context, 0, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+    require(!VulkanBuffer::deviceLocal(*gpu.context, 0, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
             "reject empty device allocation");
-    require(!GpuBuffer::hostVisible(*gpu.context, 0, VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+    require(!VulkanBuffer::hostVisible(*gpu.context, 0, VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
             "reject empty mapped allocation");
     std::memset(order0->mapped(), 0x62, static_cast<size_t>(order0->size()));
     order0->flush(0, order0->size());

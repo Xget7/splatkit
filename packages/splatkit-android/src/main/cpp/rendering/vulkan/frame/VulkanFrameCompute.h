@@ -4,14 +4,14 @@
 #include <memory>
 #include <vector>
 
-#include "rendering/vulkan/cull/VisibilityPass.h"
-#include "rendering/vulkan/device/GpuBuffer.h"
-#include "rendering/vulkan/selection/LodSelection.h"
+#include "rendering/vulkan/cull/VulkanVisibilityPass.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
+#include "rendering/vulkan/selection/VulkanLodSelection.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
 
-class RadixSort;
+class VulkanRadixSort;
 
 // Resident-world GPU ordering. Owns LOD, culling, sorting and delayed diagnostics.
 // Render thread only. Context/inputs outlive submissions. Create/destroy while idle;
@@ -21,10 +21,10 @@ class RadixSort;
 class VulkanFrameCompute {
  public:
   // Most splats one frame can keep, which bounds the visibility output and the sort.
-  static constexpr uint32_t kMaxVisible = VisibilityPass::kMaxCapacity;
+  static constexpr uint32_t kMaxVisible = VulkanVisibilityPass::kMaxCapacity;
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
-      uint32_t budget = LodSelection::kMaxBudget);
+      uint32_t budget = VulkanLodSelection::kMaxBudget);
   ~VulkanFrameCompute();
   VulkanFrameCompute(const VulkanFrameCompute&) = delete;
   VulkanFrameCompute& operator=(const VulkanFrameCompute&) = delete;
@@ -40,7 +40,7 @@ class VulkanFrameCompute {
   };
   // Nullopt means encoding failed; caller must still submit/end its acquired frame.
   std::optional<Draw> encode(VkCommandBuffer cmd, uint32_t slot, VkBuffer camera,
-                             const GpuBuffer& splats, const SplatRenderer::Frame& frame);
+                             const VulkanBuffer& splats, const SplatRenderer::Frame& frame);
   const Stats& stats() const { return stats_; }
   // The queue submission that carried the slot's last encode.
   void submitted(uint32_t slot, uint64_t submission);
@@ -54,7 +54,7 @@ class VulkanFrameCompute {
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
   uint32_t sortKeyBits() const { return sortKeyBits_ == SortKeyBits::low16 ? 16u : 32u; }
   float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
-  const VisibilityCapabilities& visibilityCapabilities() const {
+  const VulkanVisibilityCapabilities& visibilityCapabilities() const {
     return visibility_->capabilities();
   }
 
@@ -62,10 +62,10 @@ class VulkanFrameCompute {
   explicit VulkanFrameCompute(const VulkanContext& ctx);
   bool initialize(uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget);
   bool prepareRanges(uint32_t slot, const SplatRenderer::Frame& frame,
-                     VisibilityPass::Input& input);
+                     VulkanVisibilityPass::Input& input);
   void collect(uint32_t slot);
-  void copyDiagnostics(VkCommandBuffer cmd, uint32_t slot, const VisibilityPass::Output& visible,
-                       uint32_t candidates);
+  void copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
+                       const VulkanVisibilityPass::Output& visible, uint32_t candidates);
 
   struct RangeRecord {
     uint32_t offset, count, prefixEnd, pad;
@@ -77,10 +77,10 @@ class VulkanFrameCompute {
   SortKeyBits sortKeyBits_ = SortKeyBits::full32;
   uint32_t timestampBits_ = 0;
   float timestampPeriod_ = 0;
-  std::unique_ptr<LodSelection> lod_;
-  std::unique_ptr<VisibilityPass> visibility_;
-  std::unique_ptr<RadixSort> radix_;
-  std::array<std::unique_ptr<GpuBuffer>, kSlots> ranges_, readback_;
+  std::unique_ptr<VulkanLodSelection> lod_;
+  std::unique_ptr<VulkanVisibilityPass> visibility_;
+  std::unique_ptr<VulkanRadixSort> radix_;
+  std::array<std::unique_ptr<VulkanBuffer>, kSlots> ranges_, readback_;
   std::array<VkQueryPool, kSlots> queries_{};
   std::array<bool, kSlots> pending_{};
   std::array<uint64_t, kSlots> submission_{};  // of the pending encode; 0 when not submitted

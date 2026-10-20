@@ -15,14 +15,15 @@ namespace splatkit {
 // so pixels are the one lever that scales the cost directly; the blit is nearly free.
 // The render pass has the swapchain's format, so the pipelines built against the
 // swapchain pass are compatible with it.
-class RenderTarget {
+class VulkanRenderTarget {
  public:
-  static splat::Result<std::unique_ptr<RenderTarget>> create(const VulkanContext& ctx,
-                                                             VkFormat format, VkExtent2D extent);
-  ~RenderTarget();
+  static splat::Result<std::unique_ptr<VulkanRenderTarget>> create(const VulkanContext& ctx,
+                                                                   VkFormat format,
+                                                                   VkExtent2D extent);
+  ~VulkanRenderTarget();
 
-  RenderTarget(const RenderTarget&) = delete;
-  RenderTarget& operator=(const RenderTarget&) = delete;
+  VulkanRenderTarget(const VulkanRenderTarget&) = delete;
+  VulkanRenderTarget& operator=(const VulkanRenderTarget&) = delete;
 
   VkExtent2D extent() const { return extent_; }
   VkRenderPass renderPass() const { return renderPass_; }
@@ -34,7 +35,7 @@ class RenderTarget {
   void blitTo(VkCommandBuffer cmd, VkImage swapchainImage, VkExtent2D swapchainExtent) const;
 
  private:
-  explicit RenderTarget(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanRenderTarget(const VulkanContext& ctx) : ctx_(ctx) {}
 
   const VulkanContext& ctx_;
   VkExtent2D extent_{};

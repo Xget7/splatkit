@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 
 namespace splatkit::test {
 
@@ -77,9 +77,9 @@ class VulkanTestContext {
 
   // Source must have TRANSFER_SRC usage. Makes prior GPU writes visible, copies,
   // waits, then invalidates noncoherent memory before returning the actual bytes.
-  std::vector<uint8_t> readback(const GpuBuffer& source, VkDeviceSize bytes) const {
+  std::vector<uint8_t> readback(const VulkanBuffer& source, VkDeviceSize bytes) const {
     require(bytes > 0 && bytes <= source.size(), "readback range");
-    auto destination = GpuBuffer::hostVisible(
+    auto destination = VulkanBuffer::hostVisible(
         *context, std::min<VkDeviceSize>(bytes, 2 * 1024 * 1024), VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     require(destination && destination->mapped(), "create readback buffer");
     std::vector<uint8_t> result(static_cast<size_t>(bytes));

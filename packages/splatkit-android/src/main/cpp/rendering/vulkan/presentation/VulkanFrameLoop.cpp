@@ -1,4 +1,4 @@
-#include "rendering/vulkan/presentation/FrameLoop.h"
+#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
 
 #include <algorithm>
 
@@ -6,7 +6,7 @@
 
 namespace splatkit {
 
-FrameLoop::FrameLoop(const VulkanContext& ctx) : ctx_(ctx) {
+VulkanFrameLoop::VulkanFrameLoop(const VulkanContext& ctx) : ctx_(ctx) {
   VkDevice device = ctx_.device();
   VkPhysicalDeviceProperties props{};
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &props);
@@ -48,7 +48,7 @@ FrameLoop::FrameLoop(const VulkanContext& ctx) : ctx_(ctx) {
   valid_ = true;
 }
 
-FrameLoop::~FrameLoop() {
+VulkanFrameLoop::~VulkanFrameLoop() {
   VkDevice device = ctx_.device();
   vkDeviceWaitIdle(device);
   destroyRenderFinished();
@@ -60,12 +60,12 @@ FrameLoop::~FrameLoop() {
   }
 }
 
-void FrameLoop::destroyRenderFinished() {
+void VulkanFrameLoop::destroyRenderFinished() {
   for (VkSemaphore s : renderFinished_) vkDestroySemaphore(ctx_.device(), s, nullptr);
   renderFinished_.clear();
 }
 
-bool FrameLoop::onSwapchainCreated(const Swapchain& swapchain) {
+bool VulkanFrameLoop::onSwapchainCreated(const VulkanSwapchain& swapchain) {
   destroyRenderFinished();
   renderFinished_.resize(swapchain.imageCount(), VK_NULL_HANDLE);
   const VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
@@ -75,8 +75,8 @@ bool FrameLoop::onSwapchainCreated(const Swapchain& swapchain) {
   return true;
 }
 
-FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& imageIndex,
-                                        VkCommandBuffer& cmd) {
+VulkanFrameLoop::Status VulkanFrameLoop::beginFrame(const VulkanSwapchain& swapchain,
+                                                    uint32_t& imageIndex, VkCommandBuffer& cmd) {
   VkDevice device = ctx_.device();
   Frame& frame = frames_[current_];
 
@@ -116,7 +116,8 @@ FrameLoop::Status FrameLoop::beginFrame(const Swapchain& swapchain, uint32_t& im
   return Status::ok;
 }
 
-FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t imageIndex) {
+VulkanFrameLoop::Status VulkanFrameLoop::endFrame(const VulkanSwapchain& swapchain,
+                                                  uint32_t imageIndex) {
   Frame& frame = frames_[current_];
   if (frame.timestamps) {
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame.timestamps, 1);
@@ -166,7 +167,7 @@ FrameLoop::Status FrameLoop::endFrame(const Swapchain& swapchain, uint32_t image
   return Status::ok;
 }
 
-uint64_t FrameLoop::completedSubmission() {
+uint64_t VulkanFrameLoop::completedSubmission() {
   if (completionFailed_) return 0;
   for (Frame& frame : frames_) {
     if (frame.submission == 0) continue;
@@ -183,7 +184,7 @@ uint64_t FrameLoop::completedSubmission() {
 }
 
 // Once per submitted frame, after its fence: marks it complete and reads its GPU time.
-void FrameLoop::finish(Frame& frame) {
+void VulkanFrameLoop::finish(Frame& frame) {
   if (frame.submission == 0) return;
   completedSubmission_ = std::max(completedSubmission_, frame.submission);
   // Slots are polled in order, not by age: an older frame keeps a newer one's time.

@@ -6,10 +6,10 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
-#include "rendering/vulkan/presentation/FrameLoop.h"
+#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
 #include "splat/core/Result.h"
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"
@@ -20,31 +20,31 @@ namespace splatkit {
 
 // The world on the GPU: splats plus the draw order the sorter writes.
 struct GpuWorld {
-  std::unique_ptr<GpuBuffer> splats;
-  std::unique_ptr<GpuBuffer> order;
+  std::unique_ptr<VulkanBuffer> splats;
+  std::unique_ptr<VulkanBuffer> order;
   // Spherical harmonics bands 1 to `shDegree`, rgb halves per coefficient, packed two per
   // uint with no padding. A placeholder of one uint when the degree is 0, so the
   // descriptor is always valid and the degree 0 pipeline never reads it.
-  std::unique_ptr<GpuBuffer> sh;
+  std::unique_ptr<VulkanBuffer> sh;
   int shDegree = 0;
   // One host visible staging buffer per frame slot: the slot's fence guarantees the GPU
   // finished reading it before the CPU writes the next order into it.
-  std::array<std::unique_ptr<GpuBuffer>, FrameLoop::kFramesInFlight> orderStaging;
+  std::array<std::unique_ptr<VulkanBuffer>, VulkanFrameLoop::kFramesInFlight> orderStaging;
   uint32_t count = 0;
 };
 
 // The Gaussian splat pipeline: one instanced draw, four vertices per splat, blended
 // back to front with no depth test. Owns the descriptor set layout, the pipeline and
 // one camera uniform per frame in flight.
-class SplatPipeline {
+class VulkanSplatPipeline {
  public:
-  static splat::Result<std::unique_ptr<SplatPipeline>> create(const VulkanContext& ctx,
-                                                              VkRenderPass renderPass,
-                                                              bool swapchainIsSrgb);
-  ~SplatPipeline();
+  static splat::Result<std::unique_ptr<VulkanSplatPipeline>> create(const VulkanContext& ctx,
+                                                                    VkRenderPass renderPass,
+                                                                    bool swapchainIsSrgb);
+  ~VulkanSplatPipeline();
 
-  SplatPipeline(const SplatPipeline&) = delete;
-  SplatPipeline& operator=(const SplatPipeline&) = delete;
+  VulkanSplatPipeline(const VulkanSplatPipeline&) = delete;
+  VulkanSplatPipeline& operator=(const VulkanSplatPipeline&) = delete;
 
   // Converts a decoded cloud to the GPU layout and uploads it (blocking). Spherical
   // harmonics above `maxShDegree` are dropped: degree 3 costs 92 bytes per splat.
@@ -83,7 +83,7 @@ class SplatPipeline {
   static constexpr int kMaxShDegree = 3;
 
  private:
-  explicit SplatPipeline(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanSplatPipeline(const VulkanContext& ctx) : ctx_(ctx) {}
   bool createDescriptors();
   bool createPipelines(VkRenderPass renderPass);
   // Binds the pipeline for `shDegree`, limited to what the world holds, and the frame's set.
@@ -93,8 +93,8 @@ class SplatPipeline {
   bool outputLinear_ = true;
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
-  std::array<VkDescriptorSet, FrameLoop::kFramesInFlight> sets_{};
-  std::array<std::unique_ptr<GpuBuffer>, FrameLoop::kFramesInFlight> uniforms_{};
+  std::array<VkDescriptorSet, VulkanFrameLoop::kFramesInFlight> sets_{};
+  std::array<std::unique_ptr<VulkanBuffer>, VulkanFrameLoop::kFramesInFlight> uniforms_{};
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
   // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
   std::array<VkPipeline, kMaxShDegree + 1> pipelines_{};

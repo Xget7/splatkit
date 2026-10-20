@@ -3,7 +3,7 @@ set(vulkan_source_dir ${SPLATKIT_ANDROID_CPP_DIR}/rendering/vulkan)
 
 add_library(splatkit_vulkan_test_support STATIC
   ${vulkan_source_dir}/device/VulkanContext.cpp
-  ${vulkan_source_dir}/device/GpuBuffer.cpp
+  ${vulkan_source_dir}/device/VulkanBuffer.cpp
   ${vulkan_source_dir}/device/Vma.cpp
 )
 target_include_directories(splatkit_vulkan_test_support PUBLIC ${SPLATKIT_ANDROID_CPP_DIR}
@@ -15,24 +15,24 @@ target_compile_options(splatkit_vulkan_test_support PRIVATE
 target_link_libraries(splatkit_vulkan_test_support PUBLIC
   splatkit_engine vk-bootstrap::vk-bootstrap GPUOpen::VulkanMemoryAllocator vulkan android log)
 
-add_executable(splatkit_gpu_buffer_test rendering/vulkan/device/GpuBufferTest.cpp)
+add_executable(splatkit_gpu_buffer_test rendering/vulkan/device/VulkanBufferTest.cpp)
 target_link_libraries(splatkit_gpu_buffer_test PRIVATE splatkit_vulkan_test_support)
-add_executable(splatkit_gpu_upload_pressure_test rendering/vulkan/device/GpuUploadPressureTest.cpp)
+add_executable(splatkit_gpu_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
 target_link_libraries(splatkit_gpu_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
-add_executable(splatkit_lod_selection_test rendering/vulkan/selection/LodSelectionTest.cpp
-  ${vulkan_source_dir}/selection/LodSelection.cpp)
+add_executable(splatkit_lod_selection_test rendering/vulkan/selection/VulkanLodSelectionTest.cpp
+  ${vulkan_source_dir}/selection/VulkanLodSelection.cpp)
 target_link_libraries(splatkit_lod_selection_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
-add_executable(splatkit_visibility_test rendering/vulkan/cull/VisibilityPassTest.cpp
-  ${vulkan_source_dir}/cull/VisibilityPass.cpp)
+add_executable(splatkit_visibility_test rendering/vulkan/cull/VulkanVisibilityPassTest.cpp
+  ${vulkan_source_dir}/cull/VulkanVisibilityPass.cpp)
 target_link_libraries(splatkit_visibility_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
 add_executable(splatkit_vulkan_frame_test rendering/vulkan/frame/VulkanFrameComputeTest.cpp
-  ${vulkan_source_dir}/frame/VulkanFrameCompute.cpp ${vulkan_source_dir}/selection/LodSelection.cpp
-  ${vulkan_source_dir}/cull/VisibilityPass.cpp ${vulkan_source_dir}/sort/RadixSort.cpp)
+  ${vulkan_source_dir}/frame/VulkanFrameCompute.cpp ${vulkan_source_dir}/selection/VulkanLodSelection.cpp
+  ${vulkan_source_dir}/cull/VulkanVisibilityPass.cpp ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_vulkan_frame_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
-add_executable(splatkit_radix_sort_test rendering/vulkan/sort/RadixSortTest.cpp
-  ${vulkan_source_dir}/sort/RadixSort.cpp)
+add_executable(splatkit_radix_sort_test rendering/vulkan/sort/VulkanRadixSortTest.cpp
+  ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)

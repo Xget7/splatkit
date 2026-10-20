@@ -6,7 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include "rendering/vulkan/device/VulkanContext.h"
-#include "rendering/vulkan/presentation/Swapchain.h"
+#include "rendering/vulkan/presentation/VulkanSwapchain.h"
 
 namespace splatkit {
 
@@ -17,7 +17,7 @@ namespace splatkit {
 // fence the CPU waits on before reusing it, and the semaphore signalled when the
 // swapchain image is ready. Per swapchain image: the semaphore the present waits on,
 // because presentation may still be reading it when the frame slot comes around again.
-class FrameLoop {
+class VulkanFrameLoop {
  public:
   static constexpr uint32_t kFramesInFlight = 2;
 
@@ -25,23 +25,23 @@ class FrameLoop {
   // no longer matches it. The owner decides whether that needs a rebuild.
   enum class Status { ok, swapchainSuboptimal, swapchainOutOfDate, error };
 
-  explicit FrameLoop(const VulkanContext& ctx);
-  ~FrameLoop();
+  explicit VulkanFrameLoop(const VulkanContext& ctx);
+  ~VulkanFrameLoop();
 
-  FrameLoop(const FrameLoop&) = delete;
-  FrameLoop& operator=(const FrameLoop&) = delete;
+  VulkanFrameLoop(const VulkanFrameLoop&) = delete;
+  VulkanFrameLoop& operator=(const VulkanFrameLoop&) = delete;
 
   bool valid() const { return valid_; }
   // Slot of the frame being recorded; valid between beginFrame and endFrame.
   uint32_t currentSlot() const { return current_; }
 
   // Call after a swapchain is created or recreated.
-  bool onSwapchainCreated(const Swapchain& swapchain);
+  bool onSwapchainCreated(const VulkanSwapchain& swapchain);
 
   // Waits for this frame slot, acquires an image and begins recording.
-  Status beginFrame(const Swapchain& swapchain, uint32_t& imageIndex, VkCommandBuffer& cmd);
+  Status beginFrame(const VulkanSwapchain& swapchain, uint32_t& imageIndex, VkCommandBuffer& cmd);
   // Ends recording, submits and presents.
-  Status endFrame(const Swapchain& swapchain, uint32_t imageIndex);
+  Status endFrame(const VulkanSwapchain& swapchain, uint32_t imageIndex);
 
   uint64_t lastSubmission() const { return lastSubmission_; }
   // Nonblocking fence queries of the frames still in flight, including when the engine has

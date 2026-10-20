@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 #include "splat/lod/LodTree.h"
 
 namespace splatkit {
@@ -14,7 +14,7 @@ namespace splatkit {
 // Render thread only. Context outlives this pass. Upload/destroy require all consumers idle.
 // One scratch/output domain: encode AND consumers must be ordered on the same context queue.
 // The next encode overwrites output; copy diagnostics before it. No implicit submit/wait.
-class LodSelection {
+class VulkanLodSelection {
  public:
   struct Quality {
     float pixelLimit = 1.0f;  // zero requests exact leaves if capacity permits
@@ -38,10 +38,10 @@ class LodSelection {
   static constexpr VkDeviceSize kEvaluatedOffset = 20;
   static constexpr VkDeviceSize kDiagnosticBytes = 24;
 
-  static splat::Result<std::unique_ptr<LodSelection>> create(const VulkanContext& ctx);
-  ~LodSelection();
-  LodSelection(const LodSelection&) = delete;
-  LodSelection& operator=(const LodSelection&) = delete;
+  static splat::Result<std::unique_ptr<VulkanLodSelection>> create(const VulkanContext& ctx);
+  ~VulkanLodSelection();
+  VulkanLodSelection(const VulkanLodSelection&) = delete;
+  VulkanLodSelection& operator=(const VulkanLodSelection&) = delete;
 
   // Transactional, bounded allocation/upload; failure preserves old hierarchy and descriptors.
   // Budget must be 1..kMaxBudget; effective capacity is min(budget, original leaf count).
@@ -58,7 +58,7 @@ class LodSelection {
   uint32_t capacity() const { return config_.capacity; }
 
  private:
-  explicit LodSelection(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanLodSelection(const VulkanContext& ctx) : ctx_(ctx) {}
   bool initialize();
   struct Config {
     uint32_t phase = 0, capacity = 0, costs = 0, offsets = 0;
@@ -75,7 +75,7 @@ class LodSelection {
   std::array<VkDescriptorSet, kSlots> sets_{};
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
   VkPipeline pipeline_ = VK_NULL_HANDLE;
-  std::unique_ptr<GpuBuffer> clusters_, leaves_, scratch_, indices_;
+  std::unique_ptr<VulkanBuffer> clusters_, leaves_, scratch_, indices_;
 };
 
 }  // namespace splatkit

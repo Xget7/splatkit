@@ -22,7 +22,7 @@ splat::Result<std::unique_ptr<AndroidEngine>> AndroidEngine::create() {
   auto ctx = VulkanContext::create();
   if (!ctx) return ctx.error();
   host->ctx_ = std::move(ctx.value());
-  host->frameLoop_ = std::make_unique<FrameLoop>(*host->ctx_);
+  host->frameLoop_ = std::make_unique<VulkanFrameLoop>(*host->ctx_);
   if (!host->frameLoop_->valid()) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "frame loop"};
   }

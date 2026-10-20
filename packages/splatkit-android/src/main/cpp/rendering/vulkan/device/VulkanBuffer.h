@@ -14,16 +14,16 @@ namespace splatkit {
 // A VkBuffer with its VMA allocation. Two flavours:
 // - deviceLocal: lives in GPU memory, filled through a staging copy. Splat data.
 // - hostVisible: mapped for CPU writes, read by the GPU. Uniforms and sort output.
-class GpuBuffer {
+class VulkanBuffer {
  public:
-  static std::unique_ptr<GpuBuffer> deviceLocal(const VulkanContext& ctx, VkDeviceSize size,
-                                                VkBufferUsageFlags usage);
-  static std::unique_ptr<GpuBuffer> hostVisible(const VulkanContext& ctx, VkDeviceSize size,
-                                                VkBufferUsageFlags usage);
-  ~GpuBuffer();
+  static std::unique_ptr<VulkanBuffer> deviceLocal(const VulkanContext& ctx, VkDeviceSize size,
+                                                   VkBufferUsageFlags usage);
+  static std::unique_ptr<VulkanBuffer> hostVisible(const VulkanContext& ctx, VkDeviceSize size,
+                                                   VkBufferUsageFlags usage);
+  ~VulkanBuffer();
 
-  GpuBuffer(const GpuBuffer&) = delete;
-  GpuBuffer& operator=(const GpuBuffer&) = delete;
+  VulkanBuffer(const VulkanBuffer&) = delete;
+  VulkanBuffer& operator=(const VulkanBuffer&) = delete;
 
   VkBuffer handle() const { return buffer_; }
   VkDeviceSize size() const { return size_; }
@@ -45,7 +45,7 @@ class GpuBuffer {
   bool upload(VkDeviceSize offset, const void* data, VkDeviceSize size);
 
  private:
-  explicit GpuBuffer(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanBuffer(const VulkanContext& ctx) : ctx_(ctx) {}
 
   const VulkanContext& ctx_;
   VkBuffer buffer_ = VK_NULL_HANDLE;

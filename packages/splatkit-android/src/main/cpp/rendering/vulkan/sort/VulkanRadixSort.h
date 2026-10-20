@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {
@@ -15,7 +15,7 @@ namespace splatkit {
 // Inputs are read-only, separate uint32 key/value arrays; low16 ignores upper key bits.
 // Output never aliases input. Passing any owned output/scratch as input is rejected; distinct
 // VkBuffer handles must not alias the same memory. External offsets/sizes must be truthful.
-class RadixSort {
+class VulkanRadixSort {
  public:
   enum class KeyBits : uint32_t { full32, low16 };
   struct Capabilities {
@@ -38,10 +38,10 @@ class RadixSort {
   static constexpr uint32_t kSlots = 2, kBlock = 2048, kMaxCapacity = 3000000;
   static constexpr uint32_t kInvalidCount = 1;
   static Capabilities queryCapabilities(const VulkanContext& ctx);
-  static splat::Result<std::unique_ptr<RadixSort>> create(const VulkanContext& ctx);
-  ~RadixSort();
-  RadixSort(const RadixSort&) = delete;
-  RadixSort& operator=(const RadixSort&) = delete;
+  static splat::Result<std::unique_ptr<VulkanRadixSort>> create(const VulkanContext& ctx);
+  ~VulkanRadixSort();
+  VulkanRadixSort(const VulkanRadixSort&) = delete;
+  VulkanRadixSort& operator=(const VulkanRadixSort&) = delete;
   // Transactional growth; zero reserves one element. Failure preserves all old resources.
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
@@ -54,11 +54,11 @@ class RadixSort {
   Output output(uint32_t slot) const;
 
  private:
-  explicit RadixSort(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanRadixSort(const VulkanContext& ctx) : ctx_(ctx) {}
   bool initialize();
   struct Slot {
-    std::array<std::unique_ptr<GpuBuffer>, 2> keys, values;
-    std::unique_ptr<GpuBuffer> histogram, totals, state, count, status;
+    std::array<std::unique_ptr<VulkanBuffer>, 2> keys, values;
+    std::unique_ptr<VulkanBuffer> histogram, totals, state, count, status;
   };
   const VulkanContext& ctx_;
   uint32_t capacity_ = 0;

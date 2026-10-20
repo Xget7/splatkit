@@ -1,15 +1,16 @@
-#include "rendering/vulkan/presentation/Swapchain.h"
+#include "rendering/vulkan/presentation/VulkanSwapchain.h"
 
 #include "rendering/vulkan/device/VulkanHelpers.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
 
-splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext& ctx,
-                                                            VkSurfaceKHR surface,
-                                                            VkSwapchainKHR previous, bool vsync,
-                                                            bool linearBlending) {
-  std::unique_ptr<Swapchain> sc(new Swapchain(ctx));
+splat::Result<std::unique_ptr<VulkanSwapchain>> VulkanSwapchain::create(const VulkanContext& ctx,
+                                                                        VkSurfaceKHR surface,
+                                                                        VkSwapchainKHR previous,
+                                                                        bool vsync,
+                                                                        bool linearBlending) {
+  std::unique_ptr<VulkanSwapchain> sc(new VulkanSwapchain(ctx));
 
   // UNORM by default: splats blend in the encoded space, which is what the reference
   // rasterizer does and what training optimised for, and an sRGB attachment costs 40%
@@ -58,7 +59,7 @@ splat::Result<std::unique_ptr<Swapchain>> Swapchain::create(const VulkanContext&
   return sc;
 }
 
-Swapchain::~Swapchain() {
+VulkanSwapchain::~VulkanSwapchain() {
   VkDevice device = ctx_.device();
   for (VkFramebuffer fb : framebuffers_) vkDestroyFramebuffer(device, fb, nullptr);
   if (renderPass_ != VK_NULL_HANDLE) vkDestroyRenderPass(device, renderPass_, nullptr);
@@ -66,7 +67,7 @@ Swapchain::~Swapchain() {
   vkb::destroy_swapchain(swapchain_);
 }
 
-VkSwapchainKHR Swapchain::release() {
+VkSwapchainKHR VulkanSwapchain::release() {
   VkSwapchainKHR handle = swapchain_.swapchain;
   swapchain_.swapchain = VK_NULL_HANDLE;
   return handle;
@@ -74,7 +75,7 @@ VkSwapchainKHR Swapchain::release() {
 
 // Ready for presentation at the end. The acquire semaphore is waited at the color output stage,
 // so the pass must not write the image before that stage: the dependency says exactly that.
-splat::Result<splat::Ok> Swapchain::createRenderPass() {
+splat::Result<splat::Ok> VulkanSwapchain::createRenderPass() {
   renderPass_ = createColorRenderPass(ctx_.device(), format(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
   if (renderPass_ == VK_NULL_HANDLE) {
@@ -83,7 +84,7 @@ splat::Result<splat::Ok> Swapchain::createRenderPass() {
   return splat::Ok{};
 }
 
-splat::Result<splat::Ok> Swapchain::createFramebuffers() {
+splat::Result<splat::Ok> VulkanSwapchain::createFramebuffers() {
   framebuffers_.resize(imageViews_.size(), VK_NULL_HANDLE);
   for (size_t i = 0; i < imageViews_.size(); ++i) {
     VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};

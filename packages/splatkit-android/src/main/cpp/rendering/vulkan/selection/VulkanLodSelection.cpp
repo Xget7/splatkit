@@ -1,4 +1,4 @@
-#include "rendering/vulkan/selection/LodSelection.h"
+#include "rendering/vulkan/selection/VulkanLodSelection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,15 +38,16 @@ constexpr VkDeviceSize kPacketGroupsOffset = 11 * sizeof(uint32_t);     // one g
 constexpr VkDeviceSize kGroupScanGroupsOffset = 16 * sizeof(uint32_t);  // one per 128 group totals
 }  // namespace
 
-splat::Result<std::unique_ptr<LodSelection>> LodSelection::create(const VulkanContext& ctx) {
-  std::unique_ptr<LodSelection> pass(new LodSelection(ctx));
+splat::Result<std::unique_ptr<VulkanLodSelection>> VulkanLodSelection::create(
+    const VulkanContext& ctx) {
+  std::unique_ptr<VulkanLodSelection> pass(new VulkanLodSelection(ctx));
   if (!pass->initialize())
     return splat::Error{splat::ErrorCode::gpuUnavailable,
                         "LOD compute limits or pipeline unavailable"};
   return pass;
 }
 
-bool LodSelection::initialize() {
+bool VulkanLodSelection::initialize() {
   static_assert(sizeof(Config) == 52);
   VkPhysicalDeviceProperties properties{};
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
@@ -112,14 +113,14 @@ bool LodSelection::initialize() {
   return result == VK_SUCCESS;
 }
 
-LodSelection::~LodSelection() {
+VulkanLodSelection::~VulkanLodSelection() {
   if (pipeline_) vkDestroyPipeline(ctx_.device(), pipeline_, nullptr);
   if (layout_) vkDestroyPipelineLayout(ctx_.device(), layout_, nullptr);
   if (pool_) vkDestroyDescriptorPool(ctx_.device(), pool_, nullptr);
   if (setLayout_) vkDestroyDescriptorSetLayout(ctx_.device(), setLayout_, nullptr);
 }
 
-bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality quality) {
+bool VulkanLodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality quality) {
   if (budget == 0 || budget > kMaxBudget || !std::isfinite(quality.pixelLimit) ||
       quality.pixelLimit < 0 || !std::isfinite(quality.colorWeight) || quality.colorWeight < 0)
     return false;
@@ -165,13 +166,13 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
       std::max({clusterBytes, leafBytes, scratchBytes, indexBytes}) > limits_.maxStorageBufferRange)
     return false;
   constexpr auto kStorage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  auto clusters = GpuBuffer::deviceLocal(ctx_, clusterBytes, kStorage);
-  auto leaves = GpuBuffer::deviceLocal(ctx_, leafBytes, kStorage);
-  auto scratch = GpuBuffer::deviceLocal(
+  auto clusters = VulkanBuffer::deviceLocal(ctx_, clusterBytes, kStorage);
+  auto leaves = VulkanBuffer::deviceLocal(ctx_, leafBytes, kStorage);
+  auto scratch = VulkanBuffer::deviceLocal(
       ctx_, scratchBytes,
       kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   auto indices =
-      GpuBuffer::deviceLocal(ctx_, indexBytes, kStorage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      VulkanBuffer::deviceLocal(ctx_, indexBytes, kStorage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   if (!clusters || !leaves || !scratch || !indices ||
       !clusters->upload(data->clusters.data(), clusterBytes) ||
       !leaves->upload(data->leaves.data(), leafBytes))
@@ -185,12 +186,12 @@ bool LodSelection::upload(const splat::LodTree& tree, uint32_t budget, Quality q
   return true;
 }
 
-LodSelection::Output LodSelection::output() const {
+VulkanLodSelection::Output VulkanLodSelection::output() const {
   if (!scratch_) return {};
   return {indices_->handle(), scratch_->handle(), config_.capacity};
 }
 
-bool LodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
+bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
   if (!cmd || slot >= kSlots || !scratch_ || !input.camera ||
       input.cameraOffset % limits_.minUniformBufferOffsetAlignment != 0 ||
       input.cameraOffset > std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform))

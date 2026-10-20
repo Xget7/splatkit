@@ -1,4 +1,4 @@
-#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanBuffer.h"
 
 #include <algorithm>
 #include <cstring>
@@ -39,37 +39,37 @@ bool create(const VulkanContext& ctx, VkDeviceSize size, VkBufferUsageFlags usag
 
 }  // namespace
 
-std::unique_ptr<GpuBuffer> GpuBuffer::deviceLocal(const VulkanContext& ctx, VkDeviceSize size,
-                                                  VkBufferUsageFlags usage) {
-  std::unique_ptr<GpuBuffer> b(new GpuBuffer(ctx));
+std::unique_ptr<VulkanBuffer> VulkanBuffer::deviceLocal(const VulkanContext& ctx, VkDeviceSize size,
+                                                        VkBufferUsageFlags usage) {
+  std::unique_ptr<VulkanBuffer> b(new VulkanBuffer(ctx));
   b->size_ = size;
   create(ctx, size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 0, false, b->buffer_, b->allocation_,
          b->mapped_);
   return b->buffer_ != VK_NULL_HANDLE ? std::move(b) : nullptr;
 }
 
-std::unique_ptr<GpuBuffer> GpuBuffer::hostVisible(const VulkanContext& ctx, VkDeviceSize size,
-                                                  VkBufferUsageFlags usage) {
-  std::unique_ptr<GpuBuffer> b(new GpuBuffer(ctx));
+std::unique_ptr<VulkanBuffer> VulkanBuffer::hostVisible(const VulkanContext& ctx, VkDeviceSize size,
+                                                        VkBufferUsageFlags usage) {
+  std::unique_ptr<VulkanBuffer> b(new VulkanBuffer(ctx));
   b->size_ = size;
   create(ctx, size, usage, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, true, b->buffer_,
          b->allocation_, b->mapped_);
   return b->buffer_ != VK_NULL_HANDLE ? std::move(b) : nullptr;
 }
 
-GpuBuffer::~GpuBuffer() {
+VulkanBuffer::~VulkanBuffer() {
   if (buffer_ != VK_NULL_HANDLE) vmaDestroyBuffer(ctx_.allocator(), buffer_, allocation_);
 }
 
-void GpuBuffer::flush(VkDeviceSize offset, VkDeviceSize size) const {
+void VulkanBuffer::flush(VkDeviceSize offset, VkDeviceSize size) const {
   vmaFlushAllocation(ctx_.allocator(), allocation_, offset, size);
 }
 
-void GpuBuffer::invalidate(VkDeviceSize offset, VkDeviceSize size) const {
+void VulkanBuffer::invalidate(VkDeviceSize offset, VkDeviceSize size) const {
   vmaInvalidateAllocation(ctx_.allocator(), allocation_, offset, size);
 }
 
-bool GpuBuffer::upload(VkDeviceSize offset, const void* data, VkDeviceSize size) {
+bool VulkanBuffer::upload(VkDeviceSize offset, const void* data, VkDeviceSize size) {
   if (offset > size_ || size > size_ - offset) return false;
   if (size == 0) return true;
   if (!data || size > SIZE_MAX) return false;

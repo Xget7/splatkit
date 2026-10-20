@@ -1,4 +1,4 @@
-#include "rendering/vulkan/sort/RadixSort.h"
+#include "rendering/vulkan/sort/VulkanRadixSort.h"
 
 #include <algorithm>
 #include <vector>
@@ -31,7 +31,7 @@ constexpr VkBufferUsageFlags kStorage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 }  // namespace
 
-RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
+VulkanRadixSort::Capabilities VulkanRadixSort::queryCapabilities(const VulkanContext& ctx) {
   Capabilities result;
   VkPhysicalDeviceSubgroupProperties subgroup{
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
@@ -74,17 +74,17 @@ RadixSort::Capabilities RadixSort::queryCapabilities(const VulkanContext& ctx) {
   return result;
 }
 
-splat::Result<std::unique_ptr<RadixSort>> RadixSort::create(const VulkanContext& ctx) {
+splat::Result<std::unique_ptr<VulkanRadixSort>> VulkanRadixSort::create(const VulkanContext& ctx) {
   auto capabilities = queryCapabilities(ctx);
   if (!capabilities.supported)
     return splat::Error{splat::ErrorCode::gpuUnavailable, "radix: " + capabilities.reason};
-  std::unique_ptr<RadixSort> sort(new RadixSort(ctx));
+  std::unique_ptr<VulkanRadixSort> sort(new VulkanRadixSort(ctx));
   if (!sort->initialize())
     return splat::Error{splat::ErrorCode::gpuUnavailable, "radix pipeline allocation"};
   return sort;
 }
 
-RadixSort::~RadixSort() {
+VulkanRadixSort::~VulkanRadixSort() {
   for (auto* pipeline : pipelines_)
     if (pipeline) vkDestroyPipeline(ctx_.device(), pipeline, nullptr);
   if (layout_) vkDestroyPipelineLayout(ctx_.device(), layout_, nullptr);
@@ -92,7 +92,7 @@ RadixSort::~RadixSort() {
   if (setLayout_) vkDestroyDescriptorSetLayout(ctx_.device(), setLayout_, nullptr);
 }
 
-bool RadixSort::initialize() {
+bool VulkanRadixSort::initialize() {
   auto* const device = ctx_.device();
   std::array<VkDescriptorSetLayoutBinding, kBindings> bindings{};
   for (uint32_t i = 0; i < kBindings; ++i)
@@ -145,7 +145,7 @@ bool RadixSort::initialize() {
   return true;
 }
 
-bool RadixSort::reserve(uint32_t capacity) {
+bool VulkanRadixSort::reserve(uint32_t capacity) {
   capacity = std::max(capacity, 1u);
   if (capacity > kMaxCapacity) return false;
   if (capacity <= capacity_) return true;
@@ -159,14 +159,14 @@ bool RadixSort::reserve(uint32_t capacity) {
     return false;
   std::array<Slot, kSlots> next;
   for (auto& slot : next) {
-    for (auto& keys : slot.keys) keys = GpuBuffer::deviceLocal(ctx_, pairBytes, kStorage);
-    for (auto& values : slot.values) values = GpuBuffer::deviceLocal(ctx_, pairBytes, kStorage);
-    slot.histogram = GpuBuffer::deviceLocal(ctx_, histogramBytes, kStorage);
-    slot.totals = GpuBuffer::deviceLocal(ctx_, kBuckets * kWord, kStorage);
-    slot.state =
-        GpuBuffer::deviceLocal(ctx_, kStateBytes, kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-    slot.count = GpuBuffer::deviceLocal(ctx_, kWord, kStorage);
-    slot.status = GpuBuffer::deviceLocal(ctx_, kWord, kStorage);
+    for (auto& keys : slot.keys) keys = VulkanBuffer::deviceLocal(ctx_, pairBytes, kStorage);
+    for (auto& values : slot.values) values = VulkanBuffer::deviceLocal(ctx_, pairBytes, kStorage);
+    slot.histogram = VulkanBuffer::deviceLocal(ctx_, histogramBytes, kStorage);
+    slot.totals = VulkanBuffer::deviceLocal(ctx_, kBuckets * kWord, kStorage);
+    slot.state = VulkanBuffer::deviceLocal(ctx_, kStateBytes,
+                                           kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+    slot.count = VulkanBuffer::deviceLocal(ctx_, kWord, kStorage);
+    slot.status = VulkanBuffer::deviceLocal(ctx_, kWord, kStorage);
     if (!slot.keys[0] || !slot.keys[1] || !slot.values[0] || !slot.values[1] || !slot.histogram ||
         !slot.totals || !slot.state || !slot.count || !slot.status)
       return false;
@@ -176,13 +176,13 @@ bool RadixSort::reserve(uint32_t capacity) {
   return true;
 }
 
-RadixSort::Output RadixSort::output(uint32_t slot) const {
+VulkanRadixSort::Output VulkanRadixSort::output(uint32_t slot) const {
   if (slot >= kSlots || !capacity_) return {};
   const auto& s = slots_[slot];
   return {s.keys[0]->handle(), s.values[0]->handle(), s.count->handle(), s.status->handle()};
 }
 
-bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
+bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
   if (!cmd || slot >= kSlots || !capacity_ ||
       (input.keyBits != KeyBits::full32 && input.keyBits != KeyBits::low16))
     return false;
@@ -208,7 +208,7 @@ bool RadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) c
       !valid(input.count, input.countOffset, input.countBytes, kWord))
     return false;
   const auto& s = slots_[slot];
-  auto info = [](const std::unique_ptr<GpuBuffer>& buffer) {
+  auto info = [](const std::unique_ptr<VulkanBuffer>& buffer) {
     return VkDescriptorBufferInfo{buffer->handle(), 0, buffer->size()};
   };
   for (uint32_t set = 0; set < kSets; ++set) {

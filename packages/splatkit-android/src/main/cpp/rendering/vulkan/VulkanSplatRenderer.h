@@ -8,11 +8,11 @@
 
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "rendering/vulkan/frame/VulkanFrameCompute.h"
-#include "rendering/vulkan/presentation/FrameLoop.h"
-#include "rendering/vulkan/presentation/RenderTarget.h"
-#include "rendering/vulkan/presentation/Swapchain.h"
+#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
+#include "rendering/vulkan/presentation/VulkanRenderTarget.h"
+#include "rendering/vulkan/presentation/VulkanSwapchain.h"
 #include "rendering/vulkan/presentation/WorldFrameCompletion.h"
-#include "rendering/vulkan/raster/SplatPipeline.h"
+#include "rendering/vulkan/raster/VulkanSplatPipeline.h"
 #include "splat/formats/SplatCloud.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -25,7 +25,7 @@ namespace splatkit {
 // until the host attaches a surface again. Render thread only.
 class VulkanSplatRenderer final : public SplatRenderer {
  public:
-  VulkanSplatRenderer(VulkanContext& ctx, FrameLoop& frameLoop);
+  VulkanSplatRenderer(VulkanContext& ctx, VulkanFrameLoop& frameLoop);
   ~VulkanSplatRenderer() override;
 
   VulkanSplatRenderer(const VulkanSplatRenderer&) = delete;
@@ -93,12 +93,12 @@ class VulkanSplatRenderer final : public SplatRenderer {
   void applyPolicyToCompute();
 
   VulkanContext& ctx_;
-  FrameLoop& frameLoop_;
+  VulkanFrameLoop& frameLoop_;
   ANativeWindow* window_ = nullptr;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
-  std::unique_ptr<Swapchain> swapchain_;
-  std::unique_ptr<RenderTarget> target_;  // only when renderScale_ != 1
-  std::unique_ptr<SplatPipeline> splats_;
+  std::unique_ptr<VulkanSwapchain> swapchain_;
+  std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1
+  std::unique_ptr<VulkanSplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<GpuWorld> world_;
   std::unique_ptr<VulkanFrameCompute> compute_;

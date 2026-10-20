@@ -15,18 +15,18 @@ namespace splatkit {
 // The images that go to the screen, plus the render pass and one framebuffer per image.
 // Recreated whenever the surface changes size; destroyed whenever the surface goes away.
 // FIFO (vsync) is the default: the one mode Vulkan guarantees and the one that saves battery.
-class Swapchain {
+class VulkanSwapchain {
  public:
   // `vsync` false asks for an uncapped present mode (immediate, else mailbox) so that
   // frame times reflect GPU cost instead of vsync multiples; benchmarks use it.
-  static splat::Result<std::unique_ptr<Swapchain>> create(const VulkanContext& ctx,
-                                                          VkSurfaceKHR surface,
-                                                          VkSwapchainKHR previous, bool vsync,
-                                                          bool linearBlending);
-  ~Swapchain();
+  static splat::Result<std::unique_ptr<VulkanSwapchain>> create(const VulkanContext& ctx,
+                                                                VkSurfaceKHR surface,
+                                                                VkSwapchainKHR previous, bool vsync,
+                                                                bool linearBlending);
+  ~VulkanSwapchain();
 
-  Swapchain(const Swapchain&) = delete;
-  Swapchain& operator=(const Swapchain&) = delete;
+  VulkanSwapchain(const VulkanSwapchain&) = delete;
+  VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
 
   VkSwapchainKHR handle() const { return swapchain_.swapchain; }
   VkRenderPass renderPass() const { return renderPass_; }
@@ -40,7 +40,7 @@ class Swapchain {
   VkSwapchainKHR release();
 
  private:
-  explicit Swapchain(const VulkanContext& ctx) : ctx_(ctx) {}
+  explicit VulkanSwapchain(const VulkanContext& ctx) : ctx_(ctx) {}
   splat::Result<splat::Ok> createRenderPass();
   splat::Result<splat::Ok> createFramebuffers();
 

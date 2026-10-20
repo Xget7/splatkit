@@ -7,7 +7,7 @@
 
 #include "rendering/vulkan/VulkanSplatRenderer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
-#include "rendering/vulkan/presentation/FrameLoop.h"
+#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
 #include "splat/core/Result.h"
 #include "splatkit/engine/SplatEngine.h"
 
@@ -45,7 +45,7 @@ class AndroidEngine {
   uint32_t worldFrameSplatCount_ = 0;
 
   std::unique_ptr<VulkanContext> ctx_;
-  std::unique_ptr<FrameLoop> frameLoop_;
+  std::unique_ptr<VulkanFrameLoop> frameLoop_;
   VulkanSplatRenderer* renderer_ = nullptr;  // owned by the engine
   std::unique_ptr<SplatEngine> engine_;      // last: dies first, with the renderer
 };

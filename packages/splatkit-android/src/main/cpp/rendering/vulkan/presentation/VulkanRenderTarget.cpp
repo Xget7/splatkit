@@ -1,14 +1,13 @@
-#include "rendering/vulkan/presentation/RenderTarget.h"
+#include "rendering/vulkan/presentation/VulkanRenderTarget.h"
 
 #include "rendering/vulkan/device/VulkanHelpers.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
 
-splat::Result<std::unique_ptr<RenderTarget>> RenderTarget::create(const VulkanContext& ctx,
-                                                                  VkFormat format,
-                                                                  VkExtent2D extent) {
-  std::unique_ptr<RenderTarget> rt(new RenderTarget(ctx));
+splat::Result<std::unique_ptr<VulkanRenderTarget>> VulkanRenderTarget::create(
+    const VulkanContext& ctx, VkFormat format, VkExtent2D extent) {
+  std::unique_ptr<VulkanRenderTarget> rt(new VulkanRenderTarget(ctx));
   rt->extent_ = extent;
   rt->format_ = format;
   VkDevice device = ctx.device();
@@ -62,7 +61,7 @@ splat::Result<std::unique_ptr<RenderTarget>> RenderTarget::create(const VulkanCo
   return rt;
 }
 
-RenderTarget::~RenderTarget() {
+VulkanRenderTarget::~VulkanRenderTarget() {
   VkDevice device = ctx_.device();
   if (framebuffer_) vkDestroyFramebuffer(device, framebuffer_, nullptr);
   if (renderPass_) vkDestroyRenderPass(device, renderPass_, nullptr);
@@ -70,8 +69,8 @@ RenderTarget::~RenderTarget() {
   if (image_) vmaDestroyImage(ctx_.allocator(), image_, allocation_);
 }
 
-void RenderTarget::blitTo(VkCommandBuffer cmd, VkImage swapchainImage,
-                          VkExtent2D swapchainExtent) const {
+void VulkanRenderTarget::blitTo(VkCommandBuffer cmd, VkImage swapchainImage,
+                                VkExtent2D swapchainExtent) const {
   VkImageMemoryBarrier toDst{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
   toDst.srcAccessMask = 0;
   toDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
