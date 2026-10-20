@@ -97,6 +97,8 @@ class MetalFrameCompute {
     std::atomic<double> sortMillis{0};
   };
 
+  static constexpr float kDefaultLodPixels = 1.0f;
+
   bool createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort, KeyBits bits) const;
   void adaptLodThreshold();
 
@@ -110,11 +112,11 @@ class MetalFrameCompute {
   bool gpuSort_ = false;
   std::unique_ptr<MetalLodSelection> lod_;
   std::array<id<MTLBuffer>, kFramesInFlight> lodReadback_{};
-  float lodErrorPixels_ = 1.0f;
+  float lodErrorPixels_ = kDefaultLodPixels;
   uint32_t lodSplatLimit_ = 0;
   // The threshold selection runs at: the policy's, raised while a cut would exceed the splat
   // limit so detail thins evenly instead of stopping wherever traversal ran out of room.
-  float lodPixels_ = 1.0f;
+  float lodPixels_ = kDefaultLodPixels;
   uint32_t lodAdaptedReadback_ = 0;
   uint64_t frames_ = 0;  // submitted so far, which also paces the LOD log
   std::shared_ptr<GpuReport> report_ = std::make_shared<GpuReport>();
