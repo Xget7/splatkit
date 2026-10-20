@@ -123,22 +123,7 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
 }
 
 - (SKSplatStats)stats {
-  const splatkit::Stats s = _engine->stats();
-  return {s.fps,
-          s.frameMillis,
-          s.gpuMillis,
-          s.sortMillis,
-          s.splatCount,
-          s.walking,
-          s.motion,
-          s.drawnSplatCount,
-          s.computeTileCount,
-          s.nonemptyComputeTileCount,
-          s.hardwareTileCount,
-          s.presentTiming,
-          s.frameMillisP95,
-          s.lowFps,
-          s.droppedFrames};
+  return splatkit::fromCppStats(_engine->stats());
 }
 
 - (NSString*)gpuDescription {
@@ -150,18 +135,7 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
 }
 
 - (SKDeviceCapabilities)deviceCapabilities {
-  const splatkit::DeviceCapabilities caps = _engine->deviceCapabilities();
-  SKDeviceCapabilities out{};
-  out.maxLodCapacitySplats = caps.limits.maxLodCapacitySplats;
-  out.minResidencyCapacitySplats = caps.limits.minResidencyCapacitySplats;
-  out.maxResidencyCapacitySplats = caps.limits.maxResidencyCapacitySplats;
-  out.supportsComputeTiles = caps.supportsComputeTiles;
-  out.supportsHiZOcclusion = caps.supportsHiZOcclusion;
-  out.supportsSubgroups = caps.supportsSubgroups;
-  out.maxTextureDimension = caps.maxTextureDimension;
-  out.policy = splatkit::fromCppSupport(caps.policy);
-  out.fallback = splatkit::fromCppPolicy(caps.policy.fallback);
-  return out;
+  return splatkit::fromCppCapabilities(_engine->deviceCapabilities());
 }
 
 - (SKRenderPolicyOutcome)applyRenderPolicy:(SKRenderPolicy)policy
@@ -189,27 +163,13 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
 }
 
 - (BOOL)applyCameraRequest:(SKCameraRequest)request reason:(NSString**)reason {
-  splatkit::CameraRequest requested{};
-  requested.mode = static_cast<splatkit::CameraMode>(request.mode);
-  requested.anchor = {request.anchor.x, request.anchor.y, request.anchor.z};
-  requested.radius = request.radius;
-  requested.azimuth = request.azimuth;
-  requested.elevation = request.elevation;
-  requested.orbitRadiansPerSecond = request.orbitRadiansPerSecond;
-  const auto resolution = _engine->applyCameraRequest(requested);
+  const auto resolution = _engine->applyCameraRequest(splatkit::toCppCameraRequest(request));
   if (reason != nullptr) *reason = @(resolution.error.c_str());
   return resolution.accepted;
 }
 
 - (SKCameraState)cameraState {
-  const auto state = _engine->cameraState();
-  return {static_cast<int32_t>(state.mode),
-          state.hasAnchor,
-          {state.anchor.x, state.anchor.y, state.anchor.z},
-          state.radius,
-          state.azimuth,
-          state.elevation,
-          state.orbitRadiansPerSecond};
+  return splatkit::fromCppCameraState(_engine->cameraState());
 }
 
 - (void)lookWithDeltaYaw:(float)deltaYaw deltaPitch:(float)deltaPitch {

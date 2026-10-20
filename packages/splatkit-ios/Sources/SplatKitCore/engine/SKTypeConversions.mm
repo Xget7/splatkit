@@ -60,4 +60,57 @@ LensSettings lensSettings(const SKLensSettings& s) {
   return out;
 }
 
+SKSplatStats fromCppStats(const Stats& s) {
+  return {s.fps,
+          s.frameMillis,
+          s.gpuMillis,
+          s.sortMillis,
+          s.splatCount,
+          s.walking,
+          s.motion,
+          s.drawnSplatCount,
+          s.computeTileCount,
+          s.nonemptyComputeTileCount,
+          s.hardwareTileCount,
+          s.presentTiming,
+          s.frameMillisP95,
+          s.lowFps,
+          s.droppedFrames};
+}
+
+SKDeviceCapabilities fromCppCapabilities(const DeviceCapabilities& caps) {
+  SKDeviceCapabilities out{};
+  out.maxLodCapacitySplats = caps.limits.maxLodCapacitySplats;
+  out.minResidencyCapacitySplats = caps.limits.minResidencyCapacitySplats;
+  out.maxResidencyCapacitySplats = caps.limits.maxResidencyCapacitySplats;
+  out.supportsComputeTiles = caps.supportsComputeTiles;
+  out.supportsHiZOcclusion = caps.supportsHiZOcclusion;
+  out.supportsSubgroups = caps.supportsSubgroups;
+  out.maxTextureDimension = caps.maxTextureDimension;
+  out.policy = fromCppSupport(caps.policy);
+  out.fallback = fromCppPolicy(caps.policy.fallback);
+  return out;
+}
+
+SKCameraState fromCppCameraState(const CameraState& state) {
+  return {static_cast<int32_t>(state.mode),
+          state.hasAnchor,
+          {state.anchor.x, state.anchor.y, state.anchor.z},
+          state.radius,
+          state.azimuth,
+          state.elevation,
+          state.orbitRadiansPerSecond};
+}
+
+CameraRequest toCppCameraRequest(const SKCameraRequest& request) {
+  CameraRequest requested{};
+  requested.mode = static_cast<CameraMode>(request.mode);
+  requested.anchor = {request.anchor.x, request.anchor.y, request.anchor.z};
+  requested.radius = request.radius;
+  requested.azimuth = request.azimuth;
+  requested.elevation = request.elevation;
+  requested.orbitRadiansPerSecond = request.orbitRadiansPerSecond;
+  return requested;
+}
+
 }  // namespace splatkit
