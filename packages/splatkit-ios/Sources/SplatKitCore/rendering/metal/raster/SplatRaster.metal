@@ -8,7 +8,8 @@ vertex SplatVertex splatVertex(uint vertexId [[vertex_id]], uint instanceId [[in
                                const device uint* order [[buffer(2)]],
                                const device uint* shData [[buffer(3)]]) {
   uint index = order[instanceId];
-  // Without the zero value, the degree-0 specialisation drew nothing on Apple's shader compiler.
+  // Without the zero value, the degree-0 specialisation drew nothing on the Apple GPU compiler we
+  // tested; the source never reads the uninitialised fields.
   Projected p = {};
   if (!projectSplat(cam, splats[index], index, shData, p)) {
     // z beyond w is outside clip space, so the quad is discarded.
