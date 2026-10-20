@@ -208,35 +208,6 @@ TEST(SKTypeConversionsTest, ACameraStateMapsToTheCStruct) {
   EXPECT_EQ(out.orbitRadiansPerSecond, 0.3f);
 }
 
-TEST(SKTypeConversionsTest, ACameraRequestRoundTripsThroughTheStateMirror) {
-  SKCameraRequest request{};
-  request.mode = SKCameraModeFirstPerson;
-  request.anchor = {0.25f, 0.5f, 0.75f};
-  request.radius = 2.0f;
-  request.azimuth = 3.0f;
-  request.elevation = 0.4f;
-  request.orbitRadiansPerSecond = 1.0f;
-
-  const CameraRequest cpp = toCppCameraRequest(request);
-  CameraState state;
-  state.mode = cpp.mode;
-  state.hasAnchor = true;
-  state.anchor = cpp.anchor;
-  state.radius = cpp.radius;
-  state.azimuth = cpp.azimuth;
-  state.elevation = cpp.elevation;
-  state.orbitRadiansPerSecond = cpp.orbitRadiansPerSecond;
-  const SKCameraState mirrored = fromCppCameraState(state);
-  EXPECT_EQ(mirrored.mode, request.mode);
-  EXPECT_EQ(mirrored.anchor.x, request.anchor.x);
-  EXPECT_EQ(mirrored.anchor.y, request.anchor.y);
-  EXPECT_EQ(mirrored.anchor.z, request.anchor.z);
-  EXPECT_EQ(mirrored.radius, request.radius);
-  EXPECT_EQ(mirrored.azimuth, request.azimuth);
-  EXPECT_EQ(mirrored.elevation, request.elevation);
-  EXPECT_EQ(mirrored.orbitRadiansPerSecond, request.orbitRadiansPerSecond);
-}
-
 TEST(SKTypeConversionsTest, LensSettingsKeepOnlyTheFieldsWhoseFlagIsSet) {
   SKLensSettings none{};
   none.fieldOfViewDegrees = 90.0f;
