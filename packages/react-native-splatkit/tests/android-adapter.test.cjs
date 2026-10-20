@@ -55,7 +55,7 @@ test('Android camera transaction survives world replacement', () => {
 // The SDK half of the transaction lives in the Android SDK, which the published package's
 // repository does not carry.
 test('Android SDK applies a pending camera once the world is ready', t => {
-  const sdk = '../splatkit-android/src/main/java/com/splatkit/engine/RenderThread.kt';
+  const sdk = '../splatkit-android/src/main/kotlin/com/splatkit/engine/RenderThread.kt';
   if (!fs.existsSync(path.join(root, sdk))) {
     t.skip('the Android SDK sources are only available in the monorepo');
     return;

@@ -177,7 +177,7 @@ test('camera mode values match the engine and native SDK contracts', t => {
     return;
   }
   const cpp = read('splatkit-engine/include/splatkit/camera/CameraRequest.h');
-  const kotlin = read('splatkit-android/src/main/java/com/splatkit/CameraRequest.kt');
+  const kotlin = read('splatkit-android/src/main/kotlin/com/splatkit/CameraRequest.kt');
   const objc = read('splatkit-ios/Sources/SplatKitCore/include/SplatKit/SKSplatEngine.h');
   for (const [name, cppName, kotlinName, objcName] of [
     ['firstPerson', 'FirstPerson', 'FIRST_PERSON', 'SKCameraModeFirstPerson'],
