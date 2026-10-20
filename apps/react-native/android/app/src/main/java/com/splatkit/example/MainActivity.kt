@@ -9,7 +9,7 @@ class MainActivity : ReactActivity() {
 
   override fun getMainComponentName(): String = "SplatKitExample"
 
-  // SplatKitView loads absolute file paths, which App.tsx builds under this directory.
+  // SplatKitView loads absolute file paths, which src/App.tsx builds under this directory.
   // App-specific external storage needs no permission, and `adb push` fills it.
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       object : DefaultReactActivityDelegate(this, mainComponentName) {

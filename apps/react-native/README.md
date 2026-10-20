@@ -2,9 +2,9 @@
 
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
 Drag anywhere to look around.
-The world is one `.lodsplat`, the detail tree built offline by [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world); [`World.ts`](World.ts) names its file.
+The world is one `.lodsplat`, the detail tree built offline by [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world); [`World.ts`](src/World.ts) names its file.
 The example world is 12M splats, too many to load as one `.spz` on an iPhone 17 Pro; with its tree built offline it loads in seconds.
-Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
+Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](src/Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
 After loading, `Orbit` applies a revisioned camera transaction around an example anchor; `Closer` moves in another 0.3 m.
 The anchor and flythrough route are specific to the example world; adapt them for your own world.
 `Fly route` calculates and dispatches camera poses on the UI thread through Reanimated, with no JS callback per frame.
@@ -35,7 +35,7 @@ Then match what this app changes from the template:
 - `ios/Podfile`: `platform :ios, '17.0'`, and the Xcode deployment target 17.0; then `cd ios && pod install`.
 - `ios/SplatKitExample/AppDelegate.swift` and `Info.plist`: a scene delegate, which iOS 26 requires.
 - Absolute paths for `withWorld` and the `collider` prop; here `MainActivity.kt` and `SceneDelegate` pass the directory holding them as the `filesPath` initial prop.
-- [`App.tsx`](App.tsx): build the configuration, mount `SplatKitView` and rebuild when `onCapabilities` arrives.
+- [`App.tsx`](src/App.tsx): build the configuration, mount `SplatKitView` and rebuild when `onCapabilities` arrives.
 
 ## Run this app
 

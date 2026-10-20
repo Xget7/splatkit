@@ -316,7 +316,7 @@ function CameraPath({world}) {
 
 Keep every trajectory helper worklet-compatible and stop the callback on world replacement or unmount.
 `setCameraPose` still obeys first-person collider constraints; use a collider-free world for an unconstrained flythrough.
-See the [complete example](../../apps/react-native/App.tsx) and its [trajectory](../../apps/react-native/Flythrough.ts).
+See the [complete example](../../apps/react-native/src/App.tsx) and its [trajectory](../../apps/react-native/src/Flythrough.ts).
 The UI-thread dispatch API is documented by [Reanimated](https://docs.swmansion.com/react-native-reanimated/docs/advanced/dispatchCommand/).
 
 ## Quality and performance

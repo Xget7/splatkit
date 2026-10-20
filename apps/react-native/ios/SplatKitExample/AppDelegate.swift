@@ -36,7 +36,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
           let factory = (UIApplication.shared.delegate as? AppDelegate)?.reactNativeFactory else { return }
     let window = UIWindow(windowScene: windowScene)
     self.window = window
-    // SplatKitView loads absolute file paths, which App.tsx builds under Documents;
+    // SplatKitView loads absolute file paths, which src/App.tsx builds under Documents;
     // `devicectl device copy to` fills it.
     let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     factory.startReactNative(
