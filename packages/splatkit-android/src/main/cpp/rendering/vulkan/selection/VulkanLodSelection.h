@@ -10,7 +10,8 @@
 namespace splatkit {
 
 // Full hierarchy residency; interior-only GPU traversal and cooperative leaf packets.
-// SSE matches MetalLOD's covariance/appearance metadata heuristic, not an image-error bound.
+// SSE matches MetalLodSelection's covariance/appearance metadata heuristic, not an image-error
+// bound.
 // Render thread only. Context outlives this pass. Upload/destroy require all consumers idle.
 // One scratch/output domain: encode AND consumers must be ordered on the same context queue.
 // The next encode overwrites output; copy diagnostics before it. No implicit submit/wait.

@@ -2,7 +2,8 @@
 # in a generated header, so shaders ship inside libsplatkit.so and need no asset loading.
 #
 # Usage: splatkit_compile_shaders(<interface target> <shader files...>)
-# Each shaders/foo.vert becomes `splatkit::shaders::foo_vert` (std::vector-like span).
+# A shader can live in any job folder; its file name foo.vert becomes
+# `splatkit::shaders::foo_vert` (std::vector-like span).
 
 function(splatkit_compile_shaders target)
   if(NOT DEFINED ANDROID_NDK OR NOT DEFINED ANDROID_HOST_TAG)
