@@ -31,6 +31,9 @@ bool VulkanSurface::attach(ANativeWindow* window) {
 
   ANativeWindow_acquire(window);
   window_ = window;
+  windowExtent_ = {static_cast<uint32_t>(std::max(0, ANativeWindow_getWidth(window))),
+                   static_cast<uint32_t>(std::max(0, ANativeWindow_getHeight(window)))};
+  staleChecks_ = 0;
   if (!createSurface() || !recreateSwapchain()) {
     LOGE("could not attach to the surface");
     teardown();
@@ -41,11 +44,13 @@ bool VulkanSurface::attach(ANativeWindow* window) {
 
 bool VulkanSurface::resize(uint32_t width, uint32_t height) {
   if (!swapchain_) return true;
+  windowExtent_ = {width, height};
+  staleChecks_ = 0;
   const VkExtent2D current = swapchain_->extent();
   if (current.width == width && current.height == height) return true;
   LOGI("surface resized to %ux%u, swapchain was %ux%u", width, height, current.width,
        current.height);
-  return rebuildOrDrop();
+  return rebuildWhenSurfaceReportsWindowSize();
 }
 
 bool VulkanSurface::setRenderScale(float scale) {
@@ -72,11 +77,14 @@ bool VulkanSurface::setVsync(bool vsync) {
 }
 
 bool VulkanSurface::rebuildIfChanged(VulkanFrameLoop::Status status) {
-  if (status == VulkanFrameLoop::Status::swapchainOutOfDate ||
-      (status == VulkanFrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
-    return rebuildOrDrop();
-  }
-  return true;
+  if (status == VulkanFrameLoop::Status::swapchainOutOfDate) return rebuildOrDrop();
+  return !rebuildPending() || rebuildWhenSurfaceReportsWindowSize();
+}
+
+bool VulkanSurface::rebuildPending() const {
+  if (!swapchain_) return false;
+  const VkExtent2D current = swapchain_->extent();
+  return current.width != windowExtent_.width || current.height != windowExtent_.height;
 }
 
 // A rebuild that fails leaves nothing to draw into, so the surface is dropped and stays
@@ -166,23 +174,30 @@ bool VulkanSurface::rebuildOrDrop() {
   return false;
 }
 
-// True when the surface no longer has the swapchain's size, which is how a rotation shows
-// up when the driver only answers SUBOPTIMAL. A bare SUBOPTIMAL with the same size is the
-// identity pre-transform being second best, and is not worth a rebuild.
-bool VulkanSurface::surfaceExtentChanged() const {
+// Until a frame is presented, the surface keeps reporting its old size after the window
+// changed, and a swapchain built from that report is the old size again. So the rebuild
+// waits for the report to match the window. A report that never matches ends the wait
+// after `kMaxStaleChecks` frames and the swapchain takes the size the surface gives.
+bool VulkanSurface::rebuildWhenSurfaceReportsWindowSize() {
   VkSurfaceCapabilitiesKHR caps{};
-  if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx_.physicalDevice(), surface_, &caps) !=
+  if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx_.physicalDevice(), surface_, &caps) ==
       VK_SUCCESS) {
-    return false;
+    const bool reported = caps.currentExtent.width == windowExtent_.width &&
+                          caps.currentExtent.height == windowExtent_.height;
+    if (reported) {
+      LOGI("surface now reports %ux%u", caps.currentExtent.width, caps.currentExtent.height);
+      staleChecks_ = 0;
+      return rebuildOrDrop();
+    }
   }
-  const VkExtent2D current = swapchain_->extent();
-  const bool changed =
-      caps.currentExtent.width != current.width || caps.currentExtent.height != current.height;
-  if (changed) {
-    LOGI("surface is now %ux%u, swapchain was %ux%u", caps.currentExtent.width,
-         caps.currentExtent.height, current.width, current.height);
-  }
-  return changed;
+  if (++staleChecks_ <= kMaxStaleChecks) return true;
+  LOGW("surface still reports %ux%u, window is %ux%u; using the surface's size",
+       caps.currentExtent.width, caps.currentExtent.height, windowExtent_.width,
+       windowExtent_.height);
+  staleChecks_ = 0;
+  if (!rebuildOrDrop()) return false;
+  windowExtent_ = swapchain_->extent();
+  return true;
 }
 
 void VulkanSurface::teardown() {

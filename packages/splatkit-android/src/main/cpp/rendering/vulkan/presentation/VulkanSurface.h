@@ -23,6 +23,9 @@ class VulkanSurface {
  public:
   static constexpr float kMinRenderScale = 0.1f;
   static constexpr float kMaxRenderScale = 2.0f;
+  // Frames a rebuild waits for the surface to report the window's size. A surface that never
+  // does (a fixed-size buffer) is built at the size it reports instead of redrawing forever.
+  static constexpr uint32_t kMaxStaleChecks = 60;
 
   // `beforeTeardown` runs while the device is idle, before the target, swapchain and
   // surface are destroyed, so the owner can release what draws into them.
@@ -37,15 +40,16 @@ class VulkanSurface {
 
   // A new window (takes a reference) or nullptr when the surface is going away.
   bool attach(ANativeWindow* window);
-  // The window changed size while staying attached. Rebuilds the swapchain if needed.
+  // The window changed size while staying attached. Rebuilds the swapchain at once when the
+  // surface already reports that size; otherwise waits for it (see `rebuildPending`).
   bool resize(uint32_t width, uint32_t height);
   // Clamped to [kMinRenderScale, kMaxRenderScale]; below or above 1 draws offscreen.
   bool setRenderScale(float scale);
   // Flips the swapchain format.
   bool setLinearBlending(bool linear);
   bool setVsync(bool vsync);
-  // Rebuilds the swapchain after a frame: always when out of date, and when suboptimal only
-  // if the surface no longer has the swapchain's size. Other statuses change nothing.
+  // Rebuilds the swapchain after a frame: always when out of date, and when it is not the
+  // window's size once the surface reports the window's size. Other statuses change nothing.
   bool rebuildIfChanged(VulkanFrameLoop::Status status);
   // For a rebuild the owner failed after the surface succeeded: logs and drops it.
   void drop();
@@ -54,6 +58,9 @@ class VulkanSurface {
   bool ready() const { return swapchain_ != nullptr; }
   float renderScale() const { return renderScale_; }
   bool linearBlending() const { return linearBlending_; }
+  // True while the swapchain is not the window's size. Android reports the new size only
+  // after a frame is presented, so the owner keeps drawing until this turns false.
+  bool rebuildPending() const;
   // Counts the rebuilds of the swapchain or the target.
   uint32_t generation() const { return generation_; }
 
@@ -72,7 +79,7 @@ class VulkanSurface {
   bool recreateSwapchain();
   bool createRenderTarget();
   bool rebuildOrDrop();
-  bool surfaceExtentChanged() const;
+  bool rebuildWhenSurfaceReportsWindowSize();
   void teardown();
   void destroySwapchainAndSurface();
 
@@ -80,6 +87,8 @@ class VulkanSurface {
   VulkanFrameLoop& frameLoop_;
   std::function<void()> beforeTeardown_;
   ANativeWindow* window_ = nullptr;
+  VkExtent2D windowExtent_{};  // the size the swapchain must reach
+  uint32_t staleChecks_ = 0;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanSwapchain> swapchain_;
   std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1

@@ -52,6 +52,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   Extent drawExtent() const override;
   // Counts the rebuilds of the swapchain or the target.
   uint32_t generation() const override { return surface_.generation(); }
+  bool surfaceRebuildPending() const override { return surface_.rebuildPending(); }
 
   // Uploads once the GPU is done with the previous world. Needs `ready()`.
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
