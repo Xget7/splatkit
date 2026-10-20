@@ -112,14 +112,18 @@ struct ContentView: View {
         if let v = args.float("margin") { view.cullMarginDegrees = v }
         if args.has("linear") { view.linearBlending = args.bool("linear") ?? true }
 
-        if let tileset = args.string("tileset"), let url = LaunchArgs.resolve(tileset) {
-            view.loadTiledWorld(tileset: url)
-        } else if let world = args.string("world"), let url = LaunchArgs.resolve(world) {
-            view.loadWorld(file: url)
-        } else if let url = LaunchArgs.resolve(defaultWorld) {
-            view.loadWorld(file: url)
+        // A requested world that is missing never falls back to the default, so a scripted run
+        // cannot measure the wrong scene.
+        let requested = args.string("tileset") ?? args.string("world") ?? defaultWorld
+        if let url = LaunchArgs.resolve(requested) {
+            if args.string("tileset") != nil {
+                view.loadTiledWorld(tileset: url)
+            } else {
+                view.loadWorld(file: url)
+            }
         } else {
-            session.status = "World not found: \(args.string("tileset") ?? args.string("world") ?? defaultWorld)"
+            session.status = "World not found: \(requested)"
+            NSLog("SplatWorldMissing: %@", requested)
         }
         if let collider = args.string("collider"),
            let url = LaunchArgs.resolve(collider) {
