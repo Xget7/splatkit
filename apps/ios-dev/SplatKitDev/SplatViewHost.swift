@@ -196,7 +196,7 @@ final class SplatSession: ObservableObject {
 
     var pipelineText: String {
         let policy = view.renderPolicy
-        let sh = min(view.shDegree, view.maxShDegree)
+        let sh = min(view.shDegree, view.maxShDegree, stats.loadedShDegree)
         let limit = policy.lodSplatLimit == 0 ? "all" : String(format: "%.1fM", Double(policy.lodSplatLimit) / 1_000_000)
         return "SH\(sh) \(policy.sortDepth)b \(limit)"
     }
