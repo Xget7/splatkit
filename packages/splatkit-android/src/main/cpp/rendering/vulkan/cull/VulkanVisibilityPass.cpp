@@ -28,6 +28,10 @@ constexpr VkSubgroupFeatureFlags kRequiredSubgroupOperations = VK_SUBGROUP_FEATU
 constexpr uint32_t kVisibilityStorageBindings = 7;
 constexpr uint32_t kVisibilityBindings = 1 + kVisibilityStorageBindings;
 constexpr uint32_t kPrepareBindings = 3;
+// Each frame slot owns one visibility set and one prepare set.
+constexpr uint32_t kSetFamilies = 2;
+// The descriptor pool holds uniform buffers and storage buffers.
+constexpr uint32_t kPoolSizeCount = 2;
 // The bits of the shader's keyMode push constant.
 constexpr uint32_t kKeyLow16 = 1;
 constexpr uint32_t kKeyDescending = 2;
@@ -254,13 +258,13 @@ bool VulkanVisibilityPass::createDescriptors() {
   if (vkCreateDescriptorSetLayout(device, &prepareInfo, nullptr, &prepareSetLayout_) != VK_SUCCESS)
     return false;
 
-  VkDescriptorPoolSize sizes[2]{};
+  VkDescriptorPoolSize sizes[kPoolSizeCount]{};
   sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
   sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
               (kVisibilityStorageBindings + kPrepareBindings) * kFramesInFlight};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = 2 * kFramesInFlight;
-  poolInfo.poolSizeCount = 2;
+  poolInfo.maxSets = kSetFamilies * kFramesInFlight;
+  poolInfo.poolSizeCount = kPoolSizeCount;
   poolInfo.pPoolSizes = sizes;
   if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS)
     return false;
