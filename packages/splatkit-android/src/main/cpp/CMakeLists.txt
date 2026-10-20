@@ -30,30 +30,30 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../splatkit-engine splatki
 
 include(cmake/shaders.cmake)
 splatkit_compile_shaders(splatkit_shaders
-  shaders/splat.vert
-  shaders/splat.frag
-  shaders/visibility.comp
-  shaders/prepare_indirect.comp
-  shaders/lod_selection.comp
-  shaders/radix_prepare.comp
-  shaders/radix_histogram.comp
-  shaders/radix_scan.comp
-  shaders/radix_scatter.comp
+  rendering/vulkan/raster/splat.vert
+  rendering/vulkan/raster/splat.frag
+  rendering/vulkan/cull/visibility.comp
+  rendering/vulkan/cull/prepare_indirect.comp
+  rendering/vulkan/selection/lod_selection.comp
+  rendering/vulkan/sort/radix_prepare.comp
+  rendering/vulkan/sort/radix_histogram.comp
+  rendering/vulkan/sort/radix_scan.comp
+  rendering/vulkan/sort/radix_scatter.comp
 )
 
 add_library(splatkit SHARED
-  rendering/vulkan/VulkanContext.cpp
-  rendering/vulkan/Swapchain.cpp
-  rendering/vulkan/RenderTarget.cpp
-  rendering/vulkan/FrameLoop.cpp
-  rendering/vulkan/GpuBuffer.cpp
-  rendering/vulkan/SplatPipeline.cpp
-  rendering/vulkan/VisibilityPass.cpp
-  rendering/vulkan/LodSelection.cpp
-  rendering/vulkan/RadixSort.cpp
-  rendering/vulkan/VulkanFrameCompute.cpp
+  rendering/vulkan/device/VulkanContext.cpp
+  rendering/vulkan/presentation/Swapchain.cpp
+  rendering/vulkan/presentation/RenderTarget.cpp
+  rendering/vulkan/presentation/FrameLoop.cpp
+  rendering/vulkan/device/GpuBuffer.cpp
+  rendering/vulkan/raster/SplatPipeline.cpp
+  rendering/vulkan/cull/VisibilityPass.cpp
+  rendering/vulkan/selection/LodSelection.cpp
+  rendering/vulkan/sort/RadixSort.cpp
+  rendering/vulkan/frame/VulkanFrameCompute.cpp
   rendering/vulkan/VulkanSplatRenderer.cpp
-  rendering/vulkan/Vma.cpp
+  rendering/vulkan/device/Vma.cpp
   engine/AndroidEngine.cpp
   jni/SplatKitJni.cpp
 )

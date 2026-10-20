@@ -1,4 +1,4 @@
-#include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/device/VulkanContext.h"
 
 #include "splatkit/Log.h"
 

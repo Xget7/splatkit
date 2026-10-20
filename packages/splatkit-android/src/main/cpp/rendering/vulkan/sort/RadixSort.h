@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "rendering/vulkan/GpuBuffer.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {

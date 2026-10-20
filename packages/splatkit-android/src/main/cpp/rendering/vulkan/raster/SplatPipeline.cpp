@@ -1,4 +1,4 @@
-#include "rendering/vulkan/SplatPipeline.h"
+#include "rendering/vulkan/raster/SplatPipeline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,7 +6,7 @@
 #include <limits>
 #include <vector>
 
-#include "rendering/vulkan/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanHelpers.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
 #include "splatkit/Log.h"

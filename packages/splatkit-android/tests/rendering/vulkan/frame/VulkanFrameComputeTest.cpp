@@ -4,8 +4,8 @@
 #include <numeric>
 #include <string>
 
-#include "rendering/vulkan/VulkanFrameCompute.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/frame/VulkanFrameCompute.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/RenderPolicy.h"
 #include "support/VulkanTestContext.h"

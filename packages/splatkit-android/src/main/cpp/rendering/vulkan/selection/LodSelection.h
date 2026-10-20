@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "rendering/vulkan/GpuBuffer.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
 #include "splat/lod/LodTree.h"
 
 namespace splatkit {

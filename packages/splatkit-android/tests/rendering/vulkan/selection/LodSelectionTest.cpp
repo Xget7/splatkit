@@ -6,8 +6,8 @@
 #include <limits>
 #include <set>
 
-#include "rendering/vulkan/LodSelection.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/selection/LodSelection.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splat/lod/LodFile.h"
 #include "support/VulkanTestContext.h"
 

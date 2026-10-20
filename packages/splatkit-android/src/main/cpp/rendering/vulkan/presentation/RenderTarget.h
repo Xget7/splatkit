@@ -5,7 +5,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/device/VulkanContext.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {

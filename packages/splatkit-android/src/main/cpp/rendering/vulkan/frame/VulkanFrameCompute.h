@@ -4,9 +4,9 @@
 #include <memory>
 #include <vector>
 
-#include "rendering/vulkan/GpuBuffer.h"
-#include "rendering/vulkan/LodSelection.h"
-#include "rendering/vulkan/VisibilityPass.h"
+#include "rendering/vulkan/cull/VisibilityPass.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/selection/LodSelection.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {

@@ -1,4 +1,4 @@
-#include "rendering/vulkan/GpuBuffer.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
 
 #include <algorithm>
 #include <cstring>

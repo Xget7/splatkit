@@ -6,10 +6,10 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/GpuBuffer.h"
-#include "rendering/vulkan/VulkanContext.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "rendering/vulkan/presentation/FrameLoop.h"
 #include "splat/core/Result.h"
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Mat4.h"

@@ -8,8 +8,8 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/GpuBuffer.h"
-#include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
+#include "rendering/vulkan/device/VulkanContext.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {

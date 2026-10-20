@@ -6,8 +6,8 @@
 #include <numeric>
 #include <set>
 
-#include "rendering/vulkan/VisibilityPass.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/cull/VisibilityPass.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
 

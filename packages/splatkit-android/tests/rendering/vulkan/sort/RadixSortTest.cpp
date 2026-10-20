@@ -6,7 +6,7 @@
 #include <random>
 #include <vector>
 
-#include "rendering/vulkan/RadixSort.h"
+#include "rendering/vulkan/sort/RadixSort.h"
 #include "support/VulkanTestContext.h"
 
 using splatkit::GpuBuffer;

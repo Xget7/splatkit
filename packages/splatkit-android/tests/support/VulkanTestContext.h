@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "rendering/vulkan/GpuBuffer.h"
+#include "rendering/vulkan/device/GpuBuffer.h"
 
 namespace splatkit::test {
 

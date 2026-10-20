@@ -1,4 +1,4 @@
-#include "rendering/vulkan/VisibilityPass.h"
+#include "rendering/vulkan/cull/VisibilityPass.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "rendering/vulkan/VulkanHelpers.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/prepare_indirect_comp.h"
 #include "shaders/visibility_comp.h"
 #include "splatkit/Log.h"

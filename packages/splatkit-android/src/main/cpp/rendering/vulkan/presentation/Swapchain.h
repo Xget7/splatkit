@@ -7,7 +7,7 @@
 // After vulkan.h on purpose: VkBootstrap.h would otherwise hide the prototypes.
 #include <VkBootstrap.h>
 
-#include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/device/VulkanContext.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {

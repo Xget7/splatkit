@@ -1,9 +1,9 @@
-#include "rendering/vulkan/RadixSort.h"
+#include "rendering/vulkan/sort/RadixSort.h"
 
 #include <algorithm>
 #include <vector>
 
-#include "rendering/vulkan/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanHelpers.h"
 #include "shaders/radix_histogram_comp.h"
 #include "shaders/radix_prepare_comp.h"
 #include "shaders/radix_scan_comp.h"

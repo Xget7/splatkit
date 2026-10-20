@@ -6,13 +6,13 @@
 #include <android/native_window.h>
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/RenderTarget.h"
-#include "rendering/vulkan/SplatPipeline.h"
-#include "rendering/vulkan/Swapchain.h"
-#include "rendering/vulkan/VulkanContext.h"
-#include "rendering/vulkan/VulkanFrameCompute.h"
-#include "rendering/vulkan/WorldFrameCompletion.h"
+#include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/frame/VulkanFrameCompute.h"
+#include "rendering/vulkan/presentation/FrameLoop.h"
+#include "rendering/vulkan/presentation/RenderTarget.h"
+#include "rendering/vulkan/presentation/Swapchain.h"
+#include "rendering/vulkan/presentation/WorldFrameCompletion.h"
+#include "rendering/vulkan/raster/SplatPipeline.h"
 #include "splat/formats/SplatCloud.h"
 #include "splatkit/rendering/SplatRenderer.h"
 

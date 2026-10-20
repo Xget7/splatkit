@@ -1,4 +1,4 @@
-#include "rendering/vulkan/VulkanFrameCompute.h"
+#include "rendering/vulkan/frame/VulkanFrameCompute.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -6,8 +6,8 @@
 #include <limits>
 #include <utility>
 
-#include "rendering/vulkan/RadixSort.h"
-#include "rendering/vulkan/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/sort/RadixSort.h"
 #include "splatkit/Log.h"
 #include "splatkit/rendering/GpuLayout.h"
 

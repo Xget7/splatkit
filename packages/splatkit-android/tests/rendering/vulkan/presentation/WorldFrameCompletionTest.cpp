@@ -2,7 +2,7 @@
 // splatkit-engine/include and splat-core/include. Run without NDEBUG.
 #include <cassert>
 
-#include "rendering/vulkan/WorldFrameCompletion.h"
+#include "rendering/vulkan/presentation/WorldFrameCompletion.h"
 #include "splatkit/engine/SplatEngine.h"
 
 static_assert(static_cast<int>(splatkit::SplatEngine::Event::worldReady) == 0);

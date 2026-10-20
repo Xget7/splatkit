@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan_android.h>
 
-#include "rendering/vulkan/RadixSort.h"
+#include "rendering/vulkan/sort/RadixSort.h"
 
 #include "splatkit/Log.h"
 

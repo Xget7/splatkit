@@ -1,10 +1,10 @@
 # Included by src/main/cpp/CMakeLists.txt, which sets SPLATKIT_ANDROID_CPP_DIR, vma_include and vkb_include.
-set(sources ${SPLATKIT_ANDROID_CPP_DIR}/rendering/vulkan)
+set(vulkan_source_dir ${SPLATKIT_ANDROID_CPP_DIR}/rendering/vulkan)
 
 add_library(splatkit_vulkan_test_support STATIC
-  ${sources}/VulkanContext.cpp
-  ${sources}/GpuBuffer.cpp
-  ${sources}/Vma.cpp
+  ${vulkan_source_dir}/device/VulkanContext.cpp
+  ${vulkan_source_dir}/device/GpuBuffer.cpp
+  ${vulkan_source_dir}/device/Vma.cpp
 )
 target_include_directories(splatkit_vulkan_test_support PUBLIC ${SPLATKIT_ANDROID_CPP_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR})
@@ -20,19 +20,19 @@ target_link_libraries(splatkit_gpu_buffer_test PRIVATE splatkit_vulkan_test_supp
 add_executable(splatkit_gpu_upload_pressure_test rendering/vulkan/device/GpuUploadPressureTest.cpp)
 target_link_libraries(splatkit_gpu_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_lod_selection_test rendering/vulkan/selection/LodSelectionTest.cpp
-  ${sources}/LodSelection.cpp)
+  ${vulkan_source_dir}/selection/LodSelection.cpp)
 target_link_libraries(splatkit_lod_selection_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
 add_executable(splatkit_visibility_test rendering/vulkan/cull/VisibilityPassTest.cpp
-  ${sources}/VisibilityPass.cpp)
+  ${vulkan_source_dir}/cull/VisibilityPass.cpp)
 target_link_libraries(splatkit_visibility_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
 add_executable(splatkit_vulkan_frame_test rendering/vulkan/frame/VulkanFrameComputeTest.cpp
-  ${sources}/VulkanFrameCompute.cpp ${sources}/LodSelection.cpp
-  ${sources}/VisibilityPass.cpp ${sources}/RadixSort.cpp)
+  ${vulkan_source_dir}/frame/VulkanFrameCompute.cpp ${vulkan_source_dir}/selection/LodSelection.cpp
+  ${vulkan_source_dir}/cull/VisibilityPass.cpp ${vulkan_source_dir}/sort/RadixSort.cpp)
 target_link_libraries(splatkit_vulkan_frame_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
 add_executable(splatkit_radix_sort_test rendering/vulkan/sort/RadixSortTest.cpp
-  ${sources}/RadixSort.cpp)
+  ${vulkan_source_dir}/sort/RadixSort.cpp)
 target_link_libraries(splatkit_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)

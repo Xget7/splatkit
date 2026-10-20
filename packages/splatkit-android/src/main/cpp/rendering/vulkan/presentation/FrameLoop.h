@@ -5,8 +5,8 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rendering/vulkan/Swapchain.h"
-#include "rendering/vulkan/VulkanContext.h"
+#include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/presentation/Swapchain.h"
 
 namespace splatkit {
 

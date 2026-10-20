@@ -5,9 +5,9 @@
 
 #include <android/native_window.h>
 
-#include "rendering/vulkan/FrameLoop.h"
-#include "rendering/vulkan/VulkanContext.h"
 #include "rendering/vulkan/VulkanSplatRenderer.h"
+#include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/presentation/FrameLoop.h"
 #include "splat/core/Result.h"
 #include "splatkit/engine/SplatEngine.h"
 

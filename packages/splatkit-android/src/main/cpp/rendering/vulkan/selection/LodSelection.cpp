@@ -1,12 +1,12 @@
-#include "rendering/vulkan/LodSelection.h"
+#include "rendering/vulkan/selection/LodSelection.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
 
-#include "rendering/vulkan/VulkanHelpers.h"
-#include "rendering/vulkan/VulkanShaderTypes.h"
+#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/lod_selection_comp.h"
 #include "splat/lod/LodFile.h"
 
