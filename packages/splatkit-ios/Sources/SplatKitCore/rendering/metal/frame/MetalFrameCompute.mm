@@ -77,7 +77,7 @@ bool MetalFrameCompute::configure(const RenderPolicy& policy, std::string* reaso
   lodSplatLimit_ = policy.lodSplatLimit;
   lodPixels_ = lodErrorPixels_;
   // Frames are idle here, so every readback so far describes the previous policy.
-  lodAdaptedReadback_ = lodReadbacks_.load();
+  lodAdaptedReadback_ = report_->lodReadbacks.load();
   if (lod_) {
     lod_->setPixelLimit(lodPixels_);
     lod_->setSplatLimit(lodSplatLimit_);
@@ -90,8 +90,8 @@ bool MetalFrameCompute::configure(const RenderPolicy& policy, std::string* reaso
 bool MetalFrameCompute::configureFlatWorld(uint32_t count) {
   if (gpuSort_ && !reserveOrdering(visibility_, sort_, count, 0)) return false;
   lod_.reset();
-  lastSelectedCount_.store(0);
-  lastSelectMillis_.store(0);
+  report_->selectedCount.store(0);
+  report_->selectMillis.store(0);
   return true;
 }
 
@@ -116,11 +116,11 @@ bool MetalFrameCompute::configureLodWorld(const splat::LodTree& tree, uint32_t b
   lod_ = std::move(lod);
   lodReadback_ = readback;
   lodPixels_ = lodErrorPixels_;
-  lodAdaptedReadback_ = lodReadbacks_.load();
-  lastLodLimitedCount_.store(0);
-  lastLodEvaluatedCount_.store(0);
-  lastSelectedCount_.store(0);
-  lastSelectMillis_.store(0);
+  lodAdaptedReadback_ = report_->lodReadbacks.load();
+  report_->lodLimitedCount.store(0);
+  report_->lodEvaluatedCount.store(0);
+  report_->selectedCount.store(0);
+  report_->selectMillis.store(0);
   return true;
 }
 
@@ -148,12 +148,12 @@ void MetalFrameCompute::adaptLodThreshold() {
   constexpr float kRaise = 1.1f;
   constexpr float kRelax = 1.03f;
   constexpr float kMaxPixels = 64.0f;
-  const uint32_t readbacks = lodReadbacks_.load();
+  const uint32_t readbacks = report_->lodReadbacks.load();
   if (readbacks == lodAdaptedReadback_) return;
   lodAdaptedReadback_ = readbacks;
-  if (lastLodLimitedCount_.load() > 0) {
+  if (report_->lodLimitedCount.load() > 0) {
     lodPixels_ = std::min(lodPixels_ * kRaise, std::max(kMaxPixels, lodErrorPixels_));
-  } else if (lastSelectedCount_.load() < lod_->limit() / 10 * 9) {
+  } else if (report_->selectedCount.load() < lod_->limit() / 10 * 9) {
     lodPixels_ = std::max(lodPixels_ / kRelax, lodErrorPixels_);
   }
   lod_->setPixelLimit(lodPixels_);
@@ -172,30 +172,26 @@ id<MTLCommandBuffer> MetalFrameCompute::encodeSelection(uint32_t slot) {
          destinationOffset:0
                       size:sizeof(LodCounters)];
   [readback endEncoding];
-  std::atomic<uint32_t>* selected = &lastSelectedCount_;
-  std::atomic<double>* milliseconds = &lastSelectMillis_;
-  std::atomic<uint32_t>* limited = &lastLodLimitedCount_;
-  std::atomic<uint32_t>* evaluated = &lastLodEvaluatedCount_;
+  const std::shared_ptr<GpuReport> report = report_;
+  const std::shared_ptr<std::atomic<bool>> failed = frameLoop_.failureLatch();
   const bool logLod = frames_ % kLodLogFrames == 0;
-  std::atomic<uint32_t>* readbacks = &lodReadbacks_;
   const float pixels = lodPixels_;
-  MetalFrameLoop* loop = &frameLoop_;
   [selection addCompletedHandler:^(id<MTLCommandBuffer> done) {
     if (done.status == MTLCommandBufferStatusError) {
-      loop->markFailed();
+      failed->store(true);
       LOGE("LOD command failed: %s", done.error.localizedDescription.UTF8String);
       return;
     }
     const auto& counters = *static_cast<const LodCounters*>(selectedCount.contents);
-    selected->store(counters.count);
-    limited->store(counters.limited);
-    evaluated->store(counters.evaluated);
-    readbacks->fetch_add(1);
+    report->selectedCount.store(counters.count);
+    report->lodLimitedCount.store(counters.limited);
+    report->lodEvaluatedCount.store(counters.evaluated);
+    report->lodReadbacks.fetch_add(1);
     if (logLod)
       LOGI("LOD SSE: %u selected, %u evaluated interiors, %u quality-limited refinements, "
            "%.2f px",
            counters.count, counters.evaluated, counters.limited, pixels);
-    milliseconds->store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
+    report->selectMillis.store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
   }];
   return selection;
 }
@@ -214,18 +210,17 @@ id<MTLCommandBuffer> MetalFrameCompute::encodeVisibilityAndSort(const SplatRende
   }
   sort_.encode(sort, visibility_.countBuffer(slot), visibility_.depthBits());
   visibility_.encodeIndirect(sort, slot);
-  std::atomic<double>* sortMillis = &lastSortMillis_;
-  std::atomic<uint32_t>* drawn = &lastDrawCount_;
+  const std::shared_ptr<GpuReport> report = report_;
+  const std::shared_ptr<std::atomic<bool>> failed = frameLoop_.failureLatch();
   id<MTLBuffer> countBuffer = visibility_.countBuffer(slot);
-  MetalFrameLoop* loop = &frameLoop_;
   [sort addCompletedHandler:^(id<MTLCommandBuffer> done) {
     if (done.status == MTLCommandBufferStatusError) {
-      loop->markFailed();
+      failed->store(true);
       LOGE("visibility command failed: %s", done.error.localizedDescription.UTF8String);
       return;
     }
-    sortMillis->store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
-    drawn->store(*static_cast<const uint32_t*>(countBuffer.contents));
+    report->sortMillis.store((done.GPUEndTime - done.GPUStartTime) * 1000.0);
+    report->drawCount.store(*static_cast<const uint32_t*>(countBuffer.contents));
   }];
   return sort;
 }

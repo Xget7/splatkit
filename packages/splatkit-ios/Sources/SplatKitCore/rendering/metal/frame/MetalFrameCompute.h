@@ -74,16 +74,29 @@ class MetalFrameCompute {
   id<MTLBuffer> order() const { return sort_.values(); }
   id<MTLBuffer> drawArguments(uint32_t slot) const { return visibility_.drawArguments(slot); }
 
-  double lastSortMillis() const { return lastSortMillis_.load(); }
-  uint32_t lastDrawCount() const { return lastDrawCount_.load(); }
-  uint32_t lastSelectedCount() const { return lastSelectedCount_.load(); }
-  double lastSelectMillis() const { return lastSelectMillis_.load(); }
-  uint32_t lastLodLimitedCount() const { return lod_ ? lastLodLimitedCount_.load() : 0; }
-  uint32_t lastLodEvaluatedCount() const { return lod_ ? lastLodEvaluatedCount_.load() : 0; }
+  double lastSortMillis() const { return report_->sortMillis.load(); }
+  uint32_t lastDrawCount() const { return report_->drawCount.load(); }
+  uint32_t lastSelectedCount() const { return report_->selectedCount.load(); }
+  double lastSelectMillis() const { return report_->selectMillis.load(); }
+  uint32_t lastLodLimitedCount() const { return lod_ ? report_->lodLimitedCount.load() : 0; }
+  uint32_t lastLodEvaluatedCount() const { return lod_ ? report_->lodEvaluatedCount.load() : 0; }
   // The threshold the next selection runs at, at least the policy's.
   float lodPixels() const { return lodPixels_; }
 
  private:
+  // What the selection and sort completion handlers write. The handlers hold a share of it:
+  // Metal documents no order between one command buffer's handlers and another's, so a handler
+  // can still be running after the render buffer's has released the last frame slot.
+  struct GpuReport {
+    std::atomic<uint32_t> selectedCount{0};
+    std::atomic<uint32_t> lodLimitedCount{0};
+    std::atomic<uint32_t> lodEvaluatedCount{0};
+    std::atomic<uint32_t> lodReadbacks{0};  // completed selections, so each adapts once
+    std::atomic<uint32_t> drawCount{0};
+    std::atomic<double> selectMillis{0};
+    std::atomic<double> sortMillis{0};
+  };
+
   bool createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort,
                       KeyBits bits) const;
   void adaptLodThreshold();
@@ -103,14 +116,9 @@ class MetalFrameCompute {
   // The threshold selection runs at: the policy's, raised while a cut would exceed the splat
   // limit so detail thins evenly instead of stopping wherever traversal ran out of room.
   float lodPixels_ = 1.0f;
-  std::atomic<uint32_t> lodReadbacks_{0};  // completed selections, so each adapts once
   uint32_t lodAdaptedReadback_ = 0;
   uint64_t frames_ = 0;  // submitted so far, which also paces the LOD log
-  std::atomic<uint32_t> lastSelectedCount_{0};
-  std::atomic<uint32_t> lastLodLimitedCount_{0}, lastLodEvaluatedCount_{0};
-  std::atomic<double> lastSelectMillis_{0};
-  std::atomic<double> lastSortMillis_{0};
-  std::atomic<uint32_t> lastDrawCount_{0};
+  std::shared_ptr<GpuReport> report_ = std::make_shared<GpuReport>();
 };
 
 }  // namespace splatkit
