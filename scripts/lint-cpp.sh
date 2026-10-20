@@ -46,6 +46,7 @@ engine="$root/packages/splatkit-engine"
 android="$root/packages/splatkit-android/src/main/cpp"
 android_tests="$root/packages/splatkit-android/tests"
 ios="$root/packages/splatkit-ios/Sources/SplatKitCore"
+ios_tests="$root/packages/splatkit-ios/tests"
 build="$root/build/lint"
 
 # The iOS sources are Objective-C++: clang-format handles them, the NDK's clang-tidy
@@ -54,7 +55,7 @@ build="$root/build/lint"
 sources() {
   find "$core/include" "$core/src" "$core/tests" "$core/tools" \
     "$engine/include" "$engine/src" "$engine/tests" "$android" "$android_tests" \
-    "$ios" \
+    "$ios" "$ios_tests" \
     -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) | sort
 }
 
