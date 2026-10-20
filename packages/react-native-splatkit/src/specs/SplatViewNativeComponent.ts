@@ -236,37 +236,64 @@ export interface NativeCommands {
   /** World-space position, target and up vector. */
   lookAt: (
     viewRef: React.ComponentRef<ComponentType>,
-    x: CodegenTypes.Double, y: CodegenTypes.Double, z: CodegenTypes.Double,
-    targetX: CodegenTypes.Double, targetY: CodegenTypes.Double, targetZ: CodegenTypes.Double,
-    upX: CodegenTypes.Double, upY: CodegenTypes.Double, upZ: CodegenTypes.Double,
+    x: CodegenTypes.Double,
+    y: CodegenTypes.Double,
+    z: CodegenTypes.Double,
+    targetX: CodegenTypes.Double,
+    targetY: CodegenTypes.Double,
+    targetZ: CodegenTypes.Double,
+    upX: CodegenTypes.Double,
+    upY: CodegenTypes.Double,
+    upZ: CodegenTypes.Double,
   ) => void;
   /** Start orbiting a world-space point from the current camera position. */
   setAnchor: (
     viewRef: React.ComponentRef<ComponentType>,
-    x: CodegenTypes.Double, y: CodegenTypes.Double, z: CodegenTypes.Double,
+    x: CodegenTypes.Double,
+    y: CodegenTypes.Double,
+    z: CodegenTypes.Double,
   ) => void;
   /** Orbit by radians; an anchor must first be set or focused. */
   orbit: (
     viewRef: React.ComponentRef<ComponentType>,
-    deltaAzimuth: CodegenTypes.Double, deltaElevation: CodegenTypes.Double,
+    deltaAzimuth: CodegenTypes.Double,
+    deltaElevation: CodegenTypes.Double,
   ) => void;
   /** Change orbit radius in meters; positive moves away from the anchor. */
-  dolly: (viewRef: React.ComponentRef<ComponentType>, deltaRadius: CodegenTypes.Double) => void;
+  dolly: (
+    viewRef: React.ComponentRef<ComponentType>,
+    deltaRadius: CodegenTypes.Double,
+  ) => void;
   /** Pick an anchor using normalized view coordinates; result arrives in onFocusResult. */
   focus: (
     viewRef: React.ComponentRef<ComponentType>,
-    requestId: string, x: CodegenTypes.Double, y: CodegenTypes.Double,
+    requestId: string,
+    x: CodegenTypes.Double,
+    y: CodegenTypes.Double,
   ) => void;
   /** Turn a finite number of degrees at the average speed in degrees per second. */
   animateOrbit: (
     viewRef: React.ComponentRef<ComponentType>,
-    degrees: CodegenTypes.Double, degreesPerSecond: CodegenTypes.Double, easeInOut: boolean,
+    degrees: CodegenTypes.Double,
+    degreesPerSecond: CodegenTypes.Double,
+    easeInOut: boolean,
   ) => void;
 }
 
 export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
-  supportedCommands: ['setWalkVelocity', 'look', 'setCameraPose', 'lookAt', 'setAnchor',
-    'orbit', 'dolly', 'focus', 'animateOrbit'],
+  supportedCommands: [
+    'setWalkVelocity',
+    'look',
+    'setCameraPose',
+    'lookAt',
+    'setAnchor',
+    'orbit',
+    'dolly',
+    'focus',
+    'animateOrbit',
+  ],
 });
 
-export default codegenNativeComponent<NativeProps>('SplatKitView') as ComponentType;
+export default codegenNativeComponent<NativeProps>(
+  'SplatKitView',
+) as ComponentType;

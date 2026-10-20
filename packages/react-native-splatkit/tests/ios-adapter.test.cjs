@@ -5,9 +5,18 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 test('iOS adapter is Fabric-only and owns the native view lifecycle', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
-  assert.match(fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.h'), 'utf8'), /RCTViewComponentView/);
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
+  assert.match(
+    fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.h'), 'utf8'),
+    /RCTViewComponentView/,
+  );
   assert.match(mm, /componentDescriptorProvider/);
   assert.doesNotMatch(mm, /RCTBridgeModule|RCT_EXPORT_MODULE|RCTViewManager/);
   assert.match(native, /SKSplatEngine/);
@@ -15,14 +24,20 @@ test('iOS adapter is Fabric-only and owns the native view lifecycle', () => {
 });
 
 test('iOS adapter decodes off the render thread and gates events by generation', () => {
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   assert.match(native, /dispatch_queue_create/);
   assert.match(native, /generation/);
   assert.match(native, /memory_order_acquire/);
 });
 
 test('iOS adapter shares Android failure codes and throttles stats', () => {
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   assert.match(native, /INVALID_REQUEST/);
   assert.match(native, /WORLD_LOAD_FAILED/);
   assert.match(native, /GPU_UNAVAILABLE/);
@@ -30,8 +45,14 @@ test('iOS adapter shares Android failure codes and throttles stats', () => {
 });
 
 test('iOS component view releases the engine on recycle and invalidate', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   assert.match(mm, /prepareForRecycle[\s\S]*\[_splatView recycle\]/);
   assert.match(mm, /invalidate[\s\S]*\[_splatView dispose\]/);
   // Recycling forgets the policy so the next mount starts from its own props.
@@ -39,25 +60,46 @@ test('iOS component view releases the engine on recycle and invalidate', () => {
 });
 
 test('iOS adapter applies the versioned policy prop and reports it by revision', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   assert.match(mm, /next\.policy\.revision/);
   assert.match(mm, /setPolicy:policy revision:/);
   // Only the fields the backend reports as supported leave the fallback.
-  assert.match(mm, /policy = device->fallback;[\s\S]*if \(support\.subpixelThreshold\) policy\.subpixelThreshold/);
+  assert.match(
+    mm,
+    /policy = device->fallback;[\s\S]*if \(support\.subpixelThreshold\) policy\.subpixelThreshold/,
+  );
   assert.match(mm, /onPolicyEvent/);
   assert.match(mm, /onCapabilities/);
   // A world load applies the stored policy itself, so a combined update applies it once.
-  assert.match(mm, /loadWorld:[\s\S]*return;[\s\S]*if \(policyChanged\) \[_splatView applyStoredPolicy\]/);
+  assert.match(
+    mm,
+    /loadWorld:[\s\S]*return;[\s\S]*if \(policyChanged\) \[_splatView applyStoredPolicy\]/,
+  );
   // Capabilities first, then the policy, then the decode: the Android order.
-  assert.match(native, /\[self emitCapabilities\];\s*\[self applyStoredPolicy\];[\s\S]*loadWorldFile/);
+  assert.match(
+    native,
+    /\[self emitCapabilities\];\s*\[self applyStoredPolicy\];[\s\S]*loadWorldFile/,
+  );
   assert.match(native, /INVALID_POLICY/);
   assert.match(native, /POLICY_PREPARATION_FAILED/);
 });
 
 test('iOS adapter exposes navigation as props, commands and collider events', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   // Looking is the only touch the view keeps; walking is the host's own control.
   assert.match(native, /UIPanGestureRecognizer/);
   assert.doesNotMatch(native, /minimumNumberOfTouches/);
@@ -66,7 +108,10 @@ test('iOS adapter exposes navigation as props, commands and collider events', ()
   // The collider is re-queued on the engine each world load creates.
   assert.match(native, /loadWorldFile[\s\S]*enqueueColliderOnGeneration/);
   assert.match(native, /startDeviceMotionUpdatesUsingReferenceFrame/);
-  assert.match(mm, /handleCommand[\s\S]*setWalkVelocity[\s\S]*look[\s\S]*setCameraPose/);
+  assert.match(
+    mm,
+    /handleCommand[\s\S]*setWalkVelocity[\s\S]*look[\s\S]*setCameraPose/,
+  );
   assert.match(mm, /onColliderEvent/);
   assert.match(mm, /onCameraPose/);
   // Walk mode is rebuilt before the world load that replaces the engine.
@@ -76,24 +121,51 @@ test('iOS adapter exposes navigation as props, commands and collider events', ()
 // The props carry no lodSplatLimit, so an indeterminate one reached the selector and starved
 // it to that many splats: the world rendered or vanished depending on the stack.
 test('iOS adapter value initializes the C structs it fills from props', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  for (const type of ['SKRenderPolicy', 'SKCharacterSettings', 'SKLensSettings']) {
-    assert.match(mm, new RegExp(`${type} \\w+\\{\\}`), `${type} must be value initialized`);
-    assert.doesNotMatch(mm, new RegExp(`${type} \\w+;`), `${type} must not be left indeterminate`);
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  for (const type of [
+    'SKRenderPolicy',
+    'SKCharacterSettings',
+    'SKLensSettings',
+  ]) {
+    assert.match(
+      mm,
+      new RegExp(`${type} \\w+\\{\\}`),
+      `${type} must be value initialized`,
+    );
+    assert.doesNotMatch(
+      mm,
+      new RegExp(`${type} \\w+;`),
+      `${type} must not be left indeterminate`,
+    );
   }
 });
 
 // A debug build asserts that a component view carries its own props type from construction,
 // so a missing default aborted the app on the first commit while release builds ran.
 test('iOS component view seeds _props with its own default props', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  assert.match(mm, /initWithFrame:[\s\S]*std::make_shared<const SplatKitViewProps>\(\)/);
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  assert.match(
+    mm,
+    /initWithFrame:[\s\S]*std::make_shared<const SplatKitViewProps>\(\)/,
+  );
   assert.match(mm, /initWithFrame:[\s\S]*_props = defaultProps;/);
 });
 
 test('camera commits after world preparation, reports effective state, and clears on recycle', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   assert.match(mm, /next\.camera\.revision/);
   assert.match(mm, /onCameraEvent\(value\)/);
   assert.match(mm, /cameraEvent = nil/);
@@ -103,34 +175,65 @@ test('camera commits after world preparation, reports effective state, and clear
   assert.match(native, /if \(accepted\) \{\s*_acceptedCamera = request/);
   assert.match(native, /const SKCameraState effective = _engine.cameraState/);
   assert.match(native, /recycle \{[\s\S]*_acceptedCameraRevision = 0/);
-  for (const field of ['mode', 'hasAnchor', 'anchorX', 'anchorY', 'anchorZ', 'radius',
-    'azimuth', 'elevation', 'orbitRadiansPerSecond']) {
+  for (const field of [
+    'mode',
+    'hasAnchor',
+    'anchorX',
+    'anchorY',
+    'anchorZ',
+    'radius',
+    'azimuth',
+    'elevation',
+    'orbitRadiansPerSecond',
+  ]) {
     assert.ok(native.includes(`@"${field}"`));
     assert.ok(mm.includes(`value.${field} =`));
   }
 });
 
 test('iOS adapter streams a tileset and loads any other world as one file', () => {
-  const mm = fs.readFileSync(path.join(root, 'ios/SplatKitViewComponentView.mm'), 'utf8');
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
   const {WorldKind} = require('../build/contracts.js');
-  const numbered = name => Number(native.match(new RegExp(`kWorldKind${name} = (\\d+);`))?.[1]);
+  const numbered = name =>
+    Number(native.match(new RegExp(`kWorldKind${name} = (\\d+);`))?.[1]);
   assert.equal(numbered('File'), WorldKind.file);
   assert.equal(numbered('Tileset'), WorldKind.tileset);
   assert.match(mm, /kind:world\.kind/);
   // An unknown kind fails as an invalid request before any engine exists.
-  assert.match(native, /kind != kWorldKindFile && kind != kWorldKindTileset\) return NO/);
-  assert.match(native, /kind == kWorldKindTileset\) \{\s*\[engine loadTiledWorldFile:path\];\s*\} else \{\s*\[engine loadWorldFile:path\];/);
+  assert.match(
+    native,
+    /kind != kWorldKindFile && kind != kWorldKindTileset\) return NO/,
+  );
+  assert.match(
+    native,
+    /kind == kWorldKindTileset\) \{\s*\[engine loadTiledWorldFile:path\];\s*\} else \{\s*\[engine loadWorldFile:path\];/,
+  );
 });
 
 // The phases are spelled in the JS contracts, the codegen spec and each adapter; the native
 // constants are what the adapter sends, so a drifted spelling has to fail here.
 test('iOS wire phase constants spell the values the JS contracts declare', () => {
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
-  const {WorldPhase, ColliderPhase, CameraPhase} = require('../build/contracts.js');
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
+  const {
+    WorldPhase,
+    ColliderPhase,
+    CameraPhase,
+  } = require('../build/contracts.js');
   const {PolicyPhase} = require('../build/performance.js');
-  const spelled = group => [...native.matchAll(new RegExp(`k${group}Phase\\w+ = @"([^"]*)"`, 'g'))]
-    .map(match => match[1]).sort();
+  const spelled = group =>
+    [...native.matchAll(new RegExp(`k${group}Phase\\w+ = @"([^"]*)"`, 'g'))]
+      .map(match => match[1])
+      .sort();
   assert.deepEqual(spelled('World'), Object.values(WorldPhase).sort());
   assert.deepEqual(spelled('Collider'), Object.values(ColliderPhase).sort());
   assert.deepEqual(spelled('Camera'), Object.values(CameraPhase).sort());
@@ -140,7 +243,16 @@ test('iOS wire phase constants spell the values the JS contracts declare', () =>
 // The lens is checked before the current world is released, then set on the engine the load
 // creates before its decode is queued.
 test('iOS adapter validates the lens up front and sets it before the decode', () => {
-  const native = fs.readFileSync(path.join(root, 'ios/SplatKitRNView.mm'), 'utf8');
-  assert.match(native, /\[SKSplatEngine acceptsLens:lens\][\s\S]*?\[self dispose\]/);
-  assert.match(native, /if \(!\[engine setLens:lens\]\) \{[\s\S]*?kErrorInvalidRequest[\s\S]*?return;\s*\}\s*_engine = engine;[\s\S]*loadWorldFile/);
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
+  assert.match(
+    native,
+    /\[SKSplatEngine acceptsLens:lens\][\s\S]*?\[self dispose\]/,
+  );
+  assert.match(
+    native,
+    /if \(!\[engine setLens:lens\]\) \{[\s\S]*?kErrorInvalidRequest[\s\S]*?return;\s*\}\s*_engine = engine;[\s\S]*loadWorldFile/,
+  );
 });
