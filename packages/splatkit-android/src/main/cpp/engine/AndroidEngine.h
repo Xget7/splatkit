@@ -39,10 +39,12 @@ class AndroidEngine {
 
  private:
   AndroidEngine() = default;
+  void traceBenchmark();
 
   EventSink eventSink_;
   bool awaitingWorldFrame_ = false;
   uint32_t worldFrameSplatCount_ = 0;
+  bool benchmarkTraced_ = false;
 
   std::unique_ptr<VulkanContext> ctx_;
   std::unique_ptr<VulkanFrameLoop> frameLoop_;
