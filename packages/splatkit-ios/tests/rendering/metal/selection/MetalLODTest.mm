@@ -5,11 +5,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <set>
-#include "rendering/MetalCompute.h"
-#include "rendering/MetalLOD.h"
-#include "rendering/MetalSplatRenderer.h"
-#include "rendering/MetalVisibility.h"
-#include "rendering/MetalWorld.h"
+#include "rendering/metal/MetalSplatRenderer.h"
+#include "rendering/metal/cull/MetalVisibility.h"
+#include "rendering/metal/device/MetalCompute.h"
+#include "rendering/metal/selection/MetalLOD.h"
+#include "rendering/metal/world/MetalWorld.h"
 #include "splat/formats/SpzDecoder.h"
 #include "splat/io/MappedFile.h"
 #include "splat/lod/LodFile.h"

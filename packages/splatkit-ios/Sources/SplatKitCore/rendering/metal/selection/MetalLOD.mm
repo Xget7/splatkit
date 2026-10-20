@@ -1,9 +1,9 @@
-#include "rendering/MetalLOD.h"
+#include "rendering/metal/selection/MetalLOD.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include "rendering/MetalCompute.h"
+#include "rendering/metal/device/MetalCompute.h"
 #include "splat/lod/LodFile.h"
 
 namespace splatkit {

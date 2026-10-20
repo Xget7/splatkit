@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <string>
 
-#include "rendering/MetalSplatRenderer.h"
+#include "rendering/metal/MetalSplatRenderer.h"
 #include "splat/formats/SpzDecoder.h"
 #include "splat/io/MappedFile.h"
 #include "splat/sorting/SpatialOrder.h"

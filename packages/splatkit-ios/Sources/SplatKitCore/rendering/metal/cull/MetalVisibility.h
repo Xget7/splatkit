@@ -5,8 +5,8 @@
 #include <array>
 #include <cstdint>
 
-#include "rendering/MetalRadixSort.h"
-#include "rendering/MetalShaderTypes.h"
+#include "rendering/metal/layout/MetalShaderTypes.h"
+#include "rendering/metal/sort/MetalRadixSort.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {

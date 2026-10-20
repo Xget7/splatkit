@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 
-#include "rendering/MetalVisibility.h"
+#include "rendering/metal/cull/MetalVisibility.h"
 #include "splat/math/Half.h"
 #include "splat/math/Mat4.h"
 #include "splatkit/rendering/GpuLayout.h"

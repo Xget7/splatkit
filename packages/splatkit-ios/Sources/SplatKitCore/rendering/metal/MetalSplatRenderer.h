@@ -19,9 +19,9 @@
 #include <string>
 #include <vector>
 
-#include "rendering/MetalLOD.h"
-#include "rendering/MetalVisibility.h"
-#include "rendering/MetalWorld.h"
+#include "rendering/metal/cull/MetalVisibility.h"
+#include "rendering/metal/selection/MetalLOD.h"
+#include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
 

@@ -1,4 +1,4 @@
-#include "rendering/MetalSplatRenderer.h"
+#include "rendering/metal/MetalSplatRenderer.h"
 
 #if SPLATKIT_HAS_METALFX
 // Recorded in the object as an autolink option, so a static consumer (SwiftPM, CocoaPods)
@@ -17,8 +17,8 @@ asm(".linker_option \"-framework\", \"MetalFX\"");
 #include <utility>
 #include <vector>
 
-#include "rendering/MetalCompute.h"
-#include "rendering/MetalShaderTypes.h"
+#include "rendering/metal/device/MetalCompute.h"
+#include "rendering/metal/layout/MetalShaderTypes.h"
 #include "splat/math/Mat4.h"
 #include "splatkit/Log.h"
 

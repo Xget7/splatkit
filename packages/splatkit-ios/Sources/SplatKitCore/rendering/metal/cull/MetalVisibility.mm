@@ -1,9 +1,9 @@
-#include "rendering/MetalVisibility.h"
+#include "rendering/metal/cull/MetalVisibility.h"
 
 #include <algorithm>
 #include <cstring>
 
-#include "rendering/MetalCompute.h"
+#include "rendering/metal/device/MetalCompute.h"
 
 namespace splatkit {
 

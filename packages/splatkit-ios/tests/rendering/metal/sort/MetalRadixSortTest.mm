@@ -5,7 +5,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "rendering/MetalRadixSort.h"
+#include "rendering/metal/sort/MetalRadixSort.h"
 #include "support/MetalTestContext.h"
 
 namespace splatkit {
