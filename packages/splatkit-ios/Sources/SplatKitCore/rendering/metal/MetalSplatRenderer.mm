@@ -87,7 +87,7 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.lodErrorPixels = 1.0f;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = kMinPixelRadius;
-  policy.fallback.sortDepth = compute_->depthBits() == MetalRadixSort::KeyBits::Low16
+  policy.fallback.sortDepth = compute_->depthBits() == KeyBits::Low16
                                   ? SortKeyBits::low16
                                   : SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;

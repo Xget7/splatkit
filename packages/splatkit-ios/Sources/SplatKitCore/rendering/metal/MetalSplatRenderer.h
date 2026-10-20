@@ -12,6 +12,7 @@
 #include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/diagnostics/MetalFrameCapture.h"
 #include "rendering/metal/frame/MetalFrameCompute.h"
+#include "rendering/metal/layout/MetalFrameSlots.h"
 #include "rendering/metal/presentation/MetalFrameLoop.h"
 #include "rendering/metal/presentation/MetalSurface.h"
 #include "rendering/metal/raster/MetalSplatPipeline.h"
@@ -101,8 +102,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   bool reportsPresentTimes() const override { return true; }
   uint32_t takePresentTimes(std::vector<int64_t>* times) override;
   const std::string& deviceDescription() const override { return context_->description(); }
-
-  static constexpr uint32_t kFramesInFlight = MetalFrameCompute::kSlots;
 
  private:
   MetalSplatRenderer() = default;

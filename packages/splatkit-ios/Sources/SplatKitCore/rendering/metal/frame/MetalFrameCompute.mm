@@ -37,7 +37,7 @@ MetalFrameCompute::MetalFrameCompute(id<MTLDevice> device, id<MTLCommandQueue> q
     : device_(device), queue_(queue), library_(library), frameLoop_(frameLoop) {}
 
 bool MetalFrameCompute::createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort,
-                                       MetalRadixSort::KeyBits bits) const {
+                                       KeyBits bits) const {
   return visibility.create(device_, library_, bits) && sort.create(device_, library_);
 }
 
@@ -46,7 +46,7 @@ bool MetalFrameCompute::create() {
     uniform = metal::buffer(device_, sizeof(CameraUniform));
     if (uniform == nil) return false;
   }
-  gpuSort_ = createOrdering(visibility_, sort_, MetalRadixSort::KeyBits::Full32);
+  gpuSort_ = createOrdering(visibility_, sort_, KeyBits::Full32);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
        static_cast<uint32_t>(depthBits()), static_cast<uint32_t>(depthBits()) / 8);
   if (!gpuSort_) LOGW("GPU sort unavailable, sorting on the CPU");
@@ -54,9 +54,9 @@ bool MetalFrameCompute::create() {
 }
 
 bool MetalFrameCompute::configure(const RenderPolicy& policy, std::string* reason) {
-  const MetalRadixSort::KeyBits bits = policy.sortDepth == SortKeyBits::low16
-                                           ? MetalRadixSort::KeyBits::Low16
-                                           : MetalRadixSort::KeyBits::Full32;
+  const KeyBits bits = policy.sortDepth == SortKeyBits::low16
+                                           ? KeyBits::Low16
+                                           : KeyBits::Full32;
   const bool visibilityChanged = bits != depthBits();
   const bool lodChanged =
       policy.lodErrorPixels != lodErrorPixels_ || policy.lodSplatLimit != lodSplatLimit_;
@@ -106,7 +106,7 @@ bool MetalFrameCompute::configureLodWorld(const splat::LodTree& tree, uint32_t b
   if (!createOrdering(visibility, sort, depthBits()) ||
       !reserveOrdering(visibility, sort, static_cast<uint32_t>(tree.nodeCount()), lod->budget()))
     return false;
-  std::array<id<MTLBuffer>, kSlots> readback{};
+  std::array<id<MTLBuffer>, kFramesInFlight> readback{};
   for (auto& buffer : readback) {
     buffer = metal::buffer(device_, sizeof(LodCounters));
     if (!buffer) return false;
