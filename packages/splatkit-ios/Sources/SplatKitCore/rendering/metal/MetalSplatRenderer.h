@@ -17,7 +17,6 @@
 #include "rendering/metal/presentation/MetalSurface.h"
 #include "rendering/metal/raster/MetalSplatPipeline.h"
 #include "rendering/metal/world/MetalWorld.h"
-#include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
