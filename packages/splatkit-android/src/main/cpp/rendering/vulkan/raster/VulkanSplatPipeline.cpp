@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <limits>
-#include <vector>
 
 #include "rendering/vulkan/device/VulkanShaderModule.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
 #include "splatkit/Log.h"
@@ -21,9 +20,6 @@ constexpr uint32_t kOrderBinding = 2;
 constexpr uint32_t kShBinding = 3;
 constexpr uint32_t kBindings = 4;
 constexpr uint32_t kStorageBindings = kBindings - 1;
-
-// How many bytes of splats one packing and upload window covers.
-constexpr size_t kUploadWindowBytes = 2 * 1024 * 1024;
 
 }  // namespace
 
@@ -185,7 +181,7 @@ bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
   info.renderPass = renderPass;
   info.subpass = 0;
   bool ok = true;
-  for (int degree = 0; degree <= kMaxShDegree && ok; ++degree) {
+  for (int degree = 0; degree <= VulkanWorld::kMaxShDegree && ok; ++degree) {
     shDegree = static_cast<uint32_t>(degree);
     ok = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr,
                                    &pipelines_[static_cast<size_t>(degree)]) == VK_SUCCESS;
@@ -193,113 +189,7 @@ bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
   return ok;
 }
 
-std::unique_ptr<GpuWorld> VulkanSplatPipeline::uploadWorld(const splat::SplatCloud& cloud,
-                                                           int maxShDegree, bool cpuOrder) const {
-  const size_t n = cloud.count();
-  if (n > std::numeric_limits<uint32_t>::max() || cloud.positions.size() != n * 3 ||
-      cloud.covariances.size() != n * 6 || cloud.colors.size() != n * 3 || cloud.alphas.size() != n)
-    return nullptr;
-  const int requestedDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
-  const int shDegree = carriesSh(cloud, requestedDegree) ? requestedDegree : 0;
-  const size_t stride = shDegree ? shStride(shDegree) : 0;
-  const VkDeviceSize sourceBytes = std::max(size_t{1}, n) * sizeof(GpuSplat);
-  const VkDeviceSize orderBytes = (cpuOrder ? std::max(size_t{1}, n) : 1) * sizeof(uint32_t);
-  const VkDeviceSize shBytes = std::max(size_t{1}, n * stride) * sizeof(uint32_t);
-  VkPhysicalDeviceProperties properties{};
-  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
-  if (std::max({sourceBytes, orderBytes, shBytes}) > properties.limits.maxStorageBufferRange)
-    return nullptr;
-
-  auto world = std::make_unique<GpuWorld>();
-  world->count = static_cast<uint32_t>(n);
-  world->shDegree = shDegree;
-  world->splats = VulkanBuffer::deviceLocal(ctx_, sourceBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->order = VulkanBuffer::deviceLocal(ctx_, orderBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = VulkanBuffer::deviceLocal(ctx_, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  if (!world->splats || !world->order || !world->sh) return nullptr;
-  for (auto& staging : world->orderStaging) {
-    if (!cpuOrder) break;
-    staging = VulkanBuffer::hostVisible(ctx_, orderBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    if (!staging) return nullptr;
-  }
-  // Bounded packing/upload windows: do not retain full packed + mapped copies of a 10M cloud.
-  const size_t chunk = kUploadWindowBytes / std::max(sizeof(GpuSplat), stride * sizeof(uint32_t));
-  std::vector<GpuSplat> packed(std::min(n, chunk));
-  std::vector<uint32_t> sh(std::min(n, chunk) * stride);
-  std::vector<uint32_t> order(cpuOrder ? std::min(n, chunk) : 0);
-  for (size_t offset = 0; offset < n; offset += chunk) {
-    const size_t count = std::min(chunk, n - offset);
-    packSplatRange(cloud, offset, count, packed.data());
-    if (!world->splats->upload(offset * sizeof(GpuSplat), packed.data(), count * sizeof(GpuSplat)))
-      return nullptr;
-    if (stride) {
-      packShRange(cloud, shDegree, offset, count, sh.data());
-      if (!world->sh->upload(offset * stride * sizeof(uint32_t), sh.data(),
-                             count * stride * sizeof(uint32_t)))
-        return nullptr;
-    }
-    if (cpuOrder) {
-      for (size_t i = 0; i < count; ++i) order[i] = static_cast<uint32_t>(offset + i);
-      if (!world->order->upload(offset * sizeof(uint32_t), order.data(), count * sizeof(uint32_t)))
-        return nullptr;
-    }
-  }
-  const uint32_t zero = 0;
-  if ((!cpuOrder || !n) && !world->order->upload(&zero, sizeof(zero))) return nullptr;
-  if ((!stride || !n) && !world->sh->upload(&zero, sizeof(zero))) return nullptr;
-  return world;
-}
-
-std::unique_ptr<GpuWorld> VulkanSplatPipeline::createSlab(uint32_t capacity, int shDegree,
-                                                          bool cpuOrder) const {
-  if (capacity == 0) return nullptr;
-  auto world = std::make_unique<GpuWorld>();
-  world->count = capacity;
-  world->shDegree = std::clamp(shDegree, 0, kMaxShDegree);
-  const VkDeviceSize shBytes =
-      world->shDegree > 0 ? VkDeviceSize{capacity} * shStride(world->shDegree) * sizeof(uint32_t)
-                          : sizeof(uint32_t);
-  VkPhysicalDeviceProperties properties{};
-  vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
-  if (std::max(shBytes, VkDeviceSize{capacity} * sizeof(GpuSplat)) >
-      properties.limits.maxStorageBufferRange)
-    return nullptr;
-  world->splats = VulkanBuffer::deviceLocal(ctx_, VkDeviceSize{capacity} * sizeof(GpuSplat),
-                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->order =
-      VulkanBuffer::deviceLocal(ctx_, VkDeviceSize{cpuOrder ? capacity : 1u} * sizeof(uint32_t),
-                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = VulkanBuffer::deviceLocal(ctx_, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  if (!world->splats || !world->order || !world->sh) return nullptr;
-  for (auto& staging : world->orderStaging) {
-    if (!cpuOrder) break;
-    staging = VulkanBuffer::hostVisible(ctx_, VkDeviceSize{capacity} * sizeof(uint32_t),
-                                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    if (!staging) return nullptr;
-  }
-  return world;
-}
-
-bool VulkanSplatPipeline::uploadTile(const GpuWorld& slab, uint32_t offset,
-                                     const splat::SplatCloud& cloud) {
-  const size_t n = cloud.count();
-  if (n == 0) return true;
-  if (offset > slab.count || n > slab.count - offset) return false;
-  const std::vector<GpuSplat> packed = packSplats(cloud);
-  if (!slab.splats->upload(VkDeviceSize{offset} * sizeof(GpuSplat), packed.data(),
-                           packed.size() * sizeof(GpuSplat))) {
-    return false;
-  }
-  if (slab.shDegree == 0) return true;
-  const size_t stride = shStride(slab.shDegree);
-  const std::vector<uint32_t> sh = carriesSh(cloud, slab.shDegree)
-                                       ? packSh(cloud, slab.shDegree)
-                                       : std::vector<uint32_t>(n * stride, 0);
-  return slab.sh->upload(VkDeviceSize{offset} * stride * sizeof(uint32_t), sh.data(),
-                         sh.size() * sizeof(uint32_t));
-}
-
-void VulkanSplatPipeline::bindWorld(const GpuWorld& world) {
+void VulkanSplatPipeline::bindWorld(const VulkanWorld& world) {
   for (uint32_t i = 0; i < VulkanFrameLoop::kFramesInFlight; ++i) {
     const VkDescriptorBufferInfo splats{world.splats->handle(), 0, VK_WHOLE_SIZE};
     const VkDescriptorBufferInfo order{world.order->handle(), 0, VK_WHOLE_SIZE};
@@ -319,40 +209,6 @@ void VulkanSplatPipeline::bindWorld(const GpuWorld& world) {
     writes[2].pBufferInfo = &sh;
     vkUpdateDescriptorSets(ctx_.device(), 3, writes, 0, nullptr);
   }
-}
-
-void VulkanSplatPipeline::updateOrder(VkCommandBuffer cmd, uint32_t frameSlot,
-                                      const GpuWorld& world, const uint32_t* order,
-                                      uint32_t count) {
-  const VkDeviceSize bytes = std::min(count, world.count) * sizeof(uint32_t);
-  if (bytes == 0 || !world.orderStaging[frameSlot]) return;
-  const VulkanBuffer& staging = *world.orderStaging[frameSlot];
-  std::memcpy(staging.mapped(), order, static_cast<size_t>(bytes));
-  staging.flush(0, bytes);
-
-  // The previous frame may still be reading the order buffer in its vertex shader.
-  // Queue order alone does not prevent the copy from overlapping it (write after read),
-  // so this barrier makes the transfer wait for those reads.
-  VkBufferMemoryBarrier beforeCopy{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-  beforeCopy.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  beforeCopy.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  beforeCopy.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  beforeCopy.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  beforeCopy.buffer = world.order->handle();
-  beforeCopy.offset = 0;
-  beforeCopy.size = bytes;
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                       0, nullptr, 1, &beforeCopy, 0, nullptr);
-
-  const VkBufferCopy region{0, 0, bytes};
-  vkCmdCopyBuffer(cmd, staging.handle(), world.order->handle(), 1, &region);
-
-  // And this frame's vertex shader must see the copy complete (read after write).
-  VkBufferMemoryBarrier afterCopy = beforeCopy;
-  afterCopy.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  afterCopy.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0,
-                       0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
 VkBuffer VulkanSplatPipeline::updateCamera(uint32_t frameSlot, const splat::Mat4& view,
@@ -388,21 +244,21 @@ void VulkanSplatPipeline::bindOrder(uint32_t frameSlot, VkBuffer order, uint32_t
   vkUpdateDescriptorSets(ctx_.device(), 1, &write, 0, nullptr);
 }
 
-void VulkanSplatPipeline::bindDraw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
-                                   int shDegree) const {
-  const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, kMaxShDegree);
+void VulkanSplatPipeline::bindDraw(VkCommandBuffer cmd, uint32_t frameSlot,
+                                   const VulkanWorld& world, int shDegree) const {
+  const int degree = std::clamp(std::min(shDegree, world.shDegree), 0, VulkanWorld::kMaxShDegree);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines_[static_cast<size_t>(degree)]);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &sets_[frameSlot], 0,
                           nullptr);
 }
 
 void VulkanSplatPipeline::drawIndirect(VkCommandBuffer cmd, uint32_t frameSlot,
-                                       const GpuWorld& world, int shDegree, VkBuffer arguments) {
+                                       const VulkanWorld& world, int shDegree, VkBuffer arguments) {
   bindDraw(cmd, frameSlot, world, shDegree);
   vkCmdDrawIndirect(cmd, arguments, 0, 1, sizeof(VkDrawIndirectCommand));
 }
 
-void VulkanSplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const GpuWorld& world,
+void VulkanSplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const VulkanWorld& world,
                                uint32_t count, int shDegree, const splat::Mat4& view,
                                const splat::Mat4& proj, const splat::Vec3& cameraPosition,
                                VkExtent2D extent) {

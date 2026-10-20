@@ -165,7 +165,7 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
          compute.error().message.c_str());
     return false;
   }
-  auto world = splats_->uploadWorld(cloud, maxShDegree, !compute);
+  auto world = VulkanWorld::upload(ctx_, cloud, maxShDegree, !compute);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
@@ -191,7 +191,7 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
     LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
     return false;
   }
-  auto world = splats_->uploadWorld(tree.nodes, maxShDegree, false);
+  auto world = VulkanWorld::upload(ctx_, tree.nodes, maxShDegree, false);
   if (!world) return false;
   world_ = std::move(world);
   compute_ = std::move(compute.value());
@@ -206,7 +206,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, capacity);
   if (!compute && capacity > VulkanFrameCompute::kMaxVisible) return false;
-  auto world = splats_->createSlab(capacity, shDegree, !compute);
+  auto world = VulkanWorld::createSlab(ctx_, capacity, shDegree, !compute);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
@@ -219,7 +219,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
 
 bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) {
   if (!splats_ || !world_) return false;
-  return splats_->uploadTile(*world_, offset, cloud);
+  return world_->uploadTile(offset, cloud);
 }
 
 bool VulkanSplatRenderer::draw(const Frame& frame) {
@@ -247,7 +247,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
     else
       LOGE("GPU frame encode failed; submitting clear frame to preserve fence lifecycle");
   } else if (world_ && !compute_ && frame.order != nullptr) {
-    splats_->updateOrder(cmd, slot, *world_, frame.order, frame.orderCount);
+    world_->recordOrderUpload(cmd, slot, frame.order, frame.orderCount);
   }
 
   VkClearValue clear{};

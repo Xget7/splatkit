@@ -19,6 +19,9 @@ add_executable(splatkit_gpu_buffer_test rendering/vulkan/device/VulkanBufferTest
 target_link_libraries(splatkit_gpu_buffer_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_gpu_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
 target_link_libraries(splatkit_gpu_upload_pressure_test PRIVATE splatkit_vulkan_test_support)
+add_executable(splatkit_world_test rendering/vulkan/world/VulkanWorldTest.cpp
+  ${vulkan_source_dir}/world/VulkanWorld.cpp)
+target_link_libraries(splatkit_world_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_lod_selection_test rendering/vulkan/selection/VulkanLodSelectionTest.cpp
   ${vulkan_source_dir}/selection/VulkanLodSelection.cpp)
 target_link_libraries(splatkit_lod_selection_test PRIVATE

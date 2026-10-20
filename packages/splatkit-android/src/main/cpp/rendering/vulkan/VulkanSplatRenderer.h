@@ -13,6 +13,7 @@
 #include "rendering/vulkan/presentation/VulkanSwapchain.h"
 #include "rendering/vulkan/presentation/WorldFrameCompletion.h"
 #include "rendering/vulkan/raster/VulkanSplatPipeline.h"
+#include "rendering/vulkan/world/VulkanWorld.h"
 #include "splat/formats/SplatCloud.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -100,7 +101,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1
   std::unique_ptr<VulkanSplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
-  std::unique_ptr<GpuWorld> world_;
+  std::unique_ptr<VulkanWorld> world_;
   std::unique_ptr<VulkanFrameCompute> compute_;
   RenderPolicy policy_;
   float renderScale_ = 1.0f;
