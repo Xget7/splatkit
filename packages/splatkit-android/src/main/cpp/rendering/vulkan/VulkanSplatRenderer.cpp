@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <limits>
 
-#include <vulkan/vulkan_android.h>
-
 #include "rendering/vulkan/sort/VulkanRadixSort.h"
 
 #include "splatkit/Log.h"
@@ -23,63 +21,32 @@ bool isSrgb(VkFormat format) {
 }  // namespace
 
 VulkanSplatRenderer::VulkanSplatRenderer(VulkanContext& ctx, VulkanFrameLoop& frameLoop)
-    : ctx_(ctx), frameLoop_(frameLoop) {}
+    : ctx_(ctx), frameLoop_(frameLoop), surface_(ctx, frameLoop, [this] { splats_.reset(); }) {}
 
 VulkanSplatRenderer::~VulkanSplatRenderer() {
-  setWindow(nullptr);
+  surface_.attach(nullptr);
   ctx_.waitIdle();
   world_.reset();
 }
 
 void VulkanSplatRenderer::setWindow(ANativeWindow* window) {
-  if (window == window_) return;
-  destroySurface();
-  if (window_ != nullptr) {
-    ANativeWindow_release(window_);
-    window_ = nullptr;
-  }
-  if (window == nullptr) return;
-
-  ANativeWindow_acquire(window);
-  window_ = window;
-  if (!createSurface() || !recreateSwapchain()) {
-    LOGE("could not attach to the surface");
-    destroySurface();
-  }
+  if (surface_.attach(window)) rebuildPipelinesIfNeeded();
 }
 
 void VulkanSplatRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
-  if (!swapchain_) return;
-  const VkExtent2D current = swapchain_->extent();
-  if (current.width == width && current.height == height) return;
-  LOGI("surface resized to %ux%u, swapchain was %ux%u", width, height, current.width,
-       current.height);
-  keepSurfaceIf(recreateSwapchain());
+  if (surface_.resize(width, height)) rebuildPipelinesIfNeeded();
 }
 
 void VulkanSplatRenderer::setRenderScale(float scale) {
-  scale = std::clamp(scale, 0.1f, 2.0f);
-  if (scale == renderScale_) return;
-  renderScale_ = scale;
-  if (!swapchain_) return;
-  ctx_.waitIdle();
-  if (!createRenderTarget()) {
-    keepSurfaceIf(false);
-    return;
-  }
-  if (pipelineFormat_ != activeFormat()) keepSurfaceIf(createPipelines());
+  if (surface_.setRenderScale(scale)) rebuildPipelinesIfNeeded();
 }
 
 void VulkanSplatRenderer::setLinearBlending(bool linear) {
-  if (linear == linearBlending_) return;
-  linearBlending_ = linear;
-  if (swapchain_) keepSurfaceIf(recreateSwapchain());
+  if (surface_.setLinearBlending(linear)) rebuildPipelinesIfNeeded();
 }
 
 void VulkanSplatRenderer::setVsync(bool vsync) {
-  if (vsync == vsync_) return;
-  vsync_ = vsync;
-  if (swapchain_) keepSurfaceIf(recreateSwapchain());
+  if (surface_.setVsync(vsync)) rebuildPipelinesIfNeeded();
 }
 
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
@@ -141,12 +108,7 @@ void VulkanSplatRenderer::applyPolicyToCompute() {
 }
 
 Extent VulkanSplatRenderer::drawExtent() const {
-  VkExtent2D extent{0, 0};
-  if (target_) {
-    extent = target_->extent();
-  } else if (swapchain_) {
-    extent = swapchain_->extent();
-  }
+  const VkExtent2D extent = surface_.drawExtent();
   return {extent.width, extent.height};
 }
 
@@ -226,15 +188,14 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!ready()) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  VulkanFrameLoop::Status status = frameLoop_.beginFrame(*swapchain_, imageIndex, cmd);
+  VulkanFrameLoop::Status status = frameLoop_.beginFrame(surface_.swapchain(), imageIndex, cmd);
   if (status == VulkanFrameLoop::Status::swapchainOutOfDate) {
-    keepSurfaceIf(recreateSwapchain());
+    rebuildSurface(status);
     return false;
   }
   if (status != VulkanFrameLoop::Status::ok) return false;
 
-  const Extent size = drawExtent();
-  const VkExtent2D extent{size.width, size.height};
+  const VkExtent2D extent = surface_.drawExtent();
   const uint32_t slot = frameLoop_.currentSlot();
   const bool outputLinear = isSrgb(pipelineFormat_);
   // Outside the render pass: transfers are not allowed inside one.
@@ -254,8 +215,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   VkClearValue clear{};
   clear.color = {{0.05f, 0.05f, 0.08f, 1.0f}};
   VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-  pass.renderPass = activeRenderPass();
-  pass.framebuffer = target_ ? target_->framebuffer() : swapchain_->framebuffer(imageIndex);
+  pass.renderPass = surface_.activeRenderPass();
+  pass.framebuffer = surface_.framebuffer(imageIndex);
   pass.renderArea.extent = extent;
   pass.clearValueCount = 1;
   pass.pClearValues = &clear;
@@ -283,10 +244,10 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   }
 
   vkCmdEndRenderPass(cmd);
-  if (target_) target_->blitTo(cmd, swapchain_->image(imageIndex), swapchain_->extent());
+  surface_.blitIfScaled(cmd, imageIndex);
 
   const uint64_t submittedBefore = frameLoop_.lastSubmission();
-  status = frameLoop_.endFrame(*swapchain_, imageIndex);
+  status = frameLoop_.endFrame(surface_.swapchain(), imageIndex);
   if (gpuDraw && frameLoop_.lastSubmission() != submittedBefore)
     compute_->submitted(slot, frameLoop_.lastSubmission());
   const bool drewWorld =
@@ -296,10 +257,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
                     status == VulkanFrameLoop::Status::swapchainSuboptimal)) {
     worldFrameCompletion_.submitted(frameLoop_.lastSubmission());
   }
-  if (status == VulkanFrameLoop::Status::swapchainOutOfDate ||
-      (status == VulkanFrameLoop::Status::swapchainSuboptimal && surfaceExtentChanged())) {
-    keepSurfaceIf(recreateSwapchain());
-  }
+  rebuildSurface(status);
   return true;
 }
 
@@ -308,65 +266,12 @@ void VulkanSplatRenderer::collectCompletedFrames() {
   if (compute_) compute_->collectCompleted(completed);
 }
 
-bool VulkanSplatRenderer::createSurface() {
-  VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
-  info.window = window_;
-  if (vkCreateAndroidSurfaceKHR(ctx_.instance(), &info, nullptr, &surface_) != VK_SUCCESS) {
-    LOGE("vkCreateAndroidSurfaceKHR failed");
-    return false;
-  }
-  if (!ctx_.supportsPresent(surface_)) {
-    LOGE("graphics queue cannot present to this surface");
-    return false;
-  }
-  return true;
-}
-
-bool VulkanSplatRenderer::recreateSwapchain() {
-  ++generation_;
-  ctx_.waitIdle();
-  const VkSwapchainKHR previous = swapchain_ ? swapchain_->release() : VK_NULL_HANDLE;
-  swapchain_.reset();
-
-  auto swapchain = VulkanSwapchain::create(ctx_, surface_, previous, vsync_, linearBlending_);
-  if (previous != VK_NULL_HANDLE) vkDestroySwapchainKHR(ctx_.device(), previous, nullptr);
-  if (!swapchain) {
-    LOGE("%s", swapchain.error().message.c_str());
-    return false;
-  }
-  swapchain_ = std::move(swapchain.value());
-  if (!frameLoop_.onSwapchainCreated(*swapchain_)) return false;
-  if (!createRenderTarget()) return false;
-
-  // Viewport and scissor are dynamic, so a resize or rotation does not touch the
-  // pipelines. A render pass with the same attachment format is compatible with the one
-  // they were built against (Vulkan 1.1, 8.2 "Render Pass Compatibility"). Only a format
-  // change, which also flips the sRGB output path, forces a rebuild.
-  if (splats_ && pipelineFormat_ == activeFormat()) return true;
-  return createPipelines();
-}
-
-bool VulkanSplatRenderer::createRenderTarget() {
-  ++generation_;
-  target_.reset();
-  if (renderScale_ == 1.0f) return true;
-  const VkExtent2D full = swapchain_->extent();
-  const VkExtent2D scaled{std::max(1u, static_cast<uint32_t>(full.width * renderScale_)),
-                          std::max(1u, static_cast<uint32_t>(full.height * renderScale_))};
-  auto target = VulkanRenderTarget::create(ctx_, swapchain_->format(), scaled);
-  if (!target) {
-    LOGE("%s", target.error().message.c_str());
-    return false;
-  }
-  target_ = std::move(target.value());
-  return true;
-}
-
 bool VulkanSplatRenderer::createPipelines() {
   splats_.reset();
-  pipelineFormat_ = activeFormat();
-  const VkRenderPass pass = activeRenderPass();
-  LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_), target_ ? 1 : 0);
+  pipelineFormat_ = surface_.activeFormat();
+  const VkRenderPass pass = surface_.activeRenderPass();
+  LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_),
+       surface_.offscreen() ? 1 : 0);
 
   if (!camera_) {
     auto camera = VulkanCameraUniforms::create(ctx_);
@@ -386,50 +291,20 @@ bool VulkanSplatRenderer::createPipelines() {
   return true;
 }
 
+// After a surface call that left a swapchain up: only a changed format, or a surface that
+// just came back, needs new pipelines.
+void VulkanSplatRenderer::rebuildPipelinesIfNeeded() {
+  if (surface_.formatChanged()) keepSurfaceIf(createPipelines());
+}
+
+void VulkanSplatRenderer::rebuildSurface(VulkanFrameLoop::Status status) {
+  if (surface_.rebuildIfChanged(status)) rebuildPipelinesIfNeeded();
+}
+
 // A rebuild that fails leaves no pipeline to draw with, so the surface is dropped and
 // the view stays blank until the host attaches a surface again; the failure is logged.
 void VulkanSplatRenderer::keepSurfaceIf(bool rebuilt) {
-  if (rebuilt) return;
-  LOGE("rendering stopped until the surface comes back");
-  destroySurface();
-}
-
-// True when the surface no longer has the swapchain's size, which is how a rotation shows
-// up when the driver only answers SUBOPTIMAL. A bare SUBOPTIMAL with the same size is the
-// identity pre-transform being second best, and is not worth a rebuild.
-bool VulkanSplatRenderer::surfaceExtentChanged() const {
-  VkSurfaceCapabilitiesKHR caps{};
-  if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx_.physicalDevice(), surface_, &caps) !=
-      VK_SUCCESS) {
-    return false;
-  }
-  const VkExtent2D current = swapchain_->extent();
-  const bool changed =
-      caps.currentExtent.width != current.width || caps.currentExtent.height != current.height;
-  if (changed) {
-    LOGI("surface is now %ux%u, swapchain was %ux%u", caps.currentExtent.width,
-         caps.currentExtent.height, current.width, current.height);
-  }
-  return changed;
-}
-
-VkFormat VulkanSplatRenderer::activeFormat() const {
-  return target_ ? target_->format() : swapchain_->format();
-}
-
-VkRenderPass VulkanSplatRenderer::activeRenderPass() const {
-  return target_ ? target_->renderPass() : swapchain_->renderPass();
-}
-
-void VulkanSplatRenderer::destroySurface() {
-  ctx_.waitIdle();
-  splats_.reset();
-  target_.reset();
-  swapchain_.reset();
-  if (surface_ != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(ctx_.instance(), surface_, nullptr);
-    surface_ = VK_NULL_HANDLE;
-  }
+  if (!rebuilt) surface_.drop();
 }
 
 }  // namespace splatkit

@@ -10,8 +10,7 @@
 #include "rendering/vulkan/frame/VulkanCameraUniforms.h"
 #include "rendering/vulkan/frame/VulkanFrameCompute.h"
 #include "rendering/vulkan/presentation/VulkanFrameLoop.h"
-#include "rendering/vulkan/presentation/VulkanRenderTarget.h"
-#include "rendering/vulkan/presentation/VulkanSwapchain.h"
+#include "rendering/vulkan/presentation/VulkanSurface.h"
 #include "rendering/vulkan/presentation/WorldFrameCompletion.h"
 #include "rendering/vulkan/raster/VulkanSplatPipeline.h"
 #include "rendering/vulkan/world/VulkanWorld.h"
@@ -20,11 +19,10 @@
 
 namespace splatkit {
 
-// Everything between an ANativeWindow and a presented frame: the surface, the swapchain,
-// the offscreen target a render scale needs, the pipelines built for their format and
-// the world bound to them. Survives losing and regaining the window, and the world stays
-// through it. A rebuild that fails drops the surface and logs; the view stays blank
-// until the host attaches a surface again. Render thread only.
+// The SplatRenderer behind an ANativeWindow: the frame script, the pipelines built for the
+// VulkanSurface's format and the world bound to them. Survives losing and regaining the
+// window, and the world stays through it. A rebuild that fails drops the surface and logs;
+// the view stays blank until the host attaches a surface again. Render thread only.
 class VulkanSplatRenderer final : public SplatRenderer {
  public:
   VulkanSplatRenderer(VulkanContext& ctx, VulkanFrameLoop& frameLoop);
@@ -39,21 +37,21 @@ class VulkanSplatRenderer final : public SplatRenderer {
   void onSurfaceResized(uint32_t width, uint32_t height);
 
   void setRenderScale(float scale) override;
-  float renderScale() const override { return renderScale_; }
+  float renderScale() const override { return surface_.renderScale(); }
   // Flips the swapchain format.
   void setLinearBlending(bool linear) override;
-  bool linearBlending() const override { return linearBlending_; }
+  bool linearBlending() const override { return surface_.linearBlending(); }
   void setVsync(bool vsync) override;
 
   DeviceCapabilities deviceCapabilities() const override;
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason) override;
 
   // True when a surface with pipelines is up.
-  bool ready() const override { return swapchain_ && splats_; }
+  bool ready() const override { return surface_.ready() && splats_; }
   // The target's size with a render scale, else the swapchain's.
   Extent drawExtent() const override;
   // Counts the rebuilds of the swapchain or the target.
-  uint32_t generation() const override { return generation_; }
+  uint32_t generation() const override { return surface_.generation(); }
 
   // Uploads once the GPU is done with the previous world. Needs `ready()`.
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
@@ -83,23 +81,15 @@ class VulkanSplatRenderer final : public SplatRenderer {
   const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
-  bool createSurface();
-  bool recreateSwapchain();
-  bool createRenderTarget();
   bool createPipelines();
+  void rebuildPipelinesIfNeeded();
+  void rebuildSurface(VulkanFrameLoop::Status status);
   void keepSurfaceIf(bool rebuilt);
-  bool surfaceExtentChanged() const;
-  VkFormat activeFormat() const;
-  VkRenderPass activeRenderPass() const;
-  void destroySurface();
   void applyPolicyToCompute();
 
   VulkanContext& ctx_;
   VulkanFrameLoop& frameLoop_;
-  ANativeWindow* window_ = nullptr;
-  VkSurfaceKHR surface_ = VK_NULL_HANDLE;
-  std::unique_ptr<VulkanSwapchain> swapchain_;
-  std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1
+  VulkanSurface surface_;
   // Created with the first pipelines and kept, so a rebuilt pipeline binds the same buffers.
   std::unique_ptr<VulkanCameraUniforms> camera_;
   std::unique_ptr<VulkanSplatPipeline> splats_;
@@ -107,10 +97,6 @@ class VulkanSplatRenderer final : public SplatRenderer {
   std::unique_ptr<VulkanWorld> world_;
   std::unique_ptr<VulkanFrameCompute> compute_;
   RenderPolicy policy_;
-  float renderScale_ = 1.0f;
-  bool linearBlending_ = false;
-  bool vsync_ = true;
-  uint32_t generation_ = 0;
   WorldFrameCompletion worldFrameCompletion_;
 };
 

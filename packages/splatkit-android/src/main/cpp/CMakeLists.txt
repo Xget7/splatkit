@@ -43,6 +43,7 @@ splatkit_compile_shaders(splatkit_shaders
 
 add_library(splatkit SHARED
   rendering/vulkan/device/VulkanContext.cpp
+  rendering/vulkan/presentation/VulkanSurface.cpp
   rendering/vulkan/presentation/VulkanSwapchain.cpp
   rendering/vulkan/presentation/VulkanRenderTarget.cpp
   rendering/vulkan/presentation/VulkanFrameLoop.cpp
