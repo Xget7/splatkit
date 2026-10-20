@@ -7,11 +7,11 @@
 #include <random>
 #include <vector>
 
-#include "support/MetalTestContext.h"
 #include "rendering/MetalVisibility.h"
 #include "splat/math/Half.h"
 #include "splat/math/Mat4.h"
 #include "splatkit/rendering/GpuLayout.h"
+#include "support/MetalTestContext.h"
 
 namespace splatkit {
 namespace {

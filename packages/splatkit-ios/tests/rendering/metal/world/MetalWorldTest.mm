@@ -2,9 +2,9 @@
 
 #include <cstring>
 
-#include "support/MetalTestContext.h"
 #include "rendering/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
+#include "support/MetalTestContext.h"
 
 namespace splatkit {
 namespace {

@@ -5,7 +5,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <set>
-#include "support/MetalTestContext.h"
 #include "rendering/MetalCompute.h"
 #include "rendering/MetalLOD.h"
 #include "rendering/MetalSplatRenderer.h"
@@ -15,6 +14,7 @@
 #include "splat/io/MappedFile.h"
 #include "splat/lod/LodFile.h"
 #include "splatkit/camera/WalkCamera.h"
+#include "support/MetalTestContext.h"
 
 namespace splatkit {
 namespace {
