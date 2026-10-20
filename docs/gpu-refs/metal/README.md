@@ -24,6 +24,8 @@ The headers are what compiles.
 - Shading language: `MTLLanguageVersion2_3` ([MetalShaderLibrary.h](../../../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/device/MetalShaderLibrary.h)).
 - Kernels assume `threadExecutionWidth == 32` and 256-thread threadgroups, checked at pipeline creation.
 - Reference phone: iPhone 17 Pro, A19 Pro, family Apple10 (FST GPU table).
+  It reports family Apple10, Metal 4, threadgroup memory 32768 B, threads per threadgroup 1024, max buffer 6442450944 B and working set 8589950976 B on iOS 27.0 (ios-perf `gpu`, 2026-10-20).
+- `MTLGPUFamilyApple11` is in the iPhoneOS 27.1 SDK `MTLDevice.h`; the FST has no Apple11 column, as of 2026-10-20.
 
 ## Features we use
 

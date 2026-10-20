@@ -19,7 +19,7 @@ Facts we already cite live in [docs/gpu-refs/metal/README.md](../../../docs/gpu-
    - the SDK header line (`xcrun --sdk iphoneos --show-sdk-path`, then `System/Library/Frameworks/Metal.framework/Headers`), which wins on availability since it is what compiles;
    - the Xcode MCP `DocumentationSearch` result, or `https://developer.apple.com/documentation/metal/<symbol>`, for semantics;
    - the MSL specification or Feature Set Tables text in `build/gpu-refs/metal/` (run [scripts/fetch-gpu-refs.sh](../../../scripts/fetch-gpu-refs.sh) when it is missing) for language rules, GPU family and limits.
-   Check each against our floor; anything above it needs a runtime check plus a fallback, or a raised floor stated in the hypothesis.
+   Check each against our floor, and each limit against the reference phone's `gpu` block in an ios-perf `report.json`; anything above the floor needs a runtime check plus a fallback, or a raised floor stated in the hypothesis.
    An API with headers and no documented semantics is a probe target, never a plan dependency.
    Done when every item has a citation and a floor verdict.
 

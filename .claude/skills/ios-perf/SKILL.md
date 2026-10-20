@@ -38,6 +38,8 @@ The frame budget is the display interval: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz.
 - **sort, select ms** (`stage_sample_mean_ms`): periodic samples of the visibility plus sort buffer and of the LOD buffer.
 - **drawn** (`drawn_sample_range`): the fewest and most splats drawn across the samples.
 
+`report.json` `gpu` is the device's newest Apple GPU family, Metal 3 or 4, and its limits, from the renderer's `Metal capabilities:` startup line.
+
 Each figure is `GPUEndTime - GPUStartTime` of one command buffer.
 They are separate buffers on one queue, so `sort` can exceed `gpu`, and the frame's GPU cost is up to their sum, less any overlap the trace shows.
 A pass inside one buffer has no time of its own; Metal System Trace splits it.
@@ -52,3 +54,4 @@ Its timings are not comparable with unvalidated runs.
 
 - `report.json` sees GPU time per command buffer, frame pacing and drawn counts; per-pass time, GPU counters, bandwidth and memory come from the trace.
 - A world that is missing on the phone fails the run with `SplatWorldMissing`; the app never falls back to the default world.
+- A touch moves the camera, so a run whose pitch changes during the turn fails: leave the phone untouched until the script ends.
