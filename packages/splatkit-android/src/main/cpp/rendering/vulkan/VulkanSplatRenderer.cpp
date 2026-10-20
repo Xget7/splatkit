@@ -4,7 +4,6 @@
 #include <limits>
 
 #include "engine/TraceSection.h"
-#include "rendering/vulkan/sort/VulkanRadixSort.h"
 
 #include "splatkit/Log.h"
 
@@ -140,8 +139,7 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
 }
 
 bool VulkanSplatRenderer::sortsOnGpu() const {
-  return VulkanVisibilityPass::queryCapabilities(ctx_).supported &&
-         VulkanRadixSort::queryCapabilities(ctx_).supported;
+  return VulkanFrameCompute::supported(ctx_);
 }
 
 bool VulkanSplatRenderer::selectsLodOnGpu() const {

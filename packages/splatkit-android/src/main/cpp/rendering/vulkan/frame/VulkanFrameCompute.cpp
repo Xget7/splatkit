@@ -40,6 +40,11 @@ static_assert(VulkanLodSelection::kEvaluatedOffset ==
 
 VulkanFrameCompute::VulkanFrameCompute(const VulkanContext& ctx) : ctx_(ctx) {}
 
+bool VulkanFrameCompute::supported(const VulkanContext& ctx) {
+  return VulkanVisibilityPass::queryCapabilities(ctx).supported &&
+         VulkanRadixSort::queryCapabilities(ctx).supported;
+}
+
 splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
     const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
   std::unique_ptr<VulkanFrameCompute> pass(new VulkanFrameCompute(ctx));

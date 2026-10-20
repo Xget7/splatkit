@@ -24,6 +24,8 @@ class VulkanFrameCompute {
  public:
   // Most splats one frame can keep, which bounds the visibility output and the sort.
   static constexpr uint32_t kMaxVisible = VulkanVisibilityPass::kMaxCapacity;
+  // True when the device can run the GPU visibility and sort path.
+  static bool supported(const VulkanContext& ctx);
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
       uint32_t budget = VulkanLodSelection::kMaxBudget);
