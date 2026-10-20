@@ -57,7 +57,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) override;
   bool selectsLodOnGpu() const override;
   bool uploadLodWorld(const splat::LodTree& tree, int maxShDegree, uint32_t budget) override;
-  bool sortsOnGpu() const override { return compute_ != nullptr; }
+  bool sortsOnGpu() const override;
   bool createSlab(uint32_t capacity, int shDegree) override;
   // A frame in flight that still names those records may draw a mix of old and new for
   // one frame.

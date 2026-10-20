@@ -121,26 +121,29 @@ bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShD
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
-  // No unsafe giant hardware fallback if GPU allocation/capabilities are insufficient.
-  if (!compute && cloud.count() > VulkanFrameCompute::kMaxVisible) {
-    LOGE("large world requires GPU visibility/sort or an offline LOD file: %s",
-         compute.error().message.c_str());
+  // sortsOnGpu() promised GPU order, so a world without its compute passes would never draw.
+  if (!compute) {
+    LOGE("GPU upload rejected: %s", compute.error().message.c_str());
     return false;
   }
-  auto world = VulkanWorld::upload(ctx_, cloud, maxShDegree, !compute);
+  auto world = VulkanWorld::upload(ctx_, cloud, maxShDegree, false);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
-  compute_ = compute ? std::move(compute.value()) : nullptr;
+  compute_ = std::move(compute.value());
   applyPolicyToCompute();
   splats_->bindWorld(*world_);
   worldFrameCompletion_.reset();
   return true;
 }
 
-bool VulkanSplatRenderer::selectsLodOnGpu() const {
+bool VulkanSplatRenderer::sortsOnGpu() const {
   return VulkanVisibilityPass::queryCapabilities(ctx_).supported &&
          VulkanRadixSort::queryCapabilities(ctx_).supported;
+}
+
+bool VulkanSplatRenderer::selectsLodOnGpu() const {
+  return sortsOnGpu();
 }
 
 bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
@@ -167,12 +170,15 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   if (!splats_) return false;
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, capacity);
-  if (!compute && capacity > VulkanFrameCompute::kMaxVisible) return false;
-  auto world = VulkanWorld::createSlab(ctx_, capacity, shDegree, !compute);
+  if (!compute) {
+    LOGE("GPU slab rejected: %s", compute.error().message.c_str());
+    return false;
+  }
+  auto world = VulkanWorld::createSlab(ctx_, capacity, shDegree, false);
   if (!world) return false;
   ctx_.waitIdle();  // the previous world may still be in flight
   world_ = std::move(world);
-  compute_ = compute ? std::move(compute.value()) : nullptr;
+  compute_ = std::move(compute.value());
   applyPolicyToCompute();
   splats_->bindWorld(*world_);
   worldFrameCompletion_.reset();
