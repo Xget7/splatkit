@@ -101,9 +101,11 @@ void orderUpload(const test::VulkanTestContext& gpu) {
   gpu.submit([&](VkCommandBuffer cmd) { world->recordOrderUpload(cmd, 1, order.data(), 4); });
   require(std::memcmp(world->orderStaging[1]->mapped(), order.data(), 4 * sizeof(uint32_t)) == 0,
           "the order lands in the slot's staging buffer");
+  // Staging is exactly the world's size, so an uncut copy would write past it where only the
+  // validation layers see it; requireValidationClean at the end covers the cut.
   gpu.submit([&](VkCommandBuffer cmd) { world->recordOrderUpload(cmd, 0, order.data(), 6); });
   require(std::memcmp(world->orderStaging[0]->mapped(), order.data(), 4 * sizeof(uint32_t)) == 0,
-          "an order longer than the world is cut to the world");
+          "an order longer than the world still stages the world's entries");
   gpu.submit([&](VkCommandBuffer cmd) { world->recordOrderUpload(cmd, 0, order.data(), 0); });
 
   auto gpuOrder = VulkanWorld::upload(*gpu.context, cloud(4), 0, false);
@@ -129,7 +131,7 @@ int main() {
     gpu.requireValidationClean();
     return 0;
   } catch (const std::exception& e) {
-    std::fprintf(stderr, "FAIL %s\n", e.what());
+    std::fprintf(stderr, "FAIL: %s\n", e.what());
     return 1;
   }
 }

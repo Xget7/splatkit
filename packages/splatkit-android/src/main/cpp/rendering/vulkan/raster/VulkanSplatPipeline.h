@@ -36,6 +36,7 @@ class VulkanSplatPipeline {
 
   // Draws the first `count` entries of the order buffer with the spherical harmonics
   // bands up to `shDegree`, which must not exceed what the world was uploaded with.
+  // The caller updates the frame slot's VulkanCameraUniforms before recording this.
   void draw(VkCommandBuffer cmd, uint32_t frameSlot, const VulkanWorld& world, uint32_t count,
             int shDegree);
 

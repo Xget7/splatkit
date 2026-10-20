@@ -236,11 +236,12 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const Extent size = drawExtent();
   const VkExtent2D extent{size.width, size.height};
   const uint32_t slot = frameLoop_.currentSlot();
+  const bool outputLinear = isSrgb(pipelineFormat_);
   // Outside the render pass: transfers are not allowed inside one.
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
-    const VkBuffer camera = camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
-                                            extent, isSrgb(pipelineFormat_));
+    const VkBuffer camera =
+        camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, extent, outputLinear);
     gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
     if (gpuDraw)
       splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
@@ -276,8 +277,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
     if (count > 0) {
-      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, extent,
-                      isSrgb(pipelineFormat_));
+      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, extent, outputLinear);
     }
     splats_->draw(cmd, slot, *world_, count, std::min(frame.shDegree, world_->shDegree));
   }
