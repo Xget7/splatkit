@@ -14,7 +14,7 @@ namespace splatkit {
 // Projects and compacts requested ranges, sorts survivors, prepares indirect draws.
 // Owns per-frame CPU inputs and GPU scratch; never commits or waits on a command buffer.
 // Call reserve only while idle. All encodes and raster consumers use one command queue.
-class MetalVisibility {
+class MetalVisibilityPass {
  public:
   // Both widths sort by linear view depth: Full32 by its float bits, Low16 quantized between
   // finite forward-Z Mat4::perspective planes. Shader key width and radix passes agree.

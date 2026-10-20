@@ -4,7 +4,7 @@
 #include <cstring>
 #include <limits>
 
-#include "rendering/metal/device/MetalCompute.h"
+#include "rendering/metal/device/MetalShaderLibrary.h"
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {

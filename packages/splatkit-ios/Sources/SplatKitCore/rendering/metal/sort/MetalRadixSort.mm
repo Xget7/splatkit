@@ -1,6 +1,6 @@
 #include "rendering/metal/sort/MetalRadixSort.h"
 
-#include "rendering/metal/device/MetalCompute.h"
+#include "rendering/metal/device/MetalShaderLibrary.h"
 #include "rendering/metal/layout/MetalShaderTypes.h"
 
 namespace splatkit {
