@@ -144,22 +144,21 @@ void ranges(VulkanVisibilityPass::Input& in, const VulkanBuffer& records, uint32
   in.candidateCapacity = bound;
 }
 
-void tests(const test::VulkanTestContext& gpu) {
-  auto created = VulkanVisibilityPass::create(*gpu.context, 0);
-  require(static_cast<bool>(created), "create subgroup visibility pass");
-  auto pass = std::move(created.value());
-  const Fixture f(gpu);
-  require(pass->reserve(300), "reserve output");
+using Gpu = test::VulkanTestContext;
+
+void testPrefix(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f) {
   for (const uint32_t n : {0u, 1u, 127u, 128u, 129u, 257u, 300u}) {
     auto in = f.input();
     in.sourceCount = n;
     std::vector<uint32_t> expected(n);
     std::iota(expected.begin(), expected.end(), 0);
-    membership(run(gpu, *pass, in), expected);
-    membership(run(gpu, *pass, in, 1), expected);
+    membership(run(gpu, pass, in), expected);
+    membership(run(gpu, pass, in, 1), expected);
   }
   std::puts("PASS prefix, empty, subgroup tails and descriptor slots");
+}
 
+void testSparseIndexed(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f) {
   // LOD reserves far more entries than it emits. Poison inactive groups so reading
   // a capacity tail instead of the GPU count becomes a visible diagnostic failure.
   std::vector<uint32_t> sparseIndices(4097, UINT32_MAX);
@@ -172,145 +171,185 @@ void tests(const test::VulkanTestContext& gpu) {
     require(sparseCount->upload(&n, 4), "sparse GPU count");
     std::vector<uint32_t> expected(n);
     std::iota(expected.begin(), expected.end(), 0);
-    membership(run(gpu, *pass, sparse), expected);
-    membership(run(gpu, *pass, sparse, 1), expected);
+    membership(run(gpu, pass, sparse), expected);
+    membership(run(gpu, pass, sparse, 1), expected);
   }
   uint32_t sparseInvalid = 4098;
   require(sparseCount->upload(&sparseInvalid, 4), "sparse invalid count");
-  failed(run(gpu, *pass, sparse), VulkanVisibilityPass::kInvalidCount);
+  failed(run(gpu, pass, sparse), VulkanVisibilityPass::kInvalidCount);
   sparseInvalid = 0;
   require(sparseCount->upload(&sparseInvalid, 4), "sparse empty count");
   auto invalidProjection = camera();
   invalidProjection.proj = splat::Mat4::identity();
   f.setCamera(invalidProjection);
   sparse.keyBits = VulkanVisibilityPass::KeyBits::low16;
-  failed(run(gpu, *pass, sparse), VulkanVisibilityPass::kInvalidProjection);
+  failed(run(gpu, pass, sparse), VulkanVisibilityPass::kInvalidProjection);
   f.setCamera(camera());
   std::puts("PASS sparse indexed workgroups, poisoned tails and empty diagnostics");
+}
 
-  require(pass->reserve(3), "small output capacity");
+void testIndexedLod(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  require(pass.reserve(3), "small output capacity");
   auto indexBuffer = upload(gpu, std::vector<uint32_t>{299, 0, 128});
   auto countBuffer = upload(gpu, std::vector<uint32_t>{3});
   auto in = f.input();
   indexed(in, *indexBuffer, *countBuffer, 3);
-  membership(run(gpu, *pass, in), {299, 0, 128});
+  membership(run(gpu, pass, in), {299, 0, 128});
   const uint32_t zero = 0;
   const uint32_t excessive = 4;
   require(countBuffer->upload(&zero, 4), "zero GPU count");
-  membership(run(gpu, *pass, in), {});
+  membership(run(gpu, pass, in), {});
   in.candidateCapacity = 0;
-  membership(run(gpu, *pass, in), {});
+  membership(run(gpu, pass, in), {});
   require(countBuffer->upload(&excessive, 4), "bad GPU count");
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidCount);
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidCount);
   in.candidateCapacity = 3;
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidCount);
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidCount);
   auto badIndex = upload(gpu, std::vector<uint32_t>{0, 300, UINT32_MAX});
   const uint32_t three = 3;
   require(countBuffer->upload(&three, 4), "restore GPU count");
   indexed(in, *badIndex, *countBuffer, 3);
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidIndex);
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidIndex);
   std::puts("PASS indexed LOD, high resident indices, bad index/count");
+}
 
-  require(pass->reserve(5), "range output capacity");
-  auto records =
-      upload(gpu, std::vector<VulkanVisibilityPass::Range>{{2, 2, 2, 0}, {290, 3, 5, 0}});
-  in = f.input();
+void testRanges(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  using Range = VulkanVisibilityPass::Range;
+  require(pass.reserve(5), "range output capacity");
+  auto records = upload(gpu, std::vector<Range>{{2, 2, 2, 0}, {290, 3, 5, 0}});
+  auto in = f.input();
   ranges(in, *records, 2, 5);
-  membership(run(gpu, *pass, in), {2, 3, 290, 291, 292});
-  auto emptyRecords = upload(gpu, std::vector<VulkanVisibilityPass::Range>{});
+  membership(run(gpu, pass, in), {2, 3, 290, 291, 292});
+  auto emptyRecords = upload(gpu, std::vector<Range>{});
   ranges(in, *emptyRecords, 0, 0);
-  membership(run(gpu, *pass, in), {});
-  auto badRecords = upload(gpu, std::vector<VulkanVisibilityPass::Range>{{299, 2, 2, 0}});
+  membership(run(gpu, pass, in), {});
+  auto badRecords = upload(gpu, std::vector<Range>{{299, 2, 2, 0}});
   ranges(in, *badRecords, 1, 2);
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidRange);
-  auto badPrefix = upload(gpu, std::vector<VulkanVisibilityPass::Range>{{2, 2, 3, 0}});
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidRange);
+  auto badPrefix = upload(gpu, std::vector<Range>{{2, 2, 3, 0}});
   ranges(in, *badPrefix, 1, 2);
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidRange);
-  auto overlap = upload(gpu, std::vector<VulkanVisibilityPass::Range>{{2, 2, 2, 0}, {3, 2, 4, 0}});
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidRange);
+  auto overlap = upload(gpu, std::vector<Range>{{2, 2, 2, 0}, {3, 2, 4, 0}});
   ranges(in, *overlap, 2, 4);
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidRange);
-  auto hiddenBadRange = upload(
-      gpu, std::vector<VulkanVisibilityPass::Range>{{0, 2, 2, 0}, {2, 1, 1, 0}, {4, 2, 3, 0}});
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidRange);
+  auto hiddenBadRange = upload(gpu, std::vector<Range>{{0, 2, 2, 0}, {2, 1, 1, 0}, {4, 2, 3, 0}});
   ranges(in, *hiddenBadRange, 3, 3);
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidRange);
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidRange);
   std::puts("PASS streamed ranges, empty ranges and malformed ranges");
+}
 
-  in = f.input();  // source count exceeds output capacity: GPU overflow, never CPU truncation
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kOverflow);
+void testOverflow(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f) {
+  auto in = f.input();  // source count exceeds output capacity: GPU overflow, never CPU truncation
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kOverflow);
   in.candidateCapacity = 3;
-  membership(run(gpu, *pass, in), {0, 1, 2});
+  membership(run(gpu, pass, in), {0, 1, 2});
   std::puts("PASS output overflow fails closed and recovers");
+}
 
+uint32_t expectedDepthKey(float depth, VulkanVisibilityPass::KeyBits bits,
+                          VulkanVisibilityPass::KeyOrder order) {
+  const auto cam = camera();
+  const float nearPlane = cam.proj.at(2, 3) / cam.proj.at(2, 2);
+  const float farPlane = cam.proj.at(2, 3) / (cam.proj.at(2, 2) + 1);
+  const bool low16 = bits == VulkanVisibilityPass::KeyBits::low16;
+  uint32_t expected = 0;
+  std::memcpy(&expected, &depth, 4);
+  if (low16)
+    expected = static_cast<uint32_t>(
+        std::clamp((depth - nearPlane) / (farPlane - nearPlane), 0.0f, 1.0f) * 65535);
+  if (order == VulkanVisibilityPass::KeyOrder::descending)
+    expected = low16 ? 65535 - expected : ~expected;
+  return expected;
+}
+
+void requireDepthKeys(const Result& result, VulkanVisibilityPass::KeyBits bits,
+                      VulkanVisibilityPass::KeyOrder order) {
+  for (size_t i = 0; i < result.count; ++i) {
+    const auto depth = static_cast<float>(1 + result.indices[i] % 10);
+    const uint32_t expected = expectedDepthKey(depth, bits, order);
+    if (bits == VulkanVisibilityPass::KeyBits::full32)
+      require(result.keys[i] == expected,
+              "32-bit depth key preserves float bits and BTF inversion");
+    else
+      require(
+          result.keys[i] <= 65535 && std::abs(static_cast<int64_t>(result.keys[i]) - expected) <= 1,
+          "16-bit quantized depth key (one-bin floating-point tolerance)");
+  }
+}
+
+void testDepthKeys(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f) {
+  auto in = f.input();
+  in.candidateCapacity = 3;
   for (auto bits : {VulkanVisibilityPass::KeyBits::full32, VulkanVisibilityPass::KeyBits::low16}) {
     for (auto order :
          {VulkanVisibilityPass::KeyOrder::ascending, VulkanVisibilityPass::KeyOrder::descending}) {
       in.keyBits = bits;
       in.keyOrder = order;
-      auto result = run(gpu, *pass, in);
+      auto result = run(gpu, pass, in);
       membership(result, {0, 1, 2});
-      const auto cam = camera();
-      const float nearPlane = cam.proj.at(2, 3) / cam.proj.at(2, 2);
-      const float farPlane = cam.proj.at(2, 3) / (cam.proj.at(2, 2) + 1);
-      for (size_t i = 0; i < result.count; ++i) {
-        const auto depth = static_cast<float>(1 + result.indices[i] % 10);
-        uint32_t expected = 0;
-        std::memcpy(&expected, &depth, 4);
-        if (bits == VulkanVisibilityPass::KeyBits::low16)
-          expected = static_cast<uint32_t>(
-              std::clamp((depth - nearPlane) / (farPlane - nearPlane), 0.0f, 1.0f) * 65535);
-        if (order == VulkanVisibilityPass::KeyOrder::descending)
-          expected = bits == VulkanVisibilityPass::KeyBits::low16 ? 65535 - expected : ~expected;
-        if (bits == VulkanVisibilityPass::KeyBits::full32)
-          require(result.keys[i] == expected,
-                  "32-bit depth key preserves float bits and BTF inversion");
-        else
-          require(result.keys[i] <= 65535 &&
-                      std::abs(static_cast<int64_t>(result.keys[i]) - expected) <= 1,
-                  "16-bit quantized depth key (one-bin floating-point tolerance)");
-      }
+      requireDepthKeys(result, bits, order);
     }
   }
   auto badCamera = camera();
   badCamera.proj = splat::Mat4::identity();
   f.setCamera(badCamera);
   in.keyBits = VulkanVisibilityPass::KeyBits::low16;
-  failed(run(gpu, *pass, in), VulkanVisibilityPass::kInvalidProjection);
+  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidProjection);
   f.setCamera(camera());
   std::puts("PASS full32/low16 ascending/BTF keys and invalid projection");
+}
 
-  const auto old = pass->output(0);
-  require(!pass->reserve(0) && !pass->reserve(VulkanVisibilityPass::kMaxCapacity + 1),
+void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  const auto old = pass.output(0);
+  require(!pass.reserve(0) && !pass.reserve(VulkanVisibilityPass::kMaxCapacity + 1),
           "reject capacity bounds");
-  require(pass->output(0).indices == old.indices, "reserve failure preserves output");
-  in = f.input();
+  require(pass.output(0).indices == old.indices, "reserve failure preserves output");
+  auto indexBuffer = upload(gpu, std::vector<uint32_t>{299, 0, 128});
+  auto countBuffer = upload(gpu, std::vector<uint32_t>{3});
+  auto in = f.input();
   in.candidateCapacity = 3;
   gpu.submit([&](VkCommandBuffer cmd) {
     auto bad = in;
     bad.splatsBytes = 32;
-    require(!pass->encode(cmd, 0, bad), "reject undersized resident source descriptor");
+    require(!pass.encode(cmd, 0, bad), "reject undersized resident source descriptor");
     bad = in;
     bad.cameraBytes = 175;
-    require(!pass->encode(cmd, 0, bad), "reject undersized uniform descriptor");
+    require(!pass.encode(cmd, 0, bad), "reject undersized uniform descriptor");
     bad = in;
     bad.splatsOffset = std::numeric_limits<VkDeviceSize>::max();
-    require(!pass->encode(cmd, 0, bad), "reject offset overflow or misalignment");
+    require(!pass.encode(cmd, 0, bad), "reject offset overflow or misalignment");
     bad = in;
     // Fixed uint32_t underlying type permits this value; exercise enum validation.
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     bad.mode = static_cast<Mode>(99);
-    require(!pass->encode(cmd, 0, bad), "reject unknown mode");
+    require(!pass.encode(cmd, 0, bad), "reject unknown mode");
     bad = in;
     indexed(bad, *indexBuffer, *countBuffer, 3);
     bad.candidatesBytes = 4;
-    require(!pass->encode(cmd, 0, bad), "reject undersized candidate descriptor");
+    require(!pass.encode(cmd, 0, bad), "reject undersized candidate descriptor");
     bad.candidatesBytes = indexBuffer->size();
     bad.candidateCountBytes = 3;
-    require(!pass->encode(cmd, 0, bad), "reject undersized count descriptor");
-    require(!pass->encode(cmd, VulkanVisibilityPass::kSlots, in), "reject invalid slot");
-    require(!pass->encode(VK_NULL_HANDLE, 0, in), "reject null command");
+    require(!pass.encode(cmd, 0, bad), "reject undersized count descriptor");
+    require(!pass.encode(cmd, VulkanVisibilityPass::kSlots, in), "reject invalid slot");
+    require(!pass.encode(VK_NULL_HANDLE, 0, in), "reject null command");
   });
-  membership(run(gpu, *pass, in), {0, 1, 2});
+  membership(run(gpu, pass, in), {0, 1, 2});
   std::puts("PASS descriptor rejection and transactional capacity");
+}
+
+void tests(const Gpu& gpu) {
+  auto created = VulkanVisibilityPass::create(*gpu.context, 0);
+  require(static_cast<bool>(created), "create subgroup visibility pass");
+  auto pass = std::move(created.value());
+  const Fixture f(gpu);
+  require(pass->reserve(300), "reserve output");
+  testPrefix(gpu, *pass, f);
+  testSparseIndexed(gpu, *pass, f);
+  testIndexedLod(gpu, *pass, f);
+  testRanges(gpu, *pass, f);
+  testOverflow(gpu, *pass, f);
+  testDepthKeys(gpu, *pass, f);
+  testDescriptorRejection(gpu, *pass, f);
 }
 }  // namespace
 
