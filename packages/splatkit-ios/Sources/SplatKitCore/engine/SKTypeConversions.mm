@@ -76,7 +76,8 @@ SKSplatStats fromCppStats(const Stats& s) {
           s.presentTiming,
           s.frameMillisP95,
           s.lowFps,
-          s.droppedFrames};
+          s.droppedFrames,
+          s.loadedShDegree};
 }
 
 SKDeviceCapabilities fromCppCapabilities(const DeviceCapabilities& caps) {

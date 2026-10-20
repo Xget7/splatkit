@@ -91,6 +91,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 
 Unavailable GPU timings/tile counters report zero, not zero-cost execution.
 Loaded source splats differ from drawn nodes and GPU-resident hierarchy records.
+`loadedShDegree` is the harmonics degree the world holds on the GPU, the ceiling for what `shDegree` draws.
 Stats float transport exactly represents integers through 16,777,216.
 Optional `com.splatkit.ui.SplatHudView` and `JoystickView` are host conveniences.
 

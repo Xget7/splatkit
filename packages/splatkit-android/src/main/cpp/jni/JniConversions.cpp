@@ -47,6 +47,7 @@ void statsToFloats(const Stats& stats, float* out) {
   out[8] = static_cast<float>(stats.computeTileCount);
   out[9] = static_cast<float>(stats.nonemptyComputeTileCount);
   out[10] = static_cast<float>(stats.hardwareTileCount);
+  out[11] = static_cast<float>(stats.loadedShDegree);
 }
 
 RenderPolicy policyFromDoubles(const double* in) {

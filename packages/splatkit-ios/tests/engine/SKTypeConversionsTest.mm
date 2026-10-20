@@ -118,6 +118,7 @@ TEST(SKTypeConversionsTest, StatsKeepEveryField) {
   stats.computeTileCount = 11;
   stats.nonemptyComputeTileCount = 7;
   stats.hardwareTileCount = 5;
+  stats.loadedShDegree = 2;
 
   const SKSplatStats out = fromCppStats(stats);
   EXPECT_EQ(out.fps, 59.5f);
@@ -135,6 +136,7 @@ TEST(SKTypeConversionsTest, StatsKeepEveryField) {
   EXPECT_EQ(out.frameMillisP95, 21.0f);
   EXPECT_EQ(out.lowFps, 41.0f);
   EXPECT_EQ(out.droppedFrames, 3u);
+  EXPECT_EQ(out.loadedShDegree, 2u);
 }
 
 TEST(SKTypeConversionsTest, CapabilitiesCarryLimitsFeaturesSupportAndTheFallbackPolicy) {

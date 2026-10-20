@@ -373,7 +373,7 @@ SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat 
   if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
 }
 
-// Fills out[0..10] in the order kStatsFloats lists.
+// Fills out[0..11] in the order kStatsFloats lists.
 SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;

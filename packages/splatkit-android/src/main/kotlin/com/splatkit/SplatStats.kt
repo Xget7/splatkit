@@ -17,6 +17,11 @@ class SplatStats {
     var loadedSplatCount: Int
         get() = splatCount
         set(value) { splatCount = value }
+    /**
+     * Spherical harmonics degree the loaded world holds on the GPU, its file degree capped by
+     * [com.splatkit.SplatSurfaceView.maxShDegree] at load; zero without a world.
+     */
+    var loadedShDegree = 0
     var walking = false
     var motion = false
     /** Last completed visibility/order result; zero remains zero even when a source is loaded. */
@@ -29,9 +34,9 @@ class SplatStats {
     var hardwareTileCount = 0
 }
 
-internal const val SPLAT_STATS_FLOATS = 11
+internal const val SPLAT_STATS_FLOATS = 12
 
-/** Mirrors nativeStats: timings, the loaded count and two flags, then four completed counts. */
+/** Mirrors nativeStats: timings, the loaded count and two flags, then four completed counts and the world's harmonics degree. */
 internal fun decodeSplatStats(values: FloatArray, into: SplatStats): SplatStats {
     require(values.size >= SPLAT_STATS_FLOATS) { "Stats payload needs $SPLAT_STATS_FLOATS floats" }
     into.fps = values[0]
@@ -45,5 +50,6 @@ internal fun decodeSplatStats(values: FloatArray, into: SplatStats): SplatStats 
     into.computeTileCount = values[8].toInt()
     into.nonemptyComputeTileCount = values[9].toInt()
     into.hardwareTileCount = values[10].toInt()
+    into.loadedShDegree = values[11].toInt()
     return into
 }
