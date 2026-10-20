@@ -62,9 +62,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v4
+      - uses: ./.github/actions/android-sdk
         with:
-          packages: "platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006 cmake;3.22.1"
+          packages: "platforms;android-36 build-tools;36.0.0 cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v6
       - run: npm ci --ignore-scripts
         working-directory: packages/react-native-splatkit

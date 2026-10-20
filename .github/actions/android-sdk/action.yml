@@ -1,0 +1,32 @@
+name: Android SDK
+description: The SDK packages a job names, plus the NDK the native code builds with, cached and retried.
+
+inputs:
+  packages:
+    description: sdkmanager packages besides the NDK, space separated
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Keep in step with ndkVersion in packages/splatkit-android/build.gradle.kts.
+    - id: ndk
+      uses: actions/cache@v6
+      with:
+        path: /usr/local/lib/android/sdk/ndk/27.1.12297006
+        key: android-ndk-27.1.12297006-${{ runner.os }}
+    - uses: android-actions/setup-android@v4
+      with:
+        packages: ${{ inputs.packages }}
+        log-accepted-android-sdk-licenses: false
+    # The NDK zip from Google's servers sometimes arrives truncated on hosted runners, and
+    # sdkmanager then fails the whole job; a second download is almost always whole.
+    - if: steps.ndk.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          sdkmanager "ndk;27.1.12297006" && exit 0
+          echo "NDK download failed on attempt $attempt"
+          sleep 15
+        done
+        exit 1
