@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Formats and lints every C++ source of the repository with the clang tools the NDK
-# ships, so the machine that builds the library is the machine that lints it.
+# ships, so the machine that builds the library is the machine that lints it. It also
+# links the Android device tests, which nothing else builds in CI.
 #
 #   scripts/lint-cpp.sh          check: exit 1 on a formatting or clang-tidy finding
 #   scripts/lint-cpp.sh --fix    rewrite the formatting and apply clang-tidy's fixes
@@ -90,6 +91,13 @@ cmake -S "$android" -B "$build/android" "${toolchain[@]}" \
   -DSPLATKIT_ANDROID_BUILD_TESTS=ON > /dev/null
 # The splat pipeline includes the generated shader headers.
 cmake --build "$build/android" --target splatkit_shaders_generate > /dev/null
+# Linking the device tests catches a wrong source path or an undefined reference that
+# clang-tidy, which only parses, would let through to a phone.
+echo "link splatkit-android tests"
+if ! tests_log="$(cmake --build "$build/android" --target splatkit_android_tests 2>&1)"; then
+  printf '%s\n' "$tests_log" >&2
+  exit 1
+fi
 
 failed=0
 tidy() {  # <compile database dir> <sources...>

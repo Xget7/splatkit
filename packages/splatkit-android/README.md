@@ -113,6 +113,25 @@ cd apps/android-dev
 ./gradlew :splatkit:assembleRelease :splatkit:testDebugUnitTest
 ```
 
+## Native tests on a device
+
+The `splatkit_vulkan_*_test` executables need a real Vulkan device and run without a surface.
+`scripts/lint-cpp.sh` links all of them in CI; running them is a manual device step.
+Build them outside the checkout with the NDK toolchain flags from that script plus `-DSPLATKIT_ANDROID_BUILD_TESTS=ON`.
+
+```sh
+cmake -S packages/splatkit-android/src/main/cpp -B "$BUILD" \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DANDROID_STL=c++_static \
+  -DSPLATKIT_ANDROID_BUILD_TESTS=ON
+cmake --build "$BUILD" --target splatkit_android_tests
+for t in "$BUILD"/tests/splatkit_vulkan_*_test; do
+  adb push "$t" /data/local/tmp/ && adb shell "/data/local/tmp/$(basename "$t")"
+done
+```
+
+Each test exits 0 on success; `splatkit_vulkan_buffer_test` and `splatkit_vulkan_upload_pressure_test` accept `--small` for a device with little memory, which skips their large cases.
+
 Tests and emulator evidence do not replace physical Adreno/Mali validation or reference-image acceptance.
 Source builds enable 16 KB ELF alignment; CI checks every packaged shared library and APK ZIP alignment with `scripts/check_android_alignment.py`.
 Artifact alignment checks do not replace execution on a 16 KB device.

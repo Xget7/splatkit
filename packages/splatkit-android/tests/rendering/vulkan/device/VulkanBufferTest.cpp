@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
   using test::require;
   try {
     const bool small = argc == 2 && std::strcmp(argv[1], "--small") == 0;
-    require(argc == 1 || small, "usage: splatkit_gpu_buffer_test [--small]");
+    require(argc == 1 || small, "usage: splatkit_vulkan_buffer_test [--small]");
     test::VulkanTestContext gpu;
     std::printf("GPU: %s\n", gpu.context->deviceDescription().c_str());
     std::vector<uint8_t> expected(small ? 4096 : 16000000);
