@@ -89,8 +89,8 @@ class VulkanFrameCompute {
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> ranges_, readback_;
   std::array<VkQueryPool, kFramesInFlight> queries_{};
   std::array<bool, kFramesInFlight> pending_{};
-  std::array<uint64_t, kFramesInFlight>
-      submission_{};  // of the pending encode; 0 when not submitted
+  // Per slot, the submission of the pending encode; 0 when not submitted.
+  std::array<uint64_t, kFramesInFlight> submission_{};
   uint64_t collectedSubmission_ = 0;
   std::vector<RangeRecord> rangeRecords_;
   Stats stats_;

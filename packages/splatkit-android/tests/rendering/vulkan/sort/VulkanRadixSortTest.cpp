@@ -9,6 +9,7 @@
 #include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "support/VulkanTestContext.h"
 
+using splatkit::keyBitCount;
 using splatkit::KeyBits;
 using splatkit::kFramesInFlight;
 using splatkit::VulkanBuffer;
@@ -159,8 +160,8 @@ void runCase(VulkanTestContext& gpu, const VulkanRadixSort& sort, const InputBuf
              const VulkanRadixSort::Input& input, uint32_t n, uint32_t pattern,
              std::mt19937& random, uint32_t& cases) {
   const bool low16 = input.keyBits == KeyBits::low16;
-  std::printf("radix case=%u bits=%u n=%u pattern=%u stage=upload\n", cases, low16 ? 16u : 32u, n,
-              pattern);
+  std::printf("radix case=%u bits=%u n=%u pattern=%u stage=upload\n", cases,
+              keyBitCount(input.keyBits), n, pattern);
   const auto inKeys = makeKeys(n, pattern, low16, random);
   std::vector<uint32_t> inValues(n);
   std::vector<uint32_t> expected(n);
