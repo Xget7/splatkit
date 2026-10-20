@@ -21,6 +21,7 @@
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "rendering/metal/device/MetalContext.h"
+#include "rendering/metal/presentation/MetalRenderTarget.h"
 #include "rendering/metal/selection/MetalLodSelection.h"
 #include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -143,8 +144,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLRenderPipelineState> backgroundPipeline_ = nil;
   id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
   id<MTLDepthStencilState> maskDepth_ = nil;   // always write
-  id<MTLTexture> depth_ = nil;                 // GPU-private, the size of the colour target
-  bool createDepth(NSUInteger width, NSUInteger height);
   MTLPixelFormat pipelineFormat_ = MTLPixelFormatInvalid;
   std::array<id<MTLBuffer>, kFramesInFlight> uniforms_{};
   dispatch_semaphore_t inFlight_ = nullptr;
@@ -152,7 +151,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   CAMetalLayer* layer_ = nil;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  id<MTLTexture> target_ = nil;    // scaled rendering or half-float GPU compositing
+  std::unique_ptr<MetalRenderTarget> target_;
   id<MTLTexture> upscaled_ = nil;  // MetalFX output at drawable size, private storage
 #if SPLATKIT_HAS_METALFX
   id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to upscaled_, when active

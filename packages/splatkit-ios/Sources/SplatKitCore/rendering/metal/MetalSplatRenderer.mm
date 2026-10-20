@@ -22,7 +22,6 @@ asm(".linker_option \"-framework\", \"MetalFX\"");
 namespace splatkit {
 
 namespace {
-constexpr MTLPixelFormat kDepthFormat = MTLPixelFormatDepth16Unorm;
 constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
 }  // namespace
 
@@ -34,6 +33,7 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
     uniform = metal::buffer(r->context_->device(), sizeof(CameraUniform));
     if (uniform == nil) return nullptr;
   }
+  r->target_ = std::make_unique<MetalRenderTarget>(r->context_->device());
   r->depthBits_ = MetalRadixSort::KeyBits::Full32;
   r->gpuSort_ = r->visibility_.create(r->context_->device(), r->context_->library(), r->depthBits_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
@@ -194,27 +194,10 @@ MTLPixelFormat MetalSplatRenderer::pixelFormat() const {
 }
 
 Extent MetalSplatRenderer::drawExtent() const {
-  if (target_ != nil) {
-    return {static_cast<uint32_t>(target_.width), static_cast<uint32_t>(target_.height)};
+  if (id<MTLTexture> color = target_->color()) {
+    return {static_cast<uint32_t>(color.width), static_cast<uint32_t>(color.height)};
   }
   return {width_, height_};
-}
-
-// Back the transient depth buffer with GPU-private memory. Large splat passes can
-// exhaust the tiler's parameter buffer; memoryless attachments prevent spilling
-// that pass and fail on iPhone with OutOfMemoryForParameterBuffer.
-bool MetalSplatRenderer::createDepth(NSUInteger width, NSUInteger height) {
-  if (depth_ != nil && depth_.width == width && depth_.height == height) return true;
-  MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:kDepthFormat
-                                                                                  width:width
-                                                                                 height:height
-                                                                              mipmapped:NO];
-  desc.usage = MTLTextureUsageRenderTarget;
-  desc.storageMode = MTLStorageModePrivate;
-  depth_ = [context_->device() newTextureWithDescriptor:desc];
-  if (depth_ == nil)
-    LOGE("depth buffer %lux%lu failed", (unsigned long)width, (unsigned long)height);
-  return depth_ != nil;
 }
 
 MTLPixelFormat MetalSplatRenderer::targetFormat() const {
@@ -222,23 +205,13 @@ MTLPixelFormat MetalSplatRenderer::targetFormat() const {
 }
 
 bool MetalSplatRenderer::createTarget() {
-  target_ = nil;
   scaler_ = nil;
   upscaled_ = nil;
-  if ((renderScale_ == 1.0f && !gpuSort_) || width_ == 0 || height_ == 0) return true;
-  MTLTextureDescriptor* desc = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:targetFormat()
-                                   width:std::max(1u, static_cast<uint32_t>(width_ * renderScale_))
-                                  height:std::max(1u, static_cast<uint32_t>(height_ * renderScale_))
-                               mipmapped:NO];
-  desc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-  desc.storageMode = MTLStorageModePrivate;
-  target_ = [context_->device() newTextureWithDescriptor:desc];
-  if (target_ == nil) {
-    LOGE("render target %lux%lu failed", static_cast<unsigned long>(desc.width),
-         static_cast<unsigned long>(desc.height));
-    return false;
+  if ((renderScale_ == 1.0f && !gpuSort_) || width_ == 0 || height_ == 0) {
+    target_->release();
+    return true;
   }
+  if (!target_->resize(width_, height_, renderScale_, targetFormat())) return false;
   return createScaler();
 }
 
@@ -247,29 +220,30 @@ bool MetalSplatRenderer::createTarget() {
 bool MetalSplatRenderer::createScaler() {
   scaler_ = nil;
   upscaled_ = nil;
-  const bool wanted = spatialUpscaling_ && target_ != nil && renderScale_ < 1.0f;
+  const bool wanted = spatialUpscaling_ && target_->color() != nil && renderScale_ < 1.0f;
 #if SPLATKIT_HAS_METALFX
   if (wanted) {
     if (![MTLFXSpatialScalerDescriptor supportsDevice:context_->device()]) {
       LOGI("MetalFX spatial scaler unsupported here; the scaled frame is blitted");
     } else {
       MTLFXSpatialScalerDescriptor* desc = [MTLFXSpatialScalerDescriptor new];
-      desc.inputWidth = target_.width;
-      desc.inputHeight = target_.height;
+      id<MTLTexture> color = target_->color();
+      desc.inputWidth = color.width;
+      desc.inputHeight = color.height;
       desc.outputWidth = width_;
       desc.outputHeight = height_;
-      desc.colorTextureFormat = target_.pixelFormat;
+      desc.colorTextureFormat = color.pixelFormat;
       desc.outputTextureFormat = pixelFormat();
       desc.colorProcessingMode = linearBlending_ ? MTLFXSpatialScalerColorProcessingModeLinear
                                                  : MTLFXSpatialScalerColorProcessingModePerceptual;
       scaler_ = [desc newSpatialScalerWithDevice:context_->device()];
       if (scaler_ == nil) {
         LOGE("MetalFX spatial scaler %lux%lu to %ux%u failed; the scaled frame is blitted",
-             static_cast<unsigned long>(target_.width), static_cast<unsigned long>(target_.height),
+             static_cast<unsigned long>(color.width), static_cast<unsigned long>(color.height),
              width_, height_);
       } else {
-        scaler_.inputContentWidth = target_.width;
-        scaler_.inputContentHeight = target_.height;
+        scaler_.inputContentWidth = color.width;
+        scaler_.inputContentHeight = color.height;
         MTLTextureDescriptor* out =
             [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat()
                                                                width:width_
@@ -284,8 +258,8 @@ bool MetalSplatRenderer::createScaler() {
           scaler_ = nil;
           return true;
         }
-        LOGI("MetalFX spatial scaler %lux%lu to %ux%u", static_cast<unsigned long>(target_.width),
-             static_cast<unsigned long>(target_.height), width_, height_);
+        LOGI("MetalFX spatial scaler %lux%lu to %ux%u", static_cast<unsigned long>(color.width),
+             static_cast<unsigned long>(color.height), width_, height_);
       }
     }
   }
@@ -316,7 +290,7 @@ bool MetalSplatRenderer::createPipelines() {
     desc.vertexFunction = vertex;
     desc.fragmentFunction = fragment;
     desc.colorAttachments[0].pixelFormat = pipelineFormat_;
-    desc.depthAttachmentPixelFormat = kDepthFormat;
+    desc.depthAttachmentPixelFormat = MetalRenderTarget::kDepthFormat;
     // "Over" compositing, back to front: out = src.a * src + (1 - src.a) * dst.
     desc.colorAttachments[0].blendingEnabled = YES;
     desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
@@ -339,7 +313,7 @@ bool MetalSplatRenderer::createPipelines() {
   under.vertexFunction = [context_->library() newFunctionWithName:@"projectedVertex"];
   under.fragmentFunction = [context_->library() newFunctionWithName:@"splatFragmentUnder"];
   under.colorAttachments[0].pixelFormat = pipelineFormat_;
-  under.depthAttachmentPixelFormat = kDepthFormat;
+  under.depthAttachmentPixelFormat = MetalRenderTarget::kDepthFormat;
   under.colorAttachments[0].blendingEnabled = YES;
   under.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOneMinusDestinationAlpha;
   under.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
@@ -365,7 +339,7 @@ bool MetalSplatRenderer::createPipelines() {
   mask.fragmentFunction = [context_->library() newFunctionWithName:@"saturationMask"];
   mask.colorAttachments[0].pixelFormat = pipelineFormat_;
   mask.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
-  mask.depthAttachmentPixelFormat = kDepthFormat;
+  mask.depthAttachmentPixelFormat = MetalRenderTarget::kDepthFormat;
   maskPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:mask error:&error];
   if (maskPipeline_ == nil) {
     LOGE("saturation mask pipeline: %s", error.localizedDescription.UTF8String);
@@ -636,14 +610,14 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
                                       const Frame& frame, uint32_t slot, uint32_t drawCount,
                                       bool gpuOrder) {
   MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
-  id<MTLTexture> colour = target_ != nil ? target_ : drawableTexture;
+  id<MTLTexture> colour = target_->color() != nil ? target_->color() : drawableTexture;
   pass.colorAttachments[0].texture = colour;
   pass.colorAttachments[0].loadAction = MTLLoadActionClear;
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   // Front to back accumulates onto nothing and puts the background under at the end.
   pass.colorAttachments[0].clearColor = gpuOrder ? MTLClearColorMake(0, 0, 0, 0) : kBackground;
-  if (createDepth(colour.width, colour.height)) {
-    pass.depthAttachment.texture = depth_;
+  if (target_->ensureDepth(colour.width, colour.height)) {
+    pass.depthAttachment.texture = target_->depth();
     pass.depthAttachment.loadAction = MTLLoadActionClear;
     pass.depthAttachment.storeAction = MTLStoreActionDontCare;
     pass.depthAttachment.clearDepth = 1.0;
@@ -694,10 +668,10 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
 }
 
 void MetalSplatRenderer::encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture) {
-  id<MTLTexture> source = target_;
+  id<MTLTexture> source = target_->color();
 #if SPLATKIT_HAS_METALFX
   if (scaler_ != nil) {
-    scaler_.colorTexture = target_;
+    scaler_.colorTexture = source;
     scaler_.outputTexture = upscaled_;
     [scaler_ encodeToCommandBuffer:cmd];
     source = upscaled_;
