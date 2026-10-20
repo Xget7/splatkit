@@ -6,6 +6,8 @@
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
 #include "rendering/vulkan/device/VulkanBuffer.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
+#include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "rendering/vulkan/selection/VulkanLodSelection.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -22,6 +24,8 @@ class VulkanFrameCompute {
  public:
   // Most splats one frame can keep, which bounds the visibility output and the sort.
   static constexpr uint32_t kMaxVisible = VulkanVisibilityPass::kMaxCapacity;
+  // True when the device can run the GPU visibility and sort path.
+  static bool supported(const VulkanContext& ctx);
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
       uint32_t budget = VulkanLodSelection::kMaxBudget);
@@ -52,7 +56,7 @@ class VulkanFrameCompute {
   // Per-instance renderer policy. Render thread, while idle. Only sortDepth and
   // subpixelThreshold are honoured; the caller resolves the rest.
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
-  uint32_t sortKeyBits() const { return sortKeyBits_ == SortKeyBits::low16 ? 16u : 32u; }
+  uint32_t sortKeyBits() const { return keyBitCount(keyBits()); }
   float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
   const VulkanVisibilityCapabilities& visibilityCapabilities() const {
     return visibility_->capabilities();
@@ -60,6 +64,9 @@ class VulkanFrameCompute {
 
  private:
   explicit VulkanFrameCompute(const VulkanContext& ctx);
+  KeyBits keyBits() const {
+    return sortKeyBits_ == SortKeyBits::low16 ? KeyBits::low16 : KeyBits::full32;
+  }
   bool initialize(uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget);
   bool prepareRanges(uint32_t slot, const SplatRenderer::Frame& frame,
                      VulkanVisibilityPass::Input& input);
@@ -70,7 +77,6 @@ class VulkanFrameCompute {
   struct RangeRecord {
     uint32_t offset, count, prefixEnd, pad;
   };
-  static constexpr uint32_t kSlots = 2;
   static constexpr uint32_t kMaxRanges = 65536;
   const VulkanContext& ctx_;
   uint32_t sourceCount_ = 0, capacity_ = 0;
@@ -80,10 +86,11 @@ class VulkanFrameCompute {
   std::unique_ptr<VulkanLodSelection> lod_;
   std::unique_ptr<VulkanVisibilityPass> visibility_;
   std::unique_ptr<VulkanRadixSort> radix_;
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> ranges_, readback_;
-  std::array<VkQueryPool, kSlots> queries_{};
-  std::array<bool, kSlots> pending_{};
-  std::array<uint64_t, kSlots> submission_{};  // of the pending encode; 0 when not submitted
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> ranges_, readback_;
+  std::array<VkQueryPool, kFramesInFlight> queries_{};
+  std::array<bool, kFramesInFlight> pending_{};
+  std::array<uint64_t, kFramesInFlight>
+      submission_{};  // of the pending encode; 0 when not submitted
   uint64_t collectedSubmission_ = 0;
   std::vector<RangeRecord> rangeRecords_;
   Stats stats_;

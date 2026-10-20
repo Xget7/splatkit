@@ -9,6 +9,8 @@
 #include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "support/VulkanTestContext.h"
 
+using splatkit::KeyBits;
+using splatkit::kFramesInFlight;
 using splatkit::VulkanBuffer;
 using splatkit::VulkanRadixSort;
 using splatkit::test::require;
@@ -90,7 +92,7 @@ void requireInvalidInputsRejected(VulkanTestContext& gpu, const VulkanRadixSort&
                                   const VulkanRadixSort::Input& input) {
   require(!sort.encode(VK_NULL_HANDLE, 0, input), "reject null command buffer");
   gpu.submit([&](VkCommandBuffer cmd) {
-    require(!sort.encode(cmd, VulkanRadixSort::kSlots, input), "reject invalid slot");
+    require(!sort.encode(cmd, kFramesInFlight, input), "reject invalid slot");
     auto bad = input;
     bad.keysBytes = input.keysBytes - 1;
     require(!sort.encode(cmd, 0, bad), "reject undersized input");
@@ -100,7 +102,7 @@ void requireInvalidInputsRejected(VulkanTestContext& gpu, const VulkanRadixSort&
     bad = input;
     // Fixed uint32_t underlying type permits this value; exercise enum validation.
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-    bad.keyBits = static_cast<VulkanRadixSort::KeyBits>(9);
+    bad.keyBits = static_cast<KeyBits>(9);
     require(!sort.encode(cmd, 0, bad), "reject key mode");
     bad = input;
     bad.keys = sort.output(1).keys;
@@ -156,7 +158,7 @@ void requireSortedOutput(VulkanTestContext& gpu, const VulkanRadixSort::Output& 
 void runCase(VulkanTestContext& gpu, const VulkanRadixSort& sort, const InputBuffers& buffers,
              const VulkanRadixSort::Input& input, uint32_t n, uint32_t pattern,
              std::mt19937& random, uint32_t& cases) {
-  const bool low16 = input.keyBits == VulkanRadixSort::KeyBits::low16;
+  const bool low16 = input.keyBits == KeyBits::low16;
   std::printf("radix case=%u bits=%u n=%u pattern=%u stage=upload\n", cases, low16 ? 16u : 32u, n,
               pattern);
   const auto inKeys = makeKeys(n, pattern, low16, random);
@@ -170,7 +172,7 @@ void runCase(VulkanTestContext& gpu, const VulkanRadixSort& sort, const InputBuf
   const uint32_t mask = low16 ? 65535u : UINT32_MAX;
   std::stable_sort(expected.begin(), expected.end(),
                    [&](uint32_t a, uint32_t b) { return (inKeys[a] & mask) < (inKeys[b] & mask); });
-  const uint32_t slot = cases++ % VulkanRadixSort::kSlots;
+  const uint32_t slot = cases++ % kFramesInFlight;
   std::puts("radix stage=encode-submit-wait");
   gpu.submit([&](VkCommandBuffer cmd) { require(sort.encode(cmd, slot, input), "encode radix"); });
   requireSortedOutput(gpu, sort.output(slot), n, inKeys, expected);
@@ -181,7 +183,7 @@ uint32_t runAllCases(VulkanTestContext& gpu, const VulkanRadixSort& sort,
                      const std::vector<uint32_t>& sizes) {
   std::mt19937 random(0x51a7u);
   uint32_t cases = 0;
-  for (const auto bits : {VulkanRadixSort::KeyBits::full32, VulkanRadixSort::KeyBits::low16}) {
+  for (const auto bits : {KeyBits::full32, KeyBits::low16}) {
     input.keyBits = bits;
     for (const uint32_t n : sizes)
       for (uint32_t pattern = 0; pattern < 4; ++pattern)

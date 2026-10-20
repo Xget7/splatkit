@@ -79,18 +79,19 @@ bool VulkanLodSelection::initialize() {
   set.pBindings = bindings;
   if (vkCreateDescriptorSetLayout(ctx_.device(), &set, nullptr, &setLayout_) != VK_SUCCESS)
     return false;
-  VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlots},
-                                  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kSlots}};
+  VkDescriptorPoolSize sizes[] = {
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kFramesInFlight}};
   VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  pool.maxSets = kSlots;
+  pool.maxSets = kFramesInFlight;
   pool.poolSizeCount = 2;
   pool.pPoolSizes = sizes;
   if (vkCreateDescriptorPool(ctx_.device(), &pool, nullptr, &pool_) != VK_SUCCESS) return false;
-  std::array<VkDescriptorSetLayout, kSlots> layouts{};
+  std::array<VkDescriptorSetLayout, kFramesInFlight> layouts{};
   layouts.fill(setLayout_);
   VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   allocate.descriptorPool = pool_;
-  allocate.descriptorSetCount = kSlots;
+  allocate.descriptorSetCount = kFramesInFlight;
   allocate.pSetLayouts = layouts.data();
   if (vkAllocateDescriptorSets(ctx_.device(), &allocate, sets_.data()) != VK_SUCCESS) return false;
   const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Config)};
@@ -100,8 +101,8 @@ bool VulkanLodSelection::initialize() {
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
   if (vkCreatePipelineLayout(ctx_.device(), &layout, nullptr, &layout_) != VK_SUCCESS) return false;
-  const ShaderModule module(ctx_.device(), shaders::lod_selection_comp,
-                            shaders::lod_selection_comp_size);
+  const VulkanShaderModule module(ctx_.device(), shaders::lod_selection_comp,
+                                  shaders::lod_selection_comp_size);
   if (!module) return false;
   VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   pipeline.layout = layout_;
@@ -193,7 +194,7 @@ VulkanLodSelection::Output VulkanLodSelection::output() const {
 }
 
 bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
-  if (!cmd || slot >= kSlots || !scratch_ || !input.camera ||
+  if (!cmd || slot >= kFramesInFlight || !scratch_ || !input.camera ||
       input.cameraOffset % limits_.minUniformBufferOffsetAlignment != 0 ||
       input.cameraOffset > std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform))
     return false;
@@ -215,7 +216,7 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
   }
   vkUpdateDescriptorSets(ctx_.device(), kBindings, writes, 0, nullptr);
   // Inter-frame WAR/WAW plus upload/host writes, including consumers on previous submissions.
-  memoryBarrier(
+  vulkanMemoryBarrier(
       cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_HOST_BIT,
       VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_HOST_WRITE_BIT,
       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -231,10 +232,10 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
       vkCmdDispatch(cmd, 1, 1, 1);
     else
       vkCmdDispatchIndirect(cmd, scratch_->handle(), indirectOffset);
-    memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
-                      VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+    vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                            VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   };
   dispatch(kReset);
   for (uint32_t round = 0; round < rounds_; ++round) {
@@ -250,11 +251,11 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
     dispatch(kAdvance);
   }
   dispatch(kCopyPackets, kPacketGroupsOffset);
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-                    VK_ACCESS_TRANSFER_READ_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+                          VK_ACCESS_TRANSFER_READ_BIT);
   return true;
 }
 }  // namespace splatkit

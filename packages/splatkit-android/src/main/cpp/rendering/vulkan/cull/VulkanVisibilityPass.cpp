@@ -255,29 +255,29 @@ bool VulkanVisibilityPass::createDescriptors() {
     return false;
 
   VkDescriptorPoolSize sizes[2]{};
-  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlots};
+  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
   sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              (kVisibilityStorageBindings + kPrepareBindings) * kSlots};
+              (kVisibilityStorageBindings + kPrepareBindings) * kFramesInFlight};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = 2 * kSlots;
+  poolInfo.maxSets = 2 * kFramesInFlight;
   poolInfo.poolSizeCount = 2;
   poolInfo.pPoolSizes = sizes;
   if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS)
     return false;
 
-  std::array<VkDescriptorSetLayout, kSlots> visibilityLayouts{};
-  std::array<VkDescriptorSetLayout, kSlots> prepareLayouts{};
+  std::array<VkDescriptorSetLayout, kFramesInFlight> visibilityLayouts{};
+  std::array<VkDescriptorSetLayout, kFramesInFlight> prepareLayouts{};
   visibilityLayouts.fill(visibilitySetLayout_);
   prepareLayouts.fill(prepareSetLayout_);
   VkDescriptorSetAllocateInfo visibilityAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   visibilityAlloc.descriptorPool = descriptorPool_;
-  visibilityAlloc.descriptorSetCount = kSlots;
+  visibilityAlloc.descriptorSetCount = kFramesInFlight;
   visibilityAlloc.pSetLayouts = visibilityLayouts.data();
   if (vkAllocateDescriptorSets(device, &visibilityAlloc, visibilitySets_.data()) != VK_SUCCESS)
     return false;
   VkDescriptorSetAllocateInfo prepareAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   prepareAlloc.descriptorPool = descriptorPool_;
-  prepareAlloc.descriptorSetCount = kSlots;
+  prepareAlloc.descriptorSetCount = kFramesInFlight;
   prepareAlloc.pSetLayouts = prepareLayouts.data();
   return vkAllocateDescriptorSets(device, &prepareAlloc, prepareSets_.data()) == VK_SUCCESS;
 }
@@ -299,10 +299,10 @@ bool VulkanVisibilityPass::createPipelines() {
   if (vkCreatePipelineLayout(device, &prepareLayoutInfo, nullptr, &prepareLayout_) != VK_SUCCESS)
     return false;
 
-  const ShaderModule visibilityModule(device, shaders::visibility_comp,
-                                      shaders::visibility_comp_size);
-  const ShaderModule prepareModule(device, shaders::prepare_indirect_comp,
-                                   shaders::prepare_indirect_comp_size);
+  const VulkanShaderModule visibilityModule(device, shaders::visibility_comp,
+                                            shaders::visibility_comp_size);
+  const VulkanShaderModule prepareModule(device, shaders::prepare_indirect_comp,
+                                         shaders::prepare_indirect_comp_size);
   if (!visibilityModule || !prepareModule) return false;
   VkPipelineShaderStageCreateInfo visibilityStage{
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -344,12 +344,12 @@ bool VulkanVisibilityPass::reserve(uint32_t capacity) {
     if (!dummy || !dummy->upload(zeros, sizeof(zeros))) return false;
   }
 
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indices;
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> depthKeys;
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> counts;
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indirect;
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> status;
-  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indices;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> depthKeys;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> counts;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indirect;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> status;
+  for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     indices[slot] = VulkanBuffer::deviceLocal(
         ctx_, indicesBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     depthKeys[slot] = VulkanBuffer::deviceLocal(
@@ -380,7 +380,7 @@ bool VulkanVisibilityPass::reserve(uint32_t capacity) {
 }
 
 VulkanVisibilityPass::Output VulkanVisibilityPass::output(uint32_t slot) const {
-  if (slot >= kSlots || capacity_ == 0) return {};
+  if (slot >= kFramesInFlight || capacity_ == 0) return {};
   return {indices_[slot]->handle(), depthKeys_[slot]->handle(), counts_[slot]->handle(),
           indirect_[slot]->handle(), status_[slot]->handle()};
 }
@@ -436,7 +436,7 @@ void VulkanVisibilityPass::barrier(VkCommandBuffer cmd, VkPipelineStageFlags src
 
 bool VulkanVisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
   const uint32_t bound = candidateBound(input);
-  if (cmd == VK_NULL_HANDLE || slot >= kSlots || capacity_ == 0 ||
+  if (cmd == VK_NULL_HANDLE || slot >= kFramesInFlight || capacity_ == 0 ||
       static_cast<uint32_t>(input.mode) > static_cast<uint32_t>(CandidateMode::ranges) ||
       static_cast<uint32_t>(input.keyBits) > static_cast<uint32_t>(KeyBits::low16) ||
       static_cast<uint32_t>(input.keyOrder) > static_cast<uint32_t>(KeyOrder::descending) ||

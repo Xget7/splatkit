@@ -40,6 +40,11 @@ static_assert(VulkanLodSelection::kEvaluatedOffset ==
 
 VulkanFrameCompute::VulkanFrameCompute(const VulkanContext& ctx) : ctx_(ctx) {}
 
+bool VulkanFrameCompute::supported(const VulkanContext& ctx) {
+  return VulkanVisibilityPass::queryCapabilities(ctx).supported &&
+         VulkanRadixSort::queryCapabilities(ctx).supported;
+}
+
 splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
     const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
   std::unique_ptr<VulkanFrameCompute> pass(new VulkanFrameCompute(ctx));
@@ -79,7 +84,7 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   timestampBits_ = families[ctx_.queueFamily()].timestampValidBits;
   timestampPeriod_ = properties.limits.timestampPeriod;
   if (!properties.limits.timestampComputeAndGraphics) timestampBits_ = 0;
-  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+  for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     ranges_[slot] = VulkanBuffer::hostVisible(ctx_, kMaxRanges * sizeof(RangeRecord),
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     readback_[slot] =
@@ -151,11 +156,11 @@ bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame
 }
 
 void VulkanFrameCompute::submitted(uint32_t slot, uint64_t submission) {
-  if (slot < kSlots && pending_[slot]) submission_[slot] = submission;
+  if (slot < kFramesInFlight && pending_[slot]) submission_[slot] = submission;
 }
 
 void VulkanFrameCompute::collectCompleted(uint64_t completedSubmission) {
-  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+  for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     if (pending_[slot] && submission_[slot] != 0 && submission_[slot] <= completedSubmission)
       collect(slot);
   }
@@ -196,10 +201,10 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
   uint32_t words[kReadbackWords]{};
   words[kSelected] = candidates;
   vkCmdUpdateBuffer(cmd, target, 0, sizeof(words), words);
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
   const auto copy = [&](VkBuffer source, VkDeviceSize from, VkDeviceSize to, VkDeviceSize bytes) {
     const VkBufferCopy region{from, to, bytes};
     vkCmdCopyBuffer(cmd, source, target, 1, &region);
@@ -214,8 +219,8 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
     copy(lod_->output().state, VulkanLodSelection::kLimitedOffset, wordOffset(kLimited),
          2 * sizeof(uint32_t));
   }
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
   pending_[slot] = true;
   submission_[slot] = 0;
 }
@@ -223,7 +228,8 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
     VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const VulkanBuffer& splats,
     const SplatRenderer::Frame& frame) {
-  if (!cmd || slot >= kSlots || !camera || frame.orderSource != SplatRenderer::OrderSource::gpu)
+  if (!cmd || slot >= kFramesInFlight || !camera ||
+      frame.orderSource != SplatRenderer::OrderSource::gpu)
     return std::nullopt;
   collect(slot);
   VulkanVisibilityPass::Input input;
@@ -231,14 +237,13 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   input.splats = splats.handle();
   input.splatsBytes = splats.size();
   input.sourceCount = sourceCount_;
-  input.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanVisibilityPass::KeyBits::low16
-                                                     : VulkanVisibilityPass::KeyBits::full32;
+  input.keyBits = keyBits();
   input.keyOrder = VulkanVisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT);
   if (queries_[slot]) vkCmdResetQueryPool(cmd, queries_[slot], 0, kTimestampCount);
   const auto timestamp = [&](uint32_t index) {
     if (queries_[slot])
@@ -265,19 +270,18 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   sort.count = visible.count;
   sort.keysBytes = sort.valuesBytes = VkDeviceSize{capacity_} * sizeof(uint32_t);
   sort.countBytes = sizeof(uint32_t);
-  sort.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanRadixSort::KeyBits::low16
-                                                    : VulkanRadixSort::KeyBits::full32;
+  sort.keyBits = keyBits();
   if (!radix_->encode(cmd, slot, sort)) return std::nullopt;
   timestamp(3);
   // The sorter's checked GPU count is authoritative even if visibility succeeded.
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
   const VkBufferCopy countToDraw{0, offsetof(VkDrawIndirectCommand, instanceCount),
                                  sizeof(uint32_t)};
   vkCmdCopyBuffer(cmd, radix_->output(slot).count, visible.indirect, 1, &countToDraw);
-  memoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+  vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   copyDiagnostics(cmd, slot, visible, input.candidateCapacity);
   return Draw{radix_->output(slot).values, visible.indirect, capacity_};
 }

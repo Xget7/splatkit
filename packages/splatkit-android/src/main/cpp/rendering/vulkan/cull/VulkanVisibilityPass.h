@@ -10,6 +10,8 @@
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
+#include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {
@@ -51,7 +53,6 @@ class VulkanVisibilityPass {
   const VulkanVisibilityCapabilities& capabilities() const { return capabilities_; }
 
   enum class CandidateMode : uint32_t { prefix, indices, ranges };
-  enum class KeyBits : uint32_t { full32, low16 };
   enum class KeyOrder : uint32_t { ascending, descending };
   struct Range {
     uint32_t offset, count, prefixEnd, pad;
@@ -101,7 +102,6 @@ class VulkanVisibilityPass {
   bool encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const;
   Output output(uint32_t slot) const;
 
-  static constexpr uint32_t kSlots = 2;
   static constexpr uint32_t kWorkgroupSize = 128;
   static constexpr uint32_t kMaxCapacity = 3000000;
   static constexpr uint32_t kOverflow = 1u;
@@ -130,19 +130,19 @@ class VulkanVisibilityPass {
   VkDescriptorSetLayout visibilitySetLayout_ = VK_NULL_HANDLE;
   VkDescriptorSetLayout prepareSetLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
-  std::array<VkDescriptorSet, kSlots> visibilitySets_{};
-  std::array<VkDescriptorSet, kSlots> prepareSets_{};
+  std::array<VkDescriptorSet, kFramesInFlight> visibilitySets_{};
+  std::array<VkDescriptorSet, kFramesInFlight> prepareSets_{};
   VkPipelineLayout visibilityLayout_ = VK_NULL_HANDLE;
   VkPipelineLayout prepareLayout_ = VK_NULL_HANDLE;
   VkPipeline visibilityPipeline_ = VK_NULL_HANDLE;
   VkPipeline preparePipeline_ = VK_NULL_HANDLE;
 
   std::unique_ptr<VulkanBuffer> dummy_;  // immutable zero words for inactive input descriptors
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indices_{};
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> depthKeys_{};
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> counts_{};
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> indirect_{};
-  std::array<std::unique_ptr<VulkanBuffer>, kSlots> status_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indices_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> depthKeys_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> counts_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indirect_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> status_{};
 };
 
 }  // namespace splatkit

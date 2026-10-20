@@ -8,7 +8,7 @@
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
-#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "splat/core/Result.h"
 #include "splat/math/Mat4.h"
 #include "splat/math/Vec3.h"
@@ -34,7 +34,7 @@ class VulkanCameraUniforms {
  private:
   VulkanCameraUniforms() = default;
 
-  std::array<std::unique_ptr<VulkanBuffer>, VulkanFrameLoop::kFramesInFlight> uniforms_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> uniforms_{};
 };
 
 }  // namespace splatkit
