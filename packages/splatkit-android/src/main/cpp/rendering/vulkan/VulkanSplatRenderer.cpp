@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "engine/TraceSection.h"
 #include "rendering/vulkan/sort/VulkanRadixSort.h"
 
 #include "splatkit/Log.h"
@@ -118,6 +119,7 @@ std::optional<GpuWorldInfo> VulkanSplatRenderer::world() const {
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
+  const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
@@ -148,6 +150,7 @@ bool VulkanSplatRenderer::selectsLodOnGpu() const {
 
 bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
                                          uint32_t budget) {
+  const TraceSection section(trace::kUploadWorld);
   if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
   auto compute =
@@ -167,6 +170,7 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
 }
 
 bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
+  const TraceSection section(trace::kUploadWorld);
   if (!splats_) return false;
   ctx_.waitIdle();
   auto compute = VulkanFrameCompute::create(ctx_, capacity);
@@ -186,6 +190,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
 }
 
 bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) {
+  const TraceSection section(trace::kUploadTile);
   if (!splats_ || !world_) return false;
   return world_->uploadTile(offset, cloud);
 }
@@ -194,7 +199,10 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!ready()) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  VulkanFrameLoop::Status status = frameLoop_.beginFrame(surface_.swapchain(), imageIndex, cmd);
+  VulkanFrameLoop::Status status = [&] {
+    const TraceSection section(trace::kWaitForFrameSlot);
+    return frameLoop_.beginFrame(surface_.swapchain(), imageIndex, cmd);
+  }();
   if (status == VulkanFrameLoop::Status::swapchainOutOfDate) {
     rebuildSurface(status);
     return false;
@@ -209,7 +217,10 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     const VkBuffer camera =
         camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, extent, outputLinear);
-    gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
+    {
+      const TraceSection section(trace::kEncodeCompute);
+      gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
+    }
     if (gpuDraw)
       splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
     else
@@ -253,7 +264,10 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   surface_.blitIfScaled(cmd, imageIndex);
 
   const uint64_t submittedBefore = frameLoop_.lastSubmission();
-  status = frameLoop_.endFrame(surface_.swapchain(), imageIndex);
+  {
+    const TraceSection section(trace::kSubmitPresent);
+    status = frameLoop_.endFrame(surface_.swapchain(), imageIndex);
+  }
   if (gpuDraw && frameLoop_.lastSubmission() != submittedBefore)
     compute_->submitted(slot, frameLoop_.lastSubmission());
   const bool drewWorld =

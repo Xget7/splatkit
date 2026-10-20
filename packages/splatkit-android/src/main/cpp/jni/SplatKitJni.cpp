@@ -12,6 +12,7 @@
 #include <string>
 
 #include "engine/AndroidEngine.h"
+#include "engine/TraceSection.h"
 #include "jni/JniConversions.h"
 #include "splatkit/Log.h"
 
@@ -22,6 +23,7 @@
 
 namespace {
 
+using splatkit::TraceSection;
 using splatkit::jni::cameraPoseToFloats;
 using splatkit::jni::cameraRequestFromDoubles;
 using splatkit::jni::cameraStateToDoubles;
@@ -42,6 +44,7 @@ using splatkit::jni::statsToFloats;
 using splatkit::jni::toJni;
 using splatkit::jni::withBytes;
 using splatkit::jni::withUtf8;
+namespace trace = splatkit::trace;
 
 // The handle Kotlin holds is the host's address; JNI has no other way to carry it.
 splatkit::AndroidEngine* toHost(jlong handle) {
@@ -164,6 +167,7 @@ SPLATKIT_JNI(void, nativeLoadWorld)(JNIEnv* env, jobject, jlong handle, jbyteArr
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
   withBytes(env, bytes, [engine](const std::uint8_t* data, std::size_t size) {
+    const TraceSection section(trace::kDecodeWorld);
     engine->loadWorld(data, size);
   });
 }
@@ -172,6 +176,7 @@ SPLATKIT_JNI(void, nativeLoadCollider)(JNIEnv* env, jobject, jlong handle, jbyte
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
   withBytes(env, bytes, [engine](const std::uint8_t* data, std::size_t size) {
+    const TraceSection section(trace::kDecodeCollider);
     engine->loadCollider(data, size);
   });
 }
@@ -179,19 +184,28 @@ SPLATKIT_JNI(void, nativeLoadCollider)(JNIEnv* env, jobject, jlong handle, jbyte
 SPLATKIT_JNI(void, nativeLoadWorldFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
-  withUtf8(env, path, [engine](const std::string& p) { engine->loadWorldFile(p); });
+  withUtf8(env, path, [engine](const std::string& p) {
+    const TraceSection section(trace::kDecodeWorld);
+    engine->loadWorldFile(p);
+  });
 }
 
 SPLATKIT_JNI(void, nativeLoadTiledWorldFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
-  withUtf8(env, path, [engine](const std::string& p) { engine->loadTiledWorldFile(p); });
+  withUtf8(env, path, [engine](const std::string& p) {
+    const TraceSection section(trace::kDecodeWorld);
+    engine->loadTiledWorldFile(p);
+  });
 }
 
 SPLATKIT_JNI(void, nativeLoadColliderFile)(JNIEnv* env, jobject, jlong handle, jstring path) {
   auto* engine = toEngine(handle);
   if (engine == nullptr) return;
-  withUtf8(env, path, [engine](const std::string& p) { engine->loadColliderFile(p); });
+  withUtf8(env, path, [engine](const std::string& p) {
+    const TraceSection section(trace::kDecodeCollider);
+    engine->loadColliderFile(p);
+  });
 }
 
 // Camera and input.

@@ -2,6 +2,7 @@
 
 #include <android/log.h>
 
+#include "engine/TraceSection.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {
@@ -51,9 +52,11 @@ void AndroidEngine::setEventSink(EventSink sink) {
 }
 
 void AndroidEngine::render(int64_t frameTimeNanos) {
+  const TraceSection section(trace::kFrame);
   // Before the engine samples its stats, which a still scene would otherwise leave stale.
   renderer_->collectCompletedFrames();
   engine_->render(frameTimeNanos);
+  traceBenchmark();
   if (awaitingWorldFrame_ && renderer_->hasCompletedWorldFrame()) {
     awaitingWorldFrame_ = false;
     // The frame may have finished during this render: read it, so stats read after the
@@ -62,6 +65,17 @@ void AndroidEngine::render(int64_t frameTimeNanos) {
     engine_->publishStats();
     if (eventSink_) eventSink_(kWorldFrameReady, {}, worldFrameSplatCount_);
   }
+}
+
+// One async slice over the benchmark turn, so a trace can be cut to the measured window.
+void AndroidEngine::traceBenchmark() {
+  const bool running = engine_->benchmarkRunning();
+  if (running == benchmarkTraced_) return;
+  benchmarkTraced_ = running;
+  if (running)
+    ATrace_beginAsyncSection(trace::kBenchmark, trace::kBenchmarkCookie);
+  else
+    ATrace_endAsyncSection(trace::kBenchmark, trace::kBenchmarkCookie);
 }
 
 }  // namespace splatkit
