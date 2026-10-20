@@ -18,10 +18,12 @@ const {execFileSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const destination = path.join(root, 'ios', 'SplatKitCore.xcframework');
+// macOS and the Linux CI runners both ship it here; a PATH lookup could run any unzip.
+const UNZIP = '/usr/bin/unzip';
 
 function unzip(zipPath, destDir) {
   fs.mkdirSync(destDir, {recursive: true});
-  execFileSync('unzip', ['-q', '-o', zipPath, '-d', destDir], {
+  execFileSync(UNZIP, ['-q', '-o', zipPath, '-d', destDir], {
     stdio: 'inherit',
   });
 }

@@ -247,7 +247,7 @@ test('Android adapter streams a tileset and loads any other world as one file', 
   // The SDK's tiled load takes no options, so the budgets it reads at upload are set first.
   assert.match(
     view,
-    /WorldKind\.TILESET\) \{\s*(\/\/[^\n]*\s*)*view\.maxShDegree = world\.maxShDegree\s*view\.residencyBudget = world\.residencyCapacitySplats\s*view\.loadTiledWorld\(file\)/,
+    /WorldKind\.TILESET\) \{\s*(?:\/\/[^\n]*\n\s*)*view\.maxShDegree = world\.maxShDegree\s*view\.residencyBudget = world\.residencyCapacitySplats\s*view\.loadTiledWorld\(file\)/,
   );
   assert.match(
     view,

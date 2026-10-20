@@ -25,7 +25,9 @@ export function integer(
   max: number,
 ): void {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer in [${min}, ${max}]`);
+    throw new RangeError(
+      `${name} must be an integer in [${String(min)}, ${String(max)}]`,
+    );
   }
 }
 
@@ -36,6 +38,8 @@ export function range(
   max: number,
 ): void {
   if (!Number.isFinite(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be finite and in [${min}, ${max}]`);
+    throw new RangeError(
+      `${name} must be finite and in [${String(min)}, ${String(max)}]`,
+    );
   }
 }

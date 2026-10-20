@@ -219,9 +219,13 @@ test('collider requests and character settings are validated before they reach n
     validateColliderRequest,
     validateCharacter,
   } = require('../build/contracts.js');
-  validateColliderRequest({requestId: 'c1', filePath: '/tmp/room.glb'});
+  validateColliderRequest({requestId: 'c1', filePath: '/documents/room.glb'});
   assert.throws(
-    () => validateColliderRequest({requestId: ' ', filePath: '/tmp/room.glb'}),
+    () =>
+      validateColliderRequest({
+        requestId: ' ',
+        filePath: '/documents/room.glb',
+      }),
     TypeError,
   );
   assert.throws(

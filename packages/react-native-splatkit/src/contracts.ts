@@ -208,16 +208,16 @@ function validateLens(request: WorldRequest): void {
   }
   const near = Math.fround(nearPlane);
   const far = Math.fround(farPlane);
-  if (!Number.isFinite(nearPlane) || !(near > 0)) {
+  if (!Number.isFinite(nearPlane) || near <= 0) {
     throw new RangeError('nearPlane must be finite and positive');
   }
   if (
     !Number.isFinite(far) ||
-    !(far > near) ||
+    far <= near ||
     far / near > MAX_DEPTH_RANGE_RATIO
   ) {
     throw new RangeError(
-      `farPlane must be finite, beyond nearPlane and at most ${MAX_DEPTH_RANGE_RATIO} times it`,
+      `farPlane must be finite, beyond nearPlane and at most ${String(MAX_DEPTH_RANGE_RATIO)} times it`,
     );
   }
 }
@@ -324,10 +324,13 @@ function cameraNumber(name: string, value: number): void {
 /** Structural validation only; native owns transitions and effective limits. */
 export function validateCameraRequest(request: CameraRequest): void {
   integer('revision', request.revision, 1, MAX_INT32);
-  if (request.mode === CameraMode.firstPerson) return;
-  if (request.mode !== CameraMode.orbit)
+  if (!(Object.values(CameraMode) as unknown[]).includes(request.mode)) {
     throw new RangeError('invalid camera mode');
-  if (!request.anchor || typeof request.anchor !== 'object') {
+  }
+  if (request.mode === CameraMode.firstPerson) return;
+  // JavaScript callers bypass the type, so the anchor is checked as unknown data.
+  const anchor: unknown = request.anchor;
+  if (typeof anchor !== 'object' || anchor === null) {
     throw new TypeError('anchor must be a world point');
   }
   cameraNumber('anchor.x', request.anchor.x);

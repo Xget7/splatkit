@@ -13,7 +13,7 @@ const {WorldKind} = require('../build/contracts');
 
 const world = {
   requestId: 'world-1',
-  filePath: '/tmp/world.spz',
+  filePath: '/documents/world.spz',
   maxShDegree: 3,
 };
 const capabilities = {
@@ -140,7 +140,7 @@ test('a world is one file unless it names a tileset, which keeps its residency b
   const tileset = new SplatKitBuilder()
     .withWorld({
       ...world,
-      filePath: '/tmp/city/tileset.json',
+      filePath: '/documents/city/tileset.json',
       kind: WorldKind.tileset,
     })
     .withPerformance({residencyCapacitySplats: 1_500_000})
