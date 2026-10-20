@@ -161,6 +161,8 @@ class MainActivity : Activity() {
                     colliderPath?.let { splatView.loadCollider(externalFile(it)) }
                 }
             } catch (e: java.io.IOException) {
+                // scripts/android_perf.py waits for this marker in logcat.
+                Log.e(TAG, "World failed: ${e.message}")
                 runOnUiThread { toast("Could not read the world: ${e.message}") }
             }
         }.start()

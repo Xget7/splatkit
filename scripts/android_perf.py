@@ -22,6 +22,9 @@ APP_DIR = ROOT / "apps" / "android-dev"
 BUILD_VARIANT = "release"
 GRADLE_TASK = ":app:assembleRelease"
 APK = APP_DIR / "app" / "build" / "outputs" / "apk" / BUILD_VARIANT / f"app-{BUILD_VARIANT}.apk"
+ASSETS_DIR = APP_DIR / "app" / "src" / "main" / "assets"
+# The scene MainActivity loads from its assets when the launch carries no world extra.
+SCENE_ASSETS = ("kitchen_500k.spz", "kitchen_collider.glb")
 PACKAGE = perfetto_analysis.PACKAGE
 ACTIVITY = f"{PACKAGE}/.MainActivity"
 DEVICE_TRACE = "/data/misc/perfetto-traces/splatkit-perf.perfetto-trace"
@@ -119,6 +122,15 @@ def git_state():
     return {"commit": sha, "dirty": bool(dirty.strip())}
 
 
+def require_scene_assets(assets_dir=ASSETS_DIR):
+    """Fails before the build when a bundled scene file is absent; the build would not notice."""
+    missing = [assets_dir / name for name in SCENE_ASSETS if not (assets_dir / name).is_file()]
+    if missing:
+        paths = ", ".join(str(path) for path in missing)
+        raise RuntimeError(f"missing scene file {paths}: the scene files are git-ignored, "
+                           "copy them in from a checkout that has them")
+
+
 def wait_for_benchmark(serial, timeout_s):
     """Polls logcat until the benchmark prints its GPU summary, or the world fails."""
     deadline = time.monotonic() + timeout_s
@@ -144,6 +156,7 @@ def wait_for_exit(serial, pid, timeout_s):
 
 def run(args):
     if not args.skip_build:
+        require_scene_assets()
         print(f"building the {BUILD_VARIANT} dev app", flush=True)
         subprocess.run(["./gradlew", GRADLE_TASK, "-q"], cwd=APP_DIR, check=True)
     print("installing", flush=True)
