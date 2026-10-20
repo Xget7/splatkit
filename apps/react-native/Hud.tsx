@@ -45,7 +45,11 @@ const PRESET_TITLES: Readonly<Record<QualityPreset, string>> = Object.freeze({
   [QualityPreset.performance]: 'Fast',
 });
 
-const BACKEND = Platform.select({ios: 'Metal', android: 'Vulkan'}) ?? 'GPU';
+const BACKEND = Platform.select({
+  ios: 'Metal',
+  android: 'Vulkan',
+  default: 'GPU',
+});
 
 /** Above this the frame rate reads as smooth, below the lower one as a problem. */
 const SMOOTH_FPS = 50;
@@ -63,8 +67,8 @@ const SEPARATOR = '  |  ';
 
 function compact(value: number): string {
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (value >= 1e3) return `${Math.round(value / 1e3)}k`;
-  return `${value}`;
+  if (value >= 1e3) return `${String(Math.round(value / 1e3))}k`;
+  return String(value);
 }
 
 function millis(value: number | null): string {
@@ -86,7 +90,7 @@ function barHeight(fps: number | null): number {
   return Math.max(1, Math.min(1, fps / GRAPH_MAX_FPS) * GRAPH_HEIGHT);
 }
 
-function Cell({label, value}: {label: string; value: string}) {
+function Cell({label, value}: Readonly<{label: string; value: string}>) {
   return (
     <View style={styles.cell}>
       <Text style={styles.cellLabel}>{label}</Text>
@@ -95,7 +99,7 @@ function Cell({label, value}: {label: string; value: string}) {
   );
 }
 
-function Graph({samples}: {samples: readonly number[]}) {
+function Graph({samples}: Readonly<{samples: readonly number[]}>) {
   const recent = samples.slice(-GRAPH_SAMPLES);
   const slots: readonly (number | null)[] = [
     ...new Array<null>(GRAPH_SAMPLES - recent.length).fill(null),
@@ -165,22 +169,24 @@ function Panel({stats, samples, settings}: PanelProps) {
   const low = recent.length === 0 ? null : Math.min(...recent);
 
   const pixels = PixelRatio.get() * settings.renderScale;
-  const resolution = `${Math.round(window.width * pixels)} x ${Math.round(
-    window.height * pixels,
-  )}`;
+  const width = String(Math.round(window.width * pixels));
+  const height = String(Math.round(window.height * pixels));
+  const resolution = `${width} x ${height}`;
+  const lodError =
+    settings.lodErrorPixels === null
+      ? ''
+      : ` @ ${String(settings.lodErrorPixels)} px`;
   // A tileset streams by its own error bound, so the LOD error does not apply to it.
   const budget =
     settings.worldKind === WorldKind.tileset
       ? `Resident ${compact(settings.budgetSplats)}`
-      : `LOD ${compact(settings.budgetSplats)}${
-          settings.lodErrorPixels === null
-            ? ''
-            : ` @ ${settings.lodErrorPixels} px`
-        }`;
+      : `LOD ${compact(settings.budgetSplats)}${lodError}`;
   const caption = [
     `${resolution} px`,
     budget,
-    settings.sortDepth === null ? null : `${settings.sortDepth}-bit sort`,
+    settings.sortDepth === null
+      ? null
+      : `${String(settings.sortDepth)}-bit sort`,
   ]
     .filter(part => part !== null)
     .join(SEPARATOR);
@@ -258,7 +264,9 @@ function Hud({
               key={value}
               accessibilityRole="button"
               accessibilityState={{selected: active}}
-              onPress={() => onPreset(value)}
+              onPress={() => {
+                onPreset(value);
+              }}
               style={[styles.preset, active && styles.presetActive]}>
               <Text
                 style={[styles.presetText, active && styles.presetTextActive]}>

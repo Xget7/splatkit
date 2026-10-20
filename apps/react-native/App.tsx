@@ -262,7 +262,7 @@ function Splat({filesPath}: Props) {
   // limits arriving with the engine never do, because reloading a world this size is seconds
   // of tree build and a second memory peak. Every other policy field reaches the engine live.
   const {requested} = configuration.performance;
-  const key = `${requested.lodBudgetSplats}`;
+  const key = String(requested.lodBudgetSplats);
   const request = useRef<{
     key: string;
     world: SplatKitViewProps['world'];
@@ -345,7 +345,9 @@ function Splat({filesPath}: Props) {
 
   const flightRunning = useSharedValue(false);
   const flightStarted = useSharedValue(-1);
-  const finishFlight = useCallback(() => setFlying(false), []);
+  const finishFlight = useCallback(() => {
+    setFlying(false);
+  }, []);
   const flightFrame = useFrameCallback(({timestamp}) => {
     if (!flightRunning.value) return;
     if (flightStarted.value < 0) flightStarted.value = timestamp;
@@ -417,7 +419,9 @@ function Splat({filesPath}: Props) {
         world={world}
         camera={camera}
         onCameraEvent={onCameraEvent}
-        onTouchStart={() => setFlying(false)}
+        onTouchStart={() => {
+          setFlying(false);
+        }}
         collider={
           control
             ? {
@@ -452,7 +456,9 @@ function Splat({filesPath}: Props) {
       {!control && status === null && (
         <View style={[styles.modes, {bottom: insets.bottom + STATUS_LIFT}]}>
           <Pressable
-            onPress={() => setFlying(current => !current)}
+            onPress={() => {
+              setFlying(current => !current);
+            }}
             style={styles.fly}>
             <Text style={styles.flyText}>{flying ? 'Stop' : 'Fly route'}</Text>
           </Pressable>
