@@ -31,12 +31,15 @@ class MetalRenderTarget {
   id<MTLTexture> depth() const { return depth_; }
   // Pixel format of color(); invalid while there is none.
   MTLPixelFormat format() const { return format_; }
+  // The scale of the last resize: color() is this fraction of the drawable.
+  float renderScale() const { return renderScale_; }
 
  private:
   id<MTLDevice> device_ = nil;
   id<MTLTexture> color_ = nil;  // scaled rendering or half-float GPU compositing
   id<MTLTexture> depth_ = nil;  // GPU-private, the size of the colour target
   MTLPixelFormat format_ = MTLPixelFormatInvalid;
+  float renderScale_ = 1.0f;
 };
 
 }  // namespace splatkit

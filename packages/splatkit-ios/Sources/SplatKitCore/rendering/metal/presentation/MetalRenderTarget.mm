@@ -9,6 +9,7 @@ namespace splatkit {
 bool MetalRenderTarget::resize(uint32_t width, uint32_t height, float renderScale,
                                MTLPixelFormat format) {
   release();
+  renderScale_ = renderScale;
   if (width == 0 || height == 0) return true;
   MTLTextureDescriptor* desc = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:format

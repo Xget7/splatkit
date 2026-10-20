@@ -1,12 +1,6 @@
 #pragma once
 
 #import <Metal/Metal.h>
-#if __has_include(<MetalFX/MetalFX.h>)
-#import <MetalFX/MetalFX.h>
-#define SPLATKIT_HAS_METALFX 1
-#else
-#define SPLATKIT_HAS_METALFX 0  // the iOS simulator SDK ships no MetalFX
-#endif
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <array>
@@ -22,6 +16,7 @@
 #include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/presentation/MetalRenderTarget.h"
+#include "rendering/metal/presentation/MetalUpscaler.h"
 #include "rendering/metal/selection/MetalLodSelection.h"
 #include "rendering/metal/world/MetalWorld.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -54,7 +49,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   bool spatialUpscaling() const override { return spatialUpscaling_; }
   // True while frames go through MetalFX: a scale below one, the setting on, and a device
   // that has the scaler. Otherwise the scaled target is blitted.
-  bool upscalerActive() const { return scaler_ != nil; }
+  bool upscalerActive() const { return upscaler_->active(); }
   void setLinearBlending(bool linear) override;
   bool linearBlending() const override { return linearBlending_; }
   void setVsync(bool vsync) override;
@@ -113,8 +108,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   MetalSplatRenderer() = default;
   bool createPipelines();
   bool createTarget();
-  // Rebuilds scaler_ and upscaled_ for the current target_; a nil scaler_ means the blit.
-  bool createScaler();
   MTLPixelFormat pixelFormat() const;
   // Where the splats are drawn: the drawable's format, or half floats when the GPU order
   // path accumulates coverage front to back, which 8 bits would round away.
@@ -127,7 +120,6 @@ class MetalSplatRenderer final : public SplatRenderer {
   id<MTLCommandBuffer> encodeVisibilityAndSort(const Frame& frame, uint32_t slot);
   void encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture, const Frame& frame,
                     uint32_t slot, uint32_t drawCount, bool gpuOrder);
-  void encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture);
   id<MTLBuffer> encodeCapture(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture,
                               CaptureHandler* onCapture);
   // Transfers the acquired inFlight_ slot to the final completion handler.
@@ -136,7 +128,6 @@ class MetalSplatRenderer final : public SplatRenderer {
 
   std::unique_ptr<MetalContext> context_;
   std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
-  id<MTLRenderPipelineState> blitPipeline_ = nil;
   // The GPU order path: front to back in batches, a saturation mask between them, the
   // background last.
   id<MTLRenderPipelineState> projectedPipeline_ = nil;
@@ -152,12 +143,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   uint32_t width_ = 0;
   uint32_t height_ = 0;
   std::unique_ptr<MetalRenderTarget> target_;
-  id<MTLTexture> upscaled_ = nil;  // MetalFX output at drawable size, private storage
-#if SPLATKIT_HAS_METALFX
-  id<MTLFXSpatialScaler> scaler_ = nil;  // target_ to upscaled_, when active
-#else
-  id scaler_ = nil;  // stays nil: the scaled frame always goes through the blit
-#endif
+  std::unique_ptr<MetalUpscaler> upscaler_;
   std::unique_ptr<MetalWorld> world_;
   float renderScale_ = 1.0f;
   bool spatialUpscaling_ = true;

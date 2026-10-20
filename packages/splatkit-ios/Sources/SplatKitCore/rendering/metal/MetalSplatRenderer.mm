@@ -1,11 +1,5 @@
 #include "rendering/metal/MetalSplatRenderer.h"
 
-#if SPLATKIT_HAS_METALFX
-// Recorded in the object as an autolink option, so a static consumer (SwiftPM, CocoaPods)
-// links MetalFX exactly where this slice was built against it.
-asm(".linker_option \"-framework\", \"MetalFX\"");
-#endif
-
 #include <TargetConditionals.h>
 
 #include <algorithm>
@@ -34,6 +28,7 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
     if (uniform == nil) return nullptr;
   }
   r->target_ = std::make_unique<MetalRenderTarget>(r->context_->device());
+  r->upscaler_ = std::make_unique<MetalUpscaler>(r->context_->device(), r->context_->library());
   r->depthBits_ = MetalRadixSort::KeyBits::Full32;
   r->gpuSort_ = r->visibility_.create(r->context_->device(), r->context_->library(), r->depthBits_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
@@ -66,7 +61,9 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
   layer_.pixelFormat = pixelFormat();
   layer_.framebufferOnly = YES;
   ++generation_;
-  if (pipelineFormat_ != targetFormat() && !createPipelines()) {
+  bool built = upscaler_->setOutputFormat(pixelFormat());
+  if (pipelineFormat_ != targetFormat()) built = createPipelines() && built;
+  if (!built) {
     LOGE("rendering stopped: no pipelines");
     layer_ = nil;
   }
@@ -77,7 +74,7 @@ void MetalSplatRenderer::setDrawableSize(uint32_t width, uint32_t height) {
   LOGI("drawable %ux%u, was %ux%u", width, height, width_, height_);
   width_ = width;
   height_ = height;
-  if (scaler_ != nil) waitIdle();
+  if (upscaler_->active()) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -86,7 +83,7 @@ void MetalSplatRenderer::setRenderScale(float scale) {
   scale = std::clamp(scale, 0.1f, 2.0f);
   if (scale == renderScale_) return;
   renderScale_ = scale;
-  if (scaler_ != nil) waitIdle();
+  if (upscaler_->active()) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -96,7 +93,7 @@ void MetalSplatRenderer::setSpatialUpscaling(bool enabled) {
   spatialUpscaling_ = enabled;
   // The scaler is not retained by the command buffers that encode it, so it must not be
   // replaced while one is in flight.
-  if (scaler_ != nil) waitIdle();
+  if (upscaler_->active()) waitIdle();
   ++generation_;
   createTarget();
 }
@@ -107,8 +104,10 @@ void MetalSplatRenderer::setLinearBlending(bool linear) {
   waitIdle();
   if (layer_ != nil) layer_.pixelFormat = pixelFormat();
   ++generation_;
+  const bool blitReady = upscaler_->setOutputFormat(pixelFormat());
   createTarget();
-  if (!createPipelines()) {
+  const bool pipelinesReady = createPipelines();
+  if (!blitReady || !pipelinesReady) {
     LOGE("rendering stopped: no pipelines");
     layer_ = nil;
   }
@@ -205,68 +204,15 @@ MTLPixelFormat MetalSplatRenderer::targetFormat() const {
 }
 
 bool MetalSplatRenderer::createTarget() {
-  scaler_ = nil;
-  upscaled_ = nil;
+  upscaler_->reset();  // before the target is reallocated, so both are never resident
+  bool built = true;
   if ((renderScale_ == 1.0f && !gpuSort_) || width_ == 0 || height_ == 0) {
     target_->release();
-    return true;
+  } else {
+    built = target_->resize(width_, height_, renderScale_, targetFormat());
   }
-  if (!target_->resize(width_, height_, renderScale_, targetFormat())) return false;
-  return createScaler();
-}
-
-// MetalFX requires a private-storage output, which the iOS drawable is not, so the scaler
-// writes upscaled_ at drawable size and the blit pass copies that to the drawable.
-bool MetalSplatRenderer::createScaler() {
-  scaler_ = nil;
-  upscaled_ = nil;
-  const bool wanted = spatialUpscaling_ && target_->color() != nil && renderScale_ < 1.0f;
-#if SPLATKIT_HAS_METALFX
-  if (wanted) {
-    if (![MTLFXSpatialScalerDescriptor supportsDevice:context_->device()]) {
-      LOGI("MetalFX spatial scaler unsupported here; the scaled frame is blitted");
-    } else {
-      MTLFXSpatialScalerDescriptor* desc = [MTLFXSpatialScalerDescriptor new];
-      id<MTLTexture> color = target_->color();
-      desc.inputWidth = color.width;
-      desc.inputHeight = color.height;
-      desc.outputWidth = width_;
-      desc.outputHeight = height_;
-      desc.colorTextureFormat = color.pixelFormat;
-      desc.outputTextureFormat = pixelFormat();
-      desc.colorProcessingMode = linearBlending_ ? MTLFXSpatialScalerColorProcessingModeLinear
-                                                 : MTLFXSpatialScalerColorProcessingModePerceptual;
-      scaler_ = [desc newSpatialScalerWithDevice:context_->device()];
-      if (scaler_ == nil) {
-        LOGE("MetalFX spatial scaler %lux%lu to %ux%u failed; the scaled frame is blitted",
-             static_cast<unsigned long>(color.width), static_cast<unsigned long>(color.height),
-             width_, height_);
-      } else {
-        scaler_.inputContentWidth = color.width;
-        scaler_.inputContentHeight = color.height;
-        MTLTextureDescriptor* out =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat()
-                                                               width:width_
-                                                              height:height_
-                                                           mipmapped:NO];
-        out.usage =
-            MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite | MTLTextureUsageRenderTarget;
-        out.storageMode = MTLStorageModePrivate;
-        upscaled_ = [context_->device() newTextureWithDescriptor:out];
-        if (upscaled_ == nil) {
-          LOGE("MetalFX output %ux%u failed; the scaled frame is blitted", width_, height_);
-          scaler_ = nil;
-          return true;
-        }
-        LOGI("MetalFX spatial scaler %lux%lu to %ux%u", static_cast<unsigned long>(color.width),
-             static_cast<unsigned long>(color.height), width_, height_);
-      }
-    }
-  }
-#else
-  if (wanted) LOGI("MetalFX is absent from this SDK; the scaled frame is blitted");
-#endif
-  return true;
+  const bool configured = upscaler_->configure(*target_, width_, height_, spatialUpscaling_);
+  return built && configured;
 }
 
 // One splat pipeline per spherical harmonics degree, specialised through a function
@@ -353,15 +299,6 @@ bool MetalSplatRenderer::createPipelines() {
   depth.depthWriteEnabled = YES;
   maskDepth_ = [context_->device() newDepthStencilStateWithDescriptor:depth];
 
-  MTLRenderPipelineDescriptor* blit = [MTLRenderPipelineDescriptor new];
-  blit.vertexFunction = [context_->library() newFunctionWithName:@"blitVertex"];
-  blit.fragmentFunction = [context_->library() newFunctionWithName:@"blitFragment"];
-  blit.colorAttachments[0].pixelFormat = pixelFormat();
-  blitPipeline_ = [context_->device() newRenderPipelineStateWithDescriptor:blit error:&error];
-  if (blitPipeline_ == nil) {
-    LOGE("blit pipeline: %s", error.localizedDescription.UTF8String);
-    return false;
-  }
   LOGI("pipelines for format %lu", static_cast<unsigned long>(pipelineFormat_));
   return true;
 }
@@ -507,7 +444,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
 
   id<MTLCommandBuffer> cmd = [context_->queue() commandBuffer];
   encodeRaster(cmd, drawable.texture, frame, slot, drawCount, gpuOrder);
-  encodeOutput(cmd, drawable.texture);
+  upscaler_->encode(cmd, target_->color(), drawable.texture);
   CaptureHandler onCapture;
   id<MTLBuffer> captured = encodeCapture(cmd, drawable.texture, &onCapture);
 
@@ -665,29 +602,6 @@ void MetalSplatRenderer::encodeRaster(id<MTLCommandBuffer> cmd, id<MTLTexture> d
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
   }
   [encoder endEncoding];
-}
-
-void MetalSplatRenderer::encodeOutput(id<MTLCommandBuffer> cmd, id<MTLTexture> drawableTexture) {
-  id<MTLTexture> source = target_->color();
-#if SPLATKIT_HAS_METALFX
-  if (scaler_ != nil) {
-    scaler_.colorTexture = source;
-    scaler_.outputTexture = upscaled_;
-    [scaler_ encodeToCommandBuffer:cmd];
-    source = upscaled_;
-  }
-#endif
-  if (source != nil) {
-    MTLRenderPassDescriptor* blit = [MTLRenderPassDescriptor renderPassDescriptor];
-    blit.colorAttachments[0].texture = drawableTexture;
-    blit.colorAttachments[0].loadAction = MTLLoadActionDontCare;
-    blit.colorAttachments[0].storeAction = MTLStoreActionStore;
-    id<MTLRenderCommandEncoder> scale = [cmd renderCommandEncoderWithDescriptor:blit];
-    [scale setRenderPipelineState:blitPipeline_];
-    [scale setFragmentTexture:source atIndex:0];
-    [scale drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-    [scale endEncoding];
-  }
 }
 
 id<MTLBuffer> MetalSplatRenderer::encodeCapture(id<MTLCommandBuffer> cmd,
