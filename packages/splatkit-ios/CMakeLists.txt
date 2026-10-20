@@ -47,6 +47,7 @@ add_library(splatkit_ios STATIC
   Sources/SplatKitCore/rendering/metal/sort/MetalRadixSort.mm
   Sources/SplatKitCore/rendering/metal/world/MetalWorld.mm
   Sources/SplatKitCore/engine/SKSplatEngine.mm
+  Sources/SplatKitCore/engine/SKTypeConversions.mm
 )
 target_include_directories(splatkit_ios
   PUBLIC Sources/SplatKitCore/include

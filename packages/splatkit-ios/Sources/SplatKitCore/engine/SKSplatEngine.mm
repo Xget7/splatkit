@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "diagnostics/SKPngWriter.h"
+#include "engine/SKTypeConversions.h"
 #include "rendering/metal/MetalSplatRenderer.h"
 #include "splatkit/Log.h"
 #include "splatkit/engine/SplatEngine.h"
@@ -17,65 +18,6 @@ void nslogSink(splatkit::LogLevel level, const char* message) {
                     : level == splatkit::LogLevel::warn ? "W"
                                                         : "I";
   NSLog(@"SplatKit %s: %s", tag, message);
-}
-
-// Bridge between the C++ policy types and their C mirror imported by Swift.
-SKRenderPolicy fromCppPolicy(const splatkit::RenderPolicy& p) {
-  SKRenderPolicy out{};
-  out.raster = static_cast<uint32_t>(p.raster);
-  out.tileSize = p.tileSize;
-  out.lodErrorPixels = p.lodErrorPixels;
-  out.alphaThreshold = p.alphaThreshold;
-  out.subpixelThreshold = p.subpixelThreshold;
-  out.enableFrustumCulling = p.enableFrustumCulling;
-  out.enableHiZOcclusion = p.enableHiZOcclusion;
-  out.enableEarlyTermination = p.enableEarlyTermination;
-  out.sortDepth = static_cast<uint32_t>(p.sortDepth);
-  out.lodSplatLimit = p.lodSplatLimit;
-  return out;
-}
-
-bool toCppPolicy(SKRenderPolicy p, splatkit::RenderPolicy* out) {
-  if (p.sortDepth != 16 && p.sortDepth != 32) return false;
-  out->raster = static_cast<splatkit::RasterStrategy>(p.raster);
-  out->tileSize = p.tileSize;
-  out->lodErrorPixels = p.lodErrorPixels;
-  out->alphaThreshold = p.alphaThreshold;
-  out->subpixelThreshold = p.subpixelThreshold;
-  out->enableFrustumCulling = p.enableFrustumCulling == YES;
-  out->enableHiZOcclusion = p.enableHiZOcclusion == YES;
-  out->enableEarlyTermination = p.enableEarlyTermination == YES;
-  out->sortDepth = p.sortDepth == 16 ? splatkit::SortKeyBits::low16 : splatkit::SortKeyBits::full32;
-  out->lodSplatLimit = p.lodSplatLimit;
-  return true;
-}
-
-SKRenderPolicySupport fromCppSupport(const splatkit::RenderPolicySupport& s) {
-  SKRenderPolicySupport out{};
-  out.raster = s.raster;
-  out.tileSize = s.tileSize;
-  out.lodErrorPixels = s.lodErrorPixels;
-  out.alphaThreshold = s.alphaThreshold;
-  out.subpixelThreshold = s.subpixelThreshold;
-  out.enableFrustumCulling = s.enableFrustumCulling;
-  out.enableHiZOcclusion = s.enableHiZOcclusion;
-  out.enableEarlyTermination = s.enableEarlyTermination;
-  out.sortDepth = s.sortDepth;
-  out.rasterMask = s.rasterMask;
-  out.tileSizeMask = s.tileSizeMask;
-  out.minLodErrorPixels = s.minLodErrorPixels;
-  out.maxLodErrorPixels = s.maxLodErrorPixels;
-  out.minSubpixelThreshold = s.minSubpixelThreshold;
-  out.maxSubpixelThreshold = s.maxSubpixelThreshold;
-  out.lodSplatLimit = s.lodSplatLimit;
-  return out;
-}
-
-splatkit::LensSettings lensSettings(const SKLensSettings& s) {
-  splatkit::LensSettings out;
-  if (s.hasFieldOfView) out.fieldOfViewDegrees = s.fieldOfViewDegrees;
-  if (s.hasDepthRange) out.depthRange = splatkit::DepthRange{s.nearPlane, s.farPlane};
-  return out;
 }
 
 }  // namespace
@@ -204,7 +146,7 @@ splatkit::LensSettings lensSettings(const SKLensSettings& s) {
 }
 
 - (SKRenderPolicy)renderPolicy {
-  return fromCppPolicy(_engine->renderPolicy());
+  return splatkit::fromCppPolicy(_engine->renderPolicy());
 }
 
 - (SKDeviceCapabilities)deviceCapabilities {
@@ -217,8 +159,8 @@ splatkit::LensSettings lensSettings(const SKLensSettings& s) {
   out.supportsHiZOcclusion = caps.supportsHiZOcclusion;
   out.supportsSubgroups = caps.supportsSubgroups;
   out.maxTextureDimension = caps.maxTextureDimension;
-  out.policy = fromCppSupport(caps.policy);
-  out.fallback = fromCppPolicy(caps.policy.fallback);
+  out.policy = splatkit::fromCppSupport(caps.policy);
+  out.fallback = splatkit::fromCppPolicy(caps.policy.fallback);
   return out;
 }
 
@@ -226,7 +168,7 @@ splatkit::LensSettings lensSettings(const SKLensSettings& s) {
                                     reason:(NSString**)reason
                                   warnings:(NSArray<NSString*>**)warnings {
   splatkit::RenderPolicy requested;
-  if (!toCppPolicy(policy, &requested)) {
+  if (!splatkit::toCppPolicy(policy, &requested)) {
     if (reason != nullptr) *reason = @"sortDepth must be 16 or 32";
     return SKRenderPolicyOutcomeInvalid;
   }
@@ -296,11 +238,11 @@ splatkit::LensSettings lensSettings(const SKLensSettings& s) {
 }
 
 - (BOOL)setLens:(SKLensSettings)settings {
-  return _engine->setLens(lensSettings(settings)) ? YES : NO;
+  return _engine->setLens(splatkit::lensSettings(settings)) ? YES : NO;
 }
 
 + (BOOL)acceptsLens:(SKLensSettings)settings {
-  return splatkit::Lens::with(lensSettings(settings)).has_value() ? YES : NO;
+  return splatkit::Lens::with(splatkit::lensSettings(settings)).has_value() ? YES : NO;
 }
 
 - (void)setAttitude:(const float*)rowMajor {
