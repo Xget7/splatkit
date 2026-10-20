@@ -53,6 +53,7 @@ add_library(splatkit SHARED
   rendering/vulkan/selection/VulkanLodSelection.cpp
   rendering/vulkan/sort/VulkanRadixSort.cpp
   rendering/vulkan/frame/VulkanFrameCompute.cpp
+  rendering/vulkan/frame/VulkanCameraUniforms.cpp
   rendering/vulkan/VulkanSplatRenderer.cpp
   rendering/vulkan/device/Vma.cpp
   engine/AndroidEngine.cpp

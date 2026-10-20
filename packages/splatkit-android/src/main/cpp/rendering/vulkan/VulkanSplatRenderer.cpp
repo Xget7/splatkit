@@ -239,8 +239,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   // Outside the render pass: transfers are not allowed inside one.
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
-    const VkBuffer camera =
-        splats_->updateCamera(slot, frame.view, frame.proj, frame.cameraPosition, extent);
+    const VkBuffer camera = camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
+                                            extent, isSrgb(pipelineFormat_));
     gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
     if (gpuDraw)
       splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
@@ -274,9 +274,12 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (world_ && gpuDraw) {
     splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
-    splats_->draw(cmd, slot, *world_, std::min(frame.drawCount, world_->count),
-                  std::min(frame.shDegree, world_->shDegree), frame.view, frame.proj,
-                  frame.cameraPosition, extent);
+    const uint32_t count = std::min(frame.drawCount, world_->count);
+    if (count > 0) {
+      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, extent,
+                      isSrgb(pipelineFormat_));
+    }
+    splats_->draw(cmd, slot, *world_, count, std::min(frame.shDegree, world_->shDegree));
   }
 
   vkCmdEndRenderPass(cmd);
@@ -365,7 +368,15 @@ bool VulkanSplatRenderer::createPipelines() {
   const VkRenderPass pass = activeRenderPass();
   LOGI("pipelines for format %d, offscreen %d", static_cast<int>(pipelineFormat_), target_ ? 1 : 0);
 
-  auto splats = VulkanSplatPipeline::create(ctx_, pass, isSrgb(pipelineFormat_));
+  if (!camera_) {
+    auto camera = VulkanCameraUniforms::create(ctx_);
+    if (!camera) {
+      LOGE("%s", camera.error().message.c_str());
+      return false;
+    }
+    camera_ = std::move(camera.value());
+  }
+  auto splats = VulkanSplatPipeline::create(ctx_, pass, *camera_);
   if (!splats) {
     LOGE("%s", splats.error().message.c_str());
     return false;

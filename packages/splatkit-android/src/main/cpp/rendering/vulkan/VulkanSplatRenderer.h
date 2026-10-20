@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/frame/VulkanCameraUniforms.h"
 #include "rendering/vulkan/frame/VulkanFrameCompute.h"
 #include "rendering/vulkan/presentation/VulkanFrameLoop.h"
 #include "rendering/vulkan/presentation/VulkanRenderTarget.h"
@@ -99,6 +100,8 @@ class VulkanSplatRenderer final : public SplatRenderer {
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanSwapchain> swapchain_;
   std::unique_ptr<VulkanRenderTarget> target_;  // only when renderScale_ != 1
+  // Created with the first pipelines and kept, so a rebuilt pipeline binds the same buffers.
+  std::unique_ptr<VulkanCameraUniforms> camera_;
   std::unique_ptr<VulkanSplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<VulkanWorld> world_;

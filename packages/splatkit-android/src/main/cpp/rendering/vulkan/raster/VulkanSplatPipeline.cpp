@@ -1,8 +1,6 @@
 #include "rendering/vulkan/raster/VulkanSplatPipeline.h"
 
 #include <algorithm>
-#include <cmath>
-#include <cstring>
 
 #include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
@@ -24,10 +22,9 @@ constexpr uint32_t kStorageBindings = kBindings - 1;
 }  // namespace
 
 splat::Result<std::unique_ptr<VulkanSplatPipeline>> VulkanSplatPipeline::create(
-    const VulkanContext& ctx, VkRenderPass renderPass, bool swapchainIsSrgb) {
+    const VulkanContext& ctx, VkRenderPass renderPass, const VulkanCameraUniforms& cameras) {
   std::unique_ptr<VulkanSplatPipeline> p(new VulkanSplatPipeline(ctx));
-  p->outputLinear_ = swapchainIsSrgb;
-  if (!p->createDescriptors()) {
+  if (!p->createDescriptors(cameras)) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "splat descriptors"};
   }
   if (!p->createPipelines(renderPass)) {
@@ -48,7 +45,7 @@ VulkanSplatPipeline::~VulkanSplatPipeline() {
 
 // Set 0: binding 0 camera (uniform), 1 splats, 2 draw order, 3 spherical harmonics
 // (storage). One set per frame in flight so a uniform update never races the GPU.
-bool VulkanSplatPipeline::createDescriptors() {
+bool VulkanSplatPipeline::createDescriptors(const VulkanCameraUniforms& cameras) {
   VkDevice device = ctx_.device();
 
   VkDescriptorSetLayoutBinding bindings[kBindings]{};
@@ -83,10 +80,7 @@ bool VulkanSplatPipeline::createDescriptors() {
   if (vkAllocateDescriptorSets(device, &allocInfo, sets_.data()) != VK_SUCCESS) return false;
 
   for (uint32_t i = 0; i < VulkanFrameLoop::kFramesInFlight; ++i) {
-    uniforms_[i] =
-        VulkanBuffer::hostVisible(ctx_, sizeof(CameraUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    if (!uniforms_[i]) return false;
-    const VkDescriptorBufferInfo info{uniforms_[i]->handle(), 0, sizeof(CameraUniform)};
+    const VkDescriptorBufferInfo info{cameras.buffer(i), 0, sizeof(CameraUniform)};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.dstSet = sets_[i];
     write.dstBinding = kCameraBinding;
@@ -211,27 +205,6 @@ void VulkanSplatPipeline::bindWorld(const VulkanWorld& world) {
   }
 }
 
-VkBuffer VulkanSplatPipeline::updateCamera(uint32_t frameSlot, const splat::Mat4& view,
-                                           const splat::Mat4& proj,
-                                           const splat::Vec3& cameraPosition, VkExtent2D extent) {
-  CameraUniform u{};
-  u.cameraPosition[0] = cameraPosition.x;
-  u.cameraPosition[1] = cameraPosition.y;
-  u.cameraPosition[2] = cameraPosition.z;
-  u.view = view;
-  u.proj = proj;
-  u.screenSize[0] = static_cast<float>(extent.width);
-  u.screenSize[1] = static_cast<float>(extent.height);
-  u.focal[0] = u.screenSize[0] * proj.at(0, 0) / 2;
-  u.focal[1] = u.screenSize[1] * proj.at(1, 1) / 2;
-  u.tanHalfFov[0] = 1 / proj.at(0, 0);
-  u.tanHalfFov[1] = 1 / proj.at(1, 1);
-  u.outputLinear = outputLinear_ ? 1u : 0u;
-  std::memcpy(uniforms_[frameSlot]->mapped(), &u, sizeof(u));
-  uniforms_[frameSlot]->flush(0, sizeof(u));
-  return uniforms_[frameSlot]->handle();
-}
-
 void VulkanSplatPipeline::bindOrder(uint32_t frameSlot, VkBuffer order, uint32_t capacity) {
   const VkDescriptorBufferInfo info{order, 0,
                                     VkDeviceSize{std::max(1u, capacity)} * sizeof(uint32_t)};
@@ -259,11 +232,8 @@ void VulkanSplatPipeline::drawIndirect(VkCommandBuffer cmd, uint32_t frameSlot,
 }
 
 void VulkanSplatPipeline::draw(VkCommandBuffer cmd, uint32_t frameSlot, const VulkanWorld& world,
-                               uint32_t count, int shDegree, const splat::Mat4& view,
-                               const splat::Mat4& proj, const splat::Vec3& cameraPosition,
-                               VkExtent2D extent) {
+                               uint32_t count, int shDegree) {
   if (count == 0) return;
-  updateCamera(frameSlot, view, proj, cameraPosition, extent);
   bindDraw(cmd, frameSlot, world, shDegree);
   vkCmdDraw(cmd, 4, std::min(count, world.count), 0, 0);
 }
