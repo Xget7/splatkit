@@ -5,6 +5,8 @@
 #include <string>
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
+#include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {
@@ -17,7 +19,6 @@ namespace splatkit {
 // VkBuffer handles must not alias the same memory. External offsets/sizes must be truthful.
 class VulkanRadixSort {
  public:
-  enum class KeyBits : uint32_t { full32, low16 };
   struct Capabilities {
     bool supported = false;
     uint32_t subgroupSize = 0;
@@ -35,7 +36,7 @@ class VulkanRadixSort {
     VkBuffer keys = VK_NULL_HANDLE, values = VK_NULL_HANDLE;
     VkBuffer count = VK_NULL_HANDLE, status = VK_NULL_HANDLE;
   };
-  static constexpr uint32_t kSlots = 2, kBlock = 2048, kMaxCapacity = 3000000;
+  static constexpr uint32_t kBlock = 2048, kMaxCapacity = 3000000;
   static constexpr uint32_t kInvalidCount = 1;
   static Capabilities queryCapabilities(const VulkanContext& ctx);
   static splat::Result<std::unique_ptr<VulkanRadixSort>> create(const VulkanContext& ctx);
@@ -71,7 +72,7 @@ class VulkanRadixSort {
   void recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits keyBits) const;
   const VulkanContext& ctx_;
   uint32_t capacity_ = 0;
-  std::array<Slot, kSlots> slots_;
+  std::array<Slot, kFramesInFlight> slots_;
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
@@ -79,6 +80,6 @@ class VulkanRadixSort {
   std::array<VkPipeline, kStageCount> pipelines_{};
   // First pass external->B; second B->A; subsequent A->B and B->A.
   static constexpr uint32_t kSets = 3;
-  std::array<std::array<VkDescriptorSet, kSets>, kSlots> sets_{};
+  std::array<std::array<VkDescriptorSet, kSets>, kFramesInFlight> sets_{};
 };
 }  // namespace splatkit

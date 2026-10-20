@@ -128,9 +128,10 @@ bool VulkanRadixSort::initialize() {
   setInfo.pBindings = bindings.data();
   if (vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &setLayout_) != VK_SUCCESS)
     return false;
-  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kBindings * kSlots * kSets};
+  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                  kBindings * kFramesInFlight * kSets};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = kSlots * kSets;
+  poolInfo.maxSets = kFramesInFlight * kSets;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes = &size;
   if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool_) != VK_SUCCESS) return false;
@@ -183,7 +184,7 @@ bool VulkanRadixSort::reserve(uint32_t capacity) {
       uint64_t{blocks} >
           uint64_t{limits.maxComputeWorkGroupCount[0]} * limits.maxComputeWorkGroupCount[1])
     return false;
-  std::array<Slot, kSlots> next;
+  std::array<Slot, kFramesInFlight> next;
   for (auto& slot : next) {
     for (auto& keys : slot.keys) keys = VulkanBuffer::deviceLocal(ctx_, pairBytes, kStorage);
     for (auto& values : slot.values) values = VulkanBuffer::deviceLocal(ctx_, pairBytes, kStorage);
@@ -203,7 +204,7 @@ bool VulkanRadixSort::reserve(uint32_t capacity) {
 }
 
 VulkanRadixSort::Output VulkanRadixSort::output(uint32_t slot) const {
-  if (slot >= kSlots || !capacity_) return {};
+  if (slot >= kFramesInFlight || !capacity_) return {};
   const auto& s = slots_[slot];
   return {s.keys[0]->handle(), s.values[0]->handle(), s.count->handle(), s.status->handle()};
 }
@@ -278,7 +279,7 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
       cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   const VkBuffer state = slots_[slot].state->handle();
-  const uint32_t passes = (keyBits == KeyBits::low16 ? 16 : 32) / kDigitBits;
+  const uint32_t passes = keyBitCount(keyBits) / kDigitBits;
   for (uint32_t pass = 0; pass < passes; ++pass) {
     push.shift = pass * kDigitBits;
     const VkDescriptorSet set = sets_[slot][passSet(pass)];
@@ -299,7 +300,7 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
 }
 
 bool VulkanRadixSort::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
-  if (!cmd || slot >= kSlots || !capacity_ ||
+  if (!cmd || slot >= kFramesInFlight || !capacity_ ||
       (input.keyBits != KeyBits::full32 && input.keyBits != KeyBits::low16))
     return false;
   if (!acceptsInput(input)) return false;

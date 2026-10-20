@@ -62,24 +62,23 @@ bool VulkanSplatPipeline::createDescriptors(const VulkanCameraUniforms& cameras)
     return false;
 
   VkDescriptorPoolSize sizes[2]{};
-  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VulkanFrameLoop::kFramesInFlight};
-  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              kStorageBindings * VulkanFrameLoop::kFramesInFlight};
+  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
+  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kFramesInFlight};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = VulkanFrameLoop::kFramesInFlight;
+  poolInfo.maxSets = kFramesInFlight;
   poolInfo.poolSizeCount = 2;
   poolInfo.pPoolSizes = sizes;
   if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool_) != VK_SUCCESS) return false;
 
-  std::array<VkDescriptorSetLayout, VulkanFrameLoop::kFramesInFlight> layouts;
+  std::array<VkDescriptorSetLayout, kFramesInFlight> layouts;
   layouts.fill(setLayout_);
   VkDescriptorSetAllocateInfo allocInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   allocInfo.descriptorPool = pool_;
-  allocInfo.descriptorSetCount = VulkanFrameLoop::kFramesInFlight;
+  allocInfo.descriptorSetCount = kFramesInFlight;
   allocInfo.pSetLayouts = layouts.data();
   if (vkAllocateDescriptorSets(device, &allocInfo, sets_.data()) != VK_SUCCESS) return false;
 
-  for (uint32_t i = 0; i < VulkanFrameLoop::kFramesInFlight; ++i) {
+  for (uint32_t i = 0; i < kFramesInFlight; ++i) {
     const VkDescriptorBufferInfo info{cameras.buffer(i), 0, sizeof(CameraUniform)};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.dstSet = sets_[i];
@@ -184,7 +183,7 @@ bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
 }
 
 void VulkanSplatPipeline::bindWorld(const VulkanWorld& world) {
-  for (uint32_t i = 0; i < VulkanFrameLoop::kFramesInFlight; ++i) {
+  for (uint32_t i = 0; i < kFramesInFlight; ++i) {
     const VkDescriptorBufferInfo splats{world.splats->handle(), 0, VK_WHOLE_SIZE};
     const VkDescriptorBufferInfo order{world.order->handle(), 0, VK_WHOLE_SIZE};
     const VkDescriptorBufferInfo sh{world.sh->handle(), 0, VK_WHOLE_SIZE};

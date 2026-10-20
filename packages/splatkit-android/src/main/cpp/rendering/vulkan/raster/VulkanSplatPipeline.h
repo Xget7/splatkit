@@ -8,7 +8,7 @@
 
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "rendering/vulkan/frame/VulkanCameraUniforms.h"
-#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/world/VulkanWorld.h"
 #include "splat/core/Result.h"
 
@@ -51,7 +51,7 @@ class VulkanSplatPipeline {
   const VulkanContext& ctx_;
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
-  std::array<VkDescriptorSet, VulkanFrameLoop::kFramesInFlight> sets_{};
+  std::array<VkDescriptorSet, kFramesInFlight> sets_{};
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
   // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
   std::array<VkPipeline, VulkanWorld::kMaxShDegree + 1> pipelines_{};

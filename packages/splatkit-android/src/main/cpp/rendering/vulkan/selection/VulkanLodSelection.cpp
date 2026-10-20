@@ -79,18 +79,19 @@ bool VulkanLodSelection::initialize() {
   set.pBindings = bindings;
   if (vkCreateDescriptorSetLayout(ctx_.device(), &set, nullptr, &setLayout_) != VK_SUCCESS)
     return false;
-  VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlots},
-                                  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kSlots}};
+  VkDescriptorPoolSize sizes[] = {
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kStorageBindings * kFramesInFlight}};
   VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  pool.maxSets = kSlots;
+  pool.maxSets = kFramesInFlight;
   pool.poolSizeCount = 2;
   pool.pPoolSizes = sizes;
   if (vkCreateDescriptorPool(ctx_.device(), &pool, nullptr, &pool_) != VK_SUCCESS) return false;
-  std::array<VkDescriptorSetLayout, kSlots> layouts{};
+  std::array<VkDescriptorSetLayout, kFramesInFlight> layouts{};
   layouts.fill(setLayout_);
   VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   allocate.descriptorPool = pool_;
-  allocate.descriptorSetCount = kSlots;
+  allocate.descriptorSetCount = kFramesInFlight;
   allocate.pSetLayouts = layouts.data();
   if (vkAllocateDescriptorSets(ctx_.device(), &allocate, sets_.data()) != VK_SUCCESS) return false;
   const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Config)};
@@ -193,7 +194,7 @@ VulkanLodSelection::Output VulkanLodSelection::output() const {
 }
 
 bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {
-  if (!cmd || slot >= kSlots || !scratch_ || !input.camera ||
+  if (!cmd || slot >= kFramesInFlight || !scratch_ || !input.camera ||
       input.cameraOffset % limits_.minUniformBufferOffsetAlignment != 0 ||
       input.cameraOffset > std::numeric_limits<VkDeviceSize>::max() - sizeof(CameraUniform))
     return false;

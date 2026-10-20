@@ -13,6 +13,7 @@
 
 namespace {
 using splatkit::CameraUniform;
+using splatkit::kFramesInFlight;
 using splatkit::VulkanBuffer;
 using splatkit::VulkanLodSelection;
 namespace test = splatkit::test;
@@ -171,7 +172,7 @@ void tests(const test::VulkanTestContext& gpu) {
   require(select(gpu, *lod, camera()).cut == denied.cut, "old world survives failed upload");
   require(!lod->encode(VK_NULL_HANDLE, 0, {}), "reject null command");
   gpu.submit([&](VkCommandBuffer cmd) {
-    require(!lod->encode(cmd, VulkanLodSelection::kSlots, {}), "reject invalid slot");
+    require(!lod->encode(cmd, kFramesInFlight, {}), "reject invalid slot");
     require(!lod->encode(cmd, 0, {}), "reject null camera");
   });
   std::puts("PASS invalid inputs and transactional upload");

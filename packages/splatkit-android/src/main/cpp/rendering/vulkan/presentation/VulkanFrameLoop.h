@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include "rendering/vulkan/device/VulkanContext.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/presentation/VulkanSwapchain.h"
 
 namespace splatkit {
@@ -19,8 +20,6 @@ namespace splatkit {
 // because presentation may still be reading it when the frame slot comes around again.
 class VulkanFrameLoop {
  public:
-  static constexpr uint32_t kFramesInFlight = 2;
-
   // `swapchainSuboptimal`: the frame was presented, but the surface reports the swapchain
   // no longer matches it. The owner decides whether that needs a rebuild.
   enum class Status { ok, swapchainSuboptimal, swapchainOutOfDate, error };

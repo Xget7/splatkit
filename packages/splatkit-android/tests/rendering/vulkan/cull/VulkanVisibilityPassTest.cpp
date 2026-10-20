@@ -14,6 +14,8 @@
 namespace {
 using splatkit::CameraUniform;
 using splatkit::GpuSplat;
+using splatkit::KeyBits;
+using splatkit::kFramesInFlight;
 using splatkit::packSplats;
 using splatkit::VulkanBuffer;
 using splatkit::VulkanVisibilityPass;
@@ -182,7 +184,7 @@ void testSparseIndexed(const Gpu& gpu, const VulkanVisibilityPass& pass, const F
   auto invalidProjection = camera();
   invalidProjection.proj = splat::Mat4::identity();
   f.setCamera(invalidProjection);
-  sparse.keyBits = VulkanVisibilityPass::KeyBits::low16;
+  sparse.keyBits = KeyBits::low16;
   failed(run(gpu, pass, sparse), VulkanVisibilityPass::kInvalidProjection);
   f.setCamera(camera());
   std::puts("PASS sparse indexed workgroups, poisoned tails and empty diagnostics");
@@ -246,12 +248,11 @@ void testOverflow(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixtur
   std::puts("PASS output overflow fails closed and recovers");
 }
 
-uint32_t expectedDepthKey(float depth, VulkanVisibilityPass::KeyBits bits,
-                          VulkanVisibilityPass::KeyOrder order) {
+uint32_t expectedDepthKey(float depth, KeyBits bits, VulkanVisibilityPass::KeyOrder order) {
   const auto cam = camera();
   const float nearPlane = cam.proj.at(2, 3) / cam.proj.at(2, 2);
   const float farPlane = cam.proj.at(2, 3) / (cam.proj.at(2, 2) + 1);
-  const bool low16 = bits == VulkanVisibilityPass::KeyBits::low16;
+  const bool low16 = bits == KeyBits::low16;
   uint32_t expected = 0;
   std::memcpy(&expected, &depth, 4);
   if (low16)
@@ -262,12 +263,11 @@ uint32_t expectedDepthKey(float depth, VulkanVisibilityPass::KeyBits bits,
   return expected;
 }
 
-void requireDepthKeys(const Result& result, VulkanVisibilityPass::KeyBits bits,
-                      VulkanVisibilityPass::KeyOrder order) {
+void requireDepthKeys(const Result& result, KeyBits bits, VulkanVisibilityPass::KeyOrder order) {
   for (size_t i = 0; i < result.count; ++i) {
     const auto depth = static_cast<float>(1 + result.indices[i] % 10);
     const uint32_t expected = expectedDepthKey(depth, bits, order);
-    if (bits == VulkanVisibilityPass::KeyBits::full32)
+    if (bits == KeyBits::full32)
       require(result.keys[i] == expected,
               "32-bit depth key preserves float bits and BTF inversion");
     else
@@ -280,7 +280,7 @@ void requireDepthKeys(const Result& result, VulkanVisibilityPass::KeyBits bits,
 void testDepthKeys(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f) {
   auto in = f.input();
   in.candidateCapacity = 3;
-  for (auto bits : {VulkanVisibilityPass::KeyBits::full32, VulkanVisibilityPass::KeyBits::low16}) {
+  for (auto bits : {KeyBits::full32, KeyBits::low16}) {
     for (auto order :
          {VulkanVisibilityPass::KeyOrder::ascending, VulkanVisibilityPass::KeyOrder::descending}) {
       in.keyBits = bits;
@@ -293,7 +293,7 @@ void testDepthKeys(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixtu
   auto badCamera = camera();
   badCamera.proj = splat::Mat4::identity();
   f.setCamera(badCamera);
-  in.keyBits = VulkanVisibilityPass::KeyBits::low16;
+  in.keyBits = KeyBits::low16;
   failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidProjection);
   f.setCamera(camera());
   std::puts("PASS full32/low16 ascending/BTF keys and invalid projection");
@@ -330,7 +330,7 @@ void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const F
     bad.candidatesBytes = indexBuffer->size();
     bad.candidateCountBytes = 3;
     require(!pass.encode(cmd, 0, bad), "reject undersized count descriptor");
-    require(!pass.encode(cmd, VulkanVisibilityPass::kSlots, in), "reject invalid slot");
+    require(!pass.encode(cmd, kFramesInFlight, in), "reject invalid slot");
     require(!pass.encode(VK_NULL_HANDLE, 0, in), "reject null command");
   });
   membership(run(gpu, pass, in), {0, 1, 2});

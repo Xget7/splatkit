@@ -8,7 +8,7 @@
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
-#include "rendering/vulkan/presentation/VulkanFrameLoop.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "splat/formats/SplatCloud.h"
 
 namespace splatkit {
@@ -47,7 +47,7 @@ class VulkanWorld {
   int shDegree = 0;
   // One host visible staging buffer per frame slot: the slot's fence guarantees the GPU
   // finished reading it before the CPU writes the next order into it.
-  std::array<std::unique_ptr<VulkanBuffer>, VulkanFrameLoop::kFramesInFlight> orderStaging;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> orderStaging;
   uint32_t count = 0;
 
  private:

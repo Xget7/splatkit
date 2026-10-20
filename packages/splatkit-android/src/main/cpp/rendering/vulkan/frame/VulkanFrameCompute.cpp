@@ -79,7 +79,7 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   timestampBits_ = families[ctx_.queueFamily()].timestampValidBits;
   timestampPeriod_ = properties.limits.timestampPeriod;
   if (!properties.limits.timestampComputeAndGraphics) timestampBits_ = 0;
-  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+  for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     ranges_[slot] = VulkanBuffer::hostVisible(ctx_, kMaxRanges * sizeof(RangeRecord),
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     readback_[slot] =
@@ -151,11 +151,11 @@ bool VulkanFrameCompute::prepareRanges(uint32_t slot, const SplatRenderer::Frame
 }
 
 void VulkanFrameCompute::submitted(uint32_t slot, uint64_t submission) {
-  if (slot < kSlots && pending_[slot]) submission_[slot] = submission;
+  if (slot < kFramesInFlight && pending_[slot]) submission_[slot] = submission;
 }
 
 void VulkanFrameCompute::collectCompleted(uint64_t completedSubmission) {
-  for (uint32_t slot = 0; slot < kSlots; ++slot) {
+  for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     if (pending_[slot] && submission_[slot] != 0 && submission_[slot] <= completedSubmission)
       collect(slot);
   }
@@ -223,7 +223,8 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
     VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const VulkanBuffer& splats,
     const SplatRenderer::Frame& frame) {
-  if (!cmd || slot >= kSlots || !camera || frame.orderSource != SplatRenderer::OrderSource::gpu)
+  if (!cmd || slot >= kFramesInFlight || !camera ||
+      frame.orderSource != SplatRenderer::OrderSource::gpu)
     return std::nullopt;
   collect(slot);
   VulkanVisibilityPass::Input input;
@@ -231,8 +232,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   input.splats = splats.handle();
   input.splatsBytes = splats.size();
   input.sourceCount = sourceCount_;
-  input.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanVisibilityPass::KeyBits::low16
-                                                     : VulkanVisibilityPass::KeyBits::full32;
+  input.keyBits = keyBits();
   input.keyOrder = VulkanVisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
   memoryBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -265,8 +265,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   sort.count = visible.count;
   sort.keysBytes = sort.valuesBytes = VkDeviceSize{capacity_} * sizeof(uint32_t);
   sort.countBytes = sizeof(uint32_t);
-  sort.keyBits = sortKeyBits_ == SortKeyBits::low16 ? VulkanRadixSort::KeyBits::low16
-                                                    : VulkanRadixSort::KeyBits::full32;
+  sort.keyBits = keyBits();
   if (!radix_->encode(cmd, slot, sort)) return std::nullopt;
   timestamp(3);
   // The sorter's checked GPU count is authoritative even if visibility succeeded.

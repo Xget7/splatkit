@@ -7,8 +7,8 @@
 #include "support/VulkanTestContext.h"
 
 namespace {
+using splatkit::kFramesInFlight;
 using splatkit::shStride;
-using splatkit::VulkanFrameLoop;
 using splatkit::VulkanWorld;
 namespace test = splatkit::test;
 using test::require;
@@ -119,7 +119,7 @@ int main() {
     test::VulkanTestContext gpu;
     std::printf("GPU: %s; validation: %s\n", gpu.context->deviceDescription().c_str(),
                 gpu.context->validationEnabled() ? "on" : "off");
-    static_assert(VulkanFrameLoop::kFramesInFlight >= 2, "the order test uses slots 0 and 1");
+    static_assert(kFramesInFlight >= 2, "the order test uses slots 0 and 1");
     uploadShape(gpu);
     std::puts("PASS world upload shape");
     uploadShDegree(gpu);

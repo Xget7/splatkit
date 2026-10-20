@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
+#include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "splat/lod/LodTree.h"
 
 namespace splatkit {
@@ -32,7 +33,6 @@ class VulkanLodSelection {
     VkBuffer state = VK_NULL_HANDLE;  // count/diagnostics at constants below, TRANSFER_SRC capable
     uint32_t capacity = 0;
   };
-  static constexpr uint32_t kSlots = 2;
   static constexpr uint32_t kMaxBudget = 2200000;
   static constexpr VkDeviceSize kCountOffset = 0;
   static constexpr VkDeviceSize kLimitedOffset = 16;
@@ -73,7 +73,7 @@ class VulkanLodSelection {
   uint32_t rounds_ = 0;
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
-  std::array<VkDescriptorSet, kSlots> sets_{};
+  std::array<VkDescriptorSet, kFramesInFlight> sets_{};
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
   VkPipeline pipeline_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanBuffer> clusters_, leaves_, scratch_, indices_;
