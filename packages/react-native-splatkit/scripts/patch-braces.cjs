@@ -73,7 +73,7 @@ function patchedSource(relative, original) {
   return Buffer.from(source);
 }
 
-function inspect(directory) {
+function requireBracesManifest(directory) {
   const manifestFile = path.join(directory, 'package.json');
   if (
     !fs.lstatSync(manifestFile).isFile() ||
@@ -87,66 +87,77 @@ function inspect(directory) {
       `Unsupported braces installation at ${directory}: ${manifest.name}@${manifest.version}`,
     );
   }
+}
 
+// state is 'original', 'patched', or null for a source the backport leaves alone;
+// write is set only for an original source that needs patching.
+function inspectSource(directory, relative, originalHash) {
+  const file = path.join(directory, relative);
+  if (
+    !fs.existsSync(file) ||
+    !fs.lstatSync(file).isFile() ||
+    fs.realpathSync(file) !== file
+  ) {
+    fail(`Expected a real source file: ${file}`);
+  }
+  const source = fs.readFileSync(file);
+  const replacements = backport.replacements[relative];
+  if (sha256(source) === originalHash) {
+    if (!replacements) return {state: null, write: null};
+    return {
+      state: 'original',
+      write: {file, bytes: patchedSource(relative, source)},
+    };
+  }
+  // Reconstruct the original using only the exact known patch anchors.
+  // The hash then establishes provenance and makes reapplication idempotent.
+  if (!replacements) fail(`Unexpected upstream source hash: ${file}`);
+  let original = source.toString('utf8');
+  for (const [before, after] of [...replacements].reverse()) {
+    if (original.split(after).length !== 2)
+      fail(`Unexpected patched source: ${file}`);
+    original = original.replace(after, before);
+  }
+  if (
+    sha256(Buffer.from(original)) !== originalHash ||
+    !patchedSource(relative, Buffer.from(original)).equals(source)
+  ) {
+    fail(`Unexpected upstream source hash: ${file}`);
+  }
+  return {state: 'patched', write: null};
+}
+
+// Returns whether our depth guard is already installed; throws on any other file there.
+function guardInstalled(guard) {
+  if (fs.realpathSync(path.dirname(guard)) !== path.dirname(guard)) {
+    fail(`Expected a real source directory: ${path.dirname(guard)}`);
+  }
+  if (!fs.existsSync(guard)) return false;
+  if (
+    !fs.lstatSync(guard).isFile() ||
+    !fs.readFileSync(guard).equals(guardSource)
+  ) {
+    fail(`Unexpected depth guard: ${guard}`);
+  }
+  return true;
+}
+
+function inspect(directory) {
+  requireBracesManifest(directory);
   const states = [];
   const writes = [];
   for (const [relative, originalHash] of Object.entries(
     backport.originalSha256,
   )) {
-    const file = path.join(directory, relative);
-    if (
-      !fs.existsSync(file) ||
-      !fs.lstatSync(file).isFile() ||
-      fs.realpathSync(file) !== file
-    ) {
-      fail(`Expected a real source file: ${file}`);
-    }
-    const source = fs.readFileSync(file);
-    const actualHash = sha256(source);
-    if (actualHash === originalHash) {
-      if (backport.replacements[relative]) {
-        states.push('original');
-        writes.push({file, bytes: patchedSource(relative, source)});
-      }
-      continue;
-    }
-    // Reconstruct the original using only the exact known patch anchors.
-    // The hash then establishes provenance and makes reapplication idempotent.
-    if (!backport.replacements[relative])
-      fail(`Unexpected upstream source hash: ${file}`);
-    let original = source.toString('utf8');
-    for (const [before, after] of [
-      ...backport.replacements[relative],
-    ].reverse()) {
-      if (original.split(after).length !== 2)
-        fail(`Unexpected patched source: ${file}`);
-      original = original.replace(after, before);
-    }
-    if (
-      sha256(Buffer.from(original)) !== originalHash ||
-      !patchedSource(relative, Buffer.from(original)).equals(source)
-    ) {
-      fail(`Unexpected upstream source hash: ${file}`);
-    }
-    states.push('patched');
+    const {state, write} = inspectSource(directory, relative, originalHash);
+    if (state) states.push(state);
+    if (write) writes.push(write);
   }
-
   const guard = path.join(directory, guardPath);
-  if (fs.realpathSync(path.dirname(guard)) !== path.dirname(guard)) {
-    fail(`Expected a real source directory: ${path.dirname(guard)}`);
-  }
-  if (fs.existsSync(guard)) {
-    if (
-      !fs.lstatSync(guard).isFile() ||
-      !fs.readFileSync(guard).equals(guardSource)
-    ) {
-      fail(`Unexpected depth guard: ${guard}`);
-    }
-  } else {
-    writes.unshift({file: guard, bytes: guardSource});
-  }
+  const guarded = guardInstalled(guard);
+  if (!guarded) writes.unshift({file: guard, bytes: guardSource});
   const protectedAlready =
-    states.every(state => state === 'patched') && fs.existsSync(guard);
+    states.every(state => state === 'patched') && guarded;
   return {directory, protectedAlready, writes};
 }
 

@@ -504,6 +504,145 @@ function validatePolicy(policy: PerformancePolicy): void {
   if (policy.targetFps !== null) range('targetFps', policy.targetFps, 1, 240);
 }
 
+function validateCapabilities(capabilities: DeviceCapabilities): void {
+  for (const key of [
+    'supportsComputeTiles',
+    'supportsHiZOcclusion',
+    'supportsSubgroups',
+  ] as const) {
+    if (typeof capabilities[key] !== 'boolean')
+      throw new TypeError(`${key} must be boolean`);
+  }
+  integer(
+    'maxTextureDimension',
+    capabilities.maxTextureDimension,
+    1,
+    MAX_INT32,
+  );
+}
+
+/** Keeps the first warning for each code and option. */
+class DiagnosticLog {
+  readonly diagnostics: PerformanceDiagnostic[] = [];
+  private readonly keys = new Set<string>();
+
+  warn(
+    code: DiagnosticCode,
+    option: keyof PerformancePolicy,
+    requested: PerformanceDiagnostic['requested'],
+    fallback: PerformanceDiagnostic['fallback'],
+    message: string,
+  ): void {
+    const key = `${code}:${option}`;
+    if (this.keys.has(key)) return;
+    this.keys.add(key);
+    this.diagnostics.push(
+      Object.freeze({
+        severity: 'warning',
+        code,
+        option,
+        requested,
+        fallback,
+        message,
+      }),
+    );
+  }
+}
+
+function clampToLimit(
+  log: DiagnosticLog,
+  option: 'lodBudgetSplats' | 'residencyCapacitySplats',
+  value: number,
+  min: number,
+  max: number,
+): number {
+  const effective = Math.min(max, Math.max(min, value));
+  if (effective !== value)
+    log.warn(
+      DiagnosticCode.limitClamped,
+      option,
+      value,
+      effective,
+      `${option} was clamped to the host-supplied limit`,
+    );
+  return effective;
+}
+
+type PolicyPropKey = (typeof policyPropKeys)[number];
+type PolicyPropFields = {
+  -readonly [K in PolicyPropKey]: EffectivePerformancePolicy[K];
+};
+
+function unappliedFields(): PolicyPropFields {
+  return {
+    raster: null,
+    tileSize: null,
+    lodErrorPixels: null,
+    alphaThreshold: null,
+    subpixelThreshold: null,
+    enableFrustumCulling: null,
+    enableHiZOcclusion: null,
+    enableEarlyTermination: null,
+    sortDepth: null,
+  };
+}
+
+// Native reports what it accepts, so the effective values are real, not null. A
+// request outside that support still warns once and falls back on the device.
+function supportedFields(
+  log: DiagnosticLog,
+  requested: PerformancePolicy,
+  support: NativePolicySupport,
+): PolicyPropFields {
+  const fields = unappliedFields() as Record<
+    PolicyPropKey,
+    PerformancePolicy[PolicyPropKey] | null
+  >;
+  for (const option of policyPropKeys) {
+    const applied =
+      option === 'raster'
+        ? support.raster && support.rasterStrategies.includes(requested.raster)
+        : support[option];
+    if (applied) fields[option] = requested[option];
+    else if (requested[option] !== nativeDefaults[option]) {
+      log.warn(
+        DiagnosticCode.nativeOptionFallback,
+        option,
+        requested[option],
+        null,
+        `${option} fell back to the native default; read onPolicyEvent for the applied value`,
+      );
+    }
+  }
+  return fields as PolicyPropFields;
+}
+
+// The policy prop carries every field, but only onCapabilities says which ones native
+// applies. Warn only where the request differs from the native default.
+function unknownSupportFields(
+  log: DiagnosticLog,
+  requested: PerformancePolicy,
+  capabilities: DeviceCapabilities,
+): PolicyPropFields {
+  for (const option of policyPropKeys) {
+    if (requested[option] === nativeDefaults[option]) continue;
+    const hardwareFallback =
+      option === 'raster' && !capabilities.supportsComputeTiles;
+    log.warn(
+      hardwareFallback
+        ? DiagnosticCode.capabilityFallbackUnavailable
+        : DiagnosticCode.nativeSupportUnknown,
+      option,
+      requested[option],
+      hardwareFallback ? RasterStrategy.hardware : null,
+      hardwareFallback
+        ? 'hardware is the candidate fallback; read onPolicyEvent for the applied raster'
+        : `${option} support is unknown until native capabilities are supplied`,
+    );
+  }
+  return unappliedFields();
+}
+
 function policyFor(preset: QualityPreset): PerformancePolicy {
   return Object.freeze({
     mode: PerformanceMode.auto,
@@ -564,70 +703,19 @@ export class SplatKitBuilder {
   build(capabilities: DeviceCapabilities): SplatKitConfiguration {
     if (!this.world) throw new Error('world is required');
     validatePolicy(this.performance);
-    for (const key of [
-      'supportsComputeTiles',
-      'supportsHiZOcclusion',
-      'supportsSubgroups',
-    ] as const) {
-      if (typeof capabilities[key] !== 'boolean')
-        throw new TypeError(`${key} must be boolean`);
-    }
-    integer(
-      'maxTextureDimension',
-      capabilities.maxTextureDimension,
-      1,
-      MAX_INT32,
-    );
+    validateCapabilities(capabilities);
 
     const requested = Object.freeze({...this.performance});
-    const diagnostics: PerformanceDiagnostic[] = [];
-    const diagnosticKeys = new Set<string>();
-    const warn = (
-      code: DiagnosticCode,
-      option: keyof PerformancePolicy,
-      requestedValue: PerformanceDiagnostic['requested'],
-      fallback: PerformanceDiagnostic['fallback'],
-      message: string,
-    ): void => {
-      const key = `${code}:${option}`;
-      if (diagnosticKeys.has(key)) return;
-      diagnosticKeys.add(key);
-      diagnostics.push(
-        Object.freeze({
-          severity: 'warning',
-          code,
-          option,
-          requested: requestedValue,
-          fallback,
-          message,
-        }),
-      );
-    };
-    const clamp = (
-      option: 'lodBudgetSplats' | 'residencyCapacitySplats',
-      value: number,
-      min: number,
-      max: number,
-    ): number => {
-      const effective = Math.min(max, Math.max(min, value));
-      if (effective !== value)
-        warn(
-          DiagnosticCode.limitClamped,
-          option,
-          value,
-          effective,
-          `${option} was clamped to the host-supplied limit`,
-        );
-      return effective;
-    };
-
-    const lodBudgetSplats = clamp(
+    const log = new DiagnosticLog();
+    const lodBudgetSplats = clampToLimit(
+      log,
       'lodBudgetSplats',
       requested.lodBudgetSplats,
       0,
       capabilities.limits.maxLodCapacitySplats,
     );
-    const residencyCapacitySplats = clamp(
+    const residencyCapacitySplats = clampToLimit(
+      log,
       'residencyCapacitySplats',
       requested.residencyCapacitySplats,
       capabilities.limits.minResidencyCapacitySplats,
@@ -638,7 +726,7 @@ export class SplatKitBuilder {
       this.world.maxShDegree,
     ) as SHDegree;
     if (shDegree !== requested.shDegree)
-      warn(
+      log.warn(
         DiagnosticCode.limitClamped,
         'shDegree',
         requested.shDegree,
@@ -646,75 +734,11 @@ export class SplatKitBuilder {
         'shDegree was capped by the world maxShDegree',
       );
 
-    const effectiveFields: {
-      raster: RasterStrategy | null;
-      tileSize: TileSize | null;
-      lodErrorPixels: number | null;
-      alphaThreshold: number | null;
-      subpixelThreshold: number | null;
-      enableFrustumCulling: boolean | null;
-      enableHiZOcclusion: boolean | null;
-      enableEarlyTermination: boolean | null;
-      sortDepth: SortDepth | null;
-    } = {
-      raster: null,
-      tileSize: null,
-      lodErrorPixels: null,
-      alphaThreshold: null,
-      subpixelThreshold: null,
-      enableFrustumCulling: null,
-      enableHiZOcclusion: null,
-      enableEarlyTermination: null,
-      sortDepth: null,
-    };
-
-    if (capabilities.policy) {
-      // Native reports what it accepts, so the effective values are real, not null. A
-      // request outside that support still warns once and falls back on the device.
-      const support = capabilities.policy;
-      const fields = effectiveFields as Record<
-        (typeof policyPropKeys)[number],
-        PerformancePolicy[keyof PerformancePolicy] | null
-      >;
-      for (const option of policyPropKeys) {
-        const applied =
-          option === 'raster'
-            ? support.raster &&
-              support.rasterStrategies.includes(requested.raster)
-            : support[option];
-        if (applied) fields[option] = requested[option];
-        else if (requested[option] !== nativeDefaults[option]) {
-          warn(
-            DiagnosticCode.nativeOptionFallback,
-            option,
-            requested[option],
-            null,
-            `${option} fell back to the native default; read onPolicyEvent for the applied value`,
-          );
-        }
-      }
-    } else {
-      // The policy prop carries every field, but only onCapabilities says which ones native
-      // applies. Warn only where the request differs from the native default.
-      for (const option of policyPropKeys) {
-        if (requested[option] === nativeDefaults[option]) continue;
-        const hardwareFallback =
-          option === 'raster' && !capabilities.supportsComputeTiles;
-        warn(
-          hardwareFallback
-            ? DiagnosticCode.capabilityFallbackUnavailable
-            : DiagnosticCode.nativeSupportUnknown,
-          option,
-          requested[option],
-          hardwareFallback ? RasterStrategy.hardware : null,
-          hardwareFallback
-            ? 'hardware is the candidate fallback; read onPolicyEvent for the applied raster'
-            : `${option} support is unknown until native capabilities are supplied`,
-        );
-      }
-    }
+    const effectiveFields = capabilities.policy
+      ? supportedFields(log, requested, capabilities.policy)
+      : unknownSupportFields(log, requested, capabilities);
     if (requested.targetFps !== null) {
-      warn(
+      log.warn(
         DiagnosticCode.fabricOptionUnavailable,
         'targetFps',
         requested.targetFps,
@@ -753,7 +777,7 @@ export class SplatKitBuilder {
       performance: Object.freeze({
         requested,
         effective,
-        diagnostics: Object.freeze(diagnostics.slice()),
+        diagnostics: Object.freeze(log.diagnostics.slice()),
       }),
     });
   }
