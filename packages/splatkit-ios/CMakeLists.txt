@@ -32,6 +32,7 @@ splatkit_embed_text(splatkit_ios_shaders
 )
 
 add_library(splatkit_ios STATIC
+  Sources/SplatKitCore/diagnostics/SKPngWriter.mm
   Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
   Sources/SplatKitCore/rendering/metal/cull/MetalVisibilityPass.mm
   Sources/SplatKitCore/rendering/metal/device/MetalContext.mm
@@ -46,6 +47,7 @@ add_library(splatkit_ios STATIC
   Sources/SplatKitCore/rendering/metal/sort/MetalRadixSort.mm
   Sources/SplatKitCore/rendering/metal/world/MetalWorld.mm
   Sources/SplatKitCore/engine/SKSplatEngine.mm
+  Sources/SplatKitCore/engine/SKTypeConversions.mm
 )
 target_include_directories(splatkit_ios
   PUBLIC Sources/SplatKitCore/include
