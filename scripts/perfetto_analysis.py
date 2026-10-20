@@ -122,10 +122,15 @@ class Trace:
         return (start, end) if end > start else None
 
     def thread_states(self, window):
+        # The thread that draws the frames: threads it starts, such as the validation layer's,
+        # inherit its name.
         return self.rows(f"""
             select ts.state, ts.cpu, sum(min(ts.ts + ts.dur, {window[1]}) - max(ts.ts, {window[0]})) dur
-            from thread_state ts join thread t using (utid) join process p using (upid)
-            where t.name = '{RENDER_THREAD}' and {self.process}
+            from thread_state ts
+            where ts.utid in (
+                select tt.utid from slice s join thread_track tt on s.track_id = tt.id
+                join thread t using (utid) join process p using (upid)
+                where t.name = '{RENDER_THREAD}' and {self.process} and s.name = '{FRAME}')
               and ts.ts < {window[1]} and ts.ts + ts.dur > {window[0]}
             group by ts.state, ts.cpu""")
 
