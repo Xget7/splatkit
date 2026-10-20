@@ -7,7 +7,7 @@ class SplatStatsTest {
     @Test fun decodesTimingsFlagsAndCompletedCounts() {
         val snapshot = SplatStats()
         val result = decodeSplatStats(
-            floatArrayOf(60f, 16f, 7f, 3f, 500000f, 1f, 0f, 123f, 40f, 12f, 8f), snapshot
+            floatArrayOf(60f, 16f, 7f, 3f, 500000f, 1f, 0f, 123f, 40f, 12f, 8f, 2f), snapshot
         )
         assertSame(snapshot, result)
         assertEquals(60f, result.fps, 0f)
@@ -22,6 +22,7 @@ class SplatStatsTest {
         assertEquals(40, result.computeTileCount)
         assertEquals(12, result.nonemptyComputeTileCount)
         assertEquals(8, result.hardwareTileCount)
+        assertEquals(2, result.loadedShDegree)
     }
 
     @Test fun zeroCompletedCountsNeverFallBackToLoadedCount() {
@@ -30,13 +31,15 @@ class SplatStatsTest {
             computeTileCount = 5
             nonemptyComputeTileCount = 4
             hardwareTileCount = 3
+            loadedShDegree = 3
         }
-        decodeSplatStats(floatArrayOf(0f, 0f, 0f, 0f, 2000000f, 0f, 1f, 0f, 0f, 0f, 0f), snapshot)
+        decodeSplatStats(floatArrayOf(0f, 0f, 0f, 0f, 2000000f, 0f, 1f, 0f, 0f, 0f, 0f, 0f), snapshot)
         assertEquals(2000000, snapshot.loadedSplatCount)
         assertEquals(0, snapshot.drawnSplatCount)
         assertEquals(0, snapshot.computeTileCount)
         assertEquals(0, snapshot.nonemptyComputeTileCount)
         assertEquals(0, snapshot.hardwareTileCount)
+        assertEquals(0, snapshot.loadedShDegree)
         assertFalse(snapshot.walking)
         assertTrue(snapshot.motion)
         decodeSplatStats(FloatArray(SPLAT_STATS_FLOATS), snapshot)
