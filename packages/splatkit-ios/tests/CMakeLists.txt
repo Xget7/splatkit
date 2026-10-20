@@ -1,4 +1,5 @@
 add_executable(splatkit_ios_tests
+  diagnostics/SKPngWriterTest.mm
   rendering/metal/MetalSplatRendererTest.mm
   rendering/metal/cull/MetalVisibilityPassTest.mm
   rendering/metal/device/MetalContextTest.mm
