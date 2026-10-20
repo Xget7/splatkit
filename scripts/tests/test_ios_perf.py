@@ -68,6 +68,19 @@ class DeviceTest(unittest.TestCase):
         self.assertIsNone(perf.app_pid({"result": {"runningProcesses": []}}))
 
 
+class CapabilitiesTest(unittest.TestCase):
+    def test_capabilities_come_from_the_startup_line(self):
+        log = ("2026-10-20 SplatKitDev[1:2] SplatKit I: Apple A19 Pro GPU, Metal\n"
+               "2026-10-20 SplatKitDev[1:2] SplatKit I: Metal capabilities: family Apple10, Metal 4, "
+               "threadgroup memory 32768 B, threads per threadgroup 1024, max buffer 9663676416 B, "
+               "working set 9663676416 B\n")
+        self.assertEqual(perf.gpu_capabilities(log),
+                         {"family": "Apple10", "metal": 4, "threadgroup_memory_bytes": 32768,
+                          "threads_per_threadgroup": 1024, "max_buffer_bytes": 9663676416,
+                          "working_set_bytes": 9663676416})
+        self.assertIsNone(perf.gpu_capabilities("SplatKit I: Apple A19 Pro GPU, Metal"))
+
+
 class TraceTest(unittest.TestCase):
     def test_a_requested_trace_that_was_not_recorded_fails_the_run(self):
         self.assertIsNone(perf.trace_failure(requested=False, recorded=False))

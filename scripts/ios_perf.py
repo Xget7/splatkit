@@ -51,6 +51,11 @@ FAILURE = re.compile(r"SplatKit E: |SplatWorldMissing: |SplatRunStopped: ")
 ERROR = re.compile(r"SplatKit E: |failed assertion|-\[MTLDebug|Invalid (device|constant|threadgroup|texture) "
                    r"(load|store)|Shader Validation|SplatWorldMissing: ")
 WAITING, STARTED, DONE, FAILED = "waiting", "started", "done", "failed"
+# MetalContext::capabilities(), logged once when the renderer starts.
+CAPABILITIES = re.compile(r"Metal capabilities: family (?P<family>Apple\d+), Metal (?P<metal>\d+), "
+                          r"threadgroup memory (?P<threadgroup_memory_bytes>\d+) B, "
+                          r"threads per threadgroup (?P<threads_per_threadgroup>\d+), "
+                          r"max buffer (?P<max_buffer_bytes>\d+) B, working set (?P<working_set_bytes>\d+) B")
 
 
 def launch_command(udid, seconds, quality, pose, world, validation):
@@ -95,6 +100,13 @@ def app_pid(processes):
 
 def console_errors(log):
     return [line for line in log.splitlines() if ERROR.search(line)]
+
+
+def gpu_capabilities(log):
+    match = CAPABILITIES.search(log)
+    if match is None:
+        return None
+    return {key: value if key == "family" else int(value) for key, value in match.groupdict().items()}
 
 
 def benchmark_state(log):
@@ -210,6 +222,7 @@ def run(args):
                    "seconds": args.seconds, "validation": args.validation, **git_state()}
     summary = benchmark_report.summarize(log, ENVIRONMENT, None, args.seconds)
     summary["run"] = environment
+    summary["gpu"] = gpu_capabilities(log)
     summary["errors"] = sorted(set(summary["errors"]) | set(console_errors(log)))
     # A killed recorder can leave a partial trace bundle behind.
     recorded = bool(trace) and trace[0].returncode == 0 and trace_path.exists()
