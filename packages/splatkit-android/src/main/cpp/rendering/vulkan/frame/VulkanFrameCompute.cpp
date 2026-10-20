@@ -6,7 +6,7 @@
 #include <limits>
 #include <utility>
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanBarriers.h"
 #include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "splatkit/Log.h"
 #include "splatkit/rendering/GpuLayout.h"

@@ -1,6 +1,6 @@
 #include "rendering/vulkan/presentation/VulkanRenderTarget.h"
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/presentation/VulkanRenderPass.h"
 #include "splatkit/Log.h"
 
 namespace splatkit {

@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <vector>
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanBarriers.h"
+#include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "shaders/radix_histogram_comp.h"
 #include "shaders/radix_prepare_comp.h"
 #include "shaders/radix_scan_comp.h"

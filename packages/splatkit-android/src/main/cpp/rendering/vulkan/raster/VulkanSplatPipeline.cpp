@@ -6,7 +6,7 @@
 #include <limits>
 #include <vector>
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "shaders/splat_frag.h"
 #include "shaders/splat_vert.h"
 #include "splatkit/Log.h"

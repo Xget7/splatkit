@@ -1,46 +1,8 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-
 #include <vulkan/vulkan.h>
 
 namespace splatkit {
-
-// One global memory barrier; the passes order whole buffers, never single ranges.
-inline void memoryBarrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage,
-                          VkAccessFlags srcAccess, VkPipelineStageFlags dstStage,
-                          VkAccessFlags dstAccess) {
-  VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  barrier.srcAccessMask = srcAccess;
-  barrier.dstAccessMask = dstAccess;
-  vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 1, &barrier, 0, nullptr, 0, nullptr);
-}
-
-// A shader module that lives for one pipeline build and is destroyed on every exit from it.
-// `size` is in bytes, as the generated shaders::*_size constants are. False on failure.
-class ShaderModule {
- public:
-  ShaderModule(VkDevice device, const uint32_t* code, size_t size) : device_(device) {
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = size;
-    info.pCode = code;
-    if (vkCreateShaderModule(device, &info, nullptr, &module_) != VK_SUCCESS)
-      module_ = VK_NULL_HANDLE;
-  }
-  ~ShaderModule() {
-    if (module_ != VK_NULL_HANDLE) vkDestroyShaderModule(device_, module_, nullptr);
-  }
-  ShaderModule(const ShaderModule&) = delete;
-  ShaderModule& operator=(const ShaderModule&) = delete;
-
-  explicit operator bool() const { return module_ != VK_NULL_HANDLE; }
-  VkShaderModule get() const { return module_; }
-
- private:
-  VkDevice device_;
-  VkShaderModule module_ = VK_NULL_HANDLE;
-};
 
 // A render pass with one color attachment, cleared at the start and left in `finalLayout`. No
 // depth: splats are blended in sorted order, never depth tested. The pass waits on `priorStage`

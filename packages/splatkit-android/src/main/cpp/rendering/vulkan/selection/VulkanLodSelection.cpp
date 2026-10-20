@@ -5,7 +5,8 @@
 #include <limits>
 #include <vector>
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanBarriers.h"
+#include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/lod_selection_comp.h"
 #include "splat/lod/LodFile.h"

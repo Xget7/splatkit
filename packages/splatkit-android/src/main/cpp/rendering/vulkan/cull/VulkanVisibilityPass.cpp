@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "rendering/vulkan/device/VulkanHelpers.h"
+#include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/prepare_indirect_comp.h"
 #include "shaders/visibility_comp.h"
