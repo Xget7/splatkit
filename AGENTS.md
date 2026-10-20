@@ -26,3 +26,8 @@ See [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
 
 Single-context, with [CONTEXT.md](CONTEXT.md) as the glossary.
 See [docs/agents/domain.md](docs/agents/domain.md).
+
+### Pull requests
+
+Every pull request body follows the [template](.github/PULL_REQUEST_TEMPLATE.md): Summary, Evidence, Merge Danger.
+Split dependent work into a GitHub stack of one PR per concern with `gh stack` (`gh extension install github/gh-stack`).
