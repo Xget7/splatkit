@@ -138,3 +138,6 @@ Sharpness is Laplacian variance over a 1080x1200 crop, not perceptual acceptance
 
 Half-float covariance and radial ordering showed negligible differences in this comparison.
 Residual edge softness remains unresolved; frame settings must match before comparing against a web viewer.
+
+
+ci filter probe
