@@ -101,6 +101,8 @@ Prettier formats the code and JSON; Markdown and workflows keep their hand layou
 - A note in the description saying which device and driver it was tried on.
   Emulator only is fine for logic; renderer changes need a real GPU.
 - No planning or decision documents: explain decisions in the pull request text and in comments beside the code they shape.
+- A description in the [template](.github/PULL_REQUEST_TEMPLATE.md)'s Summary, Evidence and Merge Danger sections.
+- Dependent changes as a GitHub stack, one pull request per concern, with [gh-stack](https://github.com/github/gh-stack).
 - Plain dashes, no em dashes, one sentence per line in Markdown.
 
 ## Code layout

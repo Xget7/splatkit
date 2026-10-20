@@ -9,3 +9,25 @@ Build storage: reuse ignored build directories in this checkout across sessions 
 Reserve session scratchpads for small disposable probes.
 React Native iOS: use the [example scripts](apps/react-native/package.json); serialize builds sharing Derived Data.
 Separate build directories are for concurrent builds or required clean-build verification.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub issues on Xget7/splatkit, through `gh`.
+See [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+The five default roles, each label named after its role.
+See [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context, with [CONTEXT.md](CONTEXT.md) as the glossary.
+See [docs/agents/domain.md](docs/agents/domain.md).
+
+### Pull requests
+
+Every pull request body follows the [template](.github/PULL_REQUEST_TEMPLATE.md): Summary, Evidence, Merge Danger.
+Split dependent work into a GitHub stack of one PR per concern with `gh stack` (`gh extension install github/gh-stack`).
