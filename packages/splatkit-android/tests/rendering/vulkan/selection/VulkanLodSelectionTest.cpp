@@ -159,15 +159,23 @@ void tests(const test::VulkanTestContext& gpu) {
           "whole packet denied without holes");
   std::puts("PASS large leaf packet and pressure");
 
-  // Metal's ceiling: a 4M budget is accepted and clamps to the leaves.
+  // Metal's ceiling: a 4M budget is accepted, clamps to the leaves, and its limit moves live.
   {
     auto ceilingCreated = VulkanLodSelection::create(*gpu.context);
     require(static_cast<bool>(ceilingCreated), "second LOD pipeline creation");
     auto& ceiling = *ceilingCreated.value();
     require(ceiling.upload(fan, kMetalMaxBudget, {0, 4, false}), "4M budget upload");
-    require(ceiling.capacity() == fan.leafCount, "capacity clamps to the leaves");
+    require(ceiling.capacity() == fan.leafCount && ceiling.limit() == ceiling.capacity(),
+            "capacity clamps to the leaves");
+    ceiling.setSplatLimit(1);
+    require(select(gpu, ceiling, camera()).cut == std::vector<uint32_t>{0},
+            "a live splat limit denies the packet");
+    ceiling.setSplatLimit(0);
+    require(ceiling.limit() == ceiling.capacity(), "a zero limit restores the capacity");
+    require(select(gpu, ceiling, camera()).cut.size() == fan.leafCount,
+            "lifting the limit refines");
   }
-  std::puts("PASS 4M budget");
+  std::puts("PASS 4M budget and a live splat limit");
 
   auto old = lod->output();
   require(!lod->upload(fan, 0), "reject zero capacity");

@@ -36,7 +36,7 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 | Stage | Metal (iOS) | Vulkan (Android) |
 |---|---|---|
 | Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | 2 MiB host-visible staging windows into device-local VMA buffers, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
-| Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, in its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling, at a fixed 1 px threshold ([lod_selection.comp][vk-lod]) |
+| Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, in its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling; the CPU adapts the pixel threshold from counters read back one to two frames late ([lod_selection.comp][vk-lod], [LodThreshold.h][lod-threshold]) |
 | Cull | `visibility` kernel culls alpha, behind camera, near/far, screen edge and subpixel; SIMD prefix compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated ([SplatVisibility.metal][mtl-vis], [SplatProjection.metalh][mtl-proj]) | `visibility.comp` culls alpha, behind camera, near/far by centre and by covariance, screen edge and subpixel; subgroup compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated, one pipeline per SH degree ([visibility.comp][vk-vis], [splat_projection.glsl][vk-proj]) |
 | Sort | GPU LSD radix, 8-bit digits, 4 passes on 32-bit keys (default) or 2 on 16-bit; histogram and scatter rank with `simd_ballot`; indirect dispatch; needs 32-wide SIMD groups ([SplatRadixSort.metal][mtl-sort]) | GPU stable LSD radix, 8-bit digits, 4 or 2 passes; histogram with workgroup atomics because ballot loses keys on Adreno 640; scatter ranks with an `atomicOr` bitmask; indirect dispatch; 4M capacity ([radix_histogram.comp][vk-hist], [VulkanRadixSort.cpp][vk-sort]) |
 | Raster | Instanced quads in 7 indirect draws, front to back with "under" blending, in batches of 1, 1, 2, 4, 8, 16 and 32 sixty-fourths; between batches a mask pass writes `Depth16` where alpha reaches 254/255, so later batches skip saturated pixels; only the mask writes depth ([MetalSplatPipeline.mm][mtl-pipe], [SplatRaster.metal][mtl-raster], [PrepareIndirect.metalh][mtl-indirect]) | One indirect draw of instanced quads, back to front with "over" blending, one subpass with one colour attachment; `projected.vert` expands each quad from its record ([VulkanSplatPipeline.cpp][vk-pipe], [projected.vert][vk-projected]) |
@@ -46,7 +46,7 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 Both backends:
 
 - Splats blend in the encoded space by default; linear blending (off by default) applies `pow(rgb, 2.2)` to splat colour and presents to an sRGB surface.
-- The render policy applies per backend: Metal honours the pixel error, Vulkan only the sort depth and the subpixel threshold ([VulkanFrameCompute.h][vk-frame]).
+- The render policy applies per backend: both honour the sort depth and the LOD pixel error and splat limit, live; Vulkan also the subpixel threshold ([VulkanFrameCompute.h][vk-frame]).
 - Splats rasterize as hardware quads over the whole screen; `supportsComputeTiles` is false on both.
 - A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint]).
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
@@ -61,6 +61,7 @@ Both backends:
 [cov]: ../packages/splat-core/src/math/Covariance.cpp
 [morton]: ../packages/splat-core/src/sorting/SpatialOrder.cpp
 [tree]: ../packages/splat-core/src/lod/LodTree.cpp
+[lod-threshold]: ../packages/splatkit-engine/include/splatkit/rendering/LodThreshold.h
 [layout]: ../packages/splatkit-engine/src/rendering/GpuLayout.cpp
 [layout-h]: ../packages/splatkit-engine/include/splatkit/rendering/GpuLayout.h
 [engine]: ../packages/splatkit-engine/src/engine/SplatEngine.cpp

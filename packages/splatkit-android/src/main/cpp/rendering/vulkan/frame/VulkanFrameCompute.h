@@ -9,6 +9,7 @@
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "rendering/vulkan/selection/VulkanLodSelection.h"
+#include "splatkit/rendering/LodThreshold.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
@@ -56,11 +57,14 @@ class VulkanFrameCompute {
   void collectCompleted(uint64_t completedSubmission);
   bool hasLod() const { return lod_ != nullptr; }
 
-  // Per-instance renderer policy. Render thread, while idle. Only sortDepth and
-  // subpixelThreshold are honoured; the caller resolves the rest.
+  // Per-instance renderer policy. Render thread, while idle. Only sortDepth,
+  // subpixelThreshold, lodErrorPixels and lodSplatLimit are honoured; the caller resolves
+  // the rest.
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
   uint32_t sortKeyBits() const { return keyBitCount(keyBits()); }
   float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
+  // The threshold the next hierarchy selection runs at.
+  float lodPixels() const { return lodThreshold_.pixels(); }
   const VulkanVisibilityCapabilities& visibilityCapabilities() const {
     return visibility_->capabilities();
   }
@@ -87,14 +91,18 @@ class VulkanFrameCompute {
   uint32_t timestampBits_ = 0;
   float timestampPeriod_ = 0;
   std::unique_ptr<VulkanLodSelection> lod_;
+  LodThreshold lodThreshold_{VulkanLodSelection::Quality{}.pixelLimit};
   std::unique_ptr<VulkanVisibilityPass> visibility_;
   std::unique_ptr<VulkanRadixSort> radix_;
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> ranges_, readback_;
   std::array<VkQueryPool, kFramesInFlight> queries_{};
   std::array<bool, kFramesInFlight> pending_{};
+  // Per slot, whether its selection ran under the policy in effect, so it may adapt.
+  std::array<bool, kFramesInFlight> currentPolicy_{};
   // Per slot, the submission of the pending encode; 0 when not submitted.
   std::array<uint64_t, kFramesInFlight> submission_{};
   uint64_t collectedSubmission_ = 0;
+  uint64_t lodReadbacks_ = 0;  // selections read so far, which paces the LOD log
   std::vector<RangeRecord> rangeRecords_;
   Stats stats_;
 };
