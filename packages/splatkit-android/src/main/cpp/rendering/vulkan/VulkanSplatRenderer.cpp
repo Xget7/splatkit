@@ -70,18 +70,18 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = VulkanLodSelection::Quality{}.pixelLimit;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
-  policy.fallback.subpixelThreshold = 0.5f;
+  policy.fallback.subpixelThreshold = RenderPolicy{}.subpixelThreshold;
   policy.fallback.sortDepth = SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
   // Both paths draw back to front, so nothing stops at a saturated pixel. Front to back
   // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
   // termination saved.
   policy.fallback.enableEarlyTermination = false;
-  // The GPU visibility/sort path applies the sub-pixel cutoff, the key width and, on a
-  // hierarchy world, the LOD error threshold and splat limit live; without it the CPU path
-  // has none of them, and the rest is not implemented.
+  // Both paths apply the sub-pixel cutoff from the next frame. The GPU visibility/sort path
+  // applies the key width and, on a hierarchy world, the LOD error threshold and splat limit
+  // live; the CPU path has none of them, and the rest is not implemented.
   policy.sortDepth = gpu;
-  policy.subpixelThreshold = gpu;
+  policy.subpixelThreshold = true;
   policy.lodErrorPixels = gpu;
   policy.minLodErrorPixels = LodThreshold::kMinPolicyPixels;
   policy.maxLodErrorPixels = LodThreshold::kMaxPolicyPixels;
@@ -90,10 +90,10 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
 }
 
 bool VulkanSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
-  if (policy.sortDepth == policy_.sortDepth &&
-      policy.subpixelThreshold == policy_.subpixelThreshold &&
-      policy.lodErrorPixels == policy_.lodErrorPixels &&
+  if (policy.sortDepth == policy_.sortDepth && policy.lodErrorPixels == policy_.lodErrorPixels &&
       policy.lodSplatLimit == policy_.lodSplatLimit) {
+    // The cutoff rides in the camera each frame writes after its slot's fence.
+    policy_.subpixelThreshold = policy.subpixelThreshold;
     return true;
   }
   const RenderPolicy previous = policy_;
@@ -226,7 +226,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     const VkBuffer camera = camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
-                                            view, outputLinear, turns);
+                                            view, outputLinear, turns, policy_.subpixelThreshold);
     {
       const TraceSection section(trace::kEncodeCompute);
       gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
@@ -266,8 +266,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
     if (count > 0) {
-      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view, outputLinear,
-                      turns);
+      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view, outputLinear, turns,
+                      policy_.subpixelThreshold);
     }
     splats_->draw(cmd, slot, *world_, count, std::min(frame.shDegree, world_->shDegree));
   }

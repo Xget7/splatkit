@@ -85,7 +85,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `setLens(LensSettings)`, `lens` | Vertical `fieldOfViewDegrees` (10-120) and `depthRange` (near and far planes, at most 100,000:1); null keeps the default 65 degrees and 0.05-200. Applies at once and reframes the default orbit; false keeps the previous lens. |
 | `cameraPoseIntervalMillis`, `cameraPoseListener` | Milliseconds between pose callbacks, and the callback itself; 0, the default, never reports. |
 | `isAvailable`, `gpuDescription` | Renderer availability and driver description. |
-| `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. Only `sortDepth` and `subpixelThreshold` apply, with GPU visibility; other fields fall back with a warning each. |
+| `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. `sortDepth`, `lodErrorPixels` and `lodSplatLimit` apply with GPU visibility, `subpixelThreshold` from the next frame on both order paths; other fields fall back with a warning each. |
 | `readStats()` | FPS, frame/GPU/sort ms, loaded/drawn and screen-tile counts. Drawn counts and GPU ms describe the newest frame the GPU finished, also while nothing redraws, and are current when `onWorldFrameReady` fires. |
 | `startBenchmark(seconds)` | Turn-in-place benchmark logged under `SplatKit`. |
 

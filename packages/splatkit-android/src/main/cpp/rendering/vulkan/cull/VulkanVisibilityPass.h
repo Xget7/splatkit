@@ -39,8 +39,7 @@ struct VulkanVisibilityCapabilities {
 class VulkanVisibilityPass {
  public:
   static VulkanVisibilityCapabilities queryCapabilities(const VulkanContext& ctx);
-  static splat::Result<std::unique_ptr<VulkanVisibilityPass>> create(const VulkanContext& ctx,
-                                                                     float minPixelRadius = 0.5f);
+  static splat::Result<std::unique_ptr<VulkanVisibilityPass>> create(const VulkanContext& ctx);
   ~VulkanVisibilityPass();
 
   VulkanVisibilityPass(const VulkanVisibilityPass&) = delete;
@@ -49,9 +48,6 @@ class VulkanVisibilityPass {
   // Transactional output allocation, 1..kMaxCapacity. Independent of resident source count.
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
-  float minPixelRadius() const { return minPixelRadius_; }
-  // Per-instance policy; render thread while the pass is idle. Finite and >= 0 or false.
-  bool setMinPixelRadius(float radius);
   const VulkanVisibilityCapabilities& capabilities() const { return capabilities_; }
 
   enum class CandidateMode : uint32_t { prefix, indices, ranges };
@@ -61,7 +57,7 @@ class VulkanVisibilityPass {
   };
   static_assert(sizeof(Range) == 16);
   struct Input {
-    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, 176-byte std140
+    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, std140
     VkDeviceSize cameraOffset = 0;
     VkBuffer splats = VK_NULL_HANDLE;  // resident GpuSplat records, 32 bytes each
     VkDeviceSize splatsOffset = 0;
@@ -72,7 +68,7 @@ class VulkanVisibilityPass {
     VkDeviceSize shOffset = 0;
     int shDegree = 0;
     // Actual total buffer sizes, including offsets. Caller owns truthful sizes and uploads.
-    VkDeviceSize cameraBytes = 176;
+    VkDeviceSize cameraBytes = sizeof(CameraUniform);
     VkDeviceSize splatsBytes = 0;
     VkDeviceSize shBytes = 0;
     CandidateMode mode = CandidateMode::prefix;
@@ -121,9 +117,8 @@ class VulkanVisibilityPass {
   static constexpr uint32_t kInvalidProjection = 16u;
 
  private:
-  explicit VulkanVisibilityPass(const VulkanContext& ctx, VulkanVisibilityCapabilities capabilities,
-                                float minPixelRadius)
-      : ctx_(ctx), capabilities_(std::move(capabilities)), minPixelRadius_(minPixelRadius) {}
+  explicit VulkanVisibilityPass(const VulkanContext& ctx, VulkanVisibilityCapabilities capabilities)
+      : ctx_(ctx), capabilities_(std::move(capabilities)) {}
 
   bool createDescriptors();
   bool createPipelines();
@@ -134,7 +129,6 @@ class VulkanVisibilityPass {
 
   const VulkanContext& ctx_;
   VulkanVisibilityCapabilities capabilities_;
-  float minPixelRadius_ = 0.5f;
   uint32_t capacity_ = 0;
 
   VkDescriptorSetLayout visibilitySetLayout_ = VK_NULL_HANDLE;

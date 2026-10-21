@@ -330,7 +330,7 @@ void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const F
     bad.splatsBytes = 32;
     require(!pass.encode(cmd, 0, bad), "reject undersized resident source descriptor");
     bad = in;
-    bad.cameraBytes = 175;
+    bad.cameraBytes = sizeof(CameraUniform) - 1;
     require(!pass.encode(cmd, 0, bad), "reject undersized uniform descriptor");
     bad = in;
     bad.splatsOffset = std::numeric_limits<VkDeviceSize>::max();
@@ -382,6 +382,32 @@ void testQuadExtent(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f
   in.sourceCount = 5;
   membership(run(gpu, pass, in), {1, 4});
   std::puts("PASS quad cutoff, 2.5 sigma extent and 512 px cap");
+}
+
+// MetalVisibilityPassTest.KeepsOnlySplatsAtOrOverTheCameraCutoff is the same case.
+void testCameraCutoff(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  // An opaque splat at depth 20 with focal 500: source sigma 0.3 px, a 2.5 sigma quad, so a
+  // 0.75 px footprint.
+  splat::SplatCloud cloud;
+  cloud.positions = {0, 0, -20};
+  cloud.covariances = {1.44e-4f, 0, 0, 1.44e-4f, 0, 1.44e-4f};
+  cloud.colors = {1, 1, 1};
+  cloud.alphas = {1};
+  auto splats = upload(gpu, packSplats(cloud));
+  require(pass.reserve(1), "cutoff output capacity");
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = 1;
+  for (const auto [cutoff, kept] : {std::pair{0.5f, 1u}, std::pair{1.0f, 0u}}) {
+    CameraUniform cam = camera();
+    cam.minPixelRadius = cutoff;
+    f.setCamera(cam);
+    require(run(gpu, pass, in).count == kept,
+            cutoff < 1 ? "0.75 px kept at a 0.5 px cutoff" : "0.75 px dropped at a 1 px cutoff");
+  }
+  f.setCamera(camera());
+  std::puts("PASS the camera's cutoff keeps a 0.75 px footprint at 0.5 px and drops it at 1 px");
 }
 
 std::pair<float, float> halves(uint32_t packed) {
@@ -461,7 +487,7 @@ void testProjectedRecord(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixtu
 }
 
 void tests(const Gpu& gpu) {
-  auto created = VulkanVisibilityPass::create(*gpu.context, 0);
+  auto created = VulkanVisibilityPass::create(*gpu.context);
   require(static_cast<bool>(created), "create subgroup visibility pass");
   auto pass = std::move(created.value());
   const Fixture f(gpu);
@@ -474,6 +500,7 @@ void tests(const Gpu& gpu) {
   testDepthKeys(gpu, *pass, f);
   testDescriptorRejection(gpu, *pass, f);
   testQuadExtent(gpu, *pass, f);
+  testCameraCutoff(gpu, *pass, f);
   testProjectedRecord(gpu, *pass, f);
 }
 }  // namespace

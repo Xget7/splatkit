@@ -41,14 +41,13 @@ constexpr uint32_t kKeyDescending = 2;
 struct PushConstants {
   uint32_t sourceCount;
   uint32_t capacity;
-  float minPixelRadius;
   uint32_t dispatchGroupsX;
   uint32_t candidateCapacity;
   uint32_t mode;
   uint32_t rangeCount;
   uint32_t keyMode;
 };
-static_assert(sizeof(PushConstants) == 32, "must match the Constants block of visibility.comp");
+static_assert(sizeof(PushConstants) == 28, "must match the Constants block of visibility.comp");
 
 // The number of candidates a pass reads: a prefix without a capacity reads every source.
 uint32_t candidateBound(const VulkanVisibilityPass::Input& input) {
@@ -151,7 +150,6 @@ void writeBindings(VkDevice device, VkDescriptorSet set,
   vkUpdateDescriptorSets(device, N, writes.data(), 0, nullptr);
 }
 
-static_assert(sizeof(CameraUniform) == 176, "visibility camera layout must match splat.vert");
 static_assert(sizeof(VkDrawIndirectCommand) == 16,
               "visibility indirect output must match native Vulkan draw arguments");
 
@@ -210,11 +208,7 @@ VulkanVisibilityCapabilities VulkanVisibilityPass::queryCapabilities(const Vulka
 }
 
 splat::Result<std::unique_ptr<VulkanVisibilityPass>> VulkanVisibilityPass::create(
-    const VulkanContext& ctx, float minPixelRadius) {
-  if (!std::isfinite(minPixelRadius) || minPixelRadius < 0.0f) {
-    return splat::Error{splat::ErrorCode::gpuUnavailable,
-                        "visibility: invalid minimum pixel radius"};
-  }
+    const VulkanContext& ctx) {
   VulkanVisibilityCapabilities capabilities = queryCapabilities(ctx);
   if (!capabilities.supported) {
     LOGI("GPU visibility unavailable: %s", capabilities.reason.c_str());
@@ -222,17 +216,11 @@ splat::Result<std::unique_ptr<VulkanVisibilityPass>> VulkanVisibilityPass::creat
   }
 
   std::unique_ptr<VulkanVisibilityPass> pass(
-      new VulkanVisibilityPass(ctx, std::move(capabilities), minPixelRadius));
+      new VulkanVisibilityPass(ctx, std::move(capabilities)));
   if (!pass->createDescriptors() || !pass->createPipelines()) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility pipeline"};
   }
   return pass;
-}
-
-bool VulkanVisibilityPass::setMinPixelRadius(float radius) {
-  if (!std::isfinite(radius) || radius < 0.0f) return false;
-  minPixelRadius_ = radius;
-  return true;
 }
 
 VulkanVisibilityPass::~VulkanVisibilityPass() {
@@ -530,7 +518,6 @@ bool VulkanVisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Inpu
                           &visibilitySets_[slot], 0, nullptr);
   const PushConstants push{input.sourceCount,
                            capacity_,
-                           minPixelRadius_,
                            groupsX,
                            bound,
                            static_cast<uint32_t>(input.mode),

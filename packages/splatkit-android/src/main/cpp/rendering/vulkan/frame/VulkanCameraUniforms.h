@@ -26,10 +26,11 @@ class VulkanCameraUniforms {
   VulkanCameraUniforms& operator=(const VulkanCameraUniforms&) = delete;
 
   // After the frame-slot fence, before compute/draw. Borrowed uniform stays valid until
-  // this object is destroyed. `extent` is in the window's orientation (VulkanSurface::viewExtent).
+  // this object is destroyed. `extent` is in the window's orientation (VulkanSurface::viewExtent);
+  // `minPixelRadius` is the sub-pixel cutoff, in pixels.
   VkBuffer update(uint32_t frameSlot, const splat::Mat4& view, const splat::Mat4& proj,
                   const splat::Vec3& cameraPosition, VkExtent2D extent, bool outputLinear,
-                  uint32_t quarterTurns);
+                  uint32_t quarterTurns, float minPixelRadius);
   VkBuffer buffer(uint32_t frameSlot) const { return uniforms_[frameSlot]->handle(); }
 
  private:

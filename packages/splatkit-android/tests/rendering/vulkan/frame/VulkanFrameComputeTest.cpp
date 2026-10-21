@@ -133,7 +133,6 @@ void tests(const test::VulkanTestContext& gpu) {
     require(static_cast<bool>(created), "create GPU frame");
     auto pass = std::move(created.value());
     RenderPolicy policy;
-    policy.subpixelThreshold = pass->minPixelRadius();
     policy.sortDepth = bits;
     std::string reason;
     require(pass->applyRenderPolicy(policy, &reason), "apply sort depth policy");
@@ -245,7 +244,6 @@ void tests(const test::VulkanTestContext& gpu) {
     uint64_t submission = 0;
     const auto apply = [&](float pixels, uint32_t limit) {
       RenderPolicy policy;
-      policy.subpixelThreshold = 0;
       policy.lodErrorPixels = pixels;
       policy.lodSplatLimit = limit;
       std::string reason;

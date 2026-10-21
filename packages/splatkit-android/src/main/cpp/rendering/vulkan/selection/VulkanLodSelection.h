@@ -25,7 +25,7 @@ class VulkanLodSelection {
     bool frustumCull = true;
   };
   struct Input {
-    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, 176 bytes, caller-owned/flush before encode
+    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, caller-owned/flush before encode
     VkDeviceSize cameraOffset = 0;     // minUniformBufferOffsetAlignment; buffer must cover range
   };
   struct Output {
