@@ -38,10 +38,13 @@ layout(std430, set = 0, binding = 1) readonly buffer Splats { Splat splats[]; };
 layout(std430, set = 0, binding = 2) readonly buffer Order { uint order[]; };
 layout(std430, set = 0, binding = 3) readonly buffer Sh { uint shData[]; };
 
-layout(location = 0) out vec2 relativePosition;  // in units of sigma
-layout(location = 1) out vec4 color;
+// Half precision, read by splat.frag. |gaussian|^2 is the falloff exponent in base 2.
+layout(location = 0) out mediump vec2 gaussian;
+layout(location = 1) flat out mediump vec4 color;  // rgb, log2(opacity)
 
 const vec2 kCorners[4] = vec2[](vec2(-1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1));
+// sqrt(0.5 * log2(e)): exp(-r^2 / 2) = exp2(-(kGaussianScale * r)^2).
+const float kGaussianScale = 0.8493218;
 
 // Turns clip space clockwise by the display's rotation. The swapchain image has the display's
 // native orientation and is scanned out as it is (VulkanSwapchain), so everything sized in
@@ -167,7 +170,7 @@ void main() {
   vec2 corner = kCorners[gl_VertexIndex];
   vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;
   gl_Position = vec4(preRotate(clip.xy + delta * clip.w), clip.z, clip.w);
-  relativePosition = radius * corner;
+  gaussian = radius * kGaussianScale * corner;
 
   vec3 rgb = rgba.rgb;
   if (SH_DEGREE >= 1u) {
@@ -175,5 +178,5 @@ void main() {
     rgb = max(rgb + shColor(index, dir), vec3(0.0));
   }
   if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(2.2));
-  color = vec4(rgb, alpha);
+  color = vec4(rgb, log2(alpha));
 }
