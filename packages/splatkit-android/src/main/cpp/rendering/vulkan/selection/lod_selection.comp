@@ -23,19 +23,26 @@ layout(push_constant) uniform Config {
 // dispatch xyz, emit xyz, outputDelta, packetDelta, scan xyz, frontier parity.
 const uint SPLIT = 0x80000000u, DROP = 0x40000000u, COST = 0x3fffffffu;
 shared uvec4 scanValues[128];
+shared uvec4 chunkTotals[16];
 uvec4 get4(uint base, uint i) { uint a = base + i * 4; return uvec4(s[a],s[a+1],s[a+2],s[a+3]); }
 void put4(uint base, uint i, uvec4 v) { uint a = base + i * 4; s[a]=v.x; s[a+1]=v.y; s[a+2]=v.z; s[a+3]=v.w; }
 uint currentFrontier() { return s[19] == 0 ? p.frontier0 : p.frontier1; }
 uint nextFrontier() { return s[19] == 0 ? p.frontier1 : p.frontier0; }
-// Inclusive workgroup scan. Every invocation participates, including tail lanes.
+// Inclusive workgroup scan. Every invocation participates, including tail lanes. 16 chunks of 8
+// scan serially, then each lane adds the chunks before its own: two barriers, where a
+// Hillis-Steele scan takes fourteen.
 uvec4 scan(uvec4 value) {
   uint lane = gl_LocalInvocationIndex;
   scanValues[lane] = value; barrier();
-  for (uint step = 1; step < 128; step *= 2) {
-    uvec4 addend = lane >= step ? scanValues[lane-step] : uvec4(0);
-    barrier(); scanValues[lane] += addend; barrier();
+  if (lane < 16) {
+    uvec4 run = uvec4(0);
+    for (uint i = 0; i < 8; ++i) { run += scanValues[lane*8+i]; scanValues[lane*8+i] = run; }
+    chunkTotals[lane] = run;
   }
-  return scanValues[lane];
+  barrier();
+  uvec4 inclusive = scanValues[lane];
+  for (uint c = 0; c < lane/8; ++c) inclusive += chunkTotals[c];
+  return inclusive;
 }
 bool outside(Cluster n) {
   vec3 v = (cam.view * vec4(n.centerRadius.xyz,1)).xyz;
