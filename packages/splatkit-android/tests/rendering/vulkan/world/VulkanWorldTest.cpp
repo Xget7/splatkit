@@ -94,6 +94,30 @@ void slabAndTiles(const test::VulkanTestContext& gpu) {
   require(slab->uploadTile(2, cloud(2, 1, 3 * 3)), "tile with exactly the slab's bands");
 }
 
+// Where the GPU shares memory with the CPU, a tile is packed straight into the slab.
+void tilesInSharedMemory(const test::VulkanTestContext& gpu) {
+  if (!gpu.sharesDeviceMemory()) {
+    std::puts("SKIP tiles in shared memory (separate device memory)");
+    return;
+  }
+  auto slab = VulkanWorld::createSlab(*gpu.context, 8, 1, false);
+  require(slab && slab->splats->mapped() && slab->sh->mapped(), "a shared-memory slab is mapped");
+  const splat::SplatCloud tile = cloud(3, 1, 3 * 3);
+  require(slab->uploadTile(5, tile), "tile into a mapped slab");
+  const std::vector<splatkit::GpuSplat> packed = splatkit::packSplats(tile);
+  const auto* splats = static_cast<const splatkit::GpuSplat*>(slab->splats->mapped());
+  require(std::memcmp(splats + 5, packed.data(), packed.size() * sizeof(packed[0])) == 0,
+          "the tile's records sit at its offset");
+  const size_t stride = shStride(1);
+  const std::vector<uint32_t> sh = splatkit::packSh(tile, 1);
+  const auto* slabSh = static_cast<const uint32_t*>(slab->sh->mapped());
+  require(std::memcmp(slabSh + 5 * stride, sh.data(), sh.size() * sizeof(uint32_t)) == 0,
+          "the tile's harmonics sit at its offset");
+  require(slab->uploadTile(5, cloud(3)), "a tile without harmonics over one with them");
+  for (size_t i = 5 * stride; i < 8 * stride; ++i)
+    require(slabSh[i] == 0, "a tile without harmonics zeroes its range");
+}
+
 void orderUpload(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(4), 0, true);
   require(world != nullptr, "upload for order recording");
@@ -126,6 +150,8 @@ int main() {
     std::puts("PASS world SH degree");
     slabAndTiles(gpu);
     std::puts("PASS slab and tiles");
+    tilesInSharedMemory(gpu);
+    std::puts("PASS tiles in shared memory");
     orderUpload(gpu);
     std::puts("PASS order upload");
     gpu.requireValidationClean();

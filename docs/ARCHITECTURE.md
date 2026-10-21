@@ -35,7 +35,7 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 
 | Stage | Metal (iOS) | Vulkan (Android) |
 |---|---|---|
-| Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | 2 MiB host-visible staging windows into device-local VMA buffers, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
+| Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | A world: 2 MiB host-visible staging windows into device-local VMA buffers, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers. Tiles pack straight into a slab mapped in device-local, host-visible memory, coherent where offered, and are staged only where the device has none ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
 | Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, in its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling; the CPU adapts the pixel threshold from counters read back one to two frames late ([lod_selection.comp][vk-lod], [LodThreshold.h][lod-threshold]) |
 | Cull | `visibility` kernel culls alpha, behind camera, near/far, screen edge and subpixel; SIMD prefix compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated ([SplatVisibility.metal][mtl-vis], [SplatProjection.metalh][mtl-proj]) | `visibility.comp` culls alpha, behind camera, near/far by centre and by covariance, screen edge and subpixel; subgroup compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated, one pipeline per SH degree ([visibility.comp][vk-vis], [splat_projection.glsl][vk-proj]) |
 | Sort | GPU LSD radix, 8-bit digits, 4 passes on 32-bit keys (default) or 2 on 16-bit; histogram and scatter rank with `simd_ballot`; indirect dispatch; needs 32-wide SIMD groups ([SplatRadixSort.metal][mtl-sort]) | GPU stable LSD radix, 8-bit digits, 4 or 2 passes; histogram with workgroup atomics because ballot loses keys on Adreno 640; scatter ranks each 128-key row with an `atomicOr` bitmask, the block's keys and values held in registers; indirect dispatch; 4M capacity ([radix_histogram.comp][vk-hist], [VulkanRadixSort.cpp][vk-sort]) |
@@ -52,6 +52,7 @@ Both backends:
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
 - The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
+- A streamed tile is written into a slab range only once every frame that drew the range finished: [TileStreamer.h][streamer] pins a replaced set until the renderer's completed frame serial passes the last frame that drew it.
 - Collision runs on the CPU in the walk camera and moves only the camera.
 - Both share one 32-byte `ProjectedSplat` ([GpuLayout.h][layout-h]); the visibility pass projects each splat once and sorts positions in that buffer.
 - Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw whose vertex stage projects each splat; Vulkan keeps the same path in [splat.vert][vk-vert] but needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
@@ -65,6 +66,7 @@ Both backends:
 [layout]: ../packages/splatkit-engine/src/rendering/GpuLayout.cpp
 [layout-h]: ../packages/splatkit-engine/include/splatkit/rendering/GpuLayout.h
 [engine]: ../packages/splatkit-engine/src/engine/SplatEngine.cpp
+[streamer]: ../packages/splat-core/include/splat/tiles/TileStreamer.h
 [ios-thread]: ../packages/splatkit-ios/Sources/SplatKit/engine/RenderThread.swift
 [android-thread]: ../packages/splatkit-android/src/main/kotlin/com/splatkit/engine/RenderThread.kt
 [mtl-world]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/world/MetalWorld.mm

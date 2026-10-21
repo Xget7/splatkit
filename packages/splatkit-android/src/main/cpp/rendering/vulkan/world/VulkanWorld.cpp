@@ -126,12 +126,12 @@ std::unique_ptr<VulkanWorld> VulkanWorld::createSlab(const VulkanContext& ctx, u
   if (std::max(shBytes, VkDeviceSize{capacity} * sizeof(GpuSplat)) >
       properties.limits.maxStorageBufferRange)
     return nullptr;
-  world->splats = VulkanBuffer::deviceLocal(ctx, VkDeviceSize{capacity} * sizeof(GpuSplat),
-                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->splats = VulkanBuffer::deviceLocalMapped(ctx, VkDeviceSize{capacity} * sizeof(GpuSplat),
+                                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   world->order =
       VulkanBuffer::deviceLocal(ctx, VkDeviceSize{cpuOrder ? capacity : 1u} * sizeof(uint32_t),
                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = VulkanBuffer::deviceLocal(ctx, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = VulkanBuffer::deviceLocalMapped(ctx, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   if (!world->splats || !world->order || !world->sh) return nullptr;
   if (cpuOrder && !allocateOrderStaging(ctx, *world, VkDeviceSize{capacity} * sizeof(uint32_t)))
     return nullptr;
@@ -142,17 +142,33 @@ bool VulkanWorld::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) co
   const size_t n = cloud.count();
   if (n == 0) return true;
   if (offset > count || n > count - offset) return false;
-  const std::vector<GpuSplat> packed = packSplats(cloud);
-  if (!splats->upload(VkDeviceSize{offset} * sizeof(GpuSplat), packed.data(),
-                      packed.size() * sizeof(GpuSplat))) {
-    return false;
+  const VkDeviceSize splatOffset = VkDeviceSize{offset} * sizeof(GpuSplat);
+  const size_t splatBytes = n * sizeof(GpuSplat);
+  if (auto* mapped = static_cast<GpuSplat*>(splats->mapped())) {
+    packSplatRange(cloud, 0, n, mapped + offset);
+    splats->flush(splatOffset, splatBytes);
+  } else {
+    const std::vector<GpuSplat> packed = packSplats(cloud);
+    if (!splats->upload(splatOffset, packed.data(), splatBytes)) return false;
   }
   if (shDegree == 0) return true;
   const size_t stride = shStride(shDegree);
+  const VkDeviceSize shOffset = VkDeviceSize{offset} * stride * sizeof(uint32_t);
+  const size_t shBytes = n * stride * sizeof(uint32_t);
+  const bool carries = carriesSh(cloud, shDegree);
+  if (auto* mapped = static_cast<uint32_t*>(sh->mapped())) {
+    uint32_t* records = mapped + size_t{offset} * stride;
+    if (carries) {
+      packShRange(cloud, shDegree, 0, n, records);
+    } else {
+      std::memset(records, 0, shBytes);
+    }
+    sh->flush(shOffset, shBytes);
+    return true;
+  }
   const std::vector<uint32_t> packedSh =
-      carriesSh(cloud, shDegree) ? packSh(cloud, shDegree) : std::vector<uint32_t>(n * stride, 0);
-  return sh->upload(VkDeviceSize{offset} * stride * sizeof(uint32_t), packedSh.data(),
-                    packedSh.size() * sizeof(uint32_t));
+      carries ? packSh(cloud, shDegree) : std::vector<uint32_t>(n * stride, 0);
+  return sh->upload(shOffset, packedSh.data(), shBytes);
 }
 
 void VulkanWorld::recordOrderUpload(VkCommandBuffer cmd, uint32_t frameSlot,

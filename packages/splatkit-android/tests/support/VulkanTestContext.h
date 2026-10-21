@@ -34,6 +34,35 @@ class VulkanTestContext {
     require(context->validationMessageCount() == 0, "Vulkan validation warning/error");
   }
 
+  // True where some memory is both the GPU's own and mappable, as on phones.
+  bool sharesDeviceMemory() const {
+    VkPhysicalDeviceMemoryProperties memory{};
+    vkGetPhysicalDeviceMemoryProperties(context->physicalDevice(), &memory);
+    constexpr VkMemoryPropertyFlags kShared =
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    for (uint32_t i = 0; i < memory.memoryTypeCount; ++i) {
+      if ((memory.memoryTypes[i].propertyFlags & kShared) == kShared) return true;
+    }
+    return false;
+  }
+
+  // Some memory type `buffer` may live in is device local, host visible and coherent.
+  bool offersSharedCoherent(VkBuffer buffer) const {
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(context->device(), buffer, &requirements);
+    VkPhysicalDeviceMemoryProperties memory{};
+    vkGetPhysicalDeviceMemoryProperties(context->physicalDevice(), &memory);
+    constexpr VkMemoryPropertyFlags kSharedCoherent = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t i = 0; i < memory.memoryTypeCount; ++i) {
+      if ((requirements.memoryTypeBits & (1u << i)) &&
+          (memory.memoryTypes[i].propertyFlags & kSharedCoherent) == kSharedCoherent)
+        return true;
+    }
+    return false;
+  }
+
   void submit(const std::function<void(VkCommandBuffer)>& record) const {
     struct Commands {
       explicit Commands(VkDevice device) : device(device) {}

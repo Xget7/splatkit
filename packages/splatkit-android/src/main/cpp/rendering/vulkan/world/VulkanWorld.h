@@ -26,11 +26,14 @@ class VulkanWorld {
                                              const splat::SplatCloud& cloud, int maxShDegree,
                                              bool cpuOrder);
   // An empty world of `capacity` records at `shDegree`, the slab the tiles of a tiled
-  // world land in; nothing is drawn until an order names records that were uploaded.
+  // world land in; nothing is drawn until an order names records that were uploaded. The
+  // records and harmonics are mapped where the GPU shares memory with the CPU.
   static std::unique_ptr<VulkanWorld> createSlab(const VulkanContext& ctx, uint32_t capacity,
                                                  int shDegree, bool cpuOrder);
-  // Converts and uploads a tile into records [offset, offset + count) of a slab
-  // (blocking). Harmonics above the slab's degree are dropped, missing ones are zero.
+  // Converts a tile into records [offset, offset + count) of a slab: in place where the
+  // slab is mapped, else through a blocking staged copy. The caller writes a range only
+  // after every frame that drew it finished. Harmonics above the slab's degree are
+  // dropped, missing ones are zero.
   bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) const;
 
   // Records the copy of a new draw order into the world. Must be called outside a render
