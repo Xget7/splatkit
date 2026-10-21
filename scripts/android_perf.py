@@ -11,6 +11,7 @@ import argparse
 import datetime
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -73,6 +74,16 @@ ROTATION_OFF = "0"
 DEFAULT_QUALITY = "high"
 DEFAULT_SECONDS = 30
 MS_PER_S = 1000
+# VulkanContext logs this line once per engine.
+DEVICE = re.compile(r"Vulkan device: (?P<device>.+?), API (?P<api>\d+\.\d+\.\d+), driver (?P<driver>0x[0-9a-f]+)")
+CAPABILITIES = re.compile(r"Vulkan capabilities: subgroup (?P<subgroup_size>\d+), "
+                          r"compute subgroup ops (?P<compute_subgroup_ops>[a-z_ ]+), "
+                          r"shared memory (?P<shared_memory_bytes>\d+) B, "
+                          r"workgroup invocations (?P<workgroup_invocations>\d+), "
+                          r"storage buffer range (?P<storage_buffer_range_bytes>\d+) B, "
+                          r"device-local heap (?P<device_local_heap_bytes>\d+) B, "
+                          r"float16 arithmetic (?P<float16_arithmetic>yes|no), "
+                          r"16-bit storage (?P<storage_16bit>yes|no)")
 ENVIRONMENT = "physical"
 
 
@@ -144,6 +155,22 @@ def validation_failure(log):
     if VALIDATION_ON not in log:
         return "the validation layer did not load; see logcat.txt"
     return None
+
+
+def gpu_capabilities(log):
+    """report.json's gpu block, from the device and capabilities lines; None without them."""
+    device, capabilities = DEVICE.search(log), CAPABILITIES.search(log)
+    if device is None or capabilities is None:
+        return None
+    gpu = dict(device.groupdict())
+    for key, value in capabilities.groupdict().items():
+        if key == "compute_subgroup_ops":
+            gpu[key] = [] if value == "none" else value.split()
+        elif value in ("yes", "no"):
+            gpu[key] = value == "yes"
+        else:
+            gpu[key] = int(value)
+    return gpu
 
 
 def adb(serial, *args, check=True, **kwargs):
@@ -276,6 +303,7 @@ def record(args, variant):
     summary = (benchmark_report.summarize(log, ENVIRONMENT, int(app_pid), args.seconds)
                if app_pid.isdigit() else {"status": "failed", "runs": [], "errors": ["app not running"]})
     summary["run"] = environment
+    summary["gpu"] = gpu_capabilities(log)
     summary["trace"] = {"path": str(trace), "app_slices_found": FRAME_SLICE in trace.read_bytes()}
     failure = failure or (validation_failure(log) if args.validation else None)
     if failure:

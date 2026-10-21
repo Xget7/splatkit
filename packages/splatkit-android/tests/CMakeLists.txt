@@ -15,6 +15,8 @@ target_compile_options(splatkit_vulkan_test_support PRIVATE
 target_link_libraries(splatkit_vulkan_test_support PUBLIC
   splatkit_engine vk-bootstrap::vk-bootstrap GPUOpen::VulkanMemoryAllocator vulkan android log)
 
+add_executable(splatkit_vulkan_context_test rendering/vulkan/device/VulkanContextTest.cpp)
+target_link_libraries(splatkit_vulkan_context_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_vulkan_buffer_test rendering/vulkan/device/VulkanBufferTest.cpp)
 target_link_libraries(splatkit_vulkan_buffer_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_vulkan_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
@@ -42,6 +44,7 @@ target_link_libraries(splatkit_vulkan_radix_sort_test PRIVATE
 
 # Building this target links every device test; scripts/lint-cpp.sh does so in CI.
 add_custom_target(splatkit_android_tests DEPENDS
+  splatkit_vulkan_context_test
   splatkit_vulkan_buffer_test
   splatkit_vulkan_upload_pressure_test
   splatkit_vulkan_world_test

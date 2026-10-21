@@ -35,6 +35,7 @@ The frame budget is the display interval: 16.7 ms at 60 Hz.
 - **gpu ms** (`gpu_mean_ms`): GPU time per frame.
   Above the budget means GPU-bound.
 - **sort, cull ms** (`stage_sample_mean_ms`): periodic GPU samples of the radix sort and visibility passes.
+- **`gpu`**: the device, API, driver and the limits the pipeline relies on, from the `Vulkan device:` and `Vulkan capabilities:` startup lines ([VulkanContext.cpp](../../../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanContext.cpp)).
 
 `analysis.json`, from the trace:
 

@@ -1,5 +1,10 @@
 #include "rendering/vulkan/device/VulkanContext.h"
 
+#include <algorithm>
+#include <cstring>
+#include <utility>
+#include <vector>
+
 #include "splatkit/Log.h"
 
 namespace splatkit {
@@ -31,6 +36,75 @@ bool wantValidation() {
   auto info = vkb::SystemInfo::get_system_info();
   return info && info->validation_layers_available;
 #endif
+}
+
+bool hasExtension(VkPhysicalDevice gpu, const char* name) {
+  uint32_t count = 0;
+  vkEnumerateDeviceExtensionProperties(gpu, nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> extensions(count);
+  vkEnumerateDeviceExtensionProperties(gpu, nullptr, &count, extensions.data());
+  return std::any_of(extensions.begin(), extensions.end(), [&](const VkExtensionProperties& e) {
+    return std::strcmp(e.extensionName, name) == 0;
+  });
+}
+
+std::string subgroupOperations(VkSubgroupFeatureFlags operations) {
+  constexpr std::pair<VkSubgroupFeatureFlagBits, const char*> kNames[] = {
+      {VK_SUBGROUP_FEATURE_BASIC_BIT, "basic"},
+      {VK_SUBGROUP_FEATURE_VOTE_BIT, "vote"},
+      {VK_SUBGROUP_FEATURE_ARITHMETIC_BIT, "arithmetic"},
+      {VK_SUBGROUP_FEATURE_BALLOT_BIT, "ballot"},
+      {VK_SUBGROUP_FEATURE_SHUFFLE_BIT, "shuffle"},
+      {VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT, "shuffle_relative"},
+      {VK_SUBGROUP_FEATURE_CLUSTERED_BIT, "clustered"},
+      {VK_SUBGROUP_FEATURE_QUAD_BIT, "quad"}};
+  std::string names;
+  for (const auto& [bit, name] : kNames) {
+    if ((operations & bit) == 0) continue;
+    if (!names.empty()) names += ' ';
+    names += name;
+  }
+  return names.empty() ? "none" : names;
+}
+
+std::string describeCapabilities(VkPhysicalDevice gpu) {
+  VkPhysicalDeviceSubgroupProperties subgroup{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+  VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+  properties.pNext = &subgroup;
+  vkGetPhysicalDeviceProperties2(gpu, &properties);
+  const VkPhysicalDeviceLimits& limits = properties.properties.limits;
+
+  // Core in 1.1; float16 arithmetic needs VK_KHR_shader_float16_int8, which may be absent.
+  VkPhysicalDevice16BitStorageFeatures storage16{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES};
+  VkPhysicalDeviceShaderFloat16Int8FeaturesKHR float16{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR};
+  const bool float16Extension = hasExtension(gpu, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+  if (float16Extension) storage16.pNext = &float16;
+  VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+  features.pNext = &storage16;
+  vkGetPhysicalDeviceFeatures2(gpu, &features);
+
+  VkPhysicalDeviceMemoryProperties memory{};
+  vkGetPhysicalDeviceMemoryProperties(gpu, &memory);
+  VkDeviceSize deviceLocal = 0;
+  for (uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
+    if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+      deviceLocal = std::max(deviceLocal, memory.memoryHeaps[i].size);
+    }
+  }
+
+  const bool computeSubgroups = (subgroup.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
+  const auto yesNo = [](bool value) { return value ? "yes" : "no"; };
+  return "subgroup " + std::to_string(subgroup.subgroupSize) + ", compute subgroup ops " +
+         (computeSubgroups ? subgroupOperations(subgroup.supportedOperations) : "none") +
+         ", shared memory " + std::to_string(limits.maxComputeSharedMemorySize) +
+         " B, workgroup invocations " + std::to_string(limits.maxComputeWorkGroupInvocations) +
+         ", storage buffer range " + std::to_string(limits.maxStorageBufferRange) +
+         " B, device-local heap " + std::to_string(deviceLocal) + " B, float16 arithmetic " +
+         yesNo(float16Extension && float16.shaderFloat16 == VK_TRUE) + ", 16-bit storage " +
+         yesNo(storage16.storageBuffer16BitAccess == VK_TRUE);
 }
 
 }  // namespace
@@ -102,6 +176,8 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
                             std::to_string(VK_VERSION_MAJOR(props.apiVersion)) + "." +
                             std::to_string(VK_VERSION_MINOR(props.apiVersion)) + "." +
                             std::to_string(VK_VERSION_PATCH(props.apiVersion));
+  ctx->capabilities_ = describeCapabilities(ctx->device_.physical_device);
+  LOGI("Vulkan capabilities: %s", ctx->capabilities_.c_str());
   return ctx;
 }
 
