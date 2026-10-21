@@ -27,6 +27,7 @@ static uint findRange(const device uint* starts, uint rangeCount, uint t) {
 
 kernel void visibility(uint t [[thread_position_in_grid]],
                        uint lane [[thread_index_in_simdgroup]],
+                       uint groupThread [[thread_index_in_threadgroup]],
                        constant Camera& cam [[buffer(0)]],
                        const device Splat* splats [[buffer(1)]],
                        const device Range* ranges [[buffer(2)]],
@@ -40,6 +41,9 @@ kernel void visibility(uint t [[thread_position_in_grid]],
                        const device uint* activeIndices [[buffer(10), function_constant(kIndexedLOD)]],
                        const device uint* activeCount [[buffer(11), function_constant(kIndexedLOD)]]) {
   const uint total = kIndexedLOD ? activeCount[0] : rangeStarts[rangeCount];
+  // The indexed dispatch covers the capacity: a threadgroup past the selection leaves whole,
+  // so no SIMD group below runs its collectives short of a lane.
+  if (kIndexedLOD && t - groupThread >= total) return;
   bool visible = false;
   uint key = 0;
   uint index = 0;
@@ -63,7 +67,8 @@ kernel void visibility(uint t [[thread_position_in_grid]],
     key = kQuantizedDepth ? quantizedDepthKey(cam, depth) : as_type<uint>(depth);
     visible = visible && isfinite(depth);
   }
-  // No lane returns before these collectives, including padded tail lanes.
+  // Within a threadgroup that runs, no lane returns before these collectives, including
+  // padded tail lanes.
   uint rank = simd_prefix_exclusive_sum(visible ? 1u : 0u);
   uint survivors = simd_sum(visible ? 1u : 0u);
   uint base = 0;

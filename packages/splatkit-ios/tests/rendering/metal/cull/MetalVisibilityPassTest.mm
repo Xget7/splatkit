@@ -484,5 +484,54 @@ TEST_F(MetalVisibilityPassTest, CompactsSimdTailsAndClearsReusedSlots) {
   }
 }
 
+// LOD selection fills a fraction of the capacity the indexed dispatch covers; every
+// threadgroup past the selected count may leave early, the one holding its last splat may not.
+TEST_F(MetalVisibilityPassTest, IndexedSelectionsBelowTheCapacityWriteOnlyTheSelectedSplats) {
+  Gpu& gpu = Gpu::get();
+  constexpr uint32_t capacity = 1025;  // four threadgroups and one splat
+  VisibilityInput input(capacity);
+  ASSERT_TRUE(visibility.reserve(capacity));
+  auto* source = static_cast<GpuSplat*>(input.splats.contents);
+  std::vector<uint32_t> ids(capacity);
+  for (uint32_t i = 0; i < capacity; ++i) {
+    if (i % 3 == 0) source[i].position[2] = 2;  // behind the camera
+    ids[i] = capacity - 1 - i;
+  }
+  id<MTLBuffer> indices = [gpu.device newBufferWithBytes:ids.data()
+                                                  length:ids.size() * sizeof(uint32_t)
+                                                 options:MTLResourceStorageModeShared];
+  const auto* order = static_cast<const uint32_t*>(visibility.order().contents);
+  const auto* projected = static_cast<const ProjectedSplat*>(visibility.projected().contents);
+  for (uint32_t n : {0u, 1u, 255u, 256u, 257u, 700u, 1024u, 1025u}) {
+    SCOPED_TRACE(n);
+    const uint32_t slot = n % kFramesInFlight;
+    id<MTLBuffer> count = [gpu.device newBufferWithBytes:&n
+                                                  length:sizeof(n)
+                                                 options:MTLResourceStorageModeShared];
+    id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
+    ASSERT_TRUE(visibility.encode(cmd, slot, input.uniforms, input.splats, nil, 0, nullptr, 0,
+                                  indices, count));
+    [cmd commit];
+    [cmd waitUntilCompleted];
+    ASSERT_EQ(cmd.status, MTLCommandBufferStatusCompleted);
+    std::vector<bool> expected(capacity, false);
+    uint32_t visible = 0;
+    for (uint32_t t = 0; t < n; ++t) {
+      if (ids[t] % 3 != 0) {
+        expected[ids[t]] = true;
+        ++visible;
+      }
+    }
+    ASSERT_EQ(visibility.count(slot), visible);
+    for (uint32_t i = 0; i < visible; ++i) {
+      ASSERT_LT(order[i], visible);
+      const uint32_t id = projected[order[i]].index;
+      ASSERT_LT(id, capacity);
+      EXPECT_TRUE(expected[id]) << id;
+      expected[id] = false;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace splatkit
