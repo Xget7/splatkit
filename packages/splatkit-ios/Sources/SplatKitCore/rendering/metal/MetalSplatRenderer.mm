@@ -102,7 +102,9 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   policy.fallback.sortDepth =
       compute_->depthBits() == KeyBits::Low16 ? SortKeyBits::low16 : SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
-  policy.fallback.enableEarlyTermination = true;
+  // The GPU order path draws front to back and stops at saturated pixels; the CPU path
+  // draws back to front.
+  policy.fallback.enableEarlyTermination = compute_->gpuSort();
   // The key width is a public per-instance control. The raster strategy, sub-pixel radius,
   // alpha, tile size and occlusion stay fixed shader/rasterization choices.
   // The LOD error threshold applies live to a hierarchy world and at its next upload.

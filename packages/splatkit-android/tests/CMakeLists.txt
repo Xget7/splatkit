@@ -41,6 +41,12 @@ add_executable(splatkit_vulkan_radix_sort_test rendering/vulkan/sort/VulkanRadix
   ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_vulkan_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
+add_executable(splatkit_vulkan_splat_pipeline_test rendering/vulkan/raster/VulkanSplatPipelineTest.cpp
+  ${vulkan_source_dir}/raster/VulkanSplatPipeline.cpp ${vulkan_source_dir}/world/VulkanWorld.cpp
+  ${vulkan_source_dir}/frame/VulkanCameraUniforms.cpp
+  ${vulkan_source_dir}/presentation/VulkanRenderTarget.cpp)
+target_link_libraries(splatkit_vulkan_splat_pipeline_test PRIVATE
+  splatkit_vulkan_test_support splatkit_shaders)
 
 # Building this target links every device test; scripts/lint-cpp.sh does so in CI.
 add_custom_target(splatkit_android_tests DEPENDS
@@ -52,4 +58,5 @@ add_custom_target(splatkit_android_tests DEPENDS
   splatkit_vulkan_visibility_pass_test
   splatkit_vulkan_frame_compute_test
   splatkit_vulkan_radix_sort_test
+  splatkit_vulkan_splat_pipeline_test
 )

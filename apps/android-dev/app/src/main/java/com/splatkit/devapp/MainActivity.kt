@@ -2,10 +2,14 @@ package com.splatkit.devapp
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Insets
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -62,17 +66,41 @@ class MainActivity : Activity() {
             refreshGyroLabel()
         }
 
+        // The splats fill the notch's edge too; the controls stay clear of it.
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        }
         val root = FrameLayout(this)
         root.addView(splatView, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-        root.addView(hud, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+        val controls = FrameLayout(this)
+        controls.setOnApplyWindowInsetsListener { view, insets ->
+            val safe = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            } else {
+                @Suppress("DEPRECATION")
+                Insets.of(insets.systemWindowInsetLeft, insets.systemWindowInsetTop,
+                    insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            }
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            insets
+        }
+        root.addView(controls, FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        controls.addView(hud, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or Gravity.START
             setMargins(dp(12), dp(40), 0, 0)
         })
-        root.addView(joystick, FrameLayout.LayoutParams(dp(140), dp(140)).apply {
+        controls.addView(joystick, FrameLayout.LayoutParams(dp(140), dp(140)).apply {
             gravity = Gravity.BOTTOM or Gravity.START
             setMargins(dp(24), 0, 0, dp(40))
         })
-        root.addView(gyroButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+        controls.addView(gyroButton, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.BOTTOM or Gravity.END
             setMargins(0, 0, dp(24), dp(40))
         })

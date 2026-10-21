@@ -5,9 +5,11 @@
 #include <limits>
 #include <numeric>
 #include <set>
+#include <utility>
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "splat/math/Half.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
 
@@ -16,7 +18,9 @@ using splatkit::CameraUniform;
 using splatkit::GpuSplat;
 using splatkit::KeyBits;
 using splatkit::kFramesInFlight;
+using splatkit::packSh;
 using splatkit::packSplats;
+using splatkit::ProjectedSplat;
 using splatkit::VulkanBuffer;
 using splatkit::VulkanVisibilityPass;
 namespace test = splatkit::test;
@@ -78,11 +82,14 @@ struct Fixture {
 struct Result {
   uint32_t count = 0, status = 0;
   VkDrawIndirectCommand draw{};
-  std::vector<uint32_t> indices, keys;
+  std::vector<uint32_t> values, keys, sources;
+  std::vector<ProjectedSplat> projected;
 };
 Result run(const test::VulkanTestContext& gpu, const VulkanVisibilityPass& pass,
            const VulkanVisibilityPass::Input& input, uint32_t slot = 0) {
-  const VkDeviceSize bytes = 24 + pass.capacity() * 8ull;
+  const VkDeviceSize words = pass.capacity() * 4ull;
+  const VkDeviceSize records = pass.capacity() * sizeof(ProjectedSplat);
+  const VkDeviceSize bytes = 24 + 2 * words + records;
   auto copy = VulkanBuffer::deviceLocal(
       *gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   require(copy != nullptr, "readback copy allocation");
@@ -92,13 +99,15 @@ Result run(const test::VulkanTestContext& gpu, const VulkanVisibilityPass& pass,
     const VkBufferCopy count{0, 0, 4};
     const VkBufferCopy status{0, 4, 4};
     const VkBufferCopy draw{0, 8, 16};
-    const VkBufferCopy indices{0, 24, pass.capacity() * 4ull};
-    const VkBufferCopy keys{0, 24 + pass.capacity() * 4ull, pass.capacity() * 4ull};
+    const VkBufferCopy values{0, 24, words};
+    const VkBufferCopy keys{0, 24 + words, words};
+    const VkBufferCopy projected{0, 24 + 2 * words, records};
     vkCmdCopyBuffer(cmd, out.count, copy->handle(), 1, &count);
     vkCmdCopyBuffer(cmd, out.status, copy->handle(), 1, &status);
     vkCmdCopyBuffer(cmd, out.indirect, copy->handle(), 1, &draw);
-    vkCmdCopyBuffer(cmd, out.indices, copy->handle(), 1, &indices);
+    vkCmdCopyBuffer(cmd, out.values, copy->handle(), 1, &values);
     vkCmdCopyBuffer(cmd, out.depthKeys, copy->handle(), 1, &keys);
+    vkCmdCopyBuffer(cmd, out.projected, copy->handle(), 1, &projected);
   });
   const auto raw = gpu.readback(*copy, bytes);
   Result result;
@@ -109,17 +118,24 @@ Result run(const test::VulkanTestContext& gpu, const VulkanVisibilityPass& pass,
   require(result.draw.vertexCount == 4 && result.draw.instanceCount == result.count &&
               result.draw.firstVertex == 0 && result.draw.firstInstance == 0,
           "indirect draw agrees with normalized count");
-  result.indices.resize(result.count);
+  result.values.resize(result.count);
   result.keys.resize(result.count);
+  result.projected.resize(result.count);
   if (result.count) {
-    std::memcpy(result.indices.data(), raw.data() + 24, result.count * 4);
-    std::memcpy(result.keys.data(), raw.data() + 24 + pass.capacity() * 4ull, result.count * 4);
+    std::memcpy(result.values.data(), raw.data() + 24, result.count * 4);
+    std::memcpy(result.keys.data(), raw.data() + 24 + words, result.count * 4);
+    std::memcpy(result.projected.data(), raw.data() + 24 + 2 * words,
+                result.count * sizeof(ProjectedSplat));
+  }
+  for (uint32_t i = 0; i < result.count; ++i) {
+    require(result.values[i] == i, "sort values are positions in the projected records");
+    result.sources.push_back(result.projected[i].index);
   }
   return result;
 }
 void membership(const Result& result, std::vector<uint32_t> expected) {
   require(result.status == 0, "no visibility failure");
-  auto indices = result.indices;
+  auto indices = result.sources;
   std::sort(indices.begin(), indices.end());
   std::sort(expected.begin(), expected.end());
   require(indices == expected, "candidate membership equals expected source indices");
@@ -265,7 +281,7 @@ uint32_t expectedDepthKey(float depth, KeyBits bits, VulkanVisibilityPass::KeyOr
 
 void requireDepthKeys(const Result& result, KeyBits bits, VulkanVisibilityPass::KeyOrder order) {
   for (size_t i = 0; i < result.count; ++i) {
-    const auto depth = static_cast<float>(1 + result.indices[i] % 10);
+    const auto depth = static_cast<float>(1 + result.sources[i] % 10);
     const uint32_t expected = expectedDepthKey(depth, bits, order);
     if (bits == KeyBits::full32)
       require(result.keys[i] == expected,
@@ -303,7 +319,8 @@ void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const F
   const auto old = pass.output(0);
   require(!pass.reserve(0) && !pass.reserve(VulkanVisibilityPass::kMaxCapacity + 1),
           "reject capacity bounds");
-  require(pass.output(0).indices == old.indices, "reserve failure preserves output");
+  require(pass.output(0).values == old.values && pass.output(0).projected == old.projected,
+          "reserve failure preserves output");
   auto indexBuffer = upload(gpu, std::vector<uint32_t>{299, 0, 128});
   auto countBuffer = upload(gpu, std::vector<uint32_t>{3});
   auto in = f.input();
@@ -337,6 +354,112 @@ void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const F
   std::puts("PASS descriptor rejection and transactional capacity");
 }
 
+// The quad ends where the Gaussian falls to the cutoff, out to 2.5 sigma and 512 pixels:
+// a splat under the cutoff has no quad, and a quad that misses the screen is culled.
+void testQuadExtent(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  splat::SplatCloud cloud;
+  const auto add = [&](float x, float z, float variance, float alpha) {
+    cloud.positions.insert(cloud.positions.end(), {x, 0, z});
+    cloud.covariances.insert(cloud.covariances.end(), {variance, 0, 0, variance, 0, variance});
+    cloud.colors.insert(cloud.colors.end(), {1, 1, 1});
+    cloud.alphas.push_back(alpha);
+  };
+  // x at depth 10 whose centre projects to `ndc`.
+  const auto atNdc = [](float ndc) { return ndc * 10.0f / camera().proj.at(0, 0); };
+  add(0, -5, 0.01f, 1.0f / 255.0f);
+  add(0, -5, 0.01f, 3.0f / 255.0f);
+  // 100 px sigma, about 138 px across x this far out, centred 375 px past the right edge:
+  // a 3 sigma quad reaches the screen, a 2.5 sigma one stops short.
+  add(atNdc(1.75f), -10, 4, 0.5f);
+  // 2000 px sigma centred 2500 px past the edge: the 512 px cap stops the quad short.
+  add(atNdc(6), -10, 1600, 0.5f);
+  add(0, -10, 1600, 0.5f);
+  auto splats = upload(gpu, packSplats(cloud));
+  require(pass.reserve(5), "quad extent output capacity");
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = 5;
+  membership(run(gpu, pass, in), {1, 4});
+  std::puts("PASS quad cutoff, 2.5 sigma extent and 512 px cap");
+}
+
+std::pair<float, float> halves(uint32_t packed) {
+  return {splat::fromHalf(static_cast<uint16_t>(packed & 0xffffu)),
+          splat::fromHalf(static_cast<uint16_t>(packed >> 16))};
+}
+void requireNear(float got, float expected, float tolerance, const char* what) {
+  if (std::abs(got - expected) > tolerance) {
+    std::fprintf(stderr, "%s: got %f, expected %f\n", what, got, expected);
+    require(false, what);
+  }
+}
+
+// The cull writes the quad the draw expands: centre, half axes, colour seen from the camera,
+// peak opacity, radius and source index, with SH evaluated when the world carries it.
+void testProjectedRecord(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  constexpr float kX = 0.5f;
+  constexpr float kZ = -5;
+  constexpr float kVariance = 0.01f;
+  constexpr float kAlpha = 0.5f;
+  constexpr float kRgb[3] = {0.2f, 0.4f, 0.6f};
+  constexpr float kBand1Z[3] = {0.1f, -0.2f, 0.3f};  // the coefficient the z direction weights
+  splat::SplatCloud cloud;
+  for (const float alpha : {1.0f / 255.0f, kAlpha}) {  // the first has no quad
+    cloud.positions.insert(cloud.positions.end(), {kX, 0, kZ});
+    cloud.covariances.insert(cloud.covariances.end(), {kVariance, 0, 0, kVariance, 0, kVariance});
+    cloud.colors.insert(cloud.colors.end(), std::begin(kRgb), std::end(kRgb));
+    cloud.alphas.push_back(alpha);
+    cloud.sh.insert(cloud.sh.end(), {0, 0, 0, kBand1Z[0], kBand1Z[1], kBand1Z[2], 0, 0, 0});
+  }
+  cloud.shDegree = 1;
+  auto splats = upload(gpu, packSplats(cloud));
+  auto sh = upload(gpu, packSh(cloud, 1));
+  require(pass.reserve(2), "projected record capacity");
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = 2;
+  in.sh = sh->handle();
+  in.shBytes = sh->size();
+
+  const auto cam = camera();
+  const float focal = cam.focal[0];
+  // J Sigma J^T of an isotropic splat at (x, 0, z), plus the low-pass filter.
+  const float varianceX =
+      kVariance * focal * focal * (1 / (kZ * kZ) + kX * kX / (kZ * kZ * kZ * kZ));
+  const float varianceY = kVariance * focal * focal / (kZ * kZ);
+  const float quantized = [](float v) { return std::lround(v * 255) / 255.0f; }(kAlpha);
+  const float direction = kZ / std::sqrt(kX * kX + kZ * kZ);
+  constexpr float kC1 = 0.4886025119f;
+  for (const int degree : {0, 1}) {
+    in.shDegree = degree;
+    const auto result = run(gpu, pass, in);
+    membership(result, {1});
+    const auto& p = result.projected[0];
+    requireNear(p.center[0], cam.proj.at(0, 0) * kX / -kZ, 1e-5f, "centre x");
+    requireNear(p.center[1], 0, 1e-5f, "centre y");
+    const auto [a1x, a1y] = halves(p.axis1);
+    const auto [a2x, a2y] = halves(p.axis2);
+    requireNear(a1x, std::sqrt(varianceX + 0.3f), 1e-2f, "major axis");
+    requireNear(a1y, 0, 1e-3f, "major axis direction");
+    requireNear(a2x, 0, 1e-3f, "minor axis direction");
+    requireNear(std::abs(a2y), std::sqrt(varianceY + 0.3f), 1e-2f, "minor axis");
+    requireNear(p.radius, 2.5f, 1e-5f, "radius stops at 2.5 sigma");
+    const auto [red, green] = halves(p.color0);
+    const auto [blue, opacity] = halves(p.color1);
+    const float rgb[3] = {red, green, blue};
+    for (int c = 0; c < 3; ++c) {
+      const float base = std::lround(kRgb[c] * 255) / 255.0f;
+      const float shifted =
+          degree == 0 ? base : std::max(base + kC1 * direction * kBand1Z[c], 0.0f);
+      requireNear(rgb[c], shifted, 2e-3f, degree == 0 ? "base colour" : "colour with band 1");
+    }
+    requireNear(opacity, quantized, 1e-3f, "peak opacity");
+  }
+  std::puts("PASS projected record: centre, half axes, colour with SH, opacity, radius, source");
+}
+
 void tests(const Gpu& gpu) {
   auto created = VulkanVisibilityPass::create(*gpu.context, 0);
   require(static_cast<bool>(created), "create subgroup visibility pass");
@@ -350,6 +473,8 @@ void tests(const Gpu& gpu) {
   testOverflow(gpu, *pass, f);
   testDepthKeys(gpu, *pass, f);
   testDescriptorRejection(gpu, *pass, f);
+  testQuadExtent(gpu, *pass, f);
+  testProjectedRecord(gpu, *pass, f);
 }
 }  // namespace
 

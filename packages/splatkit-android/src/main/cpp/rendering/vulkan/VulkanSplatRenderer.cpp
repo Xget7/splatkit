@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "engine/TraceSection.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 
 #include "splatkit/Log.h"
 
@@ -67,11 +68,14 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   policy.fallback.raster = RasterStrategy::hardware;
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = 1.0f;
-  policy.fallback.alphaThreshold = 1.0f / 255.0f;
+  policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = 0.5f;
   policy.fallback.sortDepth = SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
-  policy.fallback.enableEarlyTermination = true;
+  // Both paths draw back to front, so nothing stops at a saturated pixel. Front to back
+  // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
+  // termination saved.
+  policy.fallback.enableEarlyTermination = false;
   // The GPU visibility/sort path applies the sub-pixel cutoff and the key width per
   // instance; without it the CPU path has neither, and the rest is not implemented.
   policy.sortDepth = gpu;
@@ -217,10 +221,11 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
                                             view, outputLinear, turns);
     {
       const TraceSection section(trace::kEncodeCompute);
-      gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
+      gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
+                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame);
     }
     if (gpuDraw)
-      splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
+      splats_->bindProjected(slot, gpuDraw->projected, gpuDraw->order, gpuDraw->capacity);
     else
       LOGE("GPU frame encode failed; submitting clear frame to preserve fence lifecycle");
   } else if (world_ && !compute_ && frame.order != nullptr) {
@@ -249,7 +254,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   if (world_ && gpuDraw) {
-    splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
+    splats_->drawProjected(cmd, slot, gpuDraw->arguments);
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
     if (count > 0) {

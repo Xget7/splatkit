@@ -34,7 +34,8 @@ class VulkanFrameCompute {
   VulkanFrameCompute& operator=(const VulkanFrameCompute&) = delete;
 
   struct Draw {
-    VkBuffer order = VK_NULL_HANDLE;
+    VkBuffer order = VK_NULL_HANDLE;      // sorted positions in projected
+    VkBuffer projected = VK_NULL_HANDLE;  // ProjectedSplat records
     VkBuffer arguments = VK_NULL_HANDLE;
     uint32_t capacity = 0;
   };
@@ -43,8 +44,10 @@ class VulkanFrameCompute {
     double sortMillis = 0, selectMillis = 0, cullMillis = 0;
   };
   // Nullopt means encoding failed; caller must still submit/end its acquired frame.
+  // `sh` holds the harmonics bands 1 to `shDegree` of every splat; degree 0 never reads it.
   std::optional<Draw> encode(VkCommandBuffer cmd, uint32_t slot, VkBuffer camera,
-                             const VulkanBuffer& splats, const SplatRenderer::Frame& frame);
+                             const VulkanBuffer& splats, const VulkanBuffer& sh, int shDegree,
+                             const SplatRenderer::Frame& frame);
   const Stats& stats() const { return stats_; }
   // The queue submission that carried the slot's last encode.
   void submitted(uint32_t slot, uint64_t submission);

@@ -29,6 +29,8 @@ class VulkanRenderTarget {
   VkRenderPass renderPass() const { return renderPass_; }
   VkFormat format() const { return format_; }
   VkFramebuffer framebuffer() const { return framebuffer_; }
+  // Left as a transfer source by the render pass.
+  VkImage image() const { return image_; }
 
   // Records the upscale into `swapchainImage`, which is left ready for presentation.
   // Call after the render pass ended; the pass leaves the image as a transfer source.
