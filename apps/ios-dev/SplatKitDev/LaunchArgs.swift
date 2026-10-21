@@ -21,6 +21,7 @@ import Foundation
 /// Quantization can change transparency ordering within a bin; no splats are removed.
 /// --lod-error-pixels <px> sets the hierarchy refinement threshold (default 1; lower draws more).
 /// --lod-splat-limit <n> caps the splats a frame selects, 0 for the loaded budget; detail thins evenly.
+/// --subpixel <px> sets the sub-pixel cutoff (default 0.5; a splat's footprint under it is not drawn).
 /// --quality <ultra|high|balanced|fast> picks the starting level (default high) unless --scale,
 /// --shdraw or --depth-key-bits set the renderer directly.
 /// --shot <overview|orbit|detail|flyby|tour> picks the ISS camera shot (default orbit).

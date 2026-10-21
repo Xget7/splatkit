@@ -154,13 +154,16 @@ class MainActivity : Activity() {
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
         if (intent?.hasExtra("budget") == true) splatView.splatBudget = intent.getIntExtra("budget", 0)
         // --ei lodSplatLimit N caps the splats a frame of a hierarchy world selects, 0 for the
-        // budget; detail thins evenly. --ef lodErrorPixels sets the refinement threshold.
-        if (intent != null && (intent.hasExtra("lodSplatLimit") || intent.hasExtra("lodErrorPixels"))) {
+        // budget; detail thins evenly. --ef lodErrorPixels sets the refinement threshold, and
+        // --ef subpixel the footprint in pixels under which a splat is not drawn.
+        val policyExtras = listOf("lodSplatLimit", "lodErrorPixels", "subpixel")
+        if (intent != null && policyExtras.any { intent.hasExtra(it) }) {
             val current = splatView.renderPolicy ?: RenderPolicy()
             splatView.applyRenderPolicy(
                 current.copy(
                     lodSplatLimit = intent.getIntExtra("lodSplatLimit", current.lodSplatLimit),
                     lodErrorPixels = intent.getFloatExtra("lodErrorPixels", current.lodErrorPixels),
+                    subpixelThreshold = intent.getFloatExtra("subpixel", current.subpixelThreshold),
                 ),
             ) { Log.i(TAG, "render policy: ${it.effective} ${it.warnings}") }
         }

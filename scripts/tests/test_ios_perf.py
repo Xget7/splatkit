@@ -38,6 +38,19 @@ class LaunchTest(unittest.TestCase):
         self.assertIn('"MTL_DEBUG_LAYER": "1"', environment)
 
 
+    def test_budget_and_cutoff_go_to_the_switches_the_dev_app_reads(self):
+        command = perf.launch_command(UDID, 30, "high", None, None, validation=False, budget=300000,
+                                      subpixel=1.0)
+        app_args = command[command.index(perf.BUNDLE_ID) + 1:]
+        self.assertEqual(app_args[app_args.index("--budget") + 1], "300000")
+        self.assertEqual(app_args[app_args.index("--subpixel") + 1], "1.0")
+        plain = perf.launch_command(UDID, 30, "high", None, None, validation=False)
+        self.assertNotIn("--budget", plain)
+        self.assertNotIn("--subpixel", plain)
+        app = perf.ROOT / "apps/ios-dev/SplatKitDev"
+        self.assertIn('args.int("budget")', (app / "ContentView.swift").read_text())
+        self.assertIn('args.float("subpixel")', (app / "SplatViewHost.swift").read_text())
+
 class DeviceTest(unittest.TestCase):
     def test_environment_reads_model_os_and_family(self):
         details = {"result": {"deviceProperties": {"name": "xgetphone", "osVersionNumber": "27.0",

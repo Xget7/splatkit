@@ -53,6 +53,14 @@ class WorldAndValidationTest(unittest.TestCase):
         self.assertIn(f'getIntExtra("{perf.EXTRA_BUDGET}"', activity)
         self.assertIn(f'getIntExtra("{perf.EXTRA_LOD_SPLAT_LIMIT}"', activity)
 
+    def test_the_cutoff_goes_to_the_extra_the_dev_app_reads(self):
+        args = perf.launch_args(20, "high", None, subpixel=1.0)
+        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) - 1], "--ef")
+        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) + 1], "1.0")
+        self.assertNotIn(perf.EXTRA_SUBPIXEL, perf.launch_args(20, "high", None))
+        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
+        self.assertIn(f'getFloatExtra("{perf.EXTRA_SUBPIXEL}"', activity)
+
     def test_relative_worlds_live_in_the_external_files_dir(self):
         self.assertEqual(perf.device_world("house.spz"), f"/sdcard/Android/data/{perf.PACKAGE}/files/house.spz")
         self.assertEqual(perf.device_world("/sdcard/house.spz"), "/sdcard/house.spz")
