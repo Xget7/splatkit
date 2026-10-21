@@ -33,7 +33,8 @@ class VulkanLodSelection {
     VkBuffer state = VK_NULL_HANDLE;  // count/diagnostics at constants below, TRANSFER_SRC capable
     uint32_t capacity = 0;
   };
-  static constexpr uint32_t kMaxBudget = 2200000;
+  // Metal's ceiling; buffers scale with the budget a world loads with.
+  static constexpr uint32_t kMaxBudget = 4'000'000;
   static constexpr VkDeviceSize kCountOffset = 0;
   static constexpr VkDeviceSize kLimitedOffset = 16;
   static constexpr VkDeviceSize kEvaluatedOffset = 20;

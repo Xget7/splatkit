@@ -52,7 +52,7 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
 
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   DeviceCapabilities caps;
-  // GpuLOD clamps a hierarchy at 2.2M nodes; the Android adapter caps residency at 8M.
+  // GPU LOD clamps a hierarchy at 4M selected nodes; the Android adapter caps residency at 8M.
   caps.limits.maxLodCapacitySplats = VulkanLodSelection::kMaxBudget;
   caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
   caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;

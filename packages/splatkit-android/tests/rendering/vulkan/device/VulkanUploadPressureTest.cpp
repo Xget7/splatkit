@@ -1,6 +1,7 @@
 #include <array>
 #include <cstdio>
 
+#include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "support/VulkanTestContext.h"
 
 // No shaders or pipelines: reproduce VulkanRadixSort::reserve's allocation pressure,
@@ -13,7 +14,7 @@ int main(int argc, char** argv) {
     const bool small = argc == 2 && std::strcmp(argv[1], "--small") == 0;
     require(argc == 1 || small, "usage: splatkit_vulkan_upload_pressure_test [--small]");
     splatkit::test::VulkanTestContext gpu;
-    const uint32_t capacity = small ? 262145 : 3000000;
+    const uint32_t capacity = small ? 262145 : splatkit::VulkanRadixSort::kMaxCapacity;
     std::printf("upload-pressure GPU=%s capacity=%u validation=%s\n",
                 gpu.context->deviceDescription().c_str(), capacity,
                 gpu.context->validationEnabled() ? "on" : "off");
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
               "exact payload and untouched guards");
     }
     gpu.requireValidationClean();
-    if (small) std::puts("SKIP 3M-capacity pressure (--small requested)");
+    if (small) std::puts("SKIP full-capacity pressure (--small requested)");
     std::puts("PASS upload-pressure: count, repeated payload, both guards; no shaders");
     return 0;
   } catch (const std::exception& error) {

@@ -15,6 +15,8 @@ namespace splatkit {
 namespace {
 static_assert(VulkanFrameCompute::kMaxVisible <= VulkanRadixSort::kMaxCapacity,
               "the sort must hold every visible splat");
+static_assert(VulkanLodSelection::kMaxBudget <= VulkanFrameCompute::kMaxVisible,
+              "visibility must hold every selected node");
 constexpr uint32_t kTimestampCount = 4;
 // Words of the diagnostics readback, in the order collect() reads them. Two are spare.
 enum ReadbackWord : uint32_t {

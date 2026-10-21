@@ -260,8 +260,8 @@ class SplatSurfaceView @JvmOverloads constructor(
     /**
      * LOD selection capacity for subsequently loaded worlds. Zero disables automatic
      * hierarchy construction; a .lodsplat file already contains its hierarchy.
-     * Vulkan GPU selection supports at most 2.2M nodes. Coarse parents are approximate,
-     * and the full hierarchy must fit GPU memory. Non-LOD visibility above 3M survivors
+     * Vulkan GPU selection supports at most 4M nodes. Coarse parents are approximate,
+     * and the full hierarchy must fit GPU memory. Non-LOD visibility above 4M survivors
      * fails closed instead of truncating or issuing an unsafe draw.
      */
     var splatBudget: Int = 0

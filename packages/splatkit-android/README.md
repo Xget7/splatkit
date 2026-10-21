@@ -74,7 +74,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `applyQuality(RenderQuality)` | Apply preset; individual properties can override it. |
 | `renderScale` | Render-target scale, 0.1–2; changing it changes image quality. |
 | `shDegree`, `maxShDegree` | Draw/load SH cap, 0–3. Set the load cap before loading. |
-| `splatBudget` | LOD capacity for subsequent loads; zero disables automatic tree construction. Prebuilt LOD files still select a hierarchy. GPU maximum: 2.2M. |
+| `splatBudget` | LOD capacity for subsequent loads; zero disables automatic tree construction. Prebuilt LOD files still select a hierarchy. GPU maximum: 4M. |
 | `residencyBudget` | Resident splats for subsequent streamed worlds, separate from LOD selection. |
 | `cullMarginDegrees` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |
 | `linearBlending` | Optional linear-light blend; not the default trained-space compositing. |
@@ -99,7 +99,7 @@ Optional `com.splatkit.ui.SplatHudView` and `JoystickView` are host conveniences
 
 GPU LOD → visibility/compaction → stable radix → indirect hardware draw.
 Full32 keys are default; a `sortDepth` of 16 selects approximate two-pass sorting.
-Above 3M visibility survivors the draw fails closed with diagnostics.
+Above 4M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
 Parents and subpixel rejection are approximate.
 There is no universal 10M or 30/60 FPS guarantee.

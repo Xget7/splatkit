@@ -41,13 +41,13 @@ class WorldSessionTest {
     @Test fun validatesLocalFilesAndNativeCapacityBounds() {
         val file = File.createTempFile("splat-request", ".spz")
         try {
-            val valid = WorldRequest("request", file.absolutePath, WorldKind.FILE, 3, 2_200_000, 8_000_000)
+            val valid = WorldRequest("request", file.absolutePath, WorldKind.FILE, 3, 4_000_000, 8_000_000)
             valid.validate()
             valid.copy(kind = WorldKind.TILESET).validate()
             listOf(valid.copy(requestId = " "), valid.copy(filePath = "https://world.spz"),
                 valid.copy(filePath = "/"), valid.copy(filePath = file.absolutePath + "missing"),
                 valid.copy(kind = -1), valid.copy(kind = 2),
-                valid.copy(maxShDegree = 4), valid.copy(lodCapacitySplats = 2_200_001),
+                valid.copy(maxShDegree = 4), valid.copy(lodCapacitySplats = 4_000_001),
                 valid.copy(residencyCapacitySplats = 99_999)).forEach {
                 assertThrows(IllegalArgumentException::class.java) { it.validate() }
             }

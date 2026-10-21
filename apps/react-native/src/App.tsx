@@ -10,14 +10,7 @@
  */
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  Platform,
-  Pressable,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import {Pressable, StatusBar, StyleSheet, Text, View} from 'react-native';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -150,24 +143,6 @@ const SPLAT_BUDGETS: Readonly<Record<QualityPreset, number>> = Object.freeze({
 });
 
 /**
- * Metal's LOD capacity is a constant of the backend, not of the device, so on iOS the first
- * request can already ask for it. Elsewhere the first request is built against the limits
- * every adapter accepts, because the real ones only arrive with the engine.
- */
-const METAL_LOD_CAPACITY_SPLATS = 4_000_000;
-
-const INITIAL_CAPABILITIES: typeof conservativeCapabilities =
-  Platform.OS === 'ios'
-    ? {
-        ...conservativeCapabilities,
-        limits: {
-          ...conservativeCapabilities.limits,
-          maxLodCapacitySplats: METAL_LOD_CAPACITY_SPLATS,
-        },
-      }
-    : conservativeCapabilities;
-
-/**
  * The share of the screen's pixels each tier draws per axis. These scenes are fill-bound, so
  * resolution is what the picker really trades: the frame's cost follows the pixels covered,
  * not the splats drawn. The app opens below full resolution because a minute of it heats a
@@ -207,7 +182,7 @@ function Splat({filesPath}: Props) {
   // in onCapabilities, which only arrive once it exists: the first world request is built
   // against the limits every adapter accepts.
   const [capabilities, setCapabilities] = useState({
-    value: INITIAL_CAPABILITIES,
+    value: conservativeCapabilities,
     revision: FIRST_REVISION,
   });
   const [preset, setPreset] = useState<QualityPreset>(INITIAL_PRESET);

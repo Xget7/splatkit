@@ -10,9 +10,9 @@ The context outlives allocations; reuse slots after fences, resize/destroy after
 The caller owns input sizes, alignment, upload dependencies and readback invalidation.
 Unsorted output requires sorting before drawing.
 Subgroup width is device-dependent; subpixel rejection is approximate.
-Visibility scratch: `80*capacity+64` bytes across two slots, a key, a value and a 32-byte `ProjectedSplat` per splat; radix adds ~99MB at 3M.
+Visibility scratch: `80*capacity+64` bytes across two slots, a key, a value and a 32-byte `ProjectedSplat` per splat; radix adds ~132MB at 4M.
 Source capacity obeys `maxStorageBufferRange/32`; 10M is not guaranteed.
-Survivor overflow above 3M zeros the draw with diagnostics; it never silently truncates.
+Survivor overflow above 4M zeros the draw with diagnostics; it never silently truncates.
 Full32 sorting is default; a per-instance `sortDepth` of 16 uses two passes on quantized keys stored in `uint32`, without requiring native 16-bit arithmetic/storage.
 
 Evidence (2026-09-12): Android arm64 emulator / M4 Pro via MoltenVK passed 128 radix cases through 3M, visibility, LOD-to-indirect integration and shader-free upload pressure; native suites had layers off.
@@ -26,6 +26,7 @@ Alpha06 passes 152 stable-sort cases through 3M (including 63/64/65 tails), visi
 Kitchen 500k and house 2M render with app validation on; background/resume also passed.
 This is device correctness evidence, not lossless LOD or universal FPS acceptance.
 2026-09-16, same device: buffer, upload-pressure, LOD, visibility, radix (144 cases; 3M skipped) and frame-compute suites passed, frame compute at 16 and 32 bits through `applyRenderPolicy`.
+2026-10-20, same device: all nine suites passed with the 4M radix (152 cases) and 4M upload-pressure cases.
 
 Mi 9 house 2M, SH0, 1080x2261, Release, 30-second turns:
 
