@@ -18,7 +18,9 @@ GPU = re.compile(r"benchmark gpu ms: mean " + NUMBER + r" p50 " + NUMBER + r" p9
 TAILS = re.compile(r"benchmark tails: frame p99 " + NUMBER + r", gpu p99 " + NUMBER + r", gpu samples (\d+) of (\d+)")
 SAMPLE = re.compile(NUMBER + r" fps, gpu " + NUMBER + r" ms, sort " + NUMBER + r" ms, cull " +
                     NUMBER + r" ms, select " + NUMBER + r" ms, (\d+) drawn of (\d+) selected of (\d+)")
-ERROR = re.compile(r"Fatal signal|FATAL EXCEPTION|VUID-|Validation Error|VK_ERROR_|GPU frame rejected|World failed:")
+# "validation: " prefixes every message the Khronos layer sends VulkanContext's callback.
+ERROR = re.compile(r"Fatal signal|FATAL EXCEPTION|VUID-|Validation Error|VK_ERROR_|GPU frame rejected|World failed:|"
+                   r"\bvalidation: ")
 
 
 def summarize(contents, environment, pid=None, minimum_seconds=0):

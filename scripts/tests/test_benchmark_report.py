@@ -36,6 +36,14 @@ class BenchmarkReportTest(unittest.TestCase):
         self.assertEqual(report.summarize(log, "physical", 42)["status"], "passed")
         self.assertEqual(report.summarize(log + line("VUID-invalid", 42), "physical", 42)["status"], "failed")
 
+    def test_any_validation_layer_message_fails_and_the_layer_status_does_not(self):
+        def line(message):
+            return f"09-12 18:00:00.001 42 99 W SplatKit: {message}\n"
+        log = "".join(line(m) for m in ("validation layers: on", START, FRAME, GPU))
+        self.assertEqual(report.summarize(log, "physical", 42)["status"], "passed")
+        warning = line("validation: vkCmdDraw: performance warning")
+        self.assertEqual(report.summarize(log + warning, "physical", 42)["status"], "failed")
+
     def test_new_tails_and_missing_gpu_queries(self):
         text = START + FRAME + GPU + "benchmark tails: frame p99 42.0, gpu p99 0.0, gpu samples 0 of 1200\n"
         run = report.summarize(text, "host")["runs"][0]
