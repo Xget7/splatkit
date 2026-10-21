@@ -32,7 +32,7 @@ data class RenderPolicy(
     val lodErrorPixels: Float = 1f,
     val lodSplatLimit: Int = 0,
     val alphaThreshold: Float = 1f / 255f,
-    val subpixelThreshold: Float = 0.5f,
+    val subpixelThreshold: Float = 1f,
     val enableFrustumCulling: Boolean = true,
     val enableHiZOcclusion: Boolean = false,
     val enableEarlyTermination: Boolean = true,

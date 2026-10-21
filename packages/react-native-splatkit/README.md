@@ -352,9 +352,9 @@ Every preset rasterizes in hardware, with frustum culling and early termination 
 
 | Preset | Render scale | SH | LOD budget | Residency | Tile | LOD error px | Alpha | Sub-pixel | Hi-Z | Sort |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |
-| `highEnd` | 1.25 | 3 | 4,000,000 | 4,000,000 | 16 | 0.75 | 1/255 | 0.35 | Yes | 32 |
-| `high` | 1.0 | 3 | 3,000,000 | 3,000,000 | 16 | 1.0 | 1/255 | 0.5 | Yes | 32 |
-| `balanced` | 0.85 | 2 | 2,000,000 | 2,000,000 | 16 | 1.25 | 1/255 | 0.65 | No | 16 |
+| `highEnd` | 1.25 | 3 | 4,000,000 | 4,000,000 | 16 | 0.75 | 1/255 | 1.0 | Yes | 32 |
+| `high` | 1.0 | 3 | 3,000,000 | 3,000,000 | 16 | 1.0 | 1/255 | 1.0 | Yes | 32 |
+| `balanced` | 0.85 | 2 | 2,000,000 | 2,000,000 | 16 | 1.25 | 1/255 | 1.0 | No | 16 |
 | `performance` | 0.65 | 1 | 1,000,000 | 1,000,000 | 8 | 2.0 | 2/255 | 1.0 | No | 16 |
 
 Lower `lodErrorPixels` sharpens the far field, which is where a captured room looks soft, and costs fill rate.
