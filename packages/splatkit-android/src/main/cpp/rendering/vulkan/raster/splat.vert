@@ -11,7 +11,7 @@ layout(set = 0, binding = 0) uniform Camera {
   vec2 tanHalfFov;    // 1 / proj[0][0], 1 / proj[1][1]
   vec2 screenSize;    // pixels
   uint outputLinear;  // 1 when the swapchain is sRGB and expects linear values
-  uint pad;
+  uint quarterTurns;  // clockwise, 0 to 3: the display's rotation the image is drawn with
   vec4 cameraPosition;  // world space, for the view direction the SH is evaluated along
 } cam;
 
@@ -41,6 +41,16 @@ layout(location = 1) out vec4 color;
 const float kBoundsRadius = 3.0;  // draw out to 3 sigma; beyond that nothing is visible
 const float kLodBoundsRadius = 5.0;  // an opacity of 1000 stays solid out past 3 sigma
 const vec2 kCorners[4] = vec2[](vec2(-1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1));
+
+// Turns clip space clockwise by the display's rotation. The swapchain image has the display's
+// native orientation and is scanned out as it is (VulkanSwapchain), so everything sized in
+// pixels uses the window's orientation and only the final position turns. Clip y is up.
+vec2 preRotate(vec2 p) {
+  if (cam.quarterTurns == 1u) return vec2(p.y, -p.x);
+  if (cam.quarterTurns == 2u) return -p;
+  if (cam.quarterTurns == 3u) return vec2(-p.y, p.x);
+  return p;
+}
 
 // Projects the 3D covariance to screen space: Sigma' = J W Sigma W^T J^T.
 vec3 projectCovariance(vec3 viewPos, vec4 covA, vec2 covB) {
@@ -160,7 +170,7 @@ void main() {
 
   vec2 corner = kCorners[gl_VertexIndex];
   vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;
-  gl_Position = vec4(clip.xy + delta * clip.w, clip.z, clip.w);
+  gl_Position = vec4(preRotate(clip.xy + delta * clip.w), clip.z, clip.w);
   relativePosition = radius * corner;
 
   vec3 rgb = rgba.rgb;

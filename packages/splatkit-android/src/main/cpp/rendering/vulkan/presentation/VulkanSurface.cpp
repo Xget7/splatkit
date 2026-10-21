@@ -45,7 +45,7 @@ bool VulkanSurface::attach(ANativeWindow* window) {
 bool VulkanSurface::resize(uint32_t width, uint32_t height) {
   if (!swapchain_) return true;
   sizeWait_.windowResized({width, height});
-  const VkExtent2D current = swapchain_->extent();
+  const VkExtent2D current = swapchain_->windowExtent();
   if (!sizeWait_.pending({current.width, current.height})) return true;
   LOGI("surface resized to %ux%u, swapchain was %ux%u", width, height, current.width,
        current.height);
@@ -77,12 +77,30 @@ bool VulkanSurface::setVsync(bool vsync) {
 
 bool VulkanSurface::rebuildIfChanged(VulkanFrameLoop::Status status) {
   if (status == VulkanFrameLoop::Status::swapchainOutOfDate) return rebuildOrDrop();
+  if (status == VulkanFrameLoop::Status::swapchainSuboptimal && rotationChanged()) {
+    return rebuildOrDrop();
+  }
   return !rebuildPending() || rebuildWhenSurfaceReportsWindowSize();
+}
+
+// A half turn keeps the window's size, so only the transform tells it apart.
+bool VulkanSurface::rotationChanged() const {
+  VkSurfaceCapabilitiesKHR caps{};
+  if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx_.physicalDevice(), surface_, &caps) !=
+      VK_SUCCESS) {
+    return false;
+  }
+  if (VulkanSwapchain::preTransformFor(caps.currentTransform) == swapchain_->transform()) {
+    return false;
+  }
+  LOGI("display rotation changed: transform %d, swapchain %d", caps.currentTransform,
+       swapchain_->transform());
+  return true;
 }
 
 bool VulkanSurface::rebuildPending() const {
   if (!swapchain_) return false;
-  const VkExtent2D current = swapchain_->extent();
+  const VkExtent2D current = swapchain_->windowExtent();
   return sizeWait_.pending({current.width, current.height});
 }
 
@@ -109,6 +127,15 @@ VkExtent2D VulkanSurface::drawExtent() const {
   if (target_) return target_->extent();
   if (swapchain_) return swapchain_->extent();
   return {0, 0};
+}
+
+VkExtent2D VulkanSurface::viewExtent() const {
+  const VkExtent2D draw = drawExtent();
+  return quarterTurns() % 2 == 1 ? VkExtent2D{draw.height, draw.width} : draw;
+}
+
+uint32_t VulkanSurface::quarterTurns() const {
+  return swapchain_ ? swapchain_->quarterTurns() : 0;
 }
 
 void VulkanSurface::blitIfScaled(VkCommandBuffer cmd, uint32_t imageIndex) const {
@@ -198,7 +225,7 @@ bool VulkanSurface::rebuildWhenSurfaceReportsWindowSize() {
   LOGW("surface still reports %ux%u, window is %ux%u; using the surface's size",
        caps.currentExtent.width, caps.currentExtent.height, window.width, window.height);
   if (!rebuildOrDrop()) return false;
-  const VkExtent2D settled = swapchain_->extent();
+  const VkExtent2D settled = swapchain_->windowExtent();
   sizeWait_.adopt({settled.width, settled.height});
   return true;
 }

@@ -154,10 +154,9 @@ VulkanFrameLoop::Status VulkanFrameLoop::endFrame(const VulkanSwapchain& swapcha
   current_ = (current_ + 1) % kFramesInFlight;
 
   if (presented == VK_ERROR_OUT_OF_DATE_KHR) return Status::swapchainOutOfDate;
-  // SUBOPTIMAL is permanent on Android whenever the swapchain pre-transform differs from
-  // the display rotation (we use identity and let the compositor rotate), but it is also
-  // all the emulator reports after a rotation that changed the surface size. The engine
-  // compares extents to tell the two apart.
+  // SUBOPTIMAL follows a display rotation: the pre-transform no longer matches, and on the
+  // emulator it is all a rotation that changed the surface size reports. The surface
+  // compares the transform and the extents to decide on a rebuild.
   if (presented == VK_SUBOPTIMAL_KHR) return Status::swapchainSuboptimal;
   if (presented != VK_SUCCESS) {
     completionFailed_ = true;

@@ -24,3 +24,6 @@ Precedence on availability: the header, then the specification, then the referen
 
 - Subgroup ballot loses keys in the radix histogram, so the histogram uses workgroup atomics ([ARCHITECTURE.md](../../ARCHITECTURE.md), Sort row).
 - An sRGB swapchain attachment cost about 40 % of the frame, so the swapchain is UNORM unless linear blending is on ([ARCHITECTURE.md](../../ARCHITECTURE.md), Present row).
+- With an identity pre-transform on the rotated display, SurfaceFlinger composited the app layer on the GPU (`dumpsys SurfaceFlinger`: CLIENT, ROT_90); pre-rotated, it is DEVICE with no transform (2026-10-20).
+  On kitchen 500k in landscape that moved 37.6 and 37.7 fps to 37.9 and 38.0, GPU 26.2 and 26.3 ms to 26.1 and 26.0 ms.
+  Method: [Android pre-rotation guide](https://developer.android.com/games/optimize/vulkan-prerotation); `currentExtent` comes in the window's orientation, the swapchain images take the swapped size.
