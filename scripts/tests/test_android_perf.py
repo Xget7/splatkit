@@ -19,6 +19,16 @@ analysis = load("perfetto_analysis")
 MS = 1_000_000
 
 
+class SettingsTest(unittest.TestCase):
+    def test_the_report_records_the_lod_budget_and_limit(self):
+        args = perf.argparse.Namespace(quality="high", pose=None, world=None, budget=300000,
+                                       lod_splat_limit=150000, seconds=30, validation=False)
+        settings = perf.run_settings(args)
+        self.assertEqual(settings["budget"], 300000)
+        self.assertEqual(settings["lod_splat_limit"], 150000)
+        self.assertEqual(settings["quality"], "high")
+
+
 class RecordingTest(unittest.TestCase):
     def test_config_traces_the_app_for_the_requested_time(self):
         config = perf.perfetto_config(45)

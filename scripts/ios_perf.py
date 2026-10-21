@@ -60,7 +60,13 @@ CAPABILITIES = re.compile(r"Metal capabilities: family (?P<family>Apple\d+), Met
                           r"max buffer (?P<max_buffer_bytes>\d+) B, working set (?P<working_set_bytes>\d+) B")
 
 
-def launch_command(udid, seconds, quality, pose, world, validation):
+def run_settings(args):
+    """The turn's settings as the report records them."""
+    return {"quality": args.quality, "pose": args.pose, "world": args.world, "budget": args.budget,
+            "seconds": args.seconds, "validation": args.validation}
+
+
+def launch_command(udid, seconds, quality, pose, world, validation, budget=None):
     """The devicectl launch that streams the app's console; --hud 0 keeps HUD redraws out."""
     variables = {**CONSOLE_VARIABLES, **(VALIDATION_VARIABLES if validation else {})}
     command = ["xcrun", "devicectl", "device", "process", "launch", "--device", udid, "--console",
@@ -70,6 +76,8 @@ def launch_command(udid, seconds, quality, pose, world, validation):
         command += ["--pose", pose]
     if world:
         command += ["--world", world]
+    if budget is not None:
+        command += ["--budget", str(budget)]
     return command
 
 
@@ -200,7 +208,7 @@ def run(args):
     print(f"running a {args.seconds:g} s turn", flush=True)
     with console_path.open("w") as console, (out / "trace.log").open("w") as trace_log:
         app = subprocess.Popen(launch_command(args.udid, args.seconds, args.quality, args.pose, args.world,
-                                              args.validation),
+                                              args.validation, args.budget),
                                stdout=console, stderr=subprocess.STDOUT)
         def on_started():
             if args.trace:
@@ -227,8 +235,7 @@ def run(args):
             app.wait(timeout=10)
 
     log = console_path.read_text(errors="replace")
-    environment = {**device, "build": CONFIGURATION, "quality": args.quality, "pose": args.pose, "world": args.world,
-                   "seconds": args.seconds, "validation": args.validation, **git_state()}
+    environment = {**device, "build": CONFIGURATION, **run_settings(args), **git_state()}
     summary = benchmark_report.summarize(log, ENVIRONMENT, None, args.seconds)
     summary["run"] = environment
     summary["gpu"] = gpu_capabilities(log)
@@ -269,6 +276,8 @@ def main():
     parser.add_argument("--quality", default=DEFAULT_QUALITY, choices=QUALITY_PRESETS)
     parser.add_argument("--pose", help='"x,y,z,yaw,pitch"; the turn keeps the position, resets yaw')
     parser.add_argument("--world", help="world file in the app's Documents or bundle; default kitchen_500k.spz")
+    parser.add_argument("--budget", type=int,
+                        help="LOD budget: a world loads as a hierarchy drawing at most this many splats")
     parser.add_argument("--trace", action="store_true", help=f"also record {TRACE_TEMPLATE} for the turn")
     parser.add_argument("--validation", action="store_true",
                         help="enable Metal API and Shader Validation; the timings are then not comparable")

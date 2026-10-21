@@ -25,6 +25,7 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(app_args[app_args.index("--quality") + 1], "high")
         self.assertNotIn("--pose", app_args)
         self.assertNotIn("--world", app_args)
+        self.assertNotIn("--budget", app_args)
         self.assertNotIn("MTL_SHADER_VALIDATION", " ".join(command))
         self.assertLess(command.index("--console"), command.index(perf.BUNDLE_ID))
 
@@ -36,6 +37,20 @@ class LaunchTest(unittest.TestCase):
         environment = command[command.index("--environment-variables") + 1]
         self.assertIn('"MTL_SHADER_VALIDATION": "1"', environment)
         self.assertIn('"MTL_DEBUG_LAYER": "1"', environment)
+
+    def test_launch_passes_a_splat_budget(self):
+        command = perf.launch_command(UDID, 20, "high", None, None, validation=False, budget=300000)
+        app_args = command[command.index(perf.BUNDLE_ID) + 1:]
+        self.assertEqual(app_args[app_args.index("--budget") + 1], "300000")
+
+
+class SettingsTest(unittest.TestCase):
+    def test_the_report_records_the_lod_budget(self):
+        args = perf.argparse.Namespace(quality="high", pose=None, world=None, budget=300000,
+                                       seconds=30, validation=False)
+        settings = perf.run_settings(args)
+        self.assertEqual(settings["budget"], 300000)
+        self.assertEqual(settings["quality"], "high")
 
 
 class DeviceTest(unittest.TestCase):

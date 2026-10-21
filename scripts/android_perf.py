@@ -124,6 +124,12 @@ duration_ms: {int(duration_s * MS_PER_S)}
 """
 
 
+def run_settings(args):
+    """The turn's settings as the report records them."""
+    return {"quality": args.quality, "pose": args.pose, "world": args.world, "budget": args.budget,
+            "lod_splat_limit": args.lod_splat_limit, "seconds": args.seconds, "validation": args.validation}
+
+
 def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None):
     """The am start command; --ez hud false keeps HUD redraws out of the measurement."""
     args = ["shell", "am", "start", "-n", ACTIVITY, "--ez", EXTRA_BENCHMARK, "true",
@@ -303,8 +309,7 @@ def record(args, variant):
         "device": device_property(args.serial, "ro.product.model"),
         "android": device_property(args.serial, "ro.build.version.release"),
         "soc": device_property(args.serial, "ro.board.platform"),
-        "build": variant, "quality": args.quality, "pose": args.pose, "world": args.world,
-        "seconds": args.seconds, "validation": args.validation, "rotation": int(RUN_ROTATION),
+        "build": variant, **run_settings(args), "rotation": int(RUN_ROTATION),
         **git_state(),
     }
     summary = (benchmark_report.summarize(log, ENVIRONMENT, int(app_pid), args.seconds)
