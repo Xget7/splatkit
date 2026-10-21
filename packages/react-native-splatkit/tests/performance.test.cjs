@@ -8,6 +8,7 @@ const {
   toNativeViewProps,
   toNativePolicyProp,
   nativeCapabilitiesFromEvent,
+  QualityPreset,
 } = require('../build/performance');
 const {WorldKind} = require('../build/contracts');
 
@@ -335,6 +336,18 @@ const nativeCapabilitiesEvent = Object.freeze({
 const nativeCapabilities = nativeCapabilitiesFromEvent(nativeCapabilitiesEvent);
 
 // These capabilities leave the threshold to native, which warns unless the request is its default.
+test('the builder default and every preset cut sub-pixel splats at one pixel', () => {
+  assert.equal(build().performance.requested.subpixelThreshold, 1);
+  for (const preset of Object.values(QualityPreset)) {
+    assert.equal(
+      build(builder => builder.withPreset(preset)).performance.requested
+        .subpixelThreshold,
+      1,
+      preset,
+    );
+  }
+});
+
 test('a one-pixel sub-pixel threshold is the native default', () => {
   const warnsAboutThreshold = threshold =>
     new SplatKitBuilder()
