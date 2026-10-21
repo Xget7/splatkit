@@ -2,15 +2,19 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <vector>
 
 #include "rendering/vulkan/frame/VulkanCameraUniforms.h"
 #include "rendering/vulkan/presentation/VulkanRenderTarget.h"
 #include "rendering/vulkan/raster/VulkanSplatPipeline.h"
 #include "rendering/vulkan/world/VulkanWorld.h"
+#include "splat/math/Half.h"
+#include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
 
 namespace {
+using splatkit::ProjectedSplat;
 using splatkit::VulkanBuffer;
 using splatkit::VulkanCameraUniforms;
 using splatkit::VulkanRenderTarget;
@@ -52,26 +56,18 @@ Scene scene(const Gpu& gpu) {
   return s;
 }
 
-// The red channel of one white splat at the centre of the view, over transparent black.
-std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, float alpha) {
-  const float worldSigma = kSigmaPixels * kDepth / (kExtent.width * s.proj.at(0, 0) / 2);
-  const float variance = worldSigma * worldSigma;
-  splat::SplatCloud cloud;
-  cloud.positions = {0, 0, -kDepth};
-  cloud.covariances = {variance, 0, 0, variance, 0, variance};
-  cloud.colors = {1, 1, 1};
-  cloud.alphas = {alpha};
-  auto world = VulkanWorld::upload(*gpu.context, cloud, 0, true);
-  require(world != nullptr, "world upload");
-  s.pipeline->bindWorld(*world);
-  s.cameras->update(0, splat::Mat4::identity(), s.proj, {0, 0, 0}, kExtent, false, 0);
+using Record = std::function<void(VkCommandBuffer)>;
 
+// The red channel of what `before` and `draw` record, over transparent black: `before` runs
+// outside the render pass, `draw` inside it.
+std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, const Record& before,
+                            const Record& draw) {
+  s.cameras->update(0, splat::Mat4::identity(), s.proj, {0, 0, 0}, kExtent, false, 0);
   const VkDeviceSize bytes = VkDeviceSize{kExtent.width} * kExtent.height * 4;
   auto pixels = VulkanBuffer::hostVisible(*gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   require(pixels && pixels->mapped(), "pixel readback buffer");
-  const uint32_t order = 0;
   gpu.submit([&](VkCommandBuffer cmd) {
-    world->recordOrderUpload(cmd, 0, &order, 1);
+    before(cmd);
     const VkClearValue clear{};
     VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     pass.renderPass = s.target->renderPass();
@@ -86,7 +82,7 @@ std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, float alpha) {
     const VkRect2D scissor{{0, 0}, kExtent};
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
-    s.pipeline->draw(cmd, 0, *world, 1, 0);
+    draw(cmd);
     vkCmdEndRenderPass(cmd);
     VkMemoryBarrier written{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     written.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -109,6 +105,54 @@ std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, float alpha) {
   std::vector<uint8_t> red(kExtent.width * kExtent.height);
   for (size_t i = 0; i < red.size(); ++i) red[i] = rgba[i * 4];
   return red;
+}
+
+// One white splat at the centre of the view, projected by the CPU-order vertex stage.
+std::vector<uint8_t> renderCpuOrder(const Gpu& gpu, const Scene& s, float alpha) {
+  const float worldSigma = kSigmaPixels * kDepth / (kExtent.width * s.proj.at(0, 0) / 2);
+  const float variance = worldSigma * worldSigma;
+  splat::SplatCloud cloud;
+  cloud.positions = {0, 0, -kDepth};
+  cloud.covariances = {variance, 0, 0, variance, 0, variance};
+  cloud.colors = {1, 1, 1};
+  cloud.alphas = {alpha};
+  auto world = VulkanWorld::upload(*gpu.context, cloud, 0, true);
+  require(world != nullptr, "world upload");
+  s.pipeline->bindWorld(*world);
+  const uint32_t order = 0;
+  return render(
+      gpu, s, [&](VkCommandBuffer cmd) { world->recordOrderUpload(cmd, 0, &order, 1); },
+      [&](VkCommandBuffer cmd) { s.pipeline->draw(cmd, 0, *world, 1, 0); });
+}
+
+uint32_t packHalves(float low, float high) {
+  return splat::toHalf(low) | (static_cast<uint32_t>(splat::toHalf(high)) << 16);
+}
+
+// The same splat as a projected record, as the visibility pass writes it, drawn indirectly.
+std::vector<uint8_t> renderProjected(const Gpu& gpu, const Scene& s, float alpha, float radius) {
+  const float sigma = std::sqrt(kSigmaPixels * kSigmaPixels + kLowPassVariance);
+  const ProjectedSplat record{{0, 0},
+                              packHalves(sigma, 0),
+                              packHalves(0, -sigma),
+                              packHalves(1, 1),
+                              packHalves(1, alpha),
+                              radius,
+                              0};
+  const uint32_t order = 0;
+  const VkDrawIndirectCommand arguments{4, 1, 0, 0};
+  const auto buffer = [&](const void* data, VkDeviceSize bytes, VkBufferUsageFlags usage) {
+    auto b = VulkanBuffer::deviceLocal(*gpu.context, bytes, usage);
+    require(b && b->upload(data, bytes), "projected draw input");
+    return b;
+  };
+  auto projected = buffer(&record, sizeof(record), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  auto orders = buffer(&order, sizeof(order), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  auto indirect = buffer(&arguments, sizeof(arguments), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+  s.pipeline->bindProjected(0, projected->handle(), orders->handle(), 1);
+  return render(
+      gpu, s, [](VkCommandBuffer) {},
+      [&](VkCommandBuffer cmd) { s.pipeline->drawProjected(cmd, 0, indirect->handle()); });
 }
 
 // Compares every pixel with alpha * exp(-r^2 / 2), cut at the quad's half-width `radius`
@@ -141,15 +185,23 @@ void requireGaussian(const std::vector<uint8_t>& red, float alpha, float radius)
 
 void testTranslucent(const Gpu& gpu, const Scene& s) {
   // Peak 0.8 reaches the 2/255 cutoff past 2.5 sigma, so the quad stops at 2.5 sigma.
-  requireGaussian(render(gpu, s, 0.8f), 0.8f, 2.5f);
+  requireGaussian(renderCpuOrder(gpu, s, 0.8f), 0.8f, 2.5f);
   std::puts("PASS translucent splat matches the Gaussian out to 2.5 sigma");
 }
 
 void testLodCore(const Gpu& gpu, const Scene& s) {
   // An LOD opacity of 3 is solid in its core and meets the 2/255 cutoff at 3.45 sigma.
   const float alpha = 3;
-  requireGaussian(render(gpu, s, alpha), alpha, std::sqrt(2 * std::log(alpha * 255 / 2)));
+  requireGaussian(renderCpuOrder(gpu, s, alpha), alpha, std::sqrt(2 * std::log(alpha * 255 / 2)));
   std::puts("PASS LOD splat saturates in its core and fades to its quad edge");
+}
+
+void testProjectedPath(const Gpu& gpu, const Scene& s) {
+  requireGaussian(renderProjected(gpu, s, 0.8f, 2.5f), 0.8f, 2.5f);
+  const float alpha = 3;
+  const float radius = std::sqrt(2 * std::log(alpha * 255 / 2));
+  requireGaussian(renderProjected(gpu, s, alpha, radius), alpha, radius);
+  std::puts("PASS projected records draw the same Gaussians as the CPU-order path");
 }
 }  // namespace
 
@@ -160,6 +212,7 @@ int main() {
     const Scene s = scene(gpu);
     testTranslucent(gpu, s);
     testLodCore(gpu, s);
+    testProjectedPath(gpu, s);
     gpu.requireValidationClean();
     return 0;
   } catch (const std::exception& error) {

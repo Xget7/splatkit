@@ -10,7 +10,7 @@ The context outlives allocations; reuse slots after fences, resize/destroy after
 The caller owns input sizes, alignment, upload dependencies and readback invalidation.
 Unsorted output requires sorting before drawing.
 Subgroup width is device-dependent; subpixel rejection is approximate.
-Visibility scratch: `16*capacity+64` bytes across two slots; radix adds ~99MB at 3M.
+Visibility scratch: `80*capacity+64` bytes across two slots, a key, a value and a 32-byte `ProjectedSplat` per splat; radix adds ~99MB at 3M.
 Source capacity obeys `maxStorageBufferRange/32`; 10M is not guaranteed.
 Survivor overflow above 3M zeros the draw with diagnostics; it never silently truncates.
 Full32 sorting is default; a per-instance `sortDepth` of 16 uses two passes on quantized keys stored in `uint32`, without requiring native 16-bit arithmetic/storage.

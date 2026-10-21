@@ -218,10 +218,11 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
                                             view, outputLinear, turns);
     {
       const TraceSection section(trace::kEncodeCompute);
-      gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, frame);
+      gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
+                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame);
     }
     if (gpuDraw)
-      splats_->bindOrder(slot, gpuDraw->order, gpuDraw->capacity);
+      splats_->bindProjected(slot, gpuDraw->projected, gpuDraw->order, gpuDraw->capacity);
     else
       LOGE("GPU frame encode failed; submitting clear frame to preserve fence lifecycle");
   } else if (world_ && !compute_ && frame.order != nullptr) {
@@ -250,7 +251,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   if (world_ && gpuDraw) {
-    splats_->drawIndirect(cmd, slot, *world_, frame.shDegree, gpuDraw->arguments);
+    splats_->drawProjected(cmd, slot, gpuDraw->arguments);
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
     if (count > 0) {

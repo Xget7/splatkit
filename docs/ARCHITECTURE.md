@@ -37,10 +37,10 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 |---|---|---|
 | Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | 2 MiB host-visible staging windows into device-local VMA buffers, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
 | Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, in its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling, at a fixed 1 px threshold ([lod_selection.comp][vk-lod]) |
-| Cull | `visibility` kernel culls alpha, behind camera, near/far, screen edge and subpixel; SIMD prefix compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated ([SplatVisibility.metal][mtl-vis], [SplatProjection.metalh][mtl-proj]) | `visibility.comp` culls alpha, behind camera, frustum with margin, near/far by covariance and subpixel; subgroup compaction; writes indices and depth keys only ([visibility.comp][vk-vis]) |
+| Cull | `visibility` kernel culls alpha, behind camera, near/far, screen edge and subpixel; SIMD prefix compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated ([SplatVisibility.metal][mtl-vis], [SplatProjection.metalh][mtl-proj]) | `visibility.comp` culls alpha, behind camera, near/far by centre and by covariance, screen edge and subpixel; subgroup compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated, one pipeline per SH degree ([visibility.comp][vk-vis], [splat_projection.glsl][vk-proj]) |
 | Sort | GPU LSD radix, 8-bit digits, 4 passes on 32-bit keys (default) or 2 on 16-bit; histogram and scatter rank with `simd_ballot`; indirect dispatch; needs 32-wide SIMD groups ([SplatRadixSort.metal][mtl-sort]) | GPU stable LSD radix, 8-bit digits, 4 or 2 passes; histogram with workgroup atomics because ballot loses keys on Adreno 640; scatter ranks with an `atomicOr` bitmask; indirect dispatch; 3M capacity ([radix_histogram.comp][vk-hist], [VulkanRadixSort.cpp][vk-sort]) |
-| Raster | Instanced quads in 7 indirect draws, front to back with "under" blending, in batches of 1, 1, 2, 4, 8, 16 and 32 sixty-fourths; between batches a mask pass writes `Depth16` where alpha reaches 254/255, so later batches skip saturated pixels; only the mask writes depth ([MetalSplatPipeline.mm][mtl-pipe], [SplatRaster.metal][mtl-raster], [PrepareIndirect.metalh][mtl-indirect]) | One indirect draw of instanced quads, back to front with "over" blending, one subpass with one colour attachment; the vertex shader reprojects and evaluates SH ([VulkanSplatPipeline.cpp][vk-pipe], [splat.vert][vk-vert]) |
-| Present | With GPU sort, always an RGBA16F target, then a fullscreen render-pass blit (or MetalFX spatial upscale) into a BGRA8 drawable ([MetalSurface.mm][mtl-surface], [MetalUpscaler.mm][mtl-upscale]) | Straight into the swapchain at render scale 1, otherwise offscreen plus `vkCmdBlitImage`; a UNORM swapchain unless linear blending is on, since an sRGB attachment costs about 40% of the frame on Adreno 640; pre-rotated: the images keep the display's native orientation, the swapchain takes the display's rotation as its pre-transform and `splat.vert` turns clip space, so the compositor scans the images out without a GPU pass ([VulkanSwapchain.cpp][vk-swap], [VulkanSurface.cpp][vk-surface]) |
+| Raster | Instanced quads in 7 indirect draws, front to back with "under" blending, in batches of 1, 1, 2, 4, 8, 16 and 32 sixty-fourths; between batches a mask pass writes `Depth16` where alpha reaches 254/255, so later batches skip saturated pixels; only the mask writes depth ([MetalSplatPipeline.mm][mtl-pipe], [SplatRaster.metal][mtl-raster], [PrepareIndirect.metalh][mtl-indirect]) | One indirect draw of instanced quads, back to front with "over" blending, one subpass with one colour attachment; `projected.vert` expands each quad from its record ([VulkanSplatPipeline.cpp][vk-pipe], [projected.vert][vk-projected]) |
+| Present | With GPU sort, always an RGBA16F target, then a fullscreen render-pass blit (or MetalFX spatial upscale) into a BGRA8 drawable ([MetalSurface.mm][mtl-surface], [MetalUpscaler.mm][mtl-upscale]) | Straight into the swapchain at render scale 1, otherwise offscreen plus `vkCmdBlitImage`; a UNORM swapchain unless linear blending is on, since an sRGB attachment costs about 40% of the frame on Adreno 640; pre-rotated: the images keep the display's native orientation, the swapchain takes the display's rotation as its pre-transform and the vertex stage turns clip space, so the compositor scans the images out without a GPU pass ([VulkanSwapchain.cpp][vk-swap], [VulkanSurface.cpp][vk-surface]) |
 | Submission | Three command buffers per frame (selection; cull, sort and indirect arguments; render and present), 2 frames in flight ([MetalSplatRenderer.mm][mtl-renderer]) | One command buffer per frame (selection, cull, sort, indirect arguments, diagnostics copy, render pass), 2 frames in flight, a swapchain of at least 3 images ([VulkanSplatRenderer.cpp][vk-renderer]) |
 
 Both backends:
@@ -48,12 +48,13 @@ Both backends:
 - Splats blend in the encoded space by default; linear blending (off by default) applies `pow(rgb, 2.2)` to splat colour and presents to an sRGB surface.
 - The render policy applies per backend: Metal honours the pixel error, Vulkan only the sort depth and the subpixel threshold ([VulkanFrameCompute.h][vk-frame]).
 - Splats rasterize as hardware quads over the whole screen; `supportsComputeTiles` is false on both.
-- A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint], which `visibility.comp` and `splat.vert` share).
+- A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint]).
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
 - The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
 - Collision runs on the CPU in the walk camera and moves only the camera.
-- Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw; Vulkan needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
+- Both share one 32-byte `ProjectedSplat` ([GpuLayout.h][layout-h]); the visibility pass projects each splat once and sorts positions in that buffer.
+- Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw whose vertex stage projects each splat; Vulkan keeps the same path in [splat.vert][vk-vert] but needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
 
 [deps]: ../packages/splat-core/cmake/dependencies.cmake
 [spz]: ../packages/splat-core/src/formats/SpzDecoder.cpp
@@ -61,6 +62,7 @@ Both backends:
 [morton]: ../packages/splat-core/src/sorting/SpatialOrder.cpp
 [tree]: ../packages/splat-core/src/lod/LodTree.cpp
 [layout]: ../packages/splatkit-engine/src/rendering/GpuLayout.cpp
+[layout-h]: ../packages/splatkit-engine/include/splatkit/rendering/GpuLayout.h
 [engine]: ../packages/splatkit-engine/src/engine/SplatEngine.cpp
 [ios-thread]: ../packages/splatkit-ios/Sources/SplatKit/engine/RenderThread.swift
 [android-thread]: ../packages/splatkit-android/src/main/kotlin/com/splatkit/engine/RenderThread.kt
@@ -82,10 +84,12 @@ Both backends:
 [vk-lod]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/selection/lod_selection.comp
 [vk-vis]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/cull/visibility.comp
 [vk-footprint]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/layout/splat_footprint.glsl
+[vk-proj]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/layout/splat_projection.glsl
 [vk-hist]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/sort/radix_histogram.comp
 [vk-sort]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/sort/VulkanRadixSort.cpp
 [vk-pipe]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/VulkanSplatPipeline.cpp
 [vk-vert]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/splat.vert
+[vk-projected]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/projected.vert
 [vk-frag]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/splat.frag
 [vk-swap]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/presentation/VulkanSwapchain.cpp
 [vk-surface]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/presentation/VulkanSurface.cpp

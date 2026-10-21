@@ -7,8 +7,8 @@
 
 namespace splatkit {
 
-// Host ABI shared by splat.vert and visibility.comp, independent of either pass.
-// Source splat records are the platform-independent GpuSplat in GpuLayout.h.
+// Host ABI shared by the splat shaders (layout/splat_camera.glsl), independent of any pass.
+// Source and projected splat records are the platform-independent ones in GpuLayout.h.
 struct alignas(16) CameraUniform {
   splat::Mat4 view;
   splat::Mat4 proj;
@@ -16,7 +16,7 @@ struct alignas(16) CameraUniform {
   float tanHalfFov[2];
   float screenSize[2];
   uint32_t outputLinear;
-  // Clockwise, 0 to 3; only splat.vert reads it (VulkanSwapchain::quarterTurns).
+  // Clockwise, 0 to 3; only the vertex stages read it (VulkanSwapchain::quarterTurns).
   uint32_t quarterTurns;
   float cameraPosition[4];
 };
@@ -34,5 +34,10 @@ static_assert(offsetof(CameraUniform, cameraPosition) == 160);
 // alphaThreshold the renderer reports.
 inline constexpr float kQuadMinAlpha = 2.0f / 255.0f;
 inline constexpr uint32_t kQuadMinAlphaConstant = 1;
+
+// The highest spherical harmonics degree the shaders specialise for, and the constant_id of
+// SH_DEGREE in splat_projection.glsl: one pipeline per degree.
+inline constexpr int kMaxShDegree = 3;
+inline constexpr uint32_t kShDegreeConstant = 0;
 
 }  // namespace splatkit

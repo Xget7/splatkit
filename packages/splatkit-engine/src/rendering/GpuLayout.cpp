@@ -12,9 +12,8 @@ namespace {
 
 // Per splat a frame may draw: its projection, the sort's key and value (double buffered) and
 // the index the selection writes.
-constexpr std::uint64_t kProjectedSplatBytes = 32;
 constexpr std::uint64_t kDrawBytesPerSplat =
-    kProjectedSplatBytes + 2 * 2 * sizeof(uint32_t) + sizeof(uint32_t);
+    sizeof(ProjectedSplat) + 2 * 2 * sizeof(uint32_t) + sizeof(uint32_t);
 // Per cluster, beside its record: the selection walk's packet (16), cost (8) and offsets (16),
 // and its place in the two frontier lists.
 constexpr std::uint64_t kWalkBytesPerCluster = 16 + 8 + 16 + 2 * sizeof(uint32_t);

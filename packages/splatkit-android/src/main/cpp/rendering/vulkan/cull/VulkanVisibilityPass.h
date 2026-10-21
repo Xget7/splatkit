@@ -11,6 +11,7 @@
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "splat/core/Result.h"
 
@@ -31,7 +32,8 @@ struct VulkanVisibilityCapabilities {
   std::string reason;
 };
 
-// GPU visibility/compaction; sorting must consume its output before rasterization.
+// GPU visibility, projection and compaction: each survivor's ProjectedSplat (GpuLayout.h) is
+// written once for the draw. Sorting must consume its output before rasterization.
 // Render-thread only. Context and inputs outlive submitted work. Reserve/destroy while all
 // consumers are idle; fence before reusing a descriptor slot. No implicit submit/count readback.
 class VulkanVisibilityPass {
@@ -64,9 +66,15 @@ class VulkanVisibilityPass {
     VkBuffer splats = VK_NULL_HANDLE;  // resident GpuSplat records, 32 bytes each
     VkDeviceSize splatsOffset = 0;
     uint32_t sourceCount = 0;
+    // Harmonics bands 1 to shDegree, shStride(shDegree) uints per source record. Degree 0
+    // never reads it and may leave it null.
+    VkBuffer sh = VK_NULL_HANDLE;
+    VkDeviceSize shOffset = 0;
+    int shDegree = 0;
     // Actual total buffer sizes, including offsets. Caller owns truthful sizes and uploads.
     VkDeviceSize cameraBytes = 176;
     VkDeviceSize splatsBytes = 0;
+    VkDeviceSize shBytes = 0;
     CandidateMode mode = CandidateMode::prefix;
     VkBuffer candidates = VK_NULL_HANDLE;  // uint indices, or 16-byte Range records
     VkDeviceSize candidatesOffset = 0;
@@ -85,7 +93,8 @@ class VulkanVisibilityPass {
 
   struct Output {
     // Borrowed handles. Valid until successful reserve or destruction, never CPU-mapped.
-    VkBuffer indices = VK_NULL_HANDLE;    // compacted original source indices
+    VkBuffer values = VK_NULL_HANDLE;     // base + rank: each survivor's position in projected
+    VkBuffer projected = VK_NULL_HANDLE;  // ProjectedSplat records, compacted
     VkBuffer depthKeys = VK_NULL_HANDLE;  // camera-depth key, configured precision/direction
     VkBuffer count = VK_NULL_HANDLE;      // GPU survivor count
     VkBuffer indirect = VK_NULL_HANDLE;   // one VkDrawIndirectCommand (4 vertices/instance)
@@ -96,7 +105,8 @@ class VulkanVisibilityPass {
   // use valid owned dummy ranges. Indexed/range source lookup is bounded on the GPU.
   // Any GPU failure zeros BOTH count and draw instanceCount; status preserves diagnostic bits.
   // Upload/host flush dependencies are caller-owned; outputs publish to compute/vertex/transfer
-  // and indirect consumers. Readback requires completion and noncoherent invalidation.
+  // and indirect consumers, the projected records to the vertex stage. Readback requires
+  // completion and noncoherent invalidation.
   // Low16 near/far quantization is approximate. Equal keys have nondeterministic compaction
   // order; stable radix alone cannot make their input order deterministic across frames.
   bool encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const;
@@ -134,11 +144,13 @@ class VulkanVisibilityPass {
   std::array<VkDescriptorSet, kFramesInFlight> prepareSets_{};
   VkPipelineLayout visibilityLayout_ = VK_NULL_HANDLE;
   VkPipelineLayout prepareLayout_ = VK_NULL_HANDLE;
-  VkPipeline visibilityPipeline_ = VK_NULL_HANDLE;
+  // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
+  std::array<VkPipeline, kMaxShDegree + 1> visibilityPipelines_{};
   VkPipeline preparePipeline_ = VK_NULL_HANDLE;
 
   std::unique_ptr<VulkanBuffer> dummy_;  // immutable zero words for inactive input descriptors
-  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indices_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> values_{};
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> projected_{};
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> depthKeys_{};
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> counts_{};
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> indirect_{};

@@ -14,6 +14,7 @@ namespace {
 using splatkit::CameraUniform;
 using splatkit::GpuSplat;
 using splatkit::packSplats;
+using splatkit::ProjectedSplat;
 using splatkit::RenderPolicy;
 using splatkit::SortKeyBits;
 using splatkit::SplatRenderer;
@@ -41,8 +42,12 @@ struct Inputs {
     if (packed.empty()) packed.resize(1);
     splats = VulkanBuffer::deviceLocal(*gpu.context, packed.size() * sizeof(GpuSplat),
                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-    require(camera && splats && splats->upload(packed.data(), packed.size() * sizeof(GpuSplat)),
-            "frame input allocation/upload");
+    // Degree 0 worlds never read the harmonics; the binding still needs a buffer.
+    sh = VulkanBuffer::deviceLocal(*gpu.context, sizeof(uint32_t),
+                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    require(
+        camera && splats && sh && splats->upload(packed.data(), packed.size() * sizeof(GpuSplat)),
+        "frame input allocation/upload");
     setView(0);
   }
   void setView(float x) const {
@@ -56,13 +61,15 @@ struct Inputs {
     std::memcpy(camera->mapped(), &u, sizeof(u));
     camera->flush(0, sizeof(u));
   }
-  std::unique_ptr<VulkanBuffer> camera, splats;
+  std::unique_ptr<VulkanBuffer> camera, splats, sh;
 };
 
 std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute& pass,
                           const Inputs& inputs, uint32_t slot, uint32_t capacity,
                           const std::vector<SplatRenderer::Range>& ranges) {
-  const VkDeviceSize bytes = sizeof(VkDrawIndirectCommand) + std::max(1u, capacity) * 4ull;
+  const VkDeviceSize orderBytes = std::max(1u, capacity) * 4ull;
+  const VkDeviceSize bytes =
+      sizeof(VkDrawIndirectCommand) + orderBytes + std::max(1u, capacity) * sizeof(ProjectedSplat);
   auto copy = VulkanBuffer::deviceLocal(*gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   require(copy != nullptr, "frame result allocation");
   gpu.submit([&](VkCommandBuffer cmd) {
@@ -70,7 +77,8 @@ std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute
     frame.orderSource = SplatRenderer::OrderSource::gpu;
     frame.ranges = ranges.data();
     frame.rangeCount = static_cast<uint32_t>(ranges.size());
-    auto draw = pass.encode(cmd, slot, inputs.camera->handle(), *inputs.splats, frame);
+    auto draw =
+        pass.encode(cmd, slot, inputs.camera->handle(), *inputs.splats, *inputs.sh, 0, frame);
     require(draw.has_value(), "GPU frame encode");
     require(draw->capacity <= std::max(1u, capacity), "draw buffer bound");
     VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -80,8 +88,11 @@ std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute
                          1, &barrier, 0, nullptr, 0, nullptr);
     const VkBufferCopy args{0, 0, sizeof(VkDrawIndirectCommand)};
     const VkBufferCopy order{0, sizeof(VkDrawIndirectCommand), draw->capacity * 4ull};
+    const VkBufferCopy projected{0, sizeof(VkDrawIndirectCommand) + orderBytes,
+                                 draw->capacity * sizeof(ProjectedSplat)};
     vkCmdCopyBuffer(cmd, draw->arguments, copy->handle(), 1, &args);
     vkCmdCopyBuffer(cmd, draw->order, copy->handle(), 1, &order);
+    vkCmdCopyBuffer(cmd, draw->projected, copy->handle(), 1, &projected);
   });
   auto data = gpu.readback(*copy, bytes);
   VkDrawIndirectCommand args{};
@@ -89,9 +100,18 @@ std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute
   require(args.vertexCount == 4 && args.instanceCount <= capacity && args.firstVertex == 0 &&
               args.firstInstance == 0,
           "GPU draw arguments bounded and initialized");
+  // The draw order holds positions in the projected records, which name the source splats.
   std::vector<uint32_t> indices(args.instanceCount);
-  if (!indices.empty())
+  std::vector<ProjectedSplat> records(capacity);
+  if (!indices.empty()) {
     std::memcpy(indices.data(), data.data() + sizeof(args), indices.size() * sizeof(uint32_t));
+    std::memcpy(records.data(), data.data() + sizeof(args) + orderBytes,
+                records.size() * sizeof(ProjectedSplat));
+  }
+  for (uint32_t& index : indices) {
+    require(index < capacity, "draw order within the projected records");
+    index = records[index].index;
+  }
   return indices;
 }
 
@@ -137,10 +157,10 @@ void tests(const test::VulkanTestContext& gpu) {
       const SplatRenderer::Range overlap[]{{0, 2}, {1, 2}};
       frame.ranges = overlap;
       frame.rangeCount = 2;
-      require(!pass->encode(cmd, 1, inputs.camera->handle(), *inputs.splats, frame),
+      require(!pass->encode(cmd, 1, inputs.camera->handle(), *inputs.splats, *inputs.sh, 0, frame),
               "overlapping residency ranges rejected");
       frame.rangeCount = 0;
-      require(!pass->encode(cmd, 2, inputs.camera->handle(), *inputs.splats, frame),
+      require(!pass->encode(cmd, 2, inputs.camera->handle(), *inputs.splats, *inputs.sh, 0, frame),
               "invalid frame slot rejected");
     });
     std::printf("PASS %u-bit visibility/sort/indirect chain, ranges, empty view and diagnostics\n",

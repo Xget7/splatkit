@@ -227,7 +227,7 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
 
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
     VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const VulkanBuffer& splats,
-    const SplatRenderer::Frame& frame) {
+    const VulkanBuffer& sh, int shDegree, const SplatRenderer::Frame& frame) {
   if (!cmd || slot >= kFramesInFlight || !camera ||
       frame.orderSource != SplatRenderer::OrderSource::gpu)
     return std::nullopt;
@@ -237,6 +237,9 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   input.splats = splats.handle();
   input.splatsBytes = splats.size();
   input.sourceCount = sourceCount_;
+  input.sh = sh.handle();
+  input.shBytes = sh.size();
+  input.shDegree = shDegree;
   input.keyBits = keyBits();
   input.keyOrder = VulkanVisibilityPass::KeyOrder::descending;  // Hardware uses back-to-front over.
   if (!lod_ && !prepareRanges(slot, frame, input)) return std::nullopt;
@@ -266,7 +269,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   timestamp(2);
   VulkanRadixSort::Input sort;
   sort.keys = visible.depthKeys;
-  sort.values = visible.indices;
+  sort.values = visible.values;
   sort.count = visible.count;
   sort.keysBytes = sort.valuesBytes = VkDeviceSize{capacity_} * sizeof(uint32_t);
   sort.countBytes = sizeof(uint32_t);
@@ -283,7 +286,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                       VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   copyDiagnostics(cmd, slot, visible, input.candidateCapacity);
-  return Draw{radix_->output(slot).values, visible.indirect, capacity_};
+  return Draw{radix_->output(slot).values, visible.projected, visible.indirect, capacity_};
 }
 
 }  // namespace splatkit

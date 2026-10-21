@@ -9,6 +9,7 @@
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/device/VulkanContext.h"
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splat/formats/SplatCloud.h"
 
 namespace splatkit {
@@ -17,7 +18,7 @@ namespace splatkit {
 class VulkanWorld {
  public:
   // The most spherical harmonics bands a world holds.
-  static constexpr int kMaxShDegree = 3;
+  static constexpr int kMaxShDegree = splatkit::kMaxShDegree;
 
   // Converts a decoded cloud to the GPU layout and uploads it (blocking). Spherical
   // harmonics above `maxShDegree` are dropped: degree 3 costs 92 bytes per splat.
