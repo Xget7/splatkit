@@ -42,6 +42,17 @@ class WorldAndValidationTest(unittest.TestCase):
         activity = perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt"
         self.assertIn(f'getStringExtra("{perf.EXTRA_WORLD}")', activity.read_text())
 
+    def test_lod_controls_go_to_the_extras_the_dev_app_reads(self):
+        args = perf.launch_args(20, "high", None, budget=300000, lod_splat_limit=150000)
+        self.assertEqual(args[args.index(perf.EXTRA_BUDGET) - 1], "--ei")
+        self.assertEqual(args[args.index(perf.EXTRA_BUDGET) + 1], "300000")
+        self.assertEqual(args[args.index(perf.EXTRA_LOD_SPLAT_LIMIT) + 1], "150000")
+        self.assertNotIn(perf.EXTRA_BUDGET, perf.launch_args(20, "high", None))
+        self.assertNotIn(perf.EXTRA_LOD_SPLAT_LIMIT, perf.launch_args(20, "high", None))
+        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
+        self.assertIn(f'getIntExtra("{perf.EXTRA_BUDGET}"', activity)
+        self.assertIn(f'getIntExtra("{perf.EXTRA_LOD_SPLAT_LIMIT}"', activity)
+
     def test_relative_worlds_live_in_the_external_files_dir(self):
         self.assertEqual(perf.device_world("house.spz"), f"/sdcard/Android/data/{perf.PACKAGE}/files/house.spz")
         self.assertEqual(perf.device_world("/sdcard/house.spz"), "/sdcard/house.spz")

@@ -64,6 +64,8 @@ EXTRA_QUALITY = "quality"
 EXTRA_HUD = "hud"
 EXTRA_POSE = "pose"
 EXTRA_WORLD = "world"
+EXTRA_BUDGET = "budget"
+EXTRA_LOD_SPLAT_LIMIT = "lodSplatLimit"
 QUALITY_PRESETS = ("low", "medium", "high", "ultra")
 # Every run draws in landscape, rotation 1 (Surface.ROTATION_90), whatever way the phone lies;
 # the previous settings come back afterwards.
@@ -122,7 +124,7 @@ duration_ms: {int(duration_s * MS_PER_S)}
 """
 
 
-def launch_args(seconds, quality, pose, world=None):
+def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None):
     """The am start command; --ez hud false keeps HUD redraws out of the measurement."""
     args = ["shell", "am", "start", "-n", ACTIVITY, "--ez", EXTRA_BENCHMARK, "true",
             "--ef", EXTRA_SECONDS, str(seconds), "--es", EXTRA_QUALITY, quality, "--ez", EXTRA_HUD, "false"]
@@ -130,6 +132,10 @@ def launch_args(seconds, quality, pose, world=None):
         args += ["--es", EXTRA_POSE, pose]
     if world:
         args += ["--es", EXTRA_WORLD, world]
+    if budget is not None:
+        args += ["--ei", EXTRA_BUDGET, str(budget)]
+    if lod_splat_limit is not None:
+        args += ["--ei", EXTRA_LOD_SPLAT_LIMIT, str(lod_splat_limit)]
     return args
 
 
@@ -276,7 +282,8 @@ def record(args, variant):
     started = adb(args.serial, "shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE, "--background",
                   input=perfetto_config(trace_seconds))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
-    adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world))
+    adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world, args.budget,
+                                   args.lod_splat_limit))
 
     failure = None
     try:
@@ -348,6 +355,10 @@ def main():
     parser.add_argument("--pose", help='"x,y,z,yaw,pitch"; the turn keeps the position, resets yaw')
     parser.add_argument("--world", help=f"world file, relative to {DEVICE_FILES_DIR} or absolute; "
                         "default the bundled kitchen_500k.spz")
+    parser.add_argument("--budget", type=int,
+                        help="LOD budget: a world loads as a hierarchy drawing at most this many splats")
+    parser.add_argument("--lod-splat-limit", type=int,
+                        help="most splats one frame of a hierarchy world selects, 0 for the budget")
     parser.add_argument("--validation", action="store_true",
                         help="debug build with the Khronos validation layer; the timings are then not comparable")
     parser.add_argument("--serial", help="adb device serial when more than one is attached")

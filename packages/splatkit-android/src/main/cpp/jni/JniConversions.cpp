@@ -61,6 +61,7 @@ RenderPolicy policyFromDoubles(const double* in) {
   p.enableHiZOcclusion = in[6] != 0.0;
   p.enableEarlyTermination = in[7] != 0.0;
   p.sortDepth = static_cast<SortKeyBits>(static_cast<uint32_t>(in[8]));
+  p.lodSplatLimit = static_cast<uint32_t>(in[9]);
   return p;
 }
 
@@ -74,6 +75,7 @@ void policyToDoubles(const RenderPolicy& policy, double* out) {
   out[6] = flag(policy.enableHiZOcclusion);
   out[7] = flag(policy.enableEarlyTermination);
   out[8] = static_cast<double>(static_cast<uint32_t>(policy.sortDepth));
+  out[9] = static_cast<double>(policy.lodSplatLimit);
 }
 
 namespace {
@@ -93,6 +95,7 @@ void supportToDoubles(const RenderPolicySupport& support, double* out) {
   out[11] = static_cast<double>(support.maxLodErrorPixels);
   out[12] = static_cast<double>(support.minSubpixelThreshold);
   out[13] = static_cast<double>(support.maxSubpixelThreshold);
+  out[14] = flag(support.lodSplatLimit);
 }
 
 }  // namespace
