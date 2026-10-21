@@ -72,7 +72,10 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   policy.fallback.subpixelThreshold = 0.5f;
   policy.fallback.sortDepth = SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
-  policy.fallback.enableEarlyTermination = true;
+  // Both paths draw back to front, so nothing stops at a saturated pixel. Front to back
+  // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
+  // termination saved.
+  policy.fallback.enableEarlyTermination = false;
   // The GPU visibility/sort path applies the sub-pixel cutoff and the key width per
   // instance; without it the CPU path has neither, and the rest is not implemented.
   policy.sortDepth = gpu;
