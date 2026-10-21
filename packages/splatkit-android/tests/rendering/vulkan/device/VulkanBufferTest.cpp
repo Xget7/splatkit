@@ -2,6 +2,45 @@
 
 #include "support/VulkanTestContext.h"
 
+namespace {
+
+// The mapped flavour takes uploads in place where it is mapped, staged elsewhere; both
+// read back on the GPU with their neighbours intact.
+void deviceLocalMapped(const splatkit::test::VulkanTestContext& gpu) {
+  using splatkit::VulkanBuffer;
+  using splatkit::test::require;
+  constexpr VkDeviceSize kBytes = 4096;
+  auto buffer = VulkanBuffer::deviceLocalMapped(
+      *gpu.context, kBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  require(buffer != nullptr, "allocate mapped device buffer");
+  const bool shared = gpu.sharesDeviceMemory();
+  require(!shared || buffer->mapped(), "shared device memory is mapped");
+  std::printf("device memory %s; the buffer is %s\n", shared ? "shared" : "separate",
+              buffer->mapped() ? "mapped" : "staged");
+  // The usage a world's slab has, whose memory types differ from a buffer read back.
+  auto slab =
+      VulkanBuffer::deviceLocalMapped(*gpu.context, kBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  require(slab != nullptr, "allocate a slab");
+  const bool slabCoherent = (slab->memoryProperties() & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+  std::printf("the slab is %s\n", slabCoherent ? "coherent" : "not coherent");
+  for (const VulkanBuffer* b : {buffer.get(), slab.get()}) {
+    require(!gpu.offersSharedCoherent(b->handle()) ||
+                (b->memoryProperties() & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+            "a mapped buffer takes coherent memory where it allows it");
+  }
+  std::vector<uint8_t> expected(kBytes, 0x5a);
+  require(buffer->upload(expected.data(), expected.size()), "upload whole");
+  const std::vector<uint8_t> patch{3, 1, 4, 1, 5};
+  require(buffer->upload(1021, patch.data(), patch.size()), "upload an unaligned range");
+  std::copy(patch.begin(), patch.end(), expected.begin() + 1021);
+  require(gpu.readback(*buffer, kBytes) == expected, "mapped device buffer round trip");
+  require(!buffer->upload(kBytes - 1, patch.data(), patch.size()), "reject overrun");
+  require(!VulkanBuffer::deviceLocalMapped(*gpu.context, 0, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+          "reject empty mapped device allocation");
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
   using splatkit::VulkanBuffer;
   namespace test = splatkit::test;
@@ -49,6 +88,8 @@ int main(int argc, char** argv) {
     order0->flush(0, order0->size());
     require(gpu.readback(*order0, order0->size()) == std::vector<uint8_t>(order0->size(), 0x62),
             "mapped host writes reach GPU");
+    deviceLocalMapped(gpu);
+    std::puts("PASS mapped device buffer");
     gpu.requireValidationClean();
     std::printf("PASS buffer regressions; validation=%s\n",
                 gpu.context->validationEnabled() ? "on" : "off");

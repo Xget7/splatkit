@@ -66,12 +66,14 @@ void packShRange(const splat::SplatCloud& cloud, int degree, size_t offset, size
   const std::size_t sourceCoefficients = n == 0 ? 0 : cloud.sh.size() / (n * 3);
   const std::size_t halves = shCoefficients(degree) * 3;
   const std::size_t stride = shStride(degree);
+  // Each word is written once and never read: `out` may be write-combined mapped memory.
   for (std::size_t i = 0; i < count; ++i) {
-    std::fill_n(out + i * stride, stride, 0u);
     const float* src = &cloud.sh[(offset + i) * sourceCoefficients * 3];
-    for (std::size_t h = 0; h < halves; ++h) {
-      const uint32_t half = splat::toHalf(src[h]);
-      out[i * stride + h / 2] |= half << ((h & 1) * 16);
+    for (std::size_t w = 0; w < stride; ++w) {
+      const std::size_t h = w * 2;
+      const uint32_t low = h < halves ? splat::toHalf(src[h]) : 0u;
+      const uint32_t high = h + 1 < halves ? splat::toHalf(src[h + 1]) : 0u;
+      out[i * stride + w] = low | (high << 16);
     }
   }
 }
