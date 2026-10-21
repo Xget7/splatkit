@@ -64,6 +64,7 @@ final class SplatSession: ObservableObject {
         if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
         if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
         if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }
+        if let pixels = args.float("subpixel"), pixels.isFinite, pixels >= 0 { policy.subpixelThreshold = pixels }
         view.renderPolicy = policy
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities

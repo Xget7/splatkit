@@ -359,7 +359,7 @@ Every preset rasterizes in hardware, with frustum culling and early termination 
 
 Lower `lodErrorPixels` sharpens the far field, which is where a captured room looks soft, and costs fill rate.
 No adapter implements `hybrid` or `computeTile`; both resolve to `hardware` with a fallback warning.
-The Sub-pixel and Alpha columns apply on Android only; iOS is fixed at 1.0 px and 2/255.
+The Alpha column applies on Android only; iOS is fixed at 2/255.
 
 ### Splat budgets
 

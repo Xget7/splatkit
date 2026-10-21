@@ -59,10 +59,11 @@ Scene scene(const Gpu& gpu) {
 using Record = std::function<void(VkCommandBuffer)>;
 
 // The red channel of what `before` and `draw` record, over transparent black: `before` runs
-// outside the render pass, `draw` inside it.
+// outside the render pass, `draw` inside it. `minPixelRadius` is the camera's cutoff.
 std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, const Record& before,
-                            const Record& draw) {
-  s.cameras->update(0, splat::Mat4::identity(), s.proj, {0, 0, 0}, kExtent, false, 0);
+                            const Record& draw, float minPixelRadius = 0) {
+  s.cameras->update(0, splat::Mat4::identity(), s.proj, {0, 0, 0}, kExtent, false, 0,
+                    minPixelRadius);
   const VkDeviceSize bytes = VkDeviceSize{kExtent.width} * kExtent.height * 4;
   auto pixels = VulkanBuffer::hostVisible(*gpu.context, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   require(pixels && pixels->mapped(), "pixel readback buffer");
@@ -108,8 +109,9 @@ std::vector<uint8_t> render(const Gpu& gpu, const Scene& s, const Record& before
 }
 
 // One white splat at the centre of the view, projected by the CPU-order vertex stage.
-std::vector<uint8_t> renderCpuOrder(const Gpu& gpu, const Scene& s, float alpha) {
-  const float worldSigma = kSigmaPixels * kDepth / (kExtent.width * s.proj.at(0, 0) / 2);
+std::vector<uint8_t> renderCpuOrder(const Gpu& gpu, const Scene& s, float alpha,
+                                    float sigmaPixels = kSigmaPixels, float minPixelRadius = 0) {
+  const float worldSigma = sigmaPixels * kDepth / (kExtent.width * s.proj.at(0, 0) / 2);
   const float variance = worldSigma * worldSigma;
   splat::SplatCloud cloud;
   cloud.positions = {0, 0, -kDepth};
@@ -122,7 +124,7 @@ std::vector<uint8_t> renderCpuOrder(const Gpu& gpu, const Scene& s, float alpha)
   const uint32_t order = 0;
   return render(
       gpu, s, [&](VkCommandBuffer cmd) { world->recordOrderUpload(cmd, 0, &order, 1); },
-      [&](VkCommandBuffer cmd) { s.pipeline->draw(cmd, 0, *world, 1, 0); });
+      [&](VkCommandBuffer cmd) { s.pipeline->draw(cmd, 0, *world, 1, 0); }, minPixelRadius);
 }
 
 uint32_t packHalves(float low, float high) {
@@ -196,6 +198,18 @@ void testLodCore(const Gpu& gpu, const Scene& s) {
   std::puts("PASS LOD splat saturates in its core and fades to its quad edge");
 }
 
+// MetalSplatRendererTest.SubpixelCutoffAppliesLiveOnBothOrderPaths draws the same splat.
+void testCpuOrderCutoff(const Gpu& gpu, const Scene& s) {
+  // Source sigma 0.3 px with an opaque 2.5 sigma quad: a 0.75 px footprint.
+  const auto brightest = [&](float cutoff) {
+    const auto red = renderCpuOrder(gpu, s, 1, 0.3f, cutoff);
+    return *std::max_element(red.begin(), red.end());
+  };
+  require(brightest(1.0f) == 0, "a 1 px cutoff drops a 0.75 px footprint");
+  require(brightest(0.5f) > 64, "a 0.5 px cutoff draws a 0.75 px footprint");
+  std::puts("PASS the CPU-order draw drops a footprint under the camera's cutoff");
+}
+
 void testProjectedPath(const Gpu& gpu, const Scene& s) {
   requireGaussian(renderProjected(gpu, s, 0.8f, 2.5f), 0.8f, 2.5f);
   const float alpha = 3;
@@ -212,6 +226,7 @@ int main() {
     const Scene s = scene(gpu);
     testTranslucent(gpu, s);
     testLodCore(gpu, s);
+    testCpuOrderCutoff(gpu, s);
     testProjectedPath(gpu, s);
     gpu.requireValidationClean();
     return 0;

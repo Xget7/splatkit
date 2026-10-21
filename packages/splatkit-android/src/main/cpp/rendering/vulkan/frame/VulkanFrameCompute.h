@@ -57,12 +57,11 @@ class VulkanFrameCompute {
   void collectCompleted(uint64_t completedSubmission);
   bool hasLod() const { return lod_ != nullptr; }
 
-  // Per-instance renderer policy. Render thread, while idle. Only sortDepth,
-  // subpixelThreshold, lodErrorPixels and lodSplatLimit are honoured; the caller resolves
-  // the rest.
+  // Per-instance renderer policy. Render thread, while idle. Only sortDepth, lodErrorPixels
+  // and lodSplatLimit are honoured; the caller resolves the rest, and writes the sub-pixel
+  // cutoff into each frame's camera.
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
   uint32_t sortKeyBits() const { return keyBitCount(keyBits()); }
-  float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
   // The threshold the next hierarchy selection runs at.
   float lodPixels() const { return lodThreshold_.pixels(); }
   const VulkanVisibilityCapabilities& visibilityCapabilities() const {

@@ -111,19 +111,13 @@ bool VulkanFrameCompute::applyRenderPolicy(const RenderPolicy& policy, std::stri
     if (reason != nullptr) *reason = "Vulkan visibility pass unavailable";
     return false;
   }
-  if (!visibility_->setMinPixelRadius(policy.subpixelThreshold)) {
-    if (reason != nullptr) *reason = "invalid subpixelThreshold";
-    return false;
-  }
   sortKeyBits_ = policy.sortDepth;
   lodThreshold_.reset(policy.lodErrorPixels);
   if (lod_) lod_->setSplatLimit(policy.lodSplatLimit);
   // Every selection still unread ran under the previous policy.
   currentPolicy_.fill(false);
-  LOGI(
-      "Vulkan policy: %u-bit sort keys, %.3fpx sub-pixel radius, %.2fpx LOD error, %u LOD "
-      "splat limit",
-      sortKeyBits(), visibility_->minPixelRadius(), policy.lodErrorPixels, policy.lodSplatLimit);
+  LOGI("Vulkan policy: %u-bit sort keys, %.2fpx LOD error, %u LOD splat limit", sortKeyBits(),
+       policy.lodErrorPixels, policy.lodSplatLimit);
   return true;
 }
 
