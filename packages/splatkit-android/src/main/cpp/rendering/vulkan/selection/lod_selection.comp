@@ -20,8 +20,10 @@ layout(push_constant) uniform Config {
   uint costGroups; uint groups; uint blocks; uint frontier0;
   uint frontier1; uint packets; float pixelLimit; float colorWeight; uint cull;
 } p;
-// State words: count, active, packets, accepted, limited, evaluated, groups, next,
-// dispatch xyz, emit xyz, outputDelta, packetDelta, scan xyz, frontier parity.
+// State words: count, active, packets, accepted, limited, evaluated, groups, scatter active,
+// dispatch xyz, emit xyz, scatter count, scatter packets, scan xyz, frontier parity, scatter xyz.
+// The scatter words keep the round the scatter phase writes for, since the commit before it already
+// advanced count, packets, active, parity and the dispatch arguments to the next round.
 const uint SPLIT = 0x80000000u, DROP = 0x40000000u, COST = 0x3fffffffu;
 shared uvec4 scanValues[128];
 shared uvec4 chunkTotals[16];
@@ -29,6 +31,13 @@ uvec4 get4(uint base, uint i) { uint a = base + i * 4; return uvec4(s[a],s[a+1],
 void put4(uint base, uint i, uvec4 v) { uint a = base + i * 4; s[a]=v.x; s[a+1]=v.y; s[a+2]=v.z; s[a+3]=v.w; }
 uint currentFrontier() { return s[19] == 0 ? p.frontier0 : p.frontier1; }
 uint nextFrontier() { return s[19] == 0 ? p.frontier1 : p.frontier0; }
+// One invocation: block totals to exclusive offsets. Returns the round's total.
+uvec4 scanBlocks() {
+  uvec4 total=uvec4(0); uint n=(s[6]+127)/128;
+  for (uint i=0;i<n;++i) { uvec4 v=get4(p.blocks,i); put4(p.blocks,i,total); total+=v; }
+  put4(p.blocks,n,total);
+  return total;
+}
 // Inclusive workgroup scan. Every invocation participates, including tail lanes. 16 chunks of 8
 // scan serially, then each lane adds the chunks before its own: two barriers, where a
 // Hillis-Steele scan takes fourteen.
@@ -64,9 +73,9 @@ void main() {
   uint t = gl_GlobalInvocationID.x, lane = gl_LocalInvocationIndex, group = gl_WorkGroupID.x;
   if (p.phase == 0) {
     if (t == 0) {
-      for (uint i=0;i<20;++i) s[i]=0;
+      for (uint i=0;i<23;++i) s[i]=0;
       s[1]=1; s[6]=1; s[8]=1; s[9]=1; s[10]=1;
-      s[12]=1; s[13]=1; s[16]=1; s[17]=1; s[18]=1;
+      s[12]=1; s[13]=1; s[16]=1; s[17]=1; s[18]=1; s[21]=1; s[22]=1;
       s[p.frontier0]=0;
     }
   } else if (p.phase == 1) {
@@ -81,20 +90,14 @@ void main() {
     uvec4 value=uvec4(extra,dropped,0,0), inclusive=scan(value);
     if (t<s[1]) { s[p.costs+2*t]=extra|flags; s[p.costs+2*t+1]=inclusive.x-extra; }
     if (lane==127) put4(p.costGroups,group,inclusive);
-  } else if (p.phase == 2 || p.phase == 6) {
+  } else if (p.phase == 2 || p.phase == 5) {
     uint base=p.phase==2 ? p.costGroups : p.groups;
     uvec4 value=t<s[6] ? get4(base,t) : uvec4(0), inclusive=scan(value);
     if (t<s[6]) put4(base,t,inclusive-value);
     if (lane==127) put4(p.blocks,group,inclusive);
   } else if (p.phase == 3) {
     if (t==0) {
-      uvec4 total=uvec4(0); uint n=(s[6]+127)/128;
-      for (uint i=0;i<n;++i) { uvec4 v=get4(p.blocks,i); put4(p.blocks,i,total); total+=v; }
-      put4(p.blocks,n,total);
-    }
-  } else if (p.phase == 4) {
-    if (t==0) {
-      uvec4 total=get4(p.blocks,(s[6]+127)/128);
+      uvec4 total=scanBlocks();
       uint available=p.limit-s[0]-s[1]+total.y;
       if (total.x<=available) s[3]=total.x;
       else {
@@ -108,7 +111,7 @@ void main() {
                               s[p.costs+2*(lo-1)+1]+(s[p.costs+2*(lo-1)]&COST);
       }
     }
-  } else if (p.phase == 5) {
+  } else if (p.phase == 4) {
     uint flags=DROP, kids=0, splats=0, packets=0, denied=0;
     if (t<s[1]) {
       flags=s[p.costs+2*t]&~COST;
@@ -125,30 +128,28 @@ void main() {
     uvec4 v=uvec4(kids,splats,packets,denied), inclusive=scan(v);
     if (t<s[1]) put4(p.offsets,t,uvec4((inclusive-v).xyz,flags));
     if (lane==127) put4(p.groups,group,inclusive);
-  } else if (p.phase == 7) {
+  } else if (p.phase == 6) {
     if (t==0) {
-      uvec4 total=get4(p.blocks,(s[6]+127)/128);
-      s[7]=total.x; s[14]=total.y; s[15]=total.z;
+      uvec4 total=scanBlocks();
       s[4]+=total.w; s[5]+=s[1];
+      s[7]=s[1]; s[14]=s[0]; s[15]=s[2]; s[20]=s[8];
+      s[0]+=total.y; s[2]+=total.z; s[1]=total.x; s[6]=(s[1]+127)/128;
+      s[8]=s[6]; s[11]=s[2]; s[16]=(s[6]+127)/128; s[19]^=1;
     }
-  } else if (p.phase == 8) {
-    if (t<s[1]) {
+  } else if (p.phase == 7) {
+    if (t<s[7]) {
       uvec4 local=get4(p.offsets,t), prefix=get4(p.groups,group)+get4(p.blocks,group/128);
       if ((local.w&DROP)!=0) return;
-      Cluster n=nodes[s[currentFrontier()+t]];
+      // The commit flipped the parity: read the frontier it retired, write the one it opened.
+      Cluster n=nodes[s[nextFrontier()+t]];
       bool split=(local.w&SPLIT)!=0;
-      if (split) for (uint k=0;k<n.childCount;++k) s[nextFrontier()+prefix.x+local.x+k]=n.childStart+k;
-      uint count=split ? n.leafCount : 1, destination=s[0]+prefix.y+local.y;
-      if (count>128) put4(p.packets,s[2]+prefix.z+local.z,uvec4(n.leafStart,count,destination,0));
+      if (split) for (uint k=0;k<n.childCount;++k) s[currentFrontier()+prefix.x+local.x+k]=n.childStart+k;
+      uint count=split ? n.leafCount : 1, destination=s[14]+prefix.y+local.y;
+      if (count>128) put4(p.packets,s[15]+prefix.z+local.z,uvec4(n.leafStart,count,destination,0));
       else if (!split) indices[destination]=n.node;
       else for (uint k=0;k<count;++k) indices[destination+k]=leaves[n.leafStart+k];
     }
-  } else if (p.phase == 9) {
-    if (t==0) {
-      s[0]+=s[14]; s[2]+=s[15]; s[1]=s[7]; s[6]=(s[1]+127)/128;
-      s[8]=s[6]; s[11]=s[2]; s[16]=(s[6]+127)/128; s[19]^=1;
-    }
-  } else if (p.phase == 10) {
+  } else if (p.phase == 8) {
     if (group<s[2]) {
       uvec4 packet=get4(p.packets,group);
       for (uint k=lane;k<packet.y;k+=128) indices[packet.z+k]=leaves[packet.x+k];

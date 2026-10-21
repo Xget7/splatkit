@@ -147,6 +147,22 @@ void tests(const test::VulkanTestContext& gpu) {
   require(select(gpu, *lod, camera()).cut == std::vector<uint32_t>{0}, "single-leaf root");
   std::puts("PASS empty view and singleton");
 
+  // Root 0 holds leaf 1 and interior 2, which holds leaves 3 and 4: both rounds emit, the second
+  // after the first round has advanced the count.
+  splat::LodTree rounds;
+  rounds.leafCount = 3;
+  rounds.layout = {{{0, 0, -2}, 0.02f, 1, 2},
+                   {{0, 0, -2}, 0.02f, 0, 0},
+                   {{0, 0, -2}, 0.02f, 3, 2},
+                   {{0, 0, -2}, 0.02f, 0, 0},
+                   {{0, 0, -2}, 0.02f, 0, 0}};
+  attributes(rounds);
+  require(lod->upload(rounds, 3, {0, 4, false}), "two-round upload");
+  auto emitted = select(gpu, *lod, camera());
+  require(emitted.cut == std::vector<uint32_t>{1, 3, 4} && emitted.stats[5] == 2,
+          "each round emits after the count of the rounds before");
+  std::puts("PASS each round emits after the rounds before");
+
   auto fan = packet(513);
   require(lod->upload(fan, 513, {0, 4, false}), "leaf packet upload");
   auto full = select(gpu, *lod, camera());
