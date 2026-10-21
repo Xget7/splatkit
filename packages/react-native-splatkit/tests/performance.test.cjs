@@ -334,6 +334,20 @@ const nativeCapabilitiesEvent = Object.freeze({
 });
 const nativeCapabilities = nativeCapabilitiesFromEvent(nativeCapabilitiesEvent);
 
+// These capabilities leave the threshold to native, which warns unless the request is its default.
+test('a one-pixel sub-pixel threshold is the native default', () => {
+  const warnsAboutThreshold = threshold =>
+    new SplatKitBuilder()
+      .withWorld(world)
+      .withPerformance({subpixelThreshold: threshold})
+      .build(nativeCapabilities)
+      .performance.diagnostics.some(
+        diagnostic => diagnostic.option === 'subpixelThreshold',
+      );
+  assert.equal(warnsAboutThreshold(1), false);
+  assert.equal(warnsAboutThreshold(0.5), true);
+});
+
 test('native capabilities resolve the requested policy against what the adapter accepts', () => {
   const config = new SplatKitBuilder()
     .withWorld(world)

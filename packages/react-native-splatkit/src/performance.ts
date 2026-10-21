@@ -357,7 +357,7 @@ const nativeDefaults = {
   tileSize: 16,
   lodErrorPixels: 1,
   alphaThreshold: 1 / 255,
-  subpixelThreshold: 0.5,
+  subpixelThreshold: 1,
   enableFrustumCulling: true,
   enableHiZOcclusion: false,
   enableEarlyTermination: true,

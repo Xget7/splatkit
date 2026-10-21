@@ -27,6 +27,11 @@ class RenderPolicyTest {
     }
 
     @Test
+    fun theSubpixelThresholdDefaultsToOnePixel() {
+        assertEquals(1f, RenderPolicy().subpixelThreshold)
+    }
+
+    @Test
     fun validationMirrorsTheJsRanges() {
         assertNull(renderPolicyError(RenderPolicy()))
         assertEquals("tileSize must be 8, 16 or 32", renderPolicyError(RenderPolicy(tileSize = 12)))
