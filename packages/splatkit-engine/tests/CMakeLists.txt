@@ -9,6 +9,7 @@ add_executable(splatkit_engine_tests
   engine/SplatEnginePolicyTest.cpp
   loading/LoadReportLogTest.cpp
   rendering/GpuLayoutTest.cpp
+  rendering/LodThresholdTest.cpp
   rendering/FrameOrderTest.cpp
   rendering/RenderPolicyTest.cpp
 )
