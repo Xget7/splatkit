@@ -7,6 +7,7 @@ add_executable(splatkit_engine_tests
   engine/SplatEngineLensTest.cpp
   engine/SplatEngineMemoryTest.cpp
   engine/SplatEnginePolicyTest.cpp
+  engine/SplatEngineStreamingTest.cpp
   loading/LoadReportLogTest.cpp
   rendering/GpuLayoutTest.cpp
   rendering/LodThresholdTest.cpp

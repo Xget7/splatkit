@@ -60,13 +60,13 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool uploadLodWorld(const splat::LodTree& tree, int maxShDegree, uint32_t budget) override;
   bool sortsOnGpu() const override;
   bool createSlab(uint32_t capacity, int shDegree) override;
-  // A frame in flight that still names those records may draw a mix of old and new for
-  // one frame.
   bool uploadTile(uint32_t offset, const splat::SplatCloud& cloud) override;
   std::optional<GpuWorldInfo> world() const override;
 
   // The world, or only the clear colour without one.
   bool draw(const Frame& frame) override;
+  uint64_t submittedFrames() const override { return frameLoop_.lastSubmission(); }
+  uint64_t completedFrames() override { return frameLoop_.completedSubmission(); }
   bool hasCompletedWorldFrame() {
     return worldFrameCompletion_.completed(frameLoop_.completedSubmission());
   }

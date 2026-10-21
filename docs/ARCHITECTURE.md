@@ -52,6 +52,7 @@ Both backends:
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
 - The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
+- A streamed tile is written into a slab range only once every frame that drew the range finished: [TileStreamer.h][streamer] pins a replaced set until the renderer's completed frame serial passes the last frame that drew it.
 - Collision runs on the CPU in the walk camera and moves only the camera.
 - Both share one 32-byte `ProjectedSplat` ([GpuLayout.h][layout-h]); the visibility pass projects each splat once and sorts positions in that buffer.
 - Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw whose vertex stage projects each splat; Vulkan keeps the same path in [splat.vert][vk-vert] but needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
@@ -65,6 +66,7 @@ Both backends:
 [layout]: ../packages/splatkit-engine/src/rendering/GpuLayout.cpp
 [layout-h]: ../packages/splatkit-engine/include/splatkit/rendering/GpuLayout.h
 [engine]: ../packages/splatkit-engine/src/engine/SplatEngine.cpp
+[streamer]: ../packages/splat-core/include/splat/tiles/TileStreamer.h
 [ios-thread]: ../packages/splatkit-ios/Sources/SplatKit/engine/RenderThread.swift
 [android-thread]: ../packages/splatkit-android/src/main/kotlin/com/splatkit/engine/RenderThread.kt
 [mtl-world]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/world/MetalWorld.mm
