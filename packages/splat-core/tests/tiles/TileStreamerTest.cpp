@@ -18,10 +18,19 @@ namespace {
 
 namespace fs = std::filesystem;
 
+// A standard normal from two raw words (Box-Muller). `std::mt19937` yields the same words on
+// every standard library, so the world whose tiles the tests below count is the same too.
+float spread(std::mt19937& rng) {
+  constexpr double kWord = 4294967296.0;
+  constexpr double kTau = 6.283185307179586;
+  const double u = (rng() + 0.5) / kWord;
+  const double v = (rng() + 0.5) / kWord;
+  return static_cast<float>(std::sqrt(-2.0 * std::log(u)) * std::cos(kTau * v));
+}
+
 // Round splats in two clusters `gap` apart along x, SH degree 0.
 spz::GaussianCloud clusters(int perCluster, float r, float gap) {
   std::mt19937 rng(7);
-  std::normal_distribution<float> spread(0.0f, 1.0f);
   spz::GaussianCloud c;
   c.shDegree = 0;
   for (int cluster = 0; cluster < 2; ++cluster) {
@@ -139,8 +148,8 @@ TEST(TileStreamer, StreamsDownToTheFinestTilesNearTheCamera) {
 
 // The renderer sorts and draws the ranges itself: `drawnNow` pins the drawn tiles until
 // every frame that may still draw them completed on the GPU, however many updates pass;
-// the engine skips the draw of a still frame but updates every vsync. The world holds 464
-// splats and the residency 360, so the far leaves fit only by evicting near ones.
+// the engine skips the draw of a still frame but updates every vsync. The world's tiles
+// hold 720 splats and the residency 360, so the far leaves fit only by evicting near ones.
 TEST(TileStreamer, TilesDrawnNowStayUntilTheFramesThatDrewThemComplete) {
   const BuiltWorld built;
   const Tileset& set = *built.world.tileset;
@@ -225,8 +234,8 @@ TEST(TileStreamer, TheDrawnSetNeverHoldsATileAndItsParent) {
 }
 
 // The root is the fallback every other tile can be replaced by, so memory pressure from
-// a walk across the world never evicts it. The world holds 464 splats and the residency
-// 360, so each stop refines to its leaves only by evicting the last stop's.
+// a walk across the world never evicts it. The world's tiles hold 720 splats and the
+// residency 360, so each stop refines to its leaves only by evicting the last stop's.
 TEST(TileStreamer, TheRootStaysResidentWhileWalking) {
   const BuiltWorld built;
   const Tileset& set = *built.world.tileset;
