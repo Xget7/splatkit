@@ -17,26 +17,27 @@ constexpr uint32_t kThreads = 128;
 // The uniform camera plus the clusters, leaves, scratch and index storage buffers.
 constexpr uint32_t kStorageBindings = 4;
 constexpr uint32_t kBindings = 1 + kStorageBindings;
-// Scratch words before the frontier, cost and packet regions: the 20 state words, padded.
+// Scratch words before the frontier, cost and packet regions: the 23 state words, padded.
 constexpr size_t kStateWords = 32;
 // Mirrors the branches of lod_selection.comp, which also documents the state words.
+// Named after the Metal kernels.
 enum Phase : uint32_t {
   kReset,
-  kClassify,
+  kEvaluate,
   kScanCosts,
-  kScanBlocks,
   kBudget,
-  kAllocate,
+  kCompact,
   kScanOffsets,
   kCommit,
-  kEmit,
-  kAdvance,
-  kCopyPackets
+  kScatter,
+  kEmit
 };
 // Byte offsets of the indirect dispatch arguments in the scratch state words.
 constexpr VkDeviceSize kFrontierGroupsOffset = 8 * sizeof(uint32_t);    // one group per 128 nodes
 constexpr VkDeviceSize kPacketGroupsOffset = 11 * sizeof(uint32_t);     // one group per packet
 constexpr VkDeviceSize kGroupScanGroupsOffset = 16 * sizeof(uint32_t);  // one per 128 group totals
+constexpr VkDeviceSize kScatterGroupsOffset =
+    20 * sizeof(uint32_t);  // the committed round's groups
 }  // namespace
 
 splat::Result<std::unique_ptr<VulkanLodSelection>> VulkanLodSelection::create(
@@ -241,18 +242,15 @@ bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input&
   };
   dispatch(kReset);
   for (uint32_t round = 0; round < rounds_; ++round) {
-    dispatch(kClassify, kFrontierGroupsOffset);
+    dispatch(kEvaluate, kFrontierGroupsOffset);
     dispatch(kScanCosts, kGroupScanGroupsOffset);
-    dispatch(kScanBlocks);
     dispatch(kBudget);
-    dispatch(kAllocate, kFrontierGroupsOffset);
+    dispatch(kCompact, kFrontierGroupsOffset);
     dispatch(kScanOffsets, kGroupScanGroupsOffset);
-    dispatch(kScanBlocks);
     dispatch(kCommit);
-    dispatch(kEmit, kFrontierGroupsOffset);
-    dispatch(kAdvance);
+    dispatch(kScatter, kScatterGroupsOffset);
   }
-  dispatch(kCopyPackets, kPacketGroupsOffset);
+  dispatch(kEmit, kPacketGroupsOffset);
   vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
                           VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
