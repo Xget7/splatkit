@@ -337,6 +337,36 @@ void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const F
   std::puts("PASS descriptor rejection and transactional capacity");
 }
 
+// The quad ends where the Gaussian falls to the cutoff, out to 2.5 sigma and 512 pixels:
+// a splat under the cutoff has no quad, and a quad that misses the screen is culled.
+void testQuadExtent(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  splat::SplatCloud cloud;
+  const auto add = [&](float x, float z, float variance, float alpha) {
+    cloud.positions.insert(cloud.positions.end(), {x, 0, z});
+    cloud.covariances.insert(cloud.covariances.end(), {variance, 0, 0, variance, 0, variance});
+    cloud.colors.insert(cloud.colors.end(), {1, 1, 1});
+    cloud.alphas.push_back(alpha);
+  };
+  // x at depth 10 whose centre projects to `ndc`.
+  const auto atNdc = [](float ndc) { return ndc * 10.0f / camera().proj.at(0, 0); };
+  add(0, -5, 0.01f, 1.0f / 255.0f);
+  add(0, -5, 0.01f, 3.0f / 255.0f);
+  // 100 px sigma, about 138 px across x this far out, centred 375 px past the right edge:
+  // a 3 sigma quad reaches the screen, a 2.5 sigma one stops short.
+  add(atNdc(1.75f), -10, 4, 0.5f);
+  // 2000 px sigma centred 2500 px past the edge: the 512 px cap stops the quad short.
+  add(atNdc(6), -10, 1600, 0.5f);
+  add(0, -10, 1600, 0.5f);
+  auto splats = upload(gpu, packSplats(cloud));
+  require(pass.reserve(5), "quad extent output capacity");
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = 5;
+  membership(run(gpu, pass, in), {1, 4});
+  std::puts("PASS quad cutoff, 2.5 sigma extent and 512 px cap");
+}
+
 void tests(const Gpu& gpu) {
   auto created = VulkanVisibilityPass::create(*gpu.context, 0);
   require(static_cast<bool>(created), "create subgroup visibility pass");
@@ -350,6 +380,7 @@ void tests(const Gpu& gpu) {
   testOverflow(gpu, *pass, f);
   testDepthKeys(gpu, *pass, f);
   testDescriptorRejection(gpu, *pass, f);
+  testQuadExtent(gpu, *pass, f);
 }
 }  // namespace
 

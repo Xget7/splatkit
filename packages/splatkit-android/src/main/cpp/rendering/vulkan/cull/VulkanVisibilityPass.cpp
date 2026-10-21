@@ -313,6 +313,10 @@ bool VulkanVisibilityPass::createPipelines() {
   visibilityStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
   visibilityStage.module = visibilityModule.get();
   visibilityStage.pName = "main";
+  const VkSpecializationMapEntry quadMinAlpha{kQuadMinAlphaConstant, 0, sizeof(kQuadMinAlpha)};
+  const VkSpecializationInfo specialization{1, &quadMinAlpha, sizeof(kQuadMinAlpha),
+                                            &kQuadMinAlpha};
+  visibilityStage.pSpecializationInfo = &specialization;
   VkComputePipelineCreateInfo visibilityInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   visibilityInfo.stage = visibilityStage;
   visibilityInfo.layout = visibilityLayout_;

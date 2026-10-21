@@ -1,4 +1,7 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "rendering/vulkan/layout/splat_footprint.glsl"
 
 // One instance per splat, four vertices per instance (triangle strip quad).
 // Ported from MetalSplatter's SplatProcessing.metal, which follows the reference
@@ -38,8 +41,6 @@ layout(std430, set = 0, binding = 3) readonly buffer Sh { uint shData[]; };
 layout(location = 0) out vec2 relativePosition;  // in units of sigma
 layout(location = 1) out vec4 color;
 
-const float kBoundsRadius = 3.0;  // draw out to 3 sigma; beyond that nothing is visible
-const float kLodBoundsRadius = 5.0;  // an opacity of 1000 stays solid out past 3 sigma
 const vec2 kCorners[4] = vec2[](vec2(-1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1));
 
 // Turns clip space clockwise by the display's rotation. The swapchain image has the display's
@@ -158,15 +159,10 @@ void main() {
   vec2 axis1, axis2;
   ellipseAxes(cov2D, axis1, axis2);
 
-  // Draw only out to where this splat's contribution drops below 1/255, which is
-  // where the fragment stage would discard anyway: exp(-r^2 / 2) * alpha = 1 / 255.
-  // Faint splats, the majority, get a much smaller quad; opaque ones keep 3 sigma.
   vec4 rgba = unpackUnorm4x8(s.rgba8);
-  // A level of detail node stands in for many overlapping splats: its opacity exceeds
-  // one and its solid core reaches further out before the falloff takes it under 1/255.
+  // A level of detail node stands in for many overlapping splats: its opacity exceeds one.
   float alpha = s.lodAlpha != 0u ? uintBitsToFloat(s.lodAlpha) : rgba.a;
-  float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius,
-                     sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
+  float radius = quadRadius(alpha, s.lodAlpha != 0u, axis1, axis2);
 
   vec2 corner = kCorners[gl_VertexIndex];
   vec2 delta = (corner.x * axis1 + corner.y * axis2) * 2.0 * radius / cam.screenSize;

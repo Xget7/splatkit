@@ -29,4 +29,10 @@ static_assert(offsetof(CameraUniform, outputLinear) == 152);
 static_assert(offsetof(CameraUniform, quarterTurns) == 156);
 static_assert(offsetof(CameraUniform, cameraPosition) == 160);
 
+// Peak opacity at which a splat's quad ends; below it the splat has no quad. constant_id
+// kQuadMinAlphaConstant of visibility.comp and splat.vert (splat_footprint.glsl), and the
+// alphaThreshold the renderer reports.
+inline constexpr float kQuadMinAlpha = 2.0f / 255.0f;
+inline constexpr uint32_t kQuadMinAlphaConstant = 1;
+
 }  // namespace splatkit

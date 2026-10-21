@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "engine/TraceSection.h"
+#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 
 #include "splatkit/Log.h"
 
@@ -67,7 +68,7 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   policy.fallback.raster = RasterStrategy::hardware;
   policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = 1.0f;
-  policy.fallback.alphaThreshold = 1.0f / 255.0f;
+  policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = 0.5f;
   policy.fallback.sortDepth = SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;

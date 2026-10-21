@@ -1,6 +1,8 @@
 #include "rendering/vulkan/raster/VulkanSplatPipeline.h"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 
 #include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
@@ -97,10 +99,17 @@ bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
   const VulkanShaderModule frag(device, shaders::splat_frag, shaders::splat_frag_size);
   if (!vert || !frag) return false;
 
-  // constant_id 0 of the vertex shader is the SH degree; each pipeline gets its own.
-  uint32_t shDegree = 0;
-  const VkSpecializationMapEntry entry{0, 0, sizeof(uint32_t)};
-  const VkSpecializationInfo specialization{1, &entry, sizeof(shDegree), &shDegree};
+  // constant_id 0 of the vertex shader is the SH degree, one pipeline per degree.
+  struct {
+    uint32_t shDegree = 0;
+    float quadMinAlpha = kQuadMinAlpha;
+  } constants;
+  const std::array<VkSpecializationMapEntry, 2> entries{{
+      {0, offsetof(decltype(constants), shDegree), sizeof(uint32_t)},
+      {kQuadMinAlphaConstant, offsetof(decltype(constants), quadMinAlpha), sizeof(float)},
+  }};
+  const VkSpecializationInfo specialization{static_cast<uint32_t>(entries.size()), entries.data(),
+                                            sizeof(constants), &constants};
 
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -175,7 +184,7 @@ bool VulkanSplatPipeline::createPipelines(VkRenderPass renderPass) {
   info.subpass = 0;
   bool ok = true;
   for (int degree = 0; degree <= VulkanWorld::kMaxShDegree && ok; ++degree) {
-    shDegree = static_cast<uint32_t>(degree);
+    constants.shDegree = static_cast<uint32_t>(degree);
     ok = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr,
                                    &pipelines_[static_cast<size_t>(degree)]) == VK_SUCCESS;
   }

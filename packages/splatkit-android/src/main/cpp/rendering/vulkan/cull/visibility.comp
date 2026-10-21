@@ -2,6 +2,9 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "rendering/vulkan/layout/splat_footprint.glsl"
 
 // This pass is deliberately independent of the radix sort.  It emits only original source
 // indices and positive camera-depth keys, which the sort orders before the draw. Workgroups
@@ -45,9 +48,6 @@ layout(push_constant) uniform Constants {
   uint rangeCount;
   uint keyMode;  // low16=1, descending=2
 } constants;
-
-const float kBoundsRadius = 3.0;
-const float kLodBoundsRadius = 5.0;
 
 bool finiteFloat(float x) { return !isnan(x) && !isinf(x); }
 bool finiteVec2(vec2 v) { return finiteFloat(v.x) && finiteFloat(v.y); }
@@ -99,7 +99,7 @@ bool visible(Splat s, out uint key) {
   if (!finiteFloat(s.px) || !finiteFloat(s.py) || !finiteFloat(s.pz)) return false;
   vec4 rgba = unpackUnorm4x8(s.rgba8);
   float alpha = s.lodAlpha != 0u ? uintBitsToFloat(s.lodAlpha) : rgba.a;
-  if (!finiteFloat(alpha) || alpha < 1.0 / 255.0) return false;
+  if (!finiteFloat(alpha) || alpha < QUAD_MIN_ALPHA) return false;
 
   vec4 viewPos4 = cam.view * vec4(s.px, s.py, s.pz, 1.0);
   vec3 viewPos = viewPos4.xyz;
@@ -125,8 +125,7 @@ bool visible(Splat s, out uint key) {
   ellipseAxes(covariance, axis1, axis2);
   if (!finiteVec2(axis1) || !finiteVec2(axis2)) return false;
 
-  float radius = min(s.lodAlpha != 0u ? kLodBoundsRadius : kBoundsRadius,
-                     sqrt(2.0 * log(max(alpha * 255.0, 1.0))));
+  float radius = quadRadius(alpha, s.lodAlpha != 0u, axis1, axis2);
   float halfDifference = 0.5 * (covariance.x - covariance.z);
   float sourceVariance = 0.5 * (covariance.x + covariance.z) +
                          sqrt(max(halfDifference * halfDifference + covariance.y * covariance.y,
