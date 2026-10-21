@@ -3,6 +3,8 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 layout(local_size_x=128) in;
+// The sorted keys are never read after the sort; the last pass writes only the values.
+layout(constant_id=0) const bool LAST_PASS=false;
 layout(set=0,binding=0,std430) readonly buffer KeysIn { uint keysIn[]; };
 layout(set=0,binding=1,std430) readonly buffer ValuesIn { uint valuesIn[]; };
 layout(set=0,binding=2,std430) writeonly buffer KeysOut { uint keysOut[]; };
@@ -55,7 +57,8 @@ void main() {
       rank+=bitCount(masks[d*4+t/32]&((1u<<(t%32))-1u));
       uint base=d==0 ? 0u : digitBase[d-1];
       uint dst=base+blockBase[d]+rank;
-      keysOut[dst]=key; valuesOut[dst]=valuesIn[e];
+      if(!LAST_PASS) keysOut[dst]=key;
+      valuesOut[dst]=valuesIn[e];
     }
     barrier();
     for(uint digit=t;digit<256;digit+=128)

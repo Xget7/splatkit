@@ -81,12 +81,12 @@ VulkanRadixSort::Input inputFor(const InputBuffers& buffers) {
 }
 
 void requireReserveBehavior(VulkanRadixSort& sort) {
-  require(sort.output(0).keys == VK_NULL_HANDLE, "unreserved output");
+  require(sort.output(0).values == VK_NULL_HANDLE, "unreserved output");
   std::puts("radix stage=reserve-one");
   require(sort.reserve(0) && sort.capacity() == 1, "zero reserve");
-  auto* const old = sort.output(0).keys;
+  auto* const old = sort.output(0).values;
   require(!sort.reserve(VulkanRadixSort::kMaxCapacity + 1), "reject oversized capacity");
-  require(sort.capacity() == 1 && sort.output(0).keys == old, "transactional reserve failure");
+  require(sort.capacity() == 1 && sort.output(0).values == old, "transactional reserve failure");
 }
 
 void requireInvalidInputsRejected(VulkanTestContext& gpu, const VulkanRadixSort& sort,
@@ -106,7 +106,7 @@ void requireInvalidInputsRejected(VulkanTestContext& gpu, const VulkanRadixSort&
     bad.keyBits = static_cast<KeyBits>(9);
     require(!sort.encode(cmd, 0, bad), "reject key mode");
     bad = input;
-    bad.keys = sort.output(1).keys;
+    bad.keys = sort.output(1).values;
     require(!sort.encode(cmd, 0, bad), "reject owned output alias");
   });
 }
@@ -139,19 +139,14 @@ std::vector<uint32_t> makeKeys(uint32_t n, uint32_t pattern, bool low16, std::mt
 }
 
 void requireSortedOutput(VulkanTestContext& gpu, const VulkanRadixSort::Output& output, uint32_t n,
-                         const std::vector<uint32_t>& inKeys,
                          const std::vector<uint32_t>& expected) {
   std::puts("radix stage=readback-metadata");
   require(read(gpu, output.count, 1)[0] == n, "output count");
   require(read(gpu, output.status, 1)[0] == 0, "output status");
-  std::puts("radix stage=readback-keys");
-  const auto actualKeys = read(gpu, output.keys, n);
   std::puts("radix stage=readback-values");
   const auto actualValues = read(gpu, output.values, n);
   std::puts("radix stage=compare");
   require(actualValues == expected, "stable permutation differs from CPU stable_sort");
-  for (uint32_t i = 0; i < n; ++i)
-    require(actualKeys[i] == inKeys[expected[i]], "key/value association lost");
 }
 
 // Sorts n pattern keys on the GPU and compares with a CPU stable_sort. `cases` counts the
@@ -176,7 +171,7 @@ void runCase(VulkanTestContext& gpu, const VulkanRadixSort& sort, const InputBuf
   const uint32_t slot = cases++ % kFramesInFlight;
   std::puts("radix stage=encode-submit-wait");
   gpu.submit([&](VkCommandBuffer cmd) { require(sort.encode(cmd, slot, input), "encode radix"); });
-  requireSortedOutput(gpu, sort.output(slot), n, inKeys, expected);
+  requireSortedOutput(gpu, sort.output(slot), n, expected);
 }
 
 uint32_t runAllCases(VulkanTestContext& gpu, const VulkanRadixSort& sort,

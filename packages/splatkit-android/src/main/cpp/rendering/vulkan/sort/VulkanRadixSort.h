@@ -32,8 +32,9 @@ class VulkanRadixSort {
     KeyBits keyBits = KeyBits::full32;
     VkDeviceSize keysOffset = 0, valuesOffset = 0, countOffset = 0;
   };
+  // The sorted values; the keys are left unsorted, nothing reads them after the sort.
   struct Output {
-    VkBuffer keys = VK_NULL_HANDLE, values = VK_NULL_HANDLE;
+    VkBuffer values = VK_NULL_HANDLE;
     VkBuffer count = VK_NULL_HANDLE, status = VK_NULL_HANDLE;
   };
   static constexpr uint32_t kBlock = 2048, kMaxCapacity = 3000000;
@@ -76,7 +77,8 @@ class VulkanRadixSort {
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
   VkPipelineLayout layout_ = VK_NULL_HANDLE;
-  enum Stage : uint32_t { kPrepare, kHistogram, kScan, kScatter, kStageCount };
+  // kScatterLast is the scatter specialised to skip the keys on the final digit.
+  enum Stage : uint32_t { kPrepare, kHistogram, kScan, kScatter, kScatterLast, kStageCount };
   std::array<VkPipeline, kStageCount> pipelines_{};
   // First pass external->B; second B->A; subsequent A->B and B->A.
   static constexpr uint32_t kSets = 3;

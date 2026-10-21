@@ -153,9 +153,15 @@ bool VulkanRadixSort::initialize() {
   if (vkCreatePipelineLayout(device, &layout, nullptr, &layout_) != VK_SUCCESS) return false;
   // Indexed by Stage.
   const uint32_t* code[] = {shaders::radix_prepare_comp, shaders::radix_histogram_comp,
-                            shaders::radix_scan_comp, shaders::radix_scatter_comp};
+                            shaders::radix_scan_comp, shaders::radix_scatter_comp,
+                            shaders::radix_scatter_comp};
   const size_t sizes[] = {shaders::radix_prepare_comp_size, shaders::radix_histogram_comp_size,
-                          shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size};
+                          shaders::radix_scan_comp_size, shaders::radix_scatter_comp_size,
+                          shaders::radix_scatter_comp_size};
+  // constant_id 0 of radix_scatter.comp: LAST_PASS, a 32-bit VkBool32.
+  const VkBool32 lastPass = VK_TRUE;
+  const VkSpecializationMapEntry lastPassEntry{0, 0, sizeof(lastPass)};
+  const VkSpecializationInfo lastPassInfo{1, &lastPassEntry, sizeof(lastPass), &lastPass};
   for (uint32_t i = 0; i < kStageCount; ++i) {
     const VulkanShaderModule module(device, code[i], sizes[i]);
     if (!module) return false;
@@ -164,6 +170,7 @@ bool VulkanRadixSort::initialize() {
     pipeline.stage.stage = kShader;
     pipeline.stage.module = module.get();
     pipeline.stage.pName = "main";
+    if (i == kScatterLast) pipeline.stage.pSpecializationInfo = &lastPassInfo;
     pipeline.layout = layout_;
     const auto result =
         vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipelines_[i]);
@@ -206,7 +213,7 @@ bool VulkanRadixSort::reserve(uint32_t capacity) {
 VulkanRadixSort::Output VulkanRadixSort::output(uint32_t slot) const {
   if (slot >= kFramesInFlight || !capacity_) return {};
   const auto& s = slots_[slot];
-  return {s.keys[0]->handle(), s.values[0]->handle(), s.count->handle(), s.status->handle()};
+  return {s.values[0]->handle(), s.count->handle(), s.status->handle()};
 }
 
 bool VulkanRadixSort::Slot::owns(VkBuffer buffer) const {
@@ -290,7 +297,7 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
     const uint32_t scanX = std::min(kBuckets, push.maxGroupsX);
     vkCmdDispatch(cmd, scanX, (kBuckets + scanX - 1) / scanX, 1);
     computeBarrier(cmd);
-    bindStage(cmd, layout_, pipelines_[kScatter], set, push);
+    bindStage(cmd, layout_, pipelines_[pass + 1 == passes ? kScatterLast : kScatter], set, push);
     vkCmdDispatchIndirect(cmd, state, 0);
     computeBarrier(cmd);
   }

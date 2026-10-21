@@ -49,6 +49,8 @@ Both backends:
 - The render policy applies per backend: Metal honours the pixel error, Vulkan only the sort depth and the subpixel threshold ([VulkanFrameCompute.h][vk-frame]).
 - Splats rasterize as hardware quads over the whole screen; `supportsComputeTiles` is false on both.
 - A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint], which `visibility.comp` and `splat.vert` share).
+- The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
+- The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
 - Collision runs on the CPU in the walk camera and moves only the camera.
 - Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw; Vulkan needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
@@ -84,6 +86,7 @@ Both backends:
 [vk-sort]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/sort/VulkanRadixSort.cpp
 [vk-pipe]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/VulkanSplatPipeline.cpp
 [vk-vert]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/splat.vert
+[vk-frag]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/raster/splat.frag
 [vk-swap]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/presentation/VulkanSwapchain.cpp
 [vk-surface]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/presentation/VulkanSurface.cpp
 [vk-renderer]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/VulkanSplatRenderer.cpp
