@@ -33,6 +33,7 @@ std::unique_ptr<MetalSplatRenderer> MetalSplatRenderer::create() {
   r->surface_ = std::make_unique<MetalSurface>(r->context_->device(), r->context_->library(),
                                                r->frameLoop_, r->compute_->gpuSort());
   LOGI("%s", r->context_->description().c_str());
+  LOGI("Metal capabilities: %s", r->context_->capabilities().c_str());
   return r;
 }
 
