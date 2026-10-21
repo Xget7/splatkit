@@ -66,6 +66,40 @@ class WorldAndValidationTest(unittest.TestCase):
             self.assertIn("fetch-validation-layers.sh", str(raised.exception))
 
 
+class CapabilitiesTest(unittest.TestCase):
+    LOG = ("10-20 20:57:18.1 1 2 I SplatKit: Vulkan device: Adreno (TM) 640, API 1.1.128, driver 0x801f6000\n"
+           "10-20 20:57:18.1 1 2 I SplatKit: Vulkan capabilities: subgroup 64, compute subgroup ops basic vote "
+           "arithmetic ballot shuffle shuffle_relative, shared memory 32768 B, workgroup invocations 1024, "
+           "storage buffer range 536870912 B, device-local heap 5767012352 B, float16 arithmetic yes, "
+           "16-bit storage no\n")
+
+    def test_the_gpu_block_holds_the_reported_limits(self):
+        self.assertEqual(perf.gpu_capabilities(self.LOG), {
+            "device": "Adreno (TM) 640", "api": "1.1.128", "driver": "0x801f6000",
+            "subgroup_size": 64,
+            "compute_subgroup_ops": ["basic", "vote", "arithmetic", "ballot", "shuffle", "shuffle_relative"],
+            "shared_memory_bytes": 32768, "workgroup_invocations": 1024,
+            "storage_buffer_range_bytes": 536870912, "device_local_heap_bytes": 5767012352,
+            "float16_arithmetic": True, "storage_16bit": False,
+        })
+
+    def test_no_compute_subgroups_is_an_empty_list(self):
+        log = self.LOG.replace("basic vote arithmetic ballot shuffle shuffle_relative", "none")
+        self.assertEqual(perf.gpu_capabilities(log)["compute_subgroup_ops"], [])
+
+    def test_a_log_without_the_lines_has_no_gpu_block(self):
+        self.assertIsNone(perf.gpu_capabilities("SplatKit: benchmark started\n"))
+
+    def test_the_pattern_follows_what_vulkan_context_logs(self):
+        context = perf.ROOT / "packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanContext.cpp"
+        source = context.read_text()
+        for fragment in ('"Vulkan capabilities: %s"', '"subgroup "', '", compute subgroup ops "',
+                         '", shared memory "', '" B, workgroup invocations "', '", storage buffer range "',
+                         '" B, device-local heap "', '" B, float16 arithmetic "', '", 16-bit storage "',
+                         '"Vulkan device: %s, API %u.%u.%u, driver 0x%x"'):
+            self.assertIn(fragment, source)
+
+
 class RotationTest(unittest.TestCase):
     def setUp(self):
         self.settings = {perf.AUTO_ROTATE: "1", perf.USER_ROTATION: "null"}

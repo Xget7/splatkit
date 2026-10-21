@@ -7,6 +7,7 @@ description: Perfetto performance runs of the Android Vulkan renderer on a physi
 
 A **run** is one release build of the dev app doing its benchmark turn under Perfetto: [scripts/android_perf.py](../../../scripts/android_perf.py) records it and [scripts/perfetto_analysis.py](../../../scripts/perfetto_analysis.py) reads the trace.
 Both scripts' `--help` carry the flags.
+Every run locks the display to landscape (rotation 1) and restores the rotation settings afterwards, so runs compare whatever way the phone lies.
 
 ## Steps
 
@@ -14,7 +15,8 @@ Both scripts' `--help` carry the flags.
    `python3 -m venv build/perf-venv && build/perf-venv/bin/pip install -r scripts/requirements-perf.txt`.
    Done when `build/perf-venv/bin/python -c "import perfetto"` exits 0.
 2. **Check the phone.** `adb devices -l` lists exactly one device (else pass `--serial`), the screen is unlocked and awake, and nothing else holds the GPU (Snapdragon Profiler capture, other apps).
-3. **Record.** `python3 scripts/android_perf.py --seconds 30` with the same `--quality` and `--pose` for every run you will compare.
+3. **Record.** `python3 scripts/android_perf.py --seconds 30` with the same `--quality`, `--pose` and `--world` for every run you will compare.
+   `--world` names a file pushed under `/sdcard/Android/data/com.splatkit.devapp/files/`; without it the run loads the bundled kitchen.
    Done when it prints `status passed`, `app slices in trace: True` and an analysis block.
    For a comparison, record at least two runs per side; the run-to-run spread is the noise floor.
 4. **Read** each run directory: `report.json` (app timings from GPU timestamp queries), `analysis.json` (the trace), `trace.perfetto-trace` (open at https://ui.perfetto.dev for anything the numbers leave open).
@@ -33,6 +35,7 @@ The frame budget is the display interval: 16.7 ms at 60 Hz.
 - **gpu ms** (`gpu_mean_ms`): GPU time per frame.
   Above the budget means GPU-bound.
 - **sort, cull ms** (`stage_sample_mean_ms`): periodic GPU samples of the radix sort and visibility passes.
+- **`gpu`**: the device, API, driver and the limits the pipeline relies on, from the `Vulkan device:` and `Vulkan capabilities:` startup lines ([VulkanContext.cpp](../../../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanContext.cpp)).
 
 `analysis.json`, from the trace:
 
@@ -52,6 +55,12 @@ The frame budget is the display interval: 16.7 ms at 60 Hz.
 - **`memory`**: process RSS.
   GPU memory is not in the trace on Android 11.
 - **`load_ms`**: world decode, collider decode and GPU upload of the last load.
+
+## Validation
+
+`--validation` builds the debug dev app, which loads the Khronos validation layer from `apps/android-dev/app/src/debug/jniLibs` ([scripts/fetch-validation-layers.sh](../../../scripts/fetch-validation-layers.sh)).
+The run fails when logcat lacks `validation layers: on` or carries any `validation:` message; `report.json` `errors` holds the messages.
+Its timings come from a debug build and compare with nothing.
 
 ## Limits
 

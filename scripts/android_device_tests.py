@@ -24,7 +24,9 @@ BINARY_DIR = BUILD_DIR / "tests"
 TARGET = "splatkit_android_tests"
 DEVICE_DIR = "/data/local/tmp/splatkit-tests"
 RUNS_DIR = ROOT / "output" / "android-device-tests"
-NDK_VERSION = "27.1.12297006"
+# The NDK the AAR builds with; its ndkVersion line is the one place it is pinned for Gradle.
+GRADLE_BUILD = ROOT / "packages" / "splatkit-android" / "build.gradle.kts"
+NDK_VERSION_LINE = re.compile(r'ndkVersion = "([^"]+)"')
 ABI = "arm64-v8a"
 PLATFORM = "android-29"
 EXIT_PASSED = 0
@@ -54,11 +56,19 @@ def test_names(cmake=TESTS_CMAKE):
     return names
 
 
+def ndk_version(gradle=GRADLE_BUILD):
+    match = NDK_VERSION_LINE.search(gradle.read_text())
+    if not match:
+        raise RuntimeError(f"no ndkVersion in {gradle}")
+    return match.group(1)
+
+
 def ndk_dir():
+    version = ndk_version()
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or str(Path.home() / "Library/Android/sdk")
-    ndk = Path(sdk) / "ndk" / NDK_VERSION
+    ndk = Path(sdk) / "ndk" / version
     if not ndk.is_dir():
-        raise RuntimeError(f"NDK {NDK_VERSION} not found at {ndk}; install it with sdkmanager \"ndk;{NDK_VERSION}\"")
+        raise RuntimeError(f"NDK {version} not found at {ndk}; install it with sdkmanager \"ndk;{version}\"")
     return ndk
 
 

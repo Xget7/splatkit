@@ -2,6 +2,8 @@
 
 Cited facts the [gpu-renderer-change](../../../.claude/skills/gpu-renderer-change/SKILL.md) skill grounds Vulkan plans in.
 Each fact names its source; refresh it in the pull request that relies on it.
+`scripts/fetch-gpu-refs.sh vulkan` puts the Khronos Vulkan-Docs sources in `build/gpu-refs/vulkan/Vulkan-Docs` at the tag matching the NDK header, for grep: the spec chapters with their VUIDs, `xml/vk.xml`, and `proposals/` for each extension's design.
+Shared validity text writes a VUID as `VUID-{refpage}-dstImage-00224`, so grep it by its last two parts.
 
 ## Sources
 
@@ -10,7 +12,8 @@ Precedence on availability: the header, then the specification, then the referen
 | Key | Source | Version |
 |---|---|---|
 | HDR | `vulkan/vulkan_core.h` in the NDK sysroot (`$ANDROID_HOME/ndk/<version>/toolchains/llvm/prebuilt/<host>/sysroot/usr/include`) | `VK_HEADER_VERSION` 275, NDK 27.1.12297006 |
-| SPEC | Vulkan specification, `https://docs.vulkan.org/spec/latest/` | latest, reachable 2026-10-20 |
+| SPEC | Vulkan specification: `build/gpu-refs/vulkan/Vulkan-Docs` (`chapters/`, `xml/vk.xml`), and `https://docs.vulkan.org/spec/latest/` for newer text | Vulkan-Docs `v1.3.275`, the header's version, fetched 2026-10-20 |
+| CAPS | The reference phone's `Vulkan capabilities:` line, `report.json` `gpu` (android-perf) | per run |
 
 ## Our floor
 
@@ -18,7 +21,7 @@ Precedence on availability: the header, then the specification, then the referen
 - OS: Android 10, API 29 (`minSdk` in [build.gradle.kts](../../../packages/splatkit-android/build.gradle.kts)).
 - GPU pipeline: a compute queue and subgroup basic, arithmetic and ballot operations in compute shaders, plus workgroup and storage-binding limits; a device without them sorts on the CPU ([VulkanVisibilityPass.cpp](../../../packages/splatkit-android/src/main/cpp/rendering/vulkan/cull/VulkanVisibilityPass.cpp) `queryCapabilities`, `VulkanSplatRenderer::sortsOnGpu`).
 - Reference phone: Xiaomi Mi 9, Adreno 640, Android 11, Vulkan 1.1.128, driver `0x801f6000` ([BENCHMARKS.md](../../BENCHMARKS.md)).
-  Its full limits are not captured yet.
+  It reports subgroup size 64 with basic, vote, arithmetic, ballot, shuffle and shuffle_relative operations in compute, shared memory 32768 B, 1024 workgroup invocations, storage buffer range 536870912 B, a 5767012352 B device-local heap, float16 arithmetic and no 16-bit storage (CAPS, 2026-10-20).
 
 ## Adreno 640 findings
 

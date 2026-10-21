@@ -46,9 +46,9 @@ Every API, flag and limit the run touches is **grounded**: it carries a citation
    Each task starts from a failing GPU test on its backend: a numeric comparison of GPU output against a CPU reference, since no validation layer reports a missing barrier or a race.
    A behaviour both backends share gets the same test case on both.
    Metal tests run on the Mac with `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1` in the environment.
-   Vulkan tests are device binaries (CMake target `splatkit_android_tests`) run on the reference phone over adb.
-   The Khronos validation layer from [scripts/fetch-validation-layers.sh](../../../scripts/fetch-validation-layers.sh) runs in the debug dev app and logs to logcat under the `SplatKit` tag.
-   Done when `python3 scripts/sdk_harness.py check metal` and `check android` pass, every Vulkan test binary the change touches passes on the phone, and neither validation run prints a message.
+   Vulkan tests are device binaries (CMake target `splatkit_android_tests`); `python3 scripts/android_device_tests.py` builds them and runs each on the reference phone over adb.
+   A user-build phone loads no validation layer for shell binaries, so Vulkan validation is a phone run of the debug dev app: `python3 scripts/android_perf.py --validation`, with the layer from [scripts/fetch-validation-layers.sh](../../../scripts/fetch-validation-layers.sh).
+   Done when `python3 scripts/sdk_harness.py check metal` and `check android` pass, `android_device_tests.py` passes, and both validation runs (`ios_perf.py --validation`, `android_perf.py --validation`) pass.
 
 7. **Refactor** on a clean branch with an allow-list of files from the design doc.
    Read the whole diff for broad barriers or encoder splits where a narrower one holds, host-visible memory the CPU never touches, per-frame allocation, leftover debug paths, and the two backends drifting apart in naming, constants or structure.

@@ -32,6 +32,10 @@ class VulkanContext {
   const vkb::Device& vkbDevice() const { return device_; }
   // "Adreno (TM) 640, Vulkan 1.1.128": what a HUD or a bug report wants to show.
   const std::string& deviceDescription() const { return deviceDescription_; }
+  // The limits and features the GPU pipeline relies on, one line for logcat and
+  // android_perf.py: subgroups, workgroup memory and size, storage range, device-local
+  // memory, 16-bit arithmetic and storage.
+  const std::string& capabilities() const { return capabilities_; }
   bool validationEnabled() const { return validationEnabled_; }
   uint32_t validationMessageCount() const { return validationMessageCount_.load(); }
 
@@ -48,6 +52,7 @@ class VulkanContext {
   uint32_t queueFamily_ = 0;
   VmaAllocator allocator_ = VK_NULL_HANDLE;
   std::string deviceDescription_;
+  std::string capabilities_;
   bool validationEnabled_ = false;
   std::atomic<uint32_t> validationMessageCount_{0};
 };

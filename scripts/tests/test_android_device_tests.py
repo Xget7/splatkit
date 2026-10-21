@@ -68,6 +68,10 @@ class CommandTest(unittest.TestCase):
         line = runner.run_command("splatkit_vulkan_radix_sort_test", {"SPLATKIT_RADIX_LARGE": "1"})
         self.assertIn("&& SPLATKIT_RADIX_LARGE=1 ./splatkit_vulkan_radix_sort_test;", line)
 
+    def test_the_ndk_is_the_one_gradle_pins(self):
+        self.assertRegex(runner.ndk_version(), r"^\d+\.\d+\.\d+$")
+        self.assertIn(f'"{runner.ndk_version()}"', (SCRIPTS / "lint-cpp.sh").read_text())
+
     def test_configure_builds_the_tests_for_the_floor(self):
         command = runner.configure_command(Path("/ndk"))
         self.assertIn("-DSPLATKIT_ANDROID_BUILD_TESTS=ON", command)
