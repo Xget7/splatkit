@@ -5,7 +5,7 @@ import com.splatkit.LensSettings
 import java.io.File
 
 // What the Vulkan backend accepts, which conservativeCapabilities in performance.ts must fit.
-private const val MAX_LOD_CAPACITY_SPLATS = 2_200_000
+private const val MAX_LOD_CAPACITY_SPLATS = 4_000_000
 private const val MIN_RESIDENCY_CAPACITY_SPLATS = 100_000
 private const val MAX_RESIDENCY_CAPACITY_SPLATS = 8_000_000
 private const val MAX_SH_DEGREE = 3

@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   // scripts/patches holds third-party sources backported verbatim.
-  {ignores: ['build/', 'scripts/patches/']},
+  {ignores: ['**/build/', 'scripts/patches/']},
   js.configs.recommended,
   sonarjs.configs.recommended,
   {

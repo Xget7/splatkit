@@ -113,7 +113,7 @@ class VulkanVisibilityPass {
   Output output(uint32_t slot) const;
 
   static constexpr uint32_t kWorkgroupSize = 128;
-  static constexpr uint32_t kMaxCapacity = 3000000;
+  static constexpr uint32_t kMaxCapacity = 4'000'000;
   static constexpr uint32_t kOverflow = 1u;
   static constexpr uint32_t kInvalidIndex = 2u;
   static constexpr uint32_t kInvalidCount = 4u;

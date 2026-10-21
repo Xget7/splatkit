@@ -136,14 +136,15 @@ bool VulkanLodSelection::upload(const splat::LodTree& tree, uint32_t budget, Qua
   }
   if (data->clusters.empty() || data->leaves.empty()) return false;
   Config config;
-  config.capacity = std::min(budget, static_cast<uint32_t>(tree.leafCount));
+  const uint32_t capacity = std::min(budget, static_cast<uint32_t>(tree.leafCount));
+  config.limit = capacity;
   config.pixelLimit = quality.pixelLimit;
   config.colorWeight = quality.colorWeight;
   config.cull = quality.frustumCull;
-  const size_t frontier = std::min(size_t{config.capacity}, data->clusters.size());
+  const size_t frontier = std::min(size_t{capacity}, data->clusters.size());
   const size_t groups = (frontier + kThreads - 1) / kThreads;
   const size_t blocks = (groups + kThreads - 1) / kThreads;
-  const size_t packets = std::min(data->clusters.size(), size_t{config.capacity} / (kThreads + 1));
+  const size_t packets = std::min(data->clusters.size(), size_t{capacity} / (kThreads + 1));
   if (groups > limits_.maxComputeWorkGroupCount[0] || packets > limits_.maxComputeWorkGroupCount[0])
     return false;
   size_t words = kStateWords;
@@ -163,7 +164,7 @@ bool VulkanLodSelection::upload(const splat::LodTree& tree, uint32_t budget, Qua
   const VkDeviceSize clusterBytes = data->clusters.size() * sizeof(splat::LodCluster);
   const VkDeviceSize leafBytes = data->leaves.size() * sizeof(uint32_t);
   const VkDeviceSize scratchBytes = words * sizeof(uint32_t);
-  const VkDeviceSize indexBytes = VkDeviceSize{config.capacity} * sizeof(uint32_t);
+  const VkDeviceSize indexBytes = VkDeviceSize{capacity} * sizeof(uint32_t);
   if (words > std::numeric_limits<uint32_t>::max() ||
       std::max({clusterBytes, leafBytes, scratchBytes, indexBytes}) > limits_.maxStorageBufferRange)
     return false;
@@ -184,13 +185,14 @@ bool VulkanLodSelection::upload(const splat::LodTree& tree, uint32_t budget, Qua
   scratch_ = std::move(scratch);
   indices_ = std::move(indices);
   config_ = config;
+  capacity_ = capacity;
   rounds_ = valid.value() + 1;
   return true;
 }
 
 VulkanLodSelection::Output VulkanLodSelection::output() const {
   if (!scratch_) return {};
-  return {indices_->handle(), scratch_->handle(), config_.capacity};
+  return {indices_->handle(), scratch_->handle(), capacity_};
 }
 
 bool VulkanLodSelection::encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const {

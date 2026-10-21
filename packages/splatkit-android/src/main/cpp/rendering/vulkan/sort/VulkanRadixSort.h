@@ -37,7 +37,7 @@ class VulkanRadixSort {
     VkBuffer values = VK_NULL_HANDLE;
     VkBuffer count = VK_NULL_HANDLE, status = VK_NULL_HANDLE;
   };
-  static constexpr uint32_t kBlock = 2048, kMaxCapacity = 3000000;
+  static constexpr uint32_t kBlock = 2048, kMaxCapacity = 4'000'000;
   static constexpr uint32_t kInvalidCount = 1;
   static Capabilities queryCapabilities(const VulkanContext& ctx);
   static splat::Result<std::unique_ptr<VulkanRadixSort>> create(const VulkanContext& ctx);

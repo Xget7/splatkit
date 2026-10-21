@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -33,7 +34,8 @@ class VulkanLodSelection {
     VkBuffer state = VK_NULL_HANDLE;  // count/diagnostics at constants below, TRANSFER_SRC capable
     uint32_t capacity = 0;
   };
-  static constexpr uint32_t kMaxBudget = 2200000;
+  // Metal's ceiling; buffers scale with the budget a world loads with.
+  static constexpr uint32_t kMaxBudget = 4'000'000;
   static constexpr VkDeviceSize kCountOffset = 0;
   static constexpr VkDeviceSize kLimitedOffset = 16;
   static constexpr VkDeviceSize kEvaluatedOffset = 20;
@@ -56,13 +58,20 @@ class VulkanLodSelection {
   // Publishes indices/count to compute/indirect/transfer consumers with Vulkan 1.1 barriers.
   bool encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const;
   Output output() const;
-  uint32_t capacity() const { return config_.capacity; }
+  uint32_t capacity() const { return capacity_; }
+  // The most nodes the next selection may emit; never above capacity().
+  uint32_t limit() const { return config_.limit; }
+  // Applies at the next encode. Zero restores capacity().
+  void setSplatLimit(uint32_t splats) {
+    config_.limit = splats == 0 ? capacity_ : std::min(splats, capacity_);
+  }
+  void setPixelLimit(float pixels) { config_.pixelLimit = pixels; }
 
  private:
   explicit VulkanLodSelection(const VulkanContext& ctx) : ctx_(ctx) {}
   bool initialize();
   struct Config {
-    uint32_t phase = 0, capacity = 0, costs = 0, offsets = 0;
+    uint32_t phase = 0, limit = 0, costs = 0, offsets = 0;
     uint32_t costGroups = 0, groups = 0, blocks = 0, frontier0 = 0;
     uint32_t frontier1 = 0, packets = 0;
     float pixelLimit = 1, colorWeight = 4;
@@ -70,6 +79,7 @@ class VulkanLodSelection {
   } config_;
   const VulkanContext& ctx_;
   VkPhysicalDeviceLimits limits_{};
+  uint32_t capacity_ = 0;
   uint32_t rounds_ = 0;
   VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;

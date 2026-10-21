@@ -24,12 +24,12 @@ inline constexpr jsize kStatsFloats = 12;
 inline constexpr jsize kAttitudeFloats = 9;
 
 // Policy and capabilities. Both arrays are double: every field is a count, flag or float.
-inline constexpr jsize kPolicyFields = 9;  // see policyFromDoubles
+inline constexpr jsize kPolicyFields = 10;  // see policyFromDoubles
 // accepted, preparationFailed, then the effective policy
 inline constexpr jsize kPolicyResolutionFields = kPolicyFields + 2;
 // Capabilities: limits and feature flags, policy support, then the fallback policy.
 inline constexpr jsize kCapabilityLeadFields = 7;
-inline constexpr jsize kPolicySupportFields = 14;
+inline constexpr jsize kPolicySupportFields = 15;
 inline constexpr jsize kCapabilityFields =
     kCapabilityLeadFields + kPolicySupportFields + kPolicyFields;
 
@@ -54,11 +54,12 @@ CameraRequest cameraRequestFromDoubles(const double* in);
 void statsToFloats(const Stats& stats, float* out);
 
 // 0 raster, 1 tileSize, 2 lodErrorPixels, 3 alphaThreshold, 4 subpixelThreshold,
-// 5 enableFrustumCulling, 6 enableHiZOcclusion, 7 enableEarlyTermination, 8 sortDepth.
+// 5 enableFrustumCulling, 6 enableHiZOcclusion, 7 enableEarlyTermination, 8 sortDepth,
+// 9 lodSplatLimit.
 RenderPolicy policyFromDoubles(const double* in);
 void policyToDoubles(const RenderPolicy& policy, double* out);
 
-// out[0..29]: limits and feature flags [0..6], policy support [7..20], fallback policy [21..29].
+// out[0..31]: limits and feature flags [0..6], policy support [7..21], fallback policy [22..31].
 void capabilitiesToDoubles(const DeviceCapabilities& caps, double* out);
 
 // Hands the bytes of a Java array to `use` without copying them for longer than the call.

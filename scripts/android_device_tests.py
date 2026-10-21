@@ -180,7 +180,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--serial", help="adb device serial when more than one is attached")
     parser.add_argument("--only", nargs="+", metavar="TEST", help="run these tests only")
-    parser.add_argument("--large", action="store_true", help="add the radix sort's 3M-key case")
+    parser.add_argument("--large", action="store_true", help="add the radix sort's full-capacity (4M-key) case")
     parser.add_argument("--skip-build", action="store_true", help=f"push the binaries already in {BINARY_DIR.relative_to(ROOT)}")
     parser.add_argument("--out", type=Path, help=f"run directory; defaults under {RUNS_DIR.relative_to(ROOT)}")
     args = parser.parse_args()

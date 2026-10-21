@@ -19,6 +19,8 @@ using splatkit::VulkanLodSelection;
 namespace test = splatkit::test;
 using test::require;
 
+constexpr uint32_t kMetalMaxBudget = 4'000'000;
+
 void attributes(splat::LodTree& tree) {
   for (const auto& node : tree.layout) {
     tree.nodes.positions.insert(tree.nodes.positions.end(), node.position, node.position + 3);
@@ -156,6 +158,24 @@ void tests(const test::VulkanTestContext& gpu) {
   require(denied.cut == std::vector<uint32_t>{0} && denied.stats[4] == 1,
           "whole packet denied without holes");
   std::puts("PASS large leaf packet and pressure");
+
+  // Metal's ceiling: a 4M budget is accepted, clamps to the leaves, and its limit moves live.
+  {
+    auto ceilingCreated = VulkanLodSelection::create(*gpu.context);
+    require(static_cast<bool>(ceilingCreated), "second LOD pipeline creation");
+    auto& ceiling = *ceilingCreated.value();
+    require(ceiling.upload(fan, kMetalMaxBudget, {0, 4, false}), "4M budget upload");
+    require(ceiling.capacity() == fan.leafCount && ceiling.limit() == ceiling.capacity(),
+            "capacity clamps to the leaves");
+    ceiling.setSplatLimit(1);
+    require(select(gpu, ceiling, camera()).cut == std::vector<uint32_t>{0},
+            "a live splat limit denies the packet");
+    ceiling.setSplatLimit(0);
+    require(ceiling.limit() == ceiling.capacity(), "a zero limit restores the capacity");
+    require(select(gpu, ceiling, camera()).cut.size() == fan.leafCount,
+            "lifting the limit refines");
+  }
+  std::puts("PASS 4M budget and a live splat limit");
 
   auto old = lod->output();
   require(!lod->upload(fan, 0), "reject zero capacity");

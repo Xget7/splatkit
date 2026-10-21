@@ -5,6 +5,7 @@
 
 #include "engine/TraceSection.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "splatkit/rendering/LodThreshold.h"
 
 #include "splatkit/Log.h"
 
@@ -52,7 +53,7 @@ void VulkanSplatRenderer::setVsync(bool vsync) {
 
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   DeviceCapabilities caps;
-  // GpuLOD clamps a hierarchy at 2.2M nodes; the Android adapter caps residency at 8M.
+  // GPU LOD clamps a hierarchy at 4M selected nodes; the Android adapter caps residency at 8M.
   caps.limits.maxLodCapacitySplats = VulkanLodSelection::kMaxBudget;
   caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
   caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;
@@ -67,7 +68,7 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   RenderPolicySupport& policy = caps.policy;
   policy.fallback.raster = RasterStrategy::hardware;
   policy.fallback.tileSize = 16;
-  policy.fallback.lodErrorPixels = 1.0f;
+  policy.fallback.lodErrorPixels = VulkanLodSelection::Quality{}.pixelLimit;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = 0.5f;
   policy.fallback.sortDepth = SortKeyBits::full32;
@@ -76,16 +77,23 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
   // termination saved.
   policy.fallback.enableEarlyTermination = false;
-  // The GPU visibility/sort path applies the sub-pixel cutoff and the key width per
-  // instance; without it the CPU path has neither, and the rest is not implemented.
+  // The GPU visibility/sort path applies the sub-pixel cutoff, the key width and, on a
+  // hierarchy world, the LOD error threshold and splat limit live; without it the CPU path
+  // has none of them, and the rest is not implemented.
   policy.sortDepth = gpu;
   policy.subpixelThreshold = gpu;
+  policy.lodErrorPixels = gpu;
+  policy.minLodErrorPixels = LodThreshold::kMinPolicyPixels;
+  policy.maxLodErrorPixels = LodThreshold::kMaxPolicyPixels;
+  policy.lodSplatLimit = gpu;
   return caps;
 }
 
 bool VulkanSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
   if (policy.sortDepth == policy_.sortDepth &&
-      policy.subpixelThreshold == policy_.subpixelThreshold) {
+      policy.subpixelThreshold == policy_.subpixelThreshold &&
+      policy.lodErrorPixels == policy_.lodErrorPixels &&
+      policy.lodSplatLimit == policy_.lodSplatLimit) {
     return true;
   }
   const RenderPolicy previous = policy_;

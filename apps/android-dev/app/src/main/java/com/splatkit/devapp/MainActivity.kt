@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.splatkit.CameraPose
+import com.splatkit.RenderPolicy
 import com.splatkit.RenderQuality
 import com.splatkit.SplatSurfaceView
 import com.splatkit.ui.JoystickView
@@ -152,6 +153,17 @@ class MainActivity : Activity() {
         if (intent?.hasExtra("shdraw") == true) splatView.shDegree = intent.getIntExtra("shdraw", 3)
         // --ei budget 500000 draws at most that many splats per frame through a level of detail tree.
         if (intent?.hasExtra("budget") == true) splatView.splatBudget = intent.getIntExtra("budget", 0)
+        // --ei lodSplatLimit N caps the splats a frame of a hierarchy world selects, 0 for the
+        // budget; detail thins evenly. --ef lodErrorPixels sets the refinement threshold.
+        if (intent != null && (intent.hasExtra("lodSplatLimit") || intent.hasExtra("lodErrorPixels"))) {
+            val current = splatView.renderPolicy ?: RenderPolicy()
+            splatView.applyRenderPolicy(
+                current.copy(
+                    lodSplatLimit = intent.getIntExtra("lodSplatLimit", current.lodSplatLimit),
+                    lodErrorPixels = intent.getFloatExtra("lodErrorPixels", current.lodErrorPixels),
+                ),
+            ) { Log.i(TAG, "render policy: ${it.effective} ${it.warnings}") }
+        }
         // --ei residency N holds at most N splats of a tiled world on the GPU.
         if (intent?.hasExtra("residency") == true) splatView.residencyBudget = intent.getIntExtra("residency", 2_000_000)
         // --ez linear true blends in linear light, the old default, 40% slower.

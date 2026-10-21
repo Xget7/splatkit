@@ -13,6 +13,7 @@ class RenderPolicyTest {
             raster = RasterStrategy.HYBRID,
             tileSize = 32,
             lodErrorPixels = 1.25f,
+            lodSplatLimit = 1_500_000,
             alphaThreshold = 0.5f,
             subpixelThreshold = 2.5f,
             enableFrustumCulling = false,
@@ -31,6 +32,7 @@ class RenderPolicyTest {
         assertEquals("tileSize must be 8, 16 or 32", renderPolicyError(RenderPolicy(tileSize = 12)))
         assertTrue(renderPolicyError(RenderPolicy(lodErrorPixels = 0f)) != null)
         assertTrue(renderPolicyError(RenderPolicy(lodErrorPixels = Float.NaN)) != null)
+        assertTrue(renderPolicyError(RenderPolicy(lodSplatLimit = -1)) != null)
         assertTrue(renderPolicyError(RenderPolicy(alphaThreshold = 1.5f)) != null)
         assertTrue(renderPolicyError(RenderPolicy(alphaThreshold = -0.1f)) != null)
         assertTrue(renderPolicyError(RenderPolicy(subpixelThreshold = -1f)) != null)
@@ -70,7 +72,7 @@ class RenderPolicyTest {
     @Test
     fun decodesTheCapabilityLayout() {
         val values = DoubleArray(CAPABILITY_FIELDS)
-        values[0] = 2_200_000.0
+        values[0] = 4_000_000.0
         values[1] = 100_000.0
         values[2] = 8_000_000.0
         values[3] = 1.0
@@ -78,13 +80,15 @@ class RenderPolicyTest {
         values[6] = 16_384.0
         values[15] = 1.0          // policy.sortDepth supported
         values[11] = 1.0          // policy.subpixelThreshold supported
-        values[21] = 0.0          // fallback raster hardware
-        values[22] = 16.0         // fallback tileSize
-        values[26] = 1.0          // fallback frustum culling
-        values[29] = 32.0         // fallback sortDepth
+        values[21] = 1.0          // policy.lodSplatLimit supported
+        values[22] = 0.0          // fallback raster hardware
+        values[23] = 16.0         // fallback tileSize
+        values[27] = 1.0          // fallback frustum culling
+        values[30] = 32.0         // fallback sortDepth
+        values[31] = 0.0          // fallback lodSplatLimit
 
         val capabilities = decodeDeviceCapabilities(values)
-        assertEquals(2_200_000, capabilities.limits.maxLodCapacitySplats)
+        assertEquals(4_000_000, capabilities.limits.maxLodCapacitySplats)
         assertEquals(8_000_000, capabilities.limits.maxResidencyCapacitySplats)
         assertTrue(capabilities.supportsComputeTiles)
         assertFalse(capabilities.supportsHiZOcclusion)
@@ -92,8 +96,11 @@ class RenderPolicyTest {
         assertEquals(16_384, capabilities.maxTextureDimension)
         assertTrue(capabilities.policy.sortDepth)
         assertTrue(capabilities.policy.subpixelThreshold)
+        assertTrue(capabilities.policy.lodSplatLimit)
+        assertFalse(capabilities.policy.lodErrorPixels)
         assertEquals(RasterStrategy.HARDWARE, capabilities.fallback.raster)
         assertEquals(16, capabilities.fallback.tileSize)
         assertEquals(SortDepth.BITS_32, capabilities.fallback.sortDepth)
+        assertEquals(0, capabilities.fallback.lodSplatLimit)
     }
 }

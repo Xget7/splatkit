@@ -23,6 +23,11 @@ using splatkit::VulkanFrameCompute;
 namespace test = splatkit::test;
 using test::require;
 
+constexpr uint32_t kPolicyLeaves = 64;
+// Thresholds far past any node's error either way, so the cut does not hang on the fixture.
+constexpr float kCoarsestPixels = 1e6f;
+constexpr float kFinestPixels = 1e-4f;
+
 splat::SplatCloud cloud(uint32_t count) {
   splat::SplatCloud result;
   for (uint32_t i = 0; i < count; ++i) {
@@ -220,6 +225,59 @@ void tests(const test::VulkanTestContext& gpu) {
             "LOD completed diagnostics");
   }
   std::puts("PASS hierarchical selection feeds sorted indirect draw with covering pressure");
+
+  // One root over 64 leaves: the policy threshold picks the root or every leaf, live.
+  splat::LodTree flat;
+  flat.leafCount = kPolicyLeaves;
+  flat.layout.push_back({{0, 0, -3}, 1, 1, kPolicyLeaves});
+  for (uint32_t i = 0; i < kPolicyLeaves; ++i)
+    flat.layout.push_back({{-0.5f + i / static_cast<float>(kPolicyLeaves), 0, -3}, 0.05f, 0, 0});
+  flat.nodes = cloud(kPolicyLeaves + 1);
+  for (uint32_t i = 0; i < flat.layout.size(); ++i)
+    std::copy_n(flat.layout[i].position, 3, flat.nodes.positions.begin() + 3 * i);
+  flat.selection = splat::buildLodSelectionData(flat);
+  const Inputs flatInputs(gpu, flat.nodes);
+  {
+    auto created =
+        VulkanFrameCompute::create(*gpu.context, kPolicyLeaves + 1, &flat, kPolicyLeaves);
+    require(static_cast<bool>(created), "create GPU LOD frame for the policy");
+    auto pass = std::move(created.value());
+    uint64_t submission = 0;
+    const auto apply = [&](float pixels, uint32_t limit) {
+      RenderPolicy policy;
+      policy.subpixelThreshold = 0;
+      policy.lodErrorPixels = pixels;
+      policy.lodSplatLimit = limit;
+      std::string reason;
+      require(pass->applyRenderPolicy(policy, &reason), "apply LOD policy");
+    };
+    const auto frame = [&](uint32_t slot) {
+      run(gpu, *pass, flatInputs, slot, kPolicyLeaves, {});
+      pass->submitted(slot, ++submission);
+      pass->collectCompleted(submission);
+    };
+    apply(kCoarsestPixels, 0);
+    frame(0);
+    require(pass->stats().selected == 1 && pass->stats().drawn == 1,
+            "a coarse policy keeps the root");
+    apply(kFinestPixels, 0);
+    frame(1);
+    require(pass->stats().selected == kPolicyLeaves && pass->stats().drawn == kPolicyLeaves &&
+                pass->stats().evaluated == 1,
+            "a fine policy refines to every leaf at once");
+    // A limit below the refined cut denies the split and raises the threshold; lifting it
+    // restores the policy's threshold at once.
+    apply(kFinestPixels, kPolicyLeaves / 2);
+    for (uint32_t i = 0; i < 4; ++i) frame(i % splatkit::kFramesInFlight);
+    require(pass->stats().selected == 1 && pass->stats().limited > 0,
+            "a splat limit below the cut denies the refinement");
+    require(pass->lodPixels() > kFinestPixels, "denied refinements raise the threshold");
+    apply(kFinestPixels, 0);
+    require(pass->lodPixels() == kFinestPixels, "a new policy resets the threshold");
+    frame(0);
+    require(pass->stats().selected == kPolicyLeaves, "lifting the limit refines again");
+  }
+  std::puts("PASS the LOD threshold and splat limit apply live and the threshold adapts");
   gpu.requireValidationClean();
 }
 }  // namespace

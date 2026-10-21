@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "splatkit/Log.h"
+#include "splatkit/rendering/LodThreshold.h"
 
 namespace splatkit {
 namespace {
@@ -12,9 +13,6 @@ namespace {
 // The residency range reported to the adapters.
 constexpr uint32_t kMinResidencyCapacity = 100'000;
 constexpr uint32_t kMaxResidencyCapacity = 32'000'000;
-// The LOD error threshold range, in pixels, a policy may request.
-constexpr float kMinLodErrorPixels = 0.1f;
-constexpr float kMaxLodErrorPixels = 16.0f;
 constexpr uint32_t kFallbackTileSize = 16;
 constexpr float kFallbackLodErrorPixels = 1.0f;
 // Apple family 7, the minimum this renderer accepts, supports 16384x16384 textures.
@@ -109,8 +107,8 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
   // alpha, tile size and occlusion stay fixed shader/rasterization choices.
   // The LOD error threshold applies live to a hierarchy world and at its next upload.
   policy.lodErrorPixels = compute_->gpuSort();
-  policy.minLodErrorPixels = kMinLodErrorPixels;
-  policy.maxLodErrorPixels = kMaxLodErrorPixels;
+  policy.minLodErrorPixels = LodThreshold::kMinPolicyPixels;
+  policy.maxLodErrorPixels = LodThreshold::kMaxPolicyPixels;
   policy.lodSplatLimit = compute_->gpuSort();
   policy.sortDepth = compute_->gpuSort();
   return caps;

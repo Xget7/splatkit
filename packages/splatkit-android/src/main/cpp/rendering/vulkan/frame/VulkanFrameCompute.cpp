@@ -15,7 +15,10 @@ namespace splatkit {
 namespace {
 static_assert(VulkanFrameCompute::kMaxVisible <= VulkanRadixSort::kMaxCapacity,
               "the sort must hold every visible splat");
+static_assert(VulkanLodSelection::kMaxBudget <= VulkanFrameCompute::kMaxVisible,
+              "visibility must hold every selected node");
 constexpr uint32_t kTimestampCount = 4;
+constexpr uint64_t kLodLogReadbacks = 120;
 // Words of the diagnostics readback, in the order collect() reads them. Two are spare.
 enum ReadbackWord : uint32_t {
   kDrawn,
@@ -113,8 +116,14 @@ bool VulkanFrameCompute::applyRenderPolicy(const RenderPolicy& policy, std::stri
     return false;
   }
   sortKeyBits_ = policy.sortDepth;
-  LOGI("Vulkan policy: %u-bit sort keys, %.3fpx sub-pixel radius", sortKeyBits(),
-       visibility_->minPixelRadius());
+  lodThreshold_.reset(policy.lodErrorPixels);
+  if (lod_) lod_->setSplatLimit(policy.lodSplatLimit);
+  // Every selection still unread ran under the previous policy.
+  currentPolicy_.fill(false);
+  LOGI(
+      "Vulkan policy: %u-bit sort keys, %.3fpx sub-pixel radius, %.2fpx LOD error, %u LOD "
+      "splat limit",
+      sortKeyBits(), visibility_->minPixelRadius(), policy.lodErrorPixels, policy.lodSplatLimit);
   return true;
 }
 
@@ -181,6 +190,15 @@ void VulkanFrameCompute::collect(uint32_t slot) {
   stats_.evaluated = words[kEvaluated];
   stats_.status = words[kVisibilityStatus] | (words[kSortStatus] << kSortStatusShift);
   if (stats_.status) LOGE("Vulkan GPU frame rejected: diagnostic bits 0x%x", stats_.status);
+  if (lod_) {
+    const float pixels = lodThreshold_.pixels();
+    if (lodReadbacks_++ % kLodLogReadbacks == 0)
+      LOGI(
+          "LOD SSE: %u selected, %u evaluated interiors, %u quality-limited refinements, "
+          "%.2f px",
+          stats_.selected, stats_.evaluated, stats_.limited, pixels);
+    if (currentPolicy_[slot]) lodThreshold_.update(stats_.selected, stats_.limited, lod_->limit());
+  }
   if (!queries_[slot]) return;
   uint64_t ticks[kTimestampCount]{};
   if (vkGetQueryPoolResults(ctx_.device(), queries_[slot], 0, kTimestampCount, sizeof(ticks), ticks,
@@ -222,6 +240,7 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
   vulkanMemoryBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                       VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
   pending_[slot] = true;
+  currentPolicy_[slot] = true;
   submission_[slot] = 0;
 }
 
@@ -254,6 +273,7 @@ std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
   };
   timestamp(0);
   if (lod_) {
+    lod_->setPixelLimit(lodThreshold_.pixels());
     if (!lod_->encode(cmd, slot, {camera, 0})) return std::nullopt;
     const auto selected = lod_->output();
     input.mode = VulkanVisibilityPass::CandidateMode::indices;

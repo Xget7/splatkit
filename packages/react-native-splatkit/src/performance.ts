@@ -93,7 +93,7 @@ export type DeviceCapabilities = Readonly<{
  */
 export const conservativeCapabilities: DeviceCapabilities = Object.freeze({
   limits: Object.freeze({
-    maxLodCapacitySplats: 2_200_000,
+    maxLodCapacitySplats: 4_000_000,
     minResidencyCapacitySplats: 100_000,
     maxResidencyCapacitySplats: 8_000_000,
   }),

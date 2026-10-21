@@ -58,11 +58,11 @@ A renderer that cannot sort on the GPU fails the world load with a clear error.
 
 ## Validation and limits
 
-Vulkan stable-sort (through 3M), visibility, LOD-to-indirect and upload-pressure suites pass on an arm64 emulator and on a physical Mi 9 (Adreno 640).
+Vulkan stable-sort (through 4M on the Mi 9, 3M on the emulator), visibility, LOD-to-indirect and upload-pressure suites pass on an arm64 emulator and on a physical Mi 9 (Adreno 640).
 On that Mi 9, kitchen 500k and house 2M render with Vulkan validation on, and 30-second turns are logged in the [benchmarks](docs/BENCHMARKS.md).
 These are correctness checks and short runs, **not sustained benchmarks**; Mali is untested.
 
-Vulkan limits include at most 3M visibility survivors and 2.2M LOD-selected nodes.
+Vulkan limits include at most 4M visibility survivors and 4M LOD-selected nodes, as on Metal.
 Overflow fails closed; source residency depends on driver buffer limits and available memory.
 LOD parents, subpixel culling and depth quantization can change the image.
 There is no universal 10M/30/60 FPS or lossless guarantee.

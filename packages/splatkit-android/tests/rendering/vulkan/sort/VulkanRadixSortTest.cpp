@@ -214,7 +214,7 @@ int runSortTests(VulkanTestContext& gpu, VulkanRadixSort& sort) {
   gpu.requireValidationClean();
   std::printf("PASS radix: %u stable-sort cases, invalid inputs/count, reserve, slots; large=%d\n",
               cases, config.large);
-  if (!config.large) std::puts("SKIP 3M case: set SPLATKIT_RADIX_LARGE=1");
+  if (!config.large) std::puts("SKIP full-capacity case: set SPLATKIT_RADIX_LARGE=1");
   return 0;
 }
 
