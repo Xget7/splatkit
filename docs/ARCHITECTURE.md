@@ -52,6 +52,7 @@ Both backends:
 - Vulkan creates every pipeline through one `VkPipelineCache` kept in the app's cache directory, so a launch after the first reuses the driver's compiles; a file that fails its checksum or names another device or driver loads as an empty cache ([VulkanPipelineCache.cpp][vk-cache]). Metal keeps no file: the system caches compiled shaders on the device.
 - A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint]).
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
+- Each renderer compiles its visibility, sort and selection pipelines once and keeps them across worlds ([MetalFrameCompute.mm][mtl-frame], [VulkanFrameCompute.h][vk-frame]); a world load only allocates buffers and descriptors. On Metal a change of sort key width rebuilds the visibility pipelines; Vulkan pushes the width as a constant.
 - The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
 - A streamed tile is written into a slab range only once every frame that drew the range finished: [TileStreamer.h][streamer] pins a replaced set until the renderer's completed frame serial passes the last frame that drew it.
@@ -83,6 +84,7 @@ Both backends:
 [mtl-indirect]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/cull/PrepareIndirect.metalh
 [mtl-surface]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/presentation/MetalSurface.mm
 [mtl-upscale]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/presentation/MetalUpscaler.mm
+[mtl-frame]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/frame/MetalFrameCompute.mm
 [mtl-renderer]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
 [vk-buffer]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanBuffer.cpp
 [vk-world]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/world/VulkanWorld.cpp

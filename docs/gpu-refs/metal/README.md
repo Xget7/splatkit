@@ -39,6 +39,11 @@ All available from Apple7 on the Metal 3 model (FST feature availability).
 | Indirect draw and dispatch arguments | Apple3 | 7 indirect draws, sort and LOD dispatches |
 | Relaxed `atomic_uint` (device and threadgroup) | all | compaction, radix bins |
 
+## Shader compilation
+
+- Metal builds and caches shaders on the device running the app, so a pipeline state the app created before compiles faster on the next launch; `MTLBinaryArchive` removes only the first launch's compile (DOC, Shader libraries, fetched 2026-10-22).
+- Create `MTLComputePipelineState` objects at a noncritical time, since creation can compile (DOC, `MTLComputePipelineState`, fetched 2026-10-22).
+
 ## Limits that bind us
 
 From FST implementation limits, Apple7 column (equal or higher on Apple8 to Apple10).

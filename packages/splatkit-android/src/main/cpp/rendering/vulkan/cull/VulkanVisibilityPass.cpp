@@ -207,112 +207,58 @@ VulkanVisibilityCapabilities VulkanVisibilityPass::queryCapabilities(const Vulka
   return result;
 }
 
-splat::Result<std::unique_ptr<VulkanVisibilityPass>> VulkanVisibilityPass::create(
+std::shared_ptr<const VulkanVisibilityPass::Pipelines> VulkanVisibilityPass::Pipelines::compile(
     const VulkanContext& ctx) {
-  VulkanVisibilityCapabilities capabilities = queryCapabilities(ctx);
-  if (!capabilities.supported) {
-    LOGI("GPU visibility unavailable: %s", capabilities.reason.c_str());
-    return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility: " + capabilities.reason};
-  }
-
-  std::unique_ptr<VulkanVisibilityPass> pass(
-      new VulkanVisibilityPass(ctx, std::move(capabilities)));
-  if (!pass->createDescriptors() || !pass->createPipelines()) {
-    return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility pipeline"};
-  }
-  return pass;
-}
-
-VulkanVisibilityPass::~VulkanVisibilityPass() {
-  VkDevice device = ctx_.device();
-  for (VkPipeline pipeline : visibilityPipelines_) {
-    if (pipeline) vkDestroyPipeline(device, pipeline, nullptr);
-  }
-  if (preparePipeline_) vkDestroyPipeline(device, preparePipeline_, nullptr);
-  if (visibilityLayout_) vkDestroyPipelineLayout(device, visibilityLayout_, nullptr);
-  if (prepareLayout_) vkDestroyPipelineLayout(device, prepareLayout_, nullptr);
-  if (descriptorPool_) vkDestroyDescriptorPool(device, descriptorPool_, nullptr);
-  if (visibilitySetLayout_) vkDestroyDescriptorSetLayout(device, visibilitySetLayout_, nullptr);
-  if (prepareSetLayout_) vkDestroyDescriptorSetLayout(device, prepareSetLayout_, nullptr);
-}
-
-bool VulkanVisibilityPass::createDescriptors() {
-  VkDevice device = ctx_.device();
+  if (!queryCapabilities(ctx).supported) return nullptr;
+  VkDevice device = ctx.device();
+  auto pipelines = std::make_shared<Pipelines>(device);
   VkDescriptorSetLayoutBinding visibilityBindings[kVisibilityBindings]{};
   visibilityBindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, kComputeShader, nullptr};
   for (uint32_t binding = 1; binding < kVisibilityBindings; ++binding) {
     visibilityBindings[binding] = {binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kComputeShader,
                                    nullptr};
   }
-  VkDescriptorSetLayoutCreateInfo visibilityInfo{
+  VkDescriptorSetLayoutCreateInfo visibilitySetInfo{
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  visibilityInfo.bindingCount = kVisibilityBindings;
-  visibilityInfo.pBindings = visibilityBindings;
-  if (vkCreateDescriptorSetLayout(device, &visibilityInfo, nullptr, &visibilitySetLayout_) !=
+  visibilitySetInfo.bindingCount = kVisibilityBindings;
+  visibilitySetInfo.pBindings = visibilityBindings;
+  if (vkCreateDescriptorSetLayout(device, &visibilitySetInfo, nullptr, &pipelines->visibilitySet) !=
       VK_SUCCESS)
-    return false;
-
+    return nullptr;
   VkDescriptorSetLayoutBinding prepareBindings[kPrepareBindings]{};
   for (uint32_t binding = 0; binding < kPrepareBindings; ++binding) {
     prepareBindings[binding] = {binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kComputeShader,
                                 nullptr};
   }
-  VkDescriptorSetLayoutCreateInfo prepareInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  prepareInfo.bindingCount = kPrepareBindings;
-  prepareInfo.pBindings = prepareBindings;
-  if (vkCreateDescriptorSetLayout(device, &prepareInfo, nullptr, &prepareSetLayout_) != VK_SUCCESS)
-    return false;
+  VkDescriptorSetLayoutCreateInfo prepareSetInfo{
+      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  prepareSetInfo.bindingCount = kPrepareBindings;
+  prepareSetInfo.pBindings = prepareBindings;
+  if (vkCreateDescriptorSetLayout(device, &prepareSetInfo, nullptr, &pipelines->prepareSet) !=
+      VK_SUCCESS)
+    return nullptr;
 
-  VkDescriptorPoolSize sizes[kPoolSizeCount]{};
-  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
-  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              (kVisibilityStorageBindings + kPrepareBindings) * kFramesInFlight};
-  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = kSetFamilies * kFramesInFlight;
-  poolInfo.poolSizeCount = kPoolSizeCount;
-  poolInfo.pPoolSizes = sizes;
-  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS)
-    return false;
-
-  std::array<VkDescriptorSetLayout, kFramesInFlight> visibilityLayouts{};
-  std::array<VkDescriptorSetLayout, kFramesInFlight> prepareLayouts{};
-  visibilityLayouts.fill(visibilitySetLayout_);
-  prepareLayouts.fill(prepareSetLayout_);
-  VkDescriptorSetAllocateInfo visibilityAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-  visibilityAlloc.descriptorPool = descriptorPool_;
-  visibilityAlloc.descriptorSetCount = kFramesInFlight;
-  visibilityAlloc.pSetLayouts = visibilityLayouts.data();
-  if (vkAllocateDescriptorSets(device, &visibilityAlloc, visibilitySets_.data()) != VK_SUCCESS)
-    return false;
-  VkDescriptorSetAllocateInfo prepareAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-  prepareAlloc.descriptorPool = descriptorPool_;
-  prepareAlloc.descriptorSetCount = kFramesInFlight;
-  prepareAlloc.pSetLayouts = prepareLayouts.data();
-  return vkAllocateDescriptorSets(device, &prepareAlloc, prepareSets_.data()) == VK_SUCCESS;
-}
-
-bool VulkanVisibilityPass::createPipelines() {
-  VkDevice device = ctx_.device();
   const VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants)};
   VkPipelineLayoutCreateInfo visibilityLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   visibilityLayoutInfo.setLayoutCount = 1;
-  visibilityLayoutInfo.pSetLayouts = &visibilitySetLayout_;
+  visibilityLayoutInfo.pSetLayouts = &pipelines->visibilitySet;
   visibilityLayoutInfo.pushConstantRangeCount = 1;
   visibilityLayoutInfo.pPushConstantRanges = &push;
-  if (vkCreatePipelineLayout(device, &visibilityLayoutInfo, nullptr, &visibilityLayout_) !=
-      VK_SUCCESS)
-    return false;
+  if (vkCreatePipelineLayout(device, &visibilityLayoutInfo, nullptr,
+                             &pipelines->visibilityLayout) != VK_SUCCESS)
+    return nullptr;
   VkPipelineLayoutCreateInfo prepareLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   prepareLayoutInfo.setLayoutCount = 1;
-  prepareLayoutInfo.pSetLayouts = &prepareSetLayout_;
-  if (vkCreatePipelineLayout(device, &prepareLayoutInfo, nullptr, &prepareLayout_) != VK_SUCCESS)
-    return false;
+  prepareLayoutInfo.pSetLayouts = &pipelines->prepareSet;
+  if (vkCreatePipelineLayout(device, &prepareLayoutInfo, nullptr, &pipelines->prepareLayout) !=
+      VK_SUCCESS)
+    return nullptr;
 
   const VulkanShaderModule visibilityModule(device, shaders::visibility_comp,
                                             shaders::visibility_comp_size);
   const VulkanShaderModule prepareModule(device, shaders::prepare_indirect_comp,
                                          shaders::prepare_indirect_comp_size);
-  if (!visibilityModule || !prepareModule) return false;
+  if (!visibilityModule || !prepareModule) return nullptr;
   VkPipelineShaderStageCreateInfo visibilityStage{
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
   visibilityStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -331,13 +277,13 @@ bool VulkanVisibilityPass::createPipelines() {
   visibilityStage.pSpecializationInfo = &specialization;
   VkComputePipelineCreateInfo visibilityInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   visibilityInfo.stage = visibilityStage;
-  visibilityInfo.layout = visibilityLayout_;
+  visibilityInfo.layout = pipelines->visibilityLayout;
   bool visibilityCreated = true;
   for (int degree = 0; degree <= kMaxShDegree && visibilityCreated; ++degree) {
     constants.shDegree = static_cast<uint32_t>(degree);
     visibilityCreated =
-        vkCreateComputePipelines(device, ctx_.pipelineCache(), 1, &visibilityInfo, nullptr,
-                                 &visibilityPipelines_[static_cast<size_t>(degree)]) == VK_SUCCESS;
+        vkCreateComputePipelines(device, ctx.pipelineCache(), 1, &visibilityInfo, nullptr,
+                                 &pipelines->visibility[static_cast<size_t>(degree)]) == VK_SUCCESS;
   }
 
   VkPipelineShaderStageCreateInfo prepareStage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -346,10 +292,77 @@ bool VulkanVisibilityPass::createPipelines() {
   prepareStage.pName = "main";
   VkComputePipelineCreateInfo prepareInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   prepareInfo.stage = prepareStage;
-  prepareInfo.layout = prepareLayout_;
-  const VkResult prepareResult = vkCreateComputePipelines(device, ctx_.pipelineCache(), 1,
-                                                          &prepareInfo, nullptr, &preparePipeline_);
-  return visibilityCreated && prepareResult == VK_SUCCESS;
+  prepareInfo.layout = pipelines->prepareLayout;
+  const VkResult prepareResult = vkCreateComputePipelines(
+      device, ctx.pipelineCache(), 1, &prepareInfo, nullptr, &pipelines->prepare);
+  if (!visibilityCreated || prepareResult != VK_SUCCESS) return nullptr;
+  return pipelines;
+}
+
+VulkanVisibilityPass::Pipelines::~Pipelines() {
+  for (VkPipeline pipeline : visibility) {
+    if (pipeline) vkDestroyPipeline(device, pipeline, nullptr);
+  }
+  if (prepare) vkDestroyPipeline(device, prepare, nullptr);
+  if (visibilityLayout) vkDestroyPipelineLayout(device, visibilityLayout, nullptr);
+  if (prepareLayout) vkDestroyPipelineLayout(device, prepareLayout, nullptr);
+  if (visibilitySet) vkDestroyDescriptorSetLayout(device, visibilitySet, nullptr);
+  if (prepareSet) vkDestroyDescriptorSetLayout(device, prepareSet, nullptr);
+}
+
+splat::Result<std::unique_ptr<VulkanVisibilityPass>> VulkanVisibilityPass::create(
+    const VulkanContext& ctx) {
+  return create(ctx, Pipelines::compile(ctx));
+}
+
+splat::Result<std::unique_ptr<VulkanVisibilityPass>> VulkanVisibilityPass::create(
+    const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines) {
+  VulkanVisibilityCapabilities capabilities = queryCapabilities(ctx);
+  if (!capabilities.supported) {
+    LOGI("GPU visibility unavailable: %s", capabilities.reason.c_str());
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility: " + capabilities.reason};
+  }
+  if (!pipelines) return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility pipeline"};
+  std::unique_ptr<VulkanVisibilityPass> pass(
+      new VulkanVisibilityPass(ctx, std::move(capabilities), std::move(pipelines)));
+  if (!pass->createDescriptors()) {
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "visibility descriptors"};
+  }
+  return pass;
+}
+
+VulkanVisibilityPass::~VulkanVisibilityPass() {
+  if (descriptorPool_) vkDestroyDescriptorPool(ctx_.device(), descriptorPool_, nullptr);
+}
+
+bool VulkanVisibilityPass::createDescriptors() {
+  VkDevice device = ctx_.device();
+  VkDescriptorPoolSize sizes[kPoolSizeCount]{};
+  sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
+  sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+              (kVisibilityStorageBindings + kPrepareBindings) * kFramesInFlight};
+  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  poolInfo.maxSets = kSetFamilies * kFramesInFlight;
+  poolInfo.poolSizeCount = kPoolSizeCount;
+  poolInfo.pPoolSizes = sizes;
+  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS)
+    return false;
+
+  std::array<VkDescriptorSetLayout, kFramesInFlight> visibilityLayouts{};
+  std::array<VkDescriptorSetLayout, kFramesInFlight> prepareLayouts{};
+  visibilityLayouts.fill(pipelines_->visibilitySet);
+  prepareLayouts.fill(pipelines_->prepareSet);
+  VkDescriptorSetAllocateInfo visibilityAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  visibilityAlloc.descriptorPool = descriptorPool_;
+  visibilityAlloc.descriptorSetCount = kFramesInFlight;
+  visibilityAlloc.pSetLayouts = visibilityLayouts.data();
+  if (vkAllocateDescriptorSets(device, &visibilityAlloc, visibilitySets_.data()) != VK_SUCCESS)
+    return false;
+  VkDescriptorSetAllocateInfo prepareAlloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  prepareAlloc.descriptorPool = descriptorPool_;
+  prepareAlloc.descriptorSetCount = kFramesInFlight;
+  prepareAlloc.pSetLayouts = prepareLayouts.data();
+  return vkAllocateDescriptorSets(device, &prepareAlloc, prepareSets_.data()) == VK_SUCCESS;
 }
 
 bool VulkanVisibilityPass::reserve(uint32_t capacity) {
@@ -513,8 +526,8 @@ bool VulkanVisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Inpu
           VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, out);
 
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-                    visibilityPipelines_[static_cast<size_t>(input.shDegree)]);
-  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, visibilityLayout_, 0, 1,
+                    pipelines_->visibility[static_cast<size_t>(input.shDegree)]);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_->visibilityLayout, 0, 1,
                           &visibilitySets_[slot], 0, nullptr);
   const PushConstants push{input.sourceCount,
                            capacity_,
@@ -524,13 +537,14 @@ bool VulkanVisibilityPass::encode(VkCommandBuffer cmd, uint32_t slot, const Inpu
                            input.rangeCount,
                            (input.keyBits == KeyBits::low16 ? kKeyLow16 : 0u) |
                                (input.keyOrder == KeyOrder::descending ? kKeyDescending : 0u)};
-  vkCmdPushConstants(cmd, visibilityLayout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
+  vkCmdPushConstants(cmd, pipelines_->visibilityLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                     sizeof(push), &push);
   vkCmdDispatch(cmd, groupsX, groupsY, 1);
   barrier(cmd, kComputeStage, kComputeStage, VK_ACCESS_SHADER_WRITE_BIT,
           VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, out);
 
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, preparePipeline_);
-  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prepareLayout_, 0, 1,
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_->prepare);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines_->prepareLayout, 0, 1,
                           &prepareSets_[slot], 0, nullptr);
   vkCmdDispatch(cmd, 1, 1, 1);
 

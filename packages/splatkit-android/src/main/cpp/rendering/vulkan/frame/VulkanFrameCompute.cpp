@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "rendering/vulkan/device/VulkanBarriers.h"
-#include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "splatkit/Log.h"
 #include "splatkit/rendering/GpuLayout.h"
 
@@ -41,16 +40,35 @@ static_assert(VulkanLodSelection::kEvaluatedOffset ==
               "limited and evaluated are copied from the LOD state as one pair");
 }  // namespace
 
-VulkanFrameCompute::VulkanFrameCompute(const VulkanContext& ctx) : ctx_(ctx) {}
+VulkanFrameCompute::VulkanFrameCompute(const VulkanContext& ctx, Pipelines pipelines)
+    : ctx_(ctx), pipelines_(std::move(pipelines)) {}
 
 bool VulkanFrameCompute::supported(const VulkanContext& ctx) {
   return VulkanVisibilityPass::queryCapabilities(ctx).supported &&
          VulkanRadixSort::queryCapabilities(ctx).supported;
 }
 
+std::optional<VulkanFrameCompute::Pipelines> VulkanFrameCompute::Pipelines::compile(
+    const VulkanContext& ctx) {
+  Pipelines pipelines{VulkanVisibilityPass::Pipelines::compile(ctx),
+                      VulkanRadixSort::Pipelines::compile(ctx),
+                      VulkanLodSelection::Pipelines::compile(ctx)};
+  if (!pipelines.visibility || !pipelines.radix || !pipelines.lod) return std::nullopt;
+  return pipelines;
+}
+
 splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
     const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
-  std::unique_ptr<VulkanFrameCompute> pass(new VulkanFrameCompute(ctx));
+  const auto pipelines = Pipelines::compile(ctx);
+  if (!pipelines)
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
+  return create(ctx, *pipelines, sourceCount, tree, budget);
+}
+
+splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
+    const VulkanContext& ctx, const Pipelines& pipelines, uint32_t sourceCount,
+    const splat::LodTree* tree, uint32_t budget) {
+  std::unique_ptr<VulkanFrameCompute> pass(new VulkanFrameCompute(ctx, pipelines));
   if (!pass->initialize(sourceCount, tree, budget))
     return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame allocation/capability limits"};
   return pass;
@@ -59,7 +77,7 @@ splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanFrameCompute::create(
 bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* tree,
                                     uint32_t budget) {
   sourceCount_ = sourceCount;
-  auto visibility = VulkanVisibilityPass::create(ctx_);
+  auto visibility = VulkanVisibilityPass::create(ctx_, pipelines_.visibility);
   if (!visibility) return false;
   visibility_ = std::move(visibility.value());
   if (VkDeviceSize{std::max(1u, sourceCount)} * sizeof(GpuSplat) >
@@ -68,12 +86,12 @@ bool VulkanFrameCompute::initialize(uint32_t sourceCount, const splat::LodTree* 
   capacity_ = std::max(1u, std::min(sourceCount, kMaxVisible));
   if (tree) {
     if (tree->nodeCount() != sourceCount) return false;
-    auto lod = VulkanLodSelection::create(ctx_);
+    auto lod = VulkanLodSelection::create(ctx_, pipelines_.lod);
     if (!lod || !lod.value()->upload(*tree, budget)) return false;
     lod_ = std::move(lod.value());
     capacity_ = lod_->capacity();
   }
-  auto radix = VulkanRadixSort::create(ctx_);
+  auto radix = VulkanRadixSort::create(ctx_, pipelines_.radix);
   if (!radix || !radix.value()->reserve(capacity_) || !visibility_->reserve(capacity_))
     return false;
   radix_ = std::move(radix.value());
