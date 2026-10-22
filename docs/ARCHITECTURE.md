@@ -18,6 +18,10 @@ Around the packages:
 
 Both platforms run the same code up to the upload.
 
+SPZ tree construction runs locally on the loader CPU when the splat budget is positive.
+The tree stays in memory; loading an SPZ does not write a `.lodsplat` file.
+The optional [`splat_lod_build`](../packages/splat-core/tools/splat_lod_build.cpp) tool saves a prepared tree as `.lodsplat`; loading that file reads the tree instead of rebuilding it.
+
 1. **Decode** on a loader thread.
    SPZ v1 to v4 goes through Niantic's spz, fetched and pinned by [dependencies.cmake][deps]; [SpzDecoder.cpp][spz] inflates gzip with zlib, and spz handles zstd for v4.
    A `.lodsplat` carries its tree and skips steps 3 and 4.
@@ -26,7 +30,7 @@ Both platforms run the same code up to the upload.
    Loader threads: iOS serial queue `com.splatkit.loader` ([RenderThread.swift][ios-thread]), React Native iOS `com.splatkit.rn.loader`, Android single-thread executor `SplatKitLoader` ([RenderThread.kt][android-thread]).
 2. **Bake** per splat inside the decoder, scalar: covariance `R diag(s)^2 R^T` ([Covariance.cpp][cov]), sigmoid opacity, the band 0 spherical harmonics (SH) folded into colour, SH truncated to `maxShDegree`.
 3. **Reorder** by 30-bit Morton code ([SpatialOrder.cpp][morton]), plain SPZ only.
-4. **Tree**: with a splat budget above 0, `buildLodTree` builds a size-adaptive grid at load ([LodTree.cpp][tree]); a budget of 0 draws the flat cloud.
+4. **Tree**: with a splat budget above 0, `buildLodTree` builds an adaptive octree at load with the same builder used offline ([LodTree.cpp][tree]); a budget of 0 draws the flat cloud.
 5. **Pack** with [GpuLayout.cpp][layout]: `GpuSplat` is 32 bytes (position `f32x3`, `rgba8`, six half covariance terms, `lodAlpha`); SH sits in its own buffer as half pairs, bands 1 to the degree.
 
 The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread takes it and uploads it.
