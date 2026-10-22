@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 
 #include <android/native_window.h>
 
@@ -17,7 +18,8 @@ namespace splatkit {
 // renderer, and the shared engine over it. What the JNI holds.
 class AndroidEngine {
  public:
-  static splat::Result<std::unique_ptr<AndroidEngine>> create();
+  // `cacheDir` is the app's cache directory, where the Vulkan pipeline cache is kept.
+  static splat::Result<std::unique_ptr<AndroidEngine>> create(const std::string& cacheDir);
   ~AndroidEngine();
 
   AndroidEngine(const AndroidEngine&) = delete;

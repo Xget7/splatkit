@@ -56,7 +56,7 @@ class SplatSurfaceView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
 
-    private val renderThread = RenderThread()
+    private val renderThread = RenderThread(context.cacheDir.absolutePath)
     private val motion = MotionInput(context, renderThread.renderHandler) { renderThread.setAttitude(it) }
     private val touch = TouchInput(object : TouchInput.Listener {
         override fun onLook(deltaYaw: Float, deltaPitch: Float) = renderThread.look(deltaYaw, deltaPitch)

@@ -109,7 +109,7 @@ std::string describeCapabilities(VkPhysicalDevice gpu) {
 
 }  // namespace
 
-splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
+splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create(std::string pipelineCachePath) {
   std::unique_ptr<VulkanContext> ctx(new VulkanContext());
 
   const bool validation = wantValidation();
@@ -167,6 +167,9 @@ splat::Result<std::unique_ptr<VulkanContext>> VulkanContext::create() {
   if (vmaCreateAllocator(&allocatorInfo, &ctx->allocator_) != VK_SUCCESS) {
     return splat::Error{splat::ErrorCode::gpuUnavailable, "VMA allocator"};
   }
+  ctx->pipelineCache_ = VulkanPipelineCache::open(ctx->device_.physical_device, ctx->device_.device,
+                                                  std::move(pipelineCachePath));
+  if (!ctx->pipelineCache_) LOGW("Vulkan pipeline cache: unavailable, compiling without one");
 
   const VkPhysicalDeviceProperties& props = ctx->device_.physical_device.properties;
   LOGI("Vulkan device: %s, API %u.%u.%u, driver 0x%x", props.deviceName,
@@ -188,6 +191,7 @@ VulkanContext::~VulkanContext() {
   if (device_.device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(device_.device);
   }
+  pipelineCache_.reset();
   if (allocator_ != VK_NULL_HANDLE) {
     vmaDestroyAllocator(allocator_);
   }

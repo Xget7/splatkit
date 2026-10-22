@@ -24,10 +24,12 @@ ENCODE_COMPUTE = "SplatKit encode compute"
 SUBMIT_PRESENT = "SplatKit submit and present"
 FRAME_STAGES = (WAIT_FOR_FRAME_SLOT, ENCODE_COMPUTE, SUBMIT_PRESENT)
 UPLOAD_WORLD = "SplatKit upload world"
+SAVE_PIPELINE_CACHE = "SplatKit save pipeline cache"
 DECODE_WORLD = "SplatKit decode world"
 DECODE_COLLIDER = "SplatKit decode collider"
 BENCHMARK = "SplatKit benchmark"
-LOAD_SLICES = (DECODE_WORLD, DECODE_COLLIDER, UPLOAD_WORLD)
+LOAD_SLICES = (DECODE_WORLD, DECODE_COLLIDER, UPLOAD_WORLD, SAVE_PIPELINE_CACHE)
+RENDER_THREAD_LOAD_SLICES = (UPLOAD_WORLD, SAVE_PIPELINE_CACHE)
 CPU_FREQUENCY_TRACK = "cpufreq"
 RSS = "mem.rss"
 RSS_COUNTERS = (RSS, "mem.rss.anon")
@@ -202,7 +204,7 @@ def analyze(path, pid=None):
         cluster["mean_mhz"] = sum(means) / len(means) / KHZ_PER_MHZ if means else None
     load = {}
     for name in LOAD_SLICES:
-        thread = RENDER_THREAD if name == UPLOAD_WORLD else LOADER_THREAD
+        thread = RENDER_THREAD if name in RENDER_THREAD_LOAD_SLICES else LOADER_THREAD
         slices = trace.thread_slices(thread, name)
         load[name] = slices[-1]["dur"] / NS_PER_MS if slices else None
     return {

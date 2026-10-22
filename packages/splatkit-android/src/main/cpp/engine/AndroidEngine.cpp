@@ -8,6 +8,8 @@
 namespace splatkit {
 namespace {
 
+constexpr char kPipelineCacheFile[] = "splatkit-vulkan-pipelines.bin";
+
 void logcatSink(LogLevel level, const char* message) {
   const int priority = level == LogLevel::error  ? ANDROID_LOG_ERROR
                        : level == LogLevel::warn ? ANDROID_LOG_WARN
@@ -17,10 +19,11 @@ void logcatSink(LogLevel level, const char* message) {
 
 }  // namespace
 
-splat::Result<std::unique_ptr<AndroidEngine>> AndroidEngine::create() {
+splat::Result<std::unique_ptr<AndroidEngine>> AndroidEngine::create(const std::string& cacheDir) {
   setLogSink(&logcatSink);
   std::unique_ptr<AndroidEngine> host(new AndroidEngine());
-  auto ctx = VulkanContext::create();
+  auto ctx =
+      VulkanContext::create(cacheDir.empty() ? std::string{} : cacheDir + "/" + kPipelineCacheFile);
   if (!ctx) return ctx.error();
   host->ctx_ = std::move(ctx.value());
   host->frameLoop_ = std::make_unique<VulkanFrameLoop>(*host->ctx_);

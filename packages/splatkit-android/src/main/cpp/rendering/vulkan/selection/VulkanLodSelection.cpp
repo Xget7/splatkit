@@ -111,8 +111,8 @@ bool VulkanLodSelection::initialize() {
   pipeline.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
   pipeline.stage.module = module.get();
   pipeline.stage.pName = "main";
-  const auto result =
-      vkCreateComputePipelines(ctx_.device(), VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipeline_);
+  const auto result = vkCreateComputePipelines(ctx_.device(), ctx_.pipelineCache(), 1, &pipeline,
+                                               nullptr, &pipeline_);
   return result == VK_SUCCESS;
 }
 
