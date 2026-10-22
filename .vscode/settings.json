@@ -26,6 +26,15 @@
     "**/.vscode": true,
     "**/.vs": true,
     "**/node_modules": true,
-    "**/build/maintenance": true
-  }
+    "**/build/maintenance": true,
+    "**/.claude/worktrees": true
+  },
+  // Agent worktrees are whole checkouts; searching or watching them duplicates every hit.
+  "search.exclude": {
+    "**/.claude/worktrees": true
+  },
+  "files.watcherExclude": {
+    "**/.claude/worktrees/**": true
+  },
+  "postman.settings.dotenv-detection-notification-visibility": false
 }
