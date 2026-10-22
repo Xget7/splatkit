@@ -86,6 +86,12 @@ class VulkanSplatRenderer final : public SplatRenderer {
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);
   void applyPolicyToCompute();
+  // The frame compute pipelines, compiled by the first world load that needs them and kept for
+  // every later one. Null when the device cannot run them.
+  const VulkanFrameCompute::Pipelines* computePipelines();
+  splat::Result<std::unique_ptr<VulkanFrameCompute>> createCompute(
+      uint32_t sourceCount, const splat::LodTree* tree = nullptr,
+      uint32_t budget = VulkanLodSelection::kMaxBudget);
   void adoptWorld(std::unique_ptr<VulkanWorld> world, std::unique_ptr<VulkanFrameCompute> compute);
 
   VulkanContext& ctx_;
@@ -96,6 +102,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   std::unique_ptr<VulkanSplatPipeline> splats_;
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<VulkanWorld> world_;
+  std::optional<VulkanFrameCompute::Pipelines> computePipelines_;
   std::unique_ptr<VulkanFrameCompute> compute_;
   RenderPolicy policy_;
   WorldFrameCompletion worldFrameCompletion_;

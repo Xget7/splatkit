@@ -3,6 +3,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
@@ -39,14 +40,35 @@ class VulkanRadixSort {
   };
   static constexpr uint32_t kBlock = 2048, kMaxCapacity = 4'000'000;
   static constexpr uint32_t kInvalidCount = 1;
+  // kScatterLast is the scatter specialised to skip the keys on the final digit.
+  enum Stage : uint32_t { kPrepare, kHistogram, kScan, kScatter, kScatterLast, kStageCount };
+  // The layouts and compute pipelines, which depend on no world. Compile them once and hand
+  // them to every sort, so loading another world compiles nothing.
+  struct Pipelines {
+    // Null when the device lacks the capabilities or a pipeline fails to build.
+    static std::shared_ptr<const Pipelines> compile(const VulkanContext& ctx);
+    explicit Pipelines(VkDevice device) : device(device) {}
+    ~Pipelines();
+    Pipelines(const Pipelines&) = delete;
+    Pipelines& operator=(const Pipelines&) = delete;
+
+    VkDevice device;
+    VkDescriptorSetLayout set = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    std::array<VkPipeline, kStageCount> stages{};
+  };
   static Capabilities queryCapabilities(const VulkanContext& ctx);
+  // Compiles its own pipelines, for a sort that shares them with no other.
   static splat::Result<std::unique_ptr<VulkanRadixSort>> create(const VulkanContext& ctx);
+  static splat::Result<std::unique_ptr<VulkanRadixSort>> create(
+      const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines);
   ~VulkanRadixSort();
   VulkanRadixSort(const VulkanRadixSort&) = delete;
   VulkanRadixSort& operator=(const VulkanRadixSort&) = delete;
   // Transactional growth; zero reserves one element. Failure preserves all old resources.
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
+  const std::shared_ptr<const Pipelines>& pipelines() const { return pipelines_; }
   // Buffers require STORAGE_BUFFER usage. Input count > capacity fails closed on GPU:
   // output count=0/status=kInvalidCount. Caller must consume output count, not input count.
   // Input dependencies (same queue) and compute/vertex/transfer output visibility included.
@@ -56,8 +78,9 @@ class VulkanRadixSort {
   Output output(uint32_t slot) const;
 
  private:
-  explicit VulkanRadixSort(const VulkanContext& ctx) : ctx_(ctx) {}
-  bool initialize();
+  VulkanRadixSort(const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines)
+      : ctx_(ctx), pipelines_(std::move(pipelines)) {}
+  bool allocateSets();
   struct Slot {
     std::array<std::unique_ptr<VulkanBuffer>, 2> keys, values;
     std::unique_ptr<VulkanBuffer> histogram, totals, state, count, status;
@@ -72,14 +95,10 @@ class VulkanRadixSort {
   // Prepare, then one histogram/scan/scatter round per digit of the key.
   void recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits keyBits) const;
   const VulkanContext& ctx_;
+  std::shared_ptr<const Pipelines> pipelines_;
   uint32_t capacity_ = 0;
   std::array<Slot, kFramesInFlight> slots_;
-  VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
-  VkPipelineLayout layout_ = VK_NULL_HANDLE;
-  // kScatterLast is the scatter specialised to skip the keys on the final digit.
-  enum Stage : uint32_t { kPrepare, kHistogram, kScan, kScatter, kScatterLast, kStageCount };
-  std::array<VkPipeline, kStageCount> pipelines_{};
   // First pass external->B; second B->A; subsequent A->B and B->A.
   static constexpr uint32_t kSets = 3;
   std::array<std::array<VkDescriptorSet, kSets>, kFramesInFlight> sets_{};

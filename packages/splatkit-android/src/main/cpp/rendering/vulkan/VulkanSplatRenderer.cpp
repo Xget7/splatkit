@@ -139,16 +139,30 @@ void VulkanSplatRenderer::adoptWorld(std::unique_ptr<VulkanWorld> world,
   applyPolicyToCompute();
   splats_->bindWorld(*world_);
   worldFrameCompletion_.reset();
-  // A world's compute passes are the last pipelines a load creates.
+  // The surface and compute pipelines exist by now; with nothing newly compiled, saving only
+  // compares the cache size.
   const TraceSection section(trace::kSavePipelineCache);
   ctx_.savePipelineCache();
+}
+
+const VulkanFrameCompute::Pipelines* VulkanSplatRenderer::computePipelines() {
+  if (!computePipelines_) computePipelines_ = VulkanFrameCompute::Pipelines::compile(ctx_);
+  return computePipelines_ ? &*computePipelines_ : nullptr;
+}
+
+splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanSplatRenderer::createCompute(
+    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
+  const auto* pipelines = computePipelines();
+  if (pipelines == nullptr)
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
+  return VulkanFrameCompute::create(ctx_, *pipelines, sourceCount, tree, budget);
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
+  auto compute = createCompute(static_cast<uint32_t>(cloud.count()));
   // sortsOnGpu() promised GPU order, so a world without its compute passes would never draw.
   if (!compute) {
     LOGE("GPU upload rejected: %s", compute.error().message.c_str());
@@ -173,8 +187,7 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute =
-      VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
+  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
   if (!compute) {
     LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
     return false;
@@ -189,7 +202,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_) return false;
   ctx_.waitIdle();
-  auto compute = VulkanFrameCompute::create(ctx_, capacity);
+  auto compute = createCompute(capacity);
   if (!compute) {
     LOGE("GPU slab rejected: %s", compute.error().message.c_str());
     return false;

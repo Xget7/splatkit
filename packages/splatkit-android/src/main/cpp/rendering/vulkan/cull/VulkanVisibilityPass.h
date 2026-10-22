@@ -39,7 +39,31 @@ struct VulkanVisibilityCapabilities {
 class VulkanVisibilityPass {
  public:
   static VulkanVisibilityCapabilities queryCapabilities(const VulkanContext& ctx);
+
+  // The layouts and compute pipelines, which depend on no world. Compile them once and hand
+  // them to every pass, so loading another world compiles nothing.
+  struct Pipelines {
+    // Null when the device lacks the capabilities or a pipeline fails to build.
+    static std::shared_ptr<const Pipelines> compile(const VulkanContext& ctx);
+    explicit Pipelines(VkDevice device) : device(device) {}
+    ~Pipelines();
+    Pipelines(const Pipelines&) = delete;
+    Pipelines& operator=(const Pipelines&) = delete;
+
+    VkDevice device;
+    VkDescriptorSetLayout visibilitySet = VK_NULL_HANDLE;
+    VkDescriptorSetLayout prepareSet = VK_NULL_HANDLE;
+    VkPipelineLayout visibilityLayout = VK_NULL_HANDLE;
+    VkPipelineLayout prepareLayout = VK_NULL_HANDLE;
+    // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
+    std::array<VkPipeline, kMaxShDegree + 1> visibility{};
+    VkPipeline prepare = VK_NULL_HANDLE;
+  };
+
+  // Compiles its own pipelines, for a pass that shares them with no other.
   static splat::Result<std::unique_ptr<VulkanVisibilityPass>> create(const VulkanContext& ctx);
+  static splat::Result<std::unique_ptr<VulkanVisibilityPass>> create(
+      const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines);
   ~VulkanVisibilityPass();
 
   VulkanVisibilityPass(const VulkanVisibilityPass&) = delete;
@@ -49,6 +73,7 @@ class VulkanVisibilityPass {
   bool reserve(uint32_t capacity);
   uint32_t capacity() const { return capacity_; }
   const VulkanVisibilityCapabilities& capabilities() const { return capabilities_; }
+  const std::shared_ptr<const Pipelines>& pipelines() const { return pipelines_; }
 
   enum class CandidateMode : uint32_t { prefix, indices, ranges };
   enum class KeyOrder : uint32_t { ascending, descending };
@@ -117,11 +142,11 @@ class VulkanVisibilityPass {
   static constexpr uint32_t kInvalidProjection = 16u;
 
  private:
-  explicit VulkanVisibilityPass(const VulkanContext& ctx, VulkanVisibilityCapabilities capabilities)
-      : ctx_(ctx), capabilities_(std::move(capabilities)) {}
+  VulkanVisibilityPass(const VulkanContext& ctx, VulkanVisibilityCapabilities capabilities,
+                       std::shared_ptr<const Pipelines> pipelines)
+      : ctx_(ctx), capabilities_(std::move(capabilities)), pipelines_(std::move(pipelines)) {}
 
   bool createDescriptors();
-  bool createPipelines();
   bool updateDescriptors(uint32_t slot, const Input& input) const;
   static void barrier(VkCommandBuffer cmd, VkPipelineStageFlags srcStage,
                       VkPipelineStageFlags dstStage, VkAccessFlags srcAccess,
@@ -129,18 +154,12 @@ class VulkanVisibilityPass {
 
   const VulkanContext& ctx_;
   VulkanVisibilityCapabilities capabilities_;
+  std::shared_ptr<const Pipelines> pipelines_;
   uint32_t capacity_ = 0;
 
-  VkDescriptorSetLayout visibilitySetLayout_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout prepareSetLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
   std::array<VkDescriptorSet, kFramesInFlight> visibilitySets_{};
   std::array<VkDescriptorSet, kFramesInFlight> prepareSets_{};
-  VkPipelineLayout visibilityLayout_ = VK_NULL_HANDLE;
-  VkPipelineLayout prepareLayout_ = VK_NULL_HANDLE;
-  // One pipeline per SH degree, specialised so degree 0 worlds pay nothing for SH.
-  std::array<VkPipeline, kMaxShDegree + 1> visibilityPipelines_{};
-  VkPipeline preparePipeline_ = VK_NULL_HANDLE;
 
   std::unique_ptr<VulkanBuffer> dummy_;  // immutable zero words for inactive input descriptors
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> values_{};
