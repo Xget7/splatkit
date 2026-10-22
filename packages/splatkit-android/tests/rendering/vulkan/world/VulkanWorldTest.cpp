@@ -118,6 +118,30 @@ void tilesInSharedMemory(const test::VulkanTestContext& gpu) {
     require(slabSh[i] == 0, "a tile without harmonics zeroes its range");
 }
 
+// Where the GPU shares memory with the CPU, a whole world is packed straight into its buffers,
+// past the 2 MiB a staged upload moves per copy.
+void worldInSharedMemory(const test::VulkanTestContext& gpu) {
+  if (!gpu.sharesDeviceMemory()) {
+    std::puts("SKIP world in shared memory (separate device memory)");
+    return;
+  }
+  constexpr uint32_t kSplats = 30000;
+  const splat::SplatCloud source = degree3Cloud(kSplats);
+  auto world = VulkanWorld::upload(*gpu.context, source, 3, false);
+  require(world && world->splats->mapped() && world->sh->mapped(),
+          "a shared-memory world is mapped");
+  const std::vector<splatkit::GpuSplat> packed = splatkit::packSplats(source);
+  const size_t splatBytes = packed.size() * sizeof(packed[0]);
+  require(
+      std::memcmp(gpu.readback(*world->splats, splatBytes).data(), packed.data(), splatBytes) == 0,
+      "the GPU reads the packed records");
+  const std::vector<uint32_t> sh = splatkit::packSh(source, 3);
+  const size_t harmonicBytes = sh.size() * sizeof(uint32_t);
+  require(
+      std::memcmp(gpu.readback(*world->sh, harmonicBytes).data(), sh.data(), harmonicBytes) == 0,
+      "the GPU reads the packed harmonics");
+}
+
 void orderUpload(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(4), 0, true);
   require(world != nullptr, "upload for order recording");
@@ -152,6 +176,8 @@ int main() {
     std::puts("PASS slab and tiles");
     tilesInSharedMemory(gpu);
     std::puts("PASS tiles in shared memory");
+    worldInSharedMemory(gpu);
+    std::puts("PASS world in shared memory");
     orderUpload(gpu);
     std::puts("PASS order upload");
     gpu.requireValidationClean();

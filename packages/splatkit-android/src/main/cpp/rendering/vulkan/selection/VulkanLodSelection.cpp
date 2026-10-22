@@ -170,8 +170,9 @@ bool VulkanLodSelection::upload(const splat::LodTree& tree, uint32_t budget, Qua
       std::max({clusterBytes, leafBytes, scratchBytes, indexBytes}) > limits_.maxStorageBufferRange)
     return false;
   constexpr auto kStorage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  auto clusters = VulkanBuffer::deviceLocal(ctx_, clusterBytes, kStorage);
-  auto leaves = VulkanBuffer::deviceLocal(ctx_, leafBytes, kStorage);
+  // Written once at load, in place where the device shares memory.
+  auto clusters = VulkanBuffer::deviceLocalMapped(ctx_, clusterBytes, kStorage);
+  auto leaves = VulkanBuffer::deviceLocalMapped(ctx_, leafBytes, kStorage);
   auto scratch = VulkanBuffer::deviceLocal(
       ctx_, scratchBytes,
       kStorage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);

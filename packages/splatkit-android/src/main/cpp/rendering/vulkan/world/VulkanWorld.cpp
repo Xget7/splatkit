@@ -49,14 +49,29 @@ bool uploadOrderWindow(const VulkanWorld& world, UploadScratch& scratch, size_t 
                              count * sizeof(uint32_t));
 }
 
+// A world in shared memory is packed in place, so a window carries only what is staged.
 bool uploadWindow(const splat::SplatCloud& cloud, const VulkanWorld& world, UploadScratch& scratch,
-                  size_t offset, size_t count, size_t stride, bool cpuOrder) {
-  packSplatRange(cloud, offset, count, scratch.packed.data());
-  if (!world.splats->upload(offset * sizeof(GpuSplat), scratch.packed.data(),
-                            count * sizeof(GpuSplat)))
-    return false;
-  if (stride && !uploadShWindow(cloud, world, scratch, offset, count, stride)) return false;
+                  size_t offset, size_t count, size_t stride, bool inPlace, bool cpuOrder) {
+  if (!inPlace) {
+    packSplatRange(cloud, offset, count, scratch.packed.data());
+    if (!world.splats->upload(offset * sizeof(GpuSplat), scratch.packed.data(),
+                              count * sizeof(GpuSplat)))
+      return false;
+    if (stride && !uploadShWindow(cloud, world, scratch, offset, count, stride)) return false;
+  }
   return !cpuOrder || uploadOrderWindow(world, scratch, offset, count);
+}
+
+// Shared memory: the pack writes the GPU's bytes in place, one pass over the cloud as on Metal.
+// The first submit that reads them makes the writes visible.
+void packInPlace(const splat::SplatCloud& cloud, const VulkanWorld& world, size_t stride) {
+  const size_t n = cloud.count();
+  if (n == 0) return;
+  packSplatRange(cloud, 0, n, static_cast<GpuSplat*>(world.splats->mapped()));
+  world.splats->flush(0, n * sizeof(GpuSplat));
+  if (stride == 0) return;
+  packShRange(cloud, world.shDegree, 0, n, static_cast<uint32_t*>(world.sh->mapped()));
+  world.sh->flush(0, n * stride * sizeof(uint32_t));
 }
 
 // The one-word placeholders keep the descriptors valid when the order or SH buffer is unused.
@@ -69,15 +84,19 @@ bool uploadPlaceholders(const VulkanWorld& world, size_t n, size_t stride, bool 
 bool uploadWindows(const splat::SplatCloud& cloud, const VulkanWorld& world, size_t stride,
                    bool cpuOrder) {
   const size_t n = cloud.count();
+  const bool inPlace = world.splats->mapped() && world.sh->mapped();
+  if (inPlace) packInPlace(cloud, world, stride);
+  if (inPlace && !cpuOrder) return uploadPlaceholders(world, n, stride, cpuOrder);
   // Bounded packing/upload windows: do not retain full packed + mapped copies of a 10M cloud.
   const size_t chunk = kUploadWindowBytes / std::max(sizeof(GpuSplat), stride * sizeof(uint32_t));
   const size_t windowSplats = std::min(n, chunk);
-  UploadScratch scratch{std::vector<GpuSplat>(windowSplats),
-                        std::vector<uint32_t>(windowSplats * stride),
+  UploadScratch scratch{std::vector<GpuSplat>(inPlace ? 0 : windowSplats),
+                        std::vector<uint32_t>(inPlace ? 0 : windowSplats * stride),
                         std::vector<uint32_t>(cpuOrder ? windowSplats : 0)};
   for (size_t offset = 0; offset < n; offset += chunk) {
     const size_t count = std::min(chunk, n - offset);
-    if (!uploadWindow(cloud, world, scratch, offset, count, stride, cpuOrder)) return false;
+    if (!uploadWindow(cloud, world, scratch, offset, count, stride, inPlace, cpuOrder))
+      return false;
   }
   return uploadPlaceholders(world, n, stride, cpuOrder);
 }
@@ -103,9 +122,10 @@ std::unique_ptr<VulkanWorld> VulkanWorld::upload(const VulkanContext& ctx,
   std::unique_ptr<VulkanWorld> world(new VulkanWorld());
   world->count = static_cast<uint32_t>(n);
   world->shDegree = shDegree;
-  world->splats = VulkanBuffer::deviceLocal(ctx, sourceBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->splats =
+      VulkanBuffer::deviceLocalMapped(ctx, sourceBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   world->order = VulkanBuffer::deviceLocal(ctx, orderBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-  world->sh = VulkanBuffer::deviceLocal(ctx, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+  world->sh = VulkanBuffer::deviceLocalMapped(ctx, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   if (!world->splats || !world->order || !world->sh) return nullptr;
   if (cpuOrder && !allocateOrderStaging(ctx, *world, orderBytes)) return nullptr;
   if (!uploadWindows(cloud, *world, stride, cpuOrder)) return nullptr;
