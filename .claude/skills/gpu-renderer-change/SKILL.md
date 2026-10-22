@@ -14,11 +14,16 @@ Every API, flag and limit the run touches is **grounded**: it carries a citation
 | Renderer | `packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/` | `packages/splatkit-android/src/main/cpp/rendering/vulkan/` |
 | Cited facts and floor | [docs/gpu-refs/metal/README.md](../../../docs/gpu-refs/metal/README.md) | [docs/gpu-refs/vulkan/README.md](../../../docs/gpu-refs/vulkan/README.md) |
 | Header that compiles | `Metal.framework/Headers` in `xcrun --sdk iphoneos --show-sdk-path` | `vulkan/vulkan_core.h` in the NDK sysroot |
-| Semantics | Xcode MCP `DocumentationSearch`, `developer.apple.com/documentation/metal/<symbol>` | the Vulkan specification at `docs.vulkan.org/spec/latest/` |
+| Docs server | Xcode MCP `DocumentationSearch` | Vulkan docs MCP `vulkan-site`: `search-vulkan-docs` |
+| Semantics | `developer.apple.com/documentation/metal/<symbol>` | the Vulkan specification at `docs.vulkan.org/spec/latest/` |
 | GPU tests | `packages/splatkit-ios/tests/rendering/metal/` | `packages/splatkit-android/tests/rendering/vulkan/` |
 | Phone run | [ios-perf](../ios-perf/SKILL.md) | [android-perf](../android-perf/SKILL.md) |
 
 ## Steps
+
+Every run opens with a **docs check**, before reading code or gathering anything about the problem: one search for the change's subject on each docs server in the table, both backends.
+A server that errors or is missing is a note, never a stop: tell the user, write it under Grounding in the design doc, and cite that backend from its header and specification instead.
+Done when each server has answered or its failure is noted.
 
 1. **Gate.** The run applies when the change alters what the GPU executes or how its data flows: shaders, passes, dispatch shape, sort, culling, LOD selection, buffer layout, storage modes, synchronization, frame slots.
    Anything else (host logic, API surface, docs, a fix confined to CPU code) goes through the ordinary pull request flow and ends here.
