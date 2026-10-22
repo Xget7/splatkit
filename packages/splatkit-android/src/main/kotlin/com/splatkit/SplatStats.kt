@@ -26,17 +26,11 @@ class SplatStats {
     var motion = false
     /** Last completed visibility/order result; zero remains zero even when a source is loaded. */
     var drawnSplatCount = 0
-    /** Completed compute screen tiles, including background-only tiles; zero when unavailable. */
-    var computeTileCount = 0
-    /** Completed compute screen tiles containing candidates; zero when unavailable. */
-    var nonemptyComputeTileCount = 0
-    /** Completed hardware screen tiles; zero when unavailable. */
-    var hardwareTileCount = 0
 }
 
-internal const val SPLAT_STATS_FLOATS = 12
+internal const val SPLAT_STATS_FLOATS = 9
 
-/** Mirrors nativeStats: timings, the loaded count and two flags, then four completed counts and the world's harmonics degree. */
+/** Mirrors nativeStats: timings, the loaded count and two flags, then the drawn count and the world's harmonics degree. */
 internal fun decodeSplatStats(values: FloatArray, into: SplatStats): SplatStats {
     require(values.size >= SPLAT_STATS_FLOATS) { "Stats payload needs $SPLAT_STATS_FLOATS floats" }
     into.fps = values[0]
@@ -47,9 +41,6 @@ internal fun decodeSplatStats(values: FloatArray, into: SplatStats): SplatStats 
     into.walking = values[5] != 0f
     into.motion = values[6] != 0f
     into.drawnSplatCount = values[7].toInt()
-    into.computeTileCount = values[8].toInt()
-    into.nonemptyComputeTileCount = values[9].toInt()
-    into.hardwareTileCount = values[10].toInt()
-    into.loadedShDegree = values[11].toInt()
+    into.loadedShDegree = values[8].toInt()
     return into
 }

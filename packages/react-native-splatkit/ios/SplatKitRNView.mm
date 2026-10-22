@@ -39,8 +39,6 @@ static const CGFloat kMinRenderScale = 0.1;
 static const CGFloat kMaxRenderScale = 2.0;
 static const NSInteger kMaxShDegree = 3;
 static const CGFloat kMaxCullMarginDegrees = 80;
-/// Hardware, compute tile and hybrid, one bit per raster wire value.
-static const uint32_t kAllRasterStrategiesMask = 0b111;
 
 @class _SplatKitRNLinkProxy;
 
@@ -356,8 +354,6 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
     @"phase": phase,
     @"errorCode": code,
     @"message": message ?: @"",
-    @"raster": @(effective.raster),
-    @"tileSize": @(effective.tileSize),
     @"lodErrorPixels": @(effective.lodErrorPixels),
     @"alphaThreshold": @(effective.alphaThreshold),
     @"subpixelThreshold": @(effective.subpixelThreshold),
@@ -375,13 +371,9 @@ static const uint32_t kAllRasterStrategiesMask = 0b111;
     @"maxLodCapacitySplats": @(caps.maxLodCapacitySplats),
     @"minResidencyCapacitySplats": @(caps.minResidencyCapacitySplats),
     @"maxResidencyCapacitySplats": @(caps.maxResidencyCapacitySplats),
-    @"supportsComputeTiles": @(caps.supportsComputeTiles),
     @"supportsHiZOcclusion": @(caps.supportsHiZOcclusion),
     @"supportsSubgroups": @(caps.supportsSubgroups),
     @"maxTextureDimension": @(caps.maxTextureDimension),
-    @"policyRaster": @(caps.policy.raster),
-    @"policyRasterMask": @(caps.policy.raster ? (caps.policy.rasterMask != 0 ? caps.policy.rasterMask : kAllRasterStrategiesMask) : 0u),
-    @"policyTileSize": @(caps.policy.tileSize),
     @"policyLodErrorPixels": @(caps.policy.lodErrorPixels),
     @"policyAlphaThreshold": @(caps.policy.alphaThreshold),
     @"policySubpixelThreshold": @(caps.policy.subpixelThreshold),

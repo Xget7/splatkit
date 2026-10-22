@@ -27,9 +27,6 @@ private const val MAX_RENDER_SCALE = 2.0
 private const val MAX_SH_DEGREE = 3
 private const val MAX_CULL_MARGIN_DEGREES = 80.0
 
-/** Bit per RasterStrategy wire value, as onCapabilities reports them: hardware, computeTile, hybrid. */
-private const val ALL_RASTER_STRATEGIES_MASK = 0b111
-
 internal class SplatKitEvent(surfaceId: Int, tag: Int, private val name: String, private val data: WritableMap) :
     Event<SplatKitEvent>(surfaceId, tag) {
     override fun getEventName() = name
@@ -474,14 +471,9 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             putInt("maxLodCapacitySplats", caps.limits.maxLodCapacitySplats)
             putInt("minResidencyCapacitySplats", caps.limits.minResidencyCapacitySplats)
             putInt("maxResidencyCapacitySplats", caps.limits.maxResidencyCapacitySplats)
-            putBoolean("supportsComputeTiles", caps.supportsComputeTiles)
             putBoolean("supportsHiZOcclusion", caps.supportsHiZOcclusion)
             putBoolean("supportsSubgroups", caps.supportsSubgroups)
             putInt("maxTextureDimension", caps.maxTextureDimension)
-            putBoolean("policyRaster", caps.policy.raster)
-            // Vulkan applies no raster choice; the Kotlin support type has no strategy mask yet.
-            putInt("policyRasterMask", if (caps.policy.raster) ALL_RASTER_STRATEGIES_MASK else 0)
-            putBoolean("policyTileSize", caps.policy.tileSize)
             putBoolean("policyLodErrorPixels", caps.policy.lodErrorPixels)
             putBoolean("policyAlphaThreshold", caps.policy.alphaThreshold)
             putBoolean("policySubpixelThreshold", caps.policy.subpixelThreshold)
@@ -501,8 +493,6 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
             putString("phase", outcome.phase)
             putString("errorCode", outcome.errorCode)
             putString("message", outcome.message)
-            putInt("raster", effective.raster.wire)
-            putInt("tileSize", effective.tileSize)
             putDouble("lodErrorPixels", effective.lodErrorPixels.toDouble())
             putDouble("alphaThreshold", effective.alphaThreshold.toDouble())
             putDouble("subpixelThreshold", effective.subpixelThreshold.toDouble())

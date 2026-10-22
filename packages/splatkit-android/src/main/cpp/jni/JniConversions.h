@@ -18,18 +18,18 @@ inline constexpr jsize kPoseFloats = 5;
 inline constexpr jsize kCameraRequestFields = 8;
 inline constexpr jsize kCameraStateFields = 9;
 inline constexpr jsize kCameraResolutionFields = kCameraStateFields + 1;
-// fps, frame, gpu and sort milliseconds, splat count, walking and motion flags, then the drawn,
-// compute tile, non-empty compute tile and hardware tile counts, then the world's SH degree.
-inline constexpr jsize kStatsFloats = 12;
+// fps, frame, gpu and sort milliseconds, splat count, walking and motion flags, then the drawn
+// count and the world's SH degree.
+inline constexpr jsize kStatsFloats = 9;
 inline constexpr jsize kAttitudeFloats = 9;
 
 // Policy and capabilities. Both arrays are double: every field is a count, flag or float.
-inline constexpr jsize kPolicyFields = 10;  // see policyFromDoubles
+inline constexpr jsize kPolicyFields = 8;  // see policyFromDoubles
 // accepted, preparationFailed, then the effective policy
 inline constexpr jsize kPolicyResolutionFields = kPolicyFields + 2;
 // Capabilities: limits and feature flags, policy support, then the fallback policy.
-inline constexpr jsize kCapabilityLeadFields = 7;
-inline constexpr jsize kPolicySupportFields = 15;
+inline constexpr jsize kCapabilityLeadFields = 6;
+inline constexpr jsize kPolicySupportFields = 12;
 inline constexpr jsize kCapabilityFields =
     kCapabilityLeadFields + kPolicySupportFields + kPolicyFields;
 
@@ -50,16 +50,15 @@ void cameraStateToDoubles(const CameraState& state, double* out);
 // Request: mode, anchor xyz, radius, azimuth, elevation, angular rate.
 CameraRequest cameraRequestFromDoubles(const double* in);
 
-// Fills out[0..11] in the order kStatsFloats lists.
+// Fills out[0..8] in the order kStatsFloats lists.
 void statsToFloats(const Stats& stats, float* out);
 
-// 0 raster, 1 tileSize, 2 lodErrorPixels, 3 alphaThreshold, 4 subpixelThreshold,
-// 5 enableFrustumCulling, 6 enableHiZOcclusion, 7 enableEarlyTermination, 8 sortDepth,
-// 9 lodSplatLimit.
+// 0 lodErrorPixels, 1 alphaThreshold, 2 subpixelThreshold, 3 enableFrustumCulling,
+// 4 enableHiZOcclusion, 5 enableEarlyTermination, 6 sortDepth, 7 lodSplatLimit.
 RenderPolicy policyFromDoubles(const double* in);
 void policyToDoubles(const RenderPolicy& policy, double* out);
 
-// out[0..31]: limits and feature flags [0..6], policy support [7..21], fallback policy [22..31].
+// out[0..25]: limits and feature flags [0..5], policy support [6..17], fallback policy [18..25].
 void capabilitiesToDoubles(const DeviceCapabilities& caps, double* out);
 
 // Hands the bytes of a Java array to `use` without copying them for longer than the call.

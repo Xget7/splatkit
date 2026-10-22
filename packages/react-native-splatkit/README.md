@@ -348,17 +348,16 @@ const configuration = new SplatKitBuilder()
 
 ### Presets
 
-Every preset rasterizes in hardware, with frustum culling and early termination on.
+Every preset keeps frustum culling and early termination on.
 
-| Preset | Render scale | SH | LOD budget | Residency | Tile | LOD error px | Alpha | Sub-pixel | Hi-Z | Sort |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |
-| `highEnd` | 1.25 | 3 | 4,000,000 | 4,000,000 | 16 | 0.75 | 1/255 | 1.0 | Yes | 32 |
-| `high` | 1.0 | 3 | 3,000,000 | 3,000,000 | 16 | 1.0 | 1/255 | 1.0 | Yes | 32 |
-| `balanced` | 0.85 | 2 | 2,000,000 | 2,000,000 | 16 | 1.25 | 1/255 | 1.0 | No | 16 |
-| `performance` | 0.65 | 1 | 1,000,000 | 1,000,000 | 8 | 2.0 | 2/255 | 1.0 | No | 16 |
+| Preset | Render scale | SH | LOD budget | Residency | LOD error px | Alpha | Sub-pixel | Hi-Z | Sort |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |
+| `highEnd` | 1.25 | 3 | 4,000,000 | 4,000,000 | 0.75 | 1/255 | 1.0 | Yes | 32 |
+| `high` | 1.0 | 3 | 3,000,000 | 3,000,000 | 1.0 | 1/255 | 1.0 | Yes | 32 |
+| `balanced` | 0.85 | 2 | 2,000,000 | 2,000,000 | 1.25 | 1/255 | 1.0 | No | 16 |
+| `performance` | 0.65 | 1 | 1,000,000 | 1,000,000 | 2.0 | 2/255 | 1.0 | No | 16 |
 
 Lower `lodErrorPixels` sharpens the far field, which is where a captured room looks soft, and costs fill rate.
-No adapter implements `hybrid` or `computeTile`; both resolve to `hardware` with a fallback warning.
 The Alpha column applies on Android only; iOS is fixed at 2/255.
 
 ### Splat budgets
@@ -456,7 +455,6 @@ Every enumerated value is a frozen object with a matching type, so there are no 
 | `CameraMode` | `firstPerson`, `orbit` |
 | `CameraPhase` | `applied`, `rejected` |
 | `PolicyPhase` | `applied`, `warning`, `rejected` |
-| `RasterStrategy` | `hardware`, `computeTile`, `hybrid` |
 | `PerformanceMode` | `auto`, `manual` |
 | `PolicyChangeKind` | `none`, `nativePropUpdate`, `worldReload`, `unavailable` |
 | `conservativeCapabilities` | the narrowest limits every shipped adapter accepts, for the first request |
@@ -484,7 +482,6 @@ None of them touch the filesystem or the GPU.
 | `limit-clamped` | Clamped to a host or native limit. |
 | `native-option-fallback` | The adapter does not apply this field; it fell back to the native default. |
 | `native-support-unknown` | Capabilities have not arrived, so support is unknown. |
-| `capability-fallback-unavailable` | The requested raster strategy is unsupported; `hardware` is the candidate. |
 | `fabric-option-unavailable` | The option has no Fabric prop. `targetFps` only, which is a request and never enables dynamic quality. |
 
 ## Error codes

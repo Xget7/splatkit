@@ -19,21 +19,6 @@ import {
   range,
 } from './validation';
 
-/**
- * `hardware` is the only strategy any adapter implements. `hybrid` and `computeTile` resolve to
- * it with a fallback warning.
- */
-export const RasterStrategy = {
-  hardware: 'hardware',
-  computeTile: 'computeTile',
-  hybrid: 'hybrid',
-} as const;
-export type RasterStrategy =
-  (typeof RasterStrategy)[keyof typeof RasterStrategy];
-
-const TILE_SIZES = [8, 16, 32] as const;
-type TileSize = (typeof TILE_SIZES)[number];
-
 const SORT_DEPTHS = [16, 32] as const;
 export type SortDepth = (typeof SORT_DEPTHS)[number];
 
@@ -58,10 +43,6 @@ export const qualityPresets: readonly QualityPreset[] = Object.freeze([
 
 /** Which policy fields one native adapter applies; the rest fall back natively. */
 export type NativePolicySupport = Readonly<{
-  raster: boolean;
-  /** The strategies native applies when `raster` is true. */
-  rasterStrategies: readonly RasterStrategy[];
-  tileSize: boolean;
   lodErrorPixels: boolean;
   alphaThreshold: boolean;
   subpixelThreshold: boolean;
@@ -74,7 +55,6 @@ export type NativePolicySupport = Readonly<{
 /** Host-supplied constraints. Use nativeCapabilitiesFromEvent for the native report. */
 export type DeviceCapabilities = Readonly<{
   limits: SplatLimits;
-  supportsComputeTiles: boolean;
   supportsHiZOcclusion: boolean;
   supportsSubgroups: boolean;
   maxTextureDimension: number;
@@ -97,7 +77,6 @@ export const conservativeCapabilities: DeviceCapabilities = Object.freeze({
     minResidencyCapacitySplats: 100_000,
     maxResidencyCapacitySplats: 8_000_000,
   }),
-  supportsComputeTiles: false,
   supportsHiZOcclusion: false,
   supportsSubgroups: false,
   maxTextureDimension: 4096,
@@ -106,8 +85,6 @@ export const conservativeCapabilities: DeviceCapabilities = Object.freeze({
 /** The policy as it crosses the Fabric boundary; enum values are the numbers native uses. */
 export type NativeRenderPolicy = Readonly<{
   revision: number;
-  raster: number;
-  tileSize: number;
   lodErrorPixels: number;
   alphaThreshold: number;
   subpixelThreshold: number;
@@ -122,13 +99,9 @@ export type NativeCapabilitiesEvent = Readonly<{
   maxLodCapacitySplats: number;
   minResidencyCapacitySplats: number;
   maxResidencyCapacitySplats: number;
-  supportsComputeTiles: boolean;
   supportsHiZOcclusion: boolean;
   supportsSubgroups: boolean;
   maxTextureDimension: number;
-  policyRaster: boolean;
-  policyRasterMask: number;
-  policyTileSize: boolean;
   policyLodErrorPixels: boolean;
   policyAlphaThreshold: boolean;
   policySubpixelThreshold: boolean;
@@ -146,8 +119,6 @@ export type SplatKitWorldRequest = Readonly<
 export type PerformancePolicy = Readonly<{
   mode: PerformanceMode;
   preset: QualityPreset;
-  raster: RasterStrategy;
-  tileSize: TileSize;
   lodErrorPixels: number;
   lodBudgetSplats: number;
   alphaThreshold: number;
@@ -169,8 +140,6 @@ export type PerformanceOptions = Partial<
 
 /** null means native support is unknown: build with capabilities from onCapabilities. */
 export type EffectivePerformancePolicy = Readonly<{
-  raster: RasterStrategy | null;
-  tileSize: TileSize | null;
   lodErrorPixels: number | null;
   lodBudgetSplats: number;
   alphaThreshold: number | null;
@@ -188,7 +157,6 @@ export type EffectivePerformancePolicy = Readonly<{
 const DiagnosticCode = {
   fabricOptionUnavailable: 'fabric-option-unavailable',
   nativeSupportUnknown: 'native-support-unknown',
-  capabilityFallbackUnavailable: 'capability-fallback-unavailable',
   limitClamped: 'limit-clamped',
   nativeOptionFallback: 'native-option-fallback',
 } as const;
@@ -245,8 +213,6 @@ const loadKeys = new Set<keyof PerformancePolicy>([
 const propKeys = new Set<keyof PerformancePolicy>([
   'renderScale',
   'shDegree',
-  'raster',
-  'tileSize',
   'lodErrorPixels',
   'alphaThreshold',
   'subpixelThreshold',
@@ -286,12 +252,6 @@ export function toNativeViewProps(
   };
 }
 
-const rasterWire: Readonly<Record<RasterStrategy, number>> = {
-  [RasterStrategy.hardware]: 0,
-  [RasterStrategy.computeTile]: 1,
-  [RasterStrategy.hybrid]: 2,
-};
-
 /**
  * The complete requested policy as the Fabric `policy` prop expects it. Pass a new positive
  * revision for each change; native reports `onPolicyEvent` under it and treats 0 or less as
@@ -305,8 +265,6 @@ export function toNativePolicyProp(
   const policy = configuration.performance.requested;
   return {
     revision,
-    raster: rasterWire[policy.raster],
-    tileSize: policy.tileSize,
     lodErrorPixels: policy.lodErrorPixels,
     alphaThreshold: policy.alphaThreshold,
     subpixelThreshold: policy.subpixelThreshold,
@@ -327,19 +285,10 @@ export function nativeCapabilitiesFromEvent(
       minResidencyCapacitySplats: event.minResidencyCapacitySplats,
       maxResidencyCapacitySplats: event.maxResidencyCapacitySplats,
     }),
-    supportsComputeTiles: event.supportsComputeTiles,
     supportsHiZOcclusion: event.supportsHiZOcclusion,
     supportsSubgroups: event.supportsSubgroups,
     maxTextureDimension: event.maxTextureDimension,
     policy: Object.freeze({
-      raster: event.policyRaster,
-      rasterStrategies: Object.freeze(
-        (Object.keys(rasterWire) as RasterStrategy[]).filter(
-          strategy =>
-            (event.policyRasterMask & (1 << rasterWire[strategy])) !== 0,
-        ),
-      ),
-      tileSize: event.policyTileSize,
       lodErrorPixels: event.policyLodErrorPixels,
       alphaThreshold: event.policyAlphaThreshold,
       subpixelThreshold: event.policySubpixelThreshold,
@@ -353,8 +302,6 @@ export function nativeCapabilitiesFromEvent(
 
 /** The shared native RenderPolicy defaults; a backend starts from its own fallback. */
 const nativeDefaults = {
-  raster: RasterStrategy.hardware,
-  tileSize: 16,
   lodErrorPixels: 1,
   alphaThreshold: 1 / 255,
   subpixelThreshold: 1,
@@ -365,12 +312,8 @@ const nativeDefaults = {
 } as const;
 
 type PresetValues = Omit<PerformancePolicy, 'mode' | 'preset'>;
-// Every preset rasterizes in hardware; screen tiles only pay off on some scenes, so they are
-// an explicit withPerformance({raster: RasterStrategy.hybrid}) choice.
 const presets: Readonly<Record<QualityPreset, PresetValues>> = {
   highEnd: {
-    raster: RasterStrategy.hardware,
-    tileSize: 16,
     lodErrorPixels: 0.75,
     lodBudgetSplats: 4_000_000,
     alphaThreshold: 1 / 255,
@@ -385,8 +328,6 @@ const presets: Readonly<Record<QualityPreset, PresetValues>> = {
     targetFps: null,
   },
   high: {
-    raster: RasterStrategy.hardware,
-    tileSize: 16,
     lodErrorPixels: 1,
     lodBudgetSplats: 3_000_000,
     alphaThreshold: 1 / 255,
@@ -401,8 +342,6 @@ const presets: Readonly<Record<QualityPreset, PresetValues>> = {
     targetFps: null,
   },
   balanced: {
-    raster: RasterStrategy.hardware,
-    tileSize: 16,
     lodErrorPixels: 1.25,
     lodBudgetSplats: 2_000_000,
     alphaThreshold: 1 / 255,
@@ -417,8 +356,6 @@ const presets: Readonly<Record<QualityPreset, PresetValues>> = {
     targetFps: null,
   },
   performance: {
-    raster: RasterStrategy.hardware,
-    tileSize: 8,
     lodErrorPixels: 2,
     lodBudgetSplats: 1_000_000,
     alphaThreshold: 2 / 255,
@@ -447,8 +384,6 @@ const worldFields: Readonly<Record<keyof SplatKitWorldRequest, true>> = {
 };
 const worldKeys = new Set<string>(Object.keys(worldFields));
 const policyPropKeys = [
-  'raster',
-  'tileSize',
   'lodErrorPixels',
   'alphaThreshold',
   'subpixelThreshold',
@@ -467,12 +402,6 @@ function validatePolicy(policy: PerformancePolicy): void {
     throw new TypeError('invalid mode');
   if (!isPreset(policy.preset))
     throw new TypeError('invalid performance preset');
-  if (!Object.values(RasterStrategy).includes(policy.raster)) {
-    throw new TypeError('invalid raster strategy');
-  }
-  if (!(TILE_SIZES as readonly number[]).includes(policy.tileSize)) {
-    throw new RangeError('invalid tileSize');
-  }
   if (!(SORT_DEPTHS as readonly number[]).includes(policy.sortDepth)) {
     throw new RangeError('invalid sortDepth');
   }
@@ -505,11 +434,7 @@ function validatePolicy(policy: PerformancePolicy): void {
 }
 
 function validateCapabilities(capabilities: DeviceCapabilities): void {
-  for (const key of [
-    'supportsComputeTiles',
-    'supportsHiZOcclusion',
-    'supportsSubgroups',
-  ] as const) {
+  for (const key of ['supportsHiZOcclusion', 'supportsSubgroups'] as const) {
     if (typeof capabilities[key] !== 'boolean')
       throw new TypeError(`${key} must be boolean`);
   }
@@ -575,8 +500,6 @@ type PolicyPropFields = {
 
 function unappliedFields(): PolicyPropFields {
   return {
-    raster: null,
-    tileSize: null,
     lodErrorPixels: null,
     alphaThreshold: null,
     subpixelThreshold: null,
@@ -599,11 +522,7 @@ function supportedFields(
     PerformancePolicy[PolicyPropKey] | null
   >;
   for (const option of policyPropKeys) {
-    const applied =
-      option === 'raster'
-        ? support.raster && support.rasterStrategies.includes(requested.raster)
-        : support[option];
-    if (applied) fields[option] = requested[option];
+    if (support[option]) fields[option] = requested[option];
     else if (requested[option] !== nativeDefaults[option]) {
       log.warn(
         DiagnosticCode.nativeOptionFallback,
@@ -622,22 +541,15 @@ function supportedFields(
 function unknownSupportFields(
   log: DiagnosticLog,
   requested: PerformancePolicy,
-  capabilities: DeviceCapabilities,
 ): PolicyPropFields {
   for (const option of policyPropKeys) {
     if (requested[option] === nativeDefaults[option]) continue;
-    const hardwareFallback =
-      option === 'raster' && !capabilities.supportsComputeTiles;
     log.warn(
-      hardwareFallback
-        ? DiagnosticCode.capabilityFallbackUnavailable
-        : DiagnosticCode.nativeSupportUnknown,
+      DiagnosticCode.nativeSupportUnknown,
       option,
       requested[option],
-      hardwareFallback ? RasterStrategy.hardware : null,
-      hardwareFallback
-        ? 'hardware is the candidate fallback; read onPolicyEvent for the applied raster'
-        : `${option} support is unknown until native capabilities are supplied`,
+      null,
+      `${option} support is unknown until native capabilities are supplied`,
     );
   }
   return unappliedFields();
@@ -736,7 +648,7 @@ export class SplatKitBuilder {
 
     const effectiveFields = capabilities.policy
       ? supportedFields(log, requested, capabilities.policy)
-      : unknownSupportFields(log, requested, capabilities);
+      : unknownSupportFields(log, requested);
     if (requested.targetFps !== null) {
       log.warn(
         DiagnosticCode.fabricOptionUnavailable,

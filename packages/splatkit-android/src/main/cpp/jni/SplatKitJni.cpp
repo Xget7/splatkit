@@ -375,7 +375,7 @@ SPLATKIT_JNI(void, nativeStartBenchmark)(JNIEnv*, jobject, jlong handle, jfloat 
   if (auto* engine = toEngine(handle)) engine->startBenchmark(seconds);
 }
 
-// Fills out[0..11] in the order kStatsFloats lists.
+// Fills out[0..8] in the order kStatsFloats lists.
 SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray out) {
   auto* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kStatsFloats) return;
@@ -386,7 +386,7 @@ SPLATKIT_JNI(void, nativeStats)(JNIEnv* env, jobject, jlong handle, jfloatArray 
 
 // Policy and capabilities.
 
-// out[0..29]: limits and feature flags [0..6], policy support [7..20], fallback policy [21..29].
+// out[0..25]: limits and feature flags [0..5], policy support [6..17], fallback policy [18..25].
 SPLATKIT_JNI(void, nativeCapabilities)(JNIEnv* env, jobject, jlong handle, jdoubleArray out) {
   const splatkit::SplatEngine* engine = toEngine(handle);
   if (engine == nullptr || out == nullptr || env->GetArrayLength(out) < kCapabilityFields) return;
@@ -395,7 +395,7 @@ SPLATKIT_JNI(void, nativeCapabilities)(JNIEnv* env, jobject, jlong handle, jdoub
   env->SetDoubleArrayRegion(out, 0, kCapabilityFields, values);
 }
 
-// requested[0..8] in; out[0] accepted, out[1] preparationFailed, out[2..10] the effective
+// requested[0..7] in; out[0] accepted, out[1] preparationFailed, out[2..9] the effective
 // policy. Returns the rejection reason, or one warning per fallback; both are also logged.
 SPLATKIT_JNI(jobjectArray, nativeApplyRenderPolicy)
 (JNIEnv* env, jobject, jlong handle, jdoubleArray requested, jdoubleArray out) {

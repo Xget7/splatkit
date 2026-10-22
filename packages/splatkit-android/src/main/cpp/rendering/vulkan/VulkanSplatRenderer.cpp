@@ -57,8 +57,7 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   caps.limits.maxLodCapacitySplats = VulkanLodSelection::kMaxBudget;
   caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
   caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;
-  // Vulkan has no screen-tile rasterization and conservative occlusion is unimplemented.
-  caps.supportsComputeTiles = false;
+  // Conservative occlusion is unimplemented.
   caps.supportsHiZOcclusion = false;
   const bool gpu = selectsLodOnGpu();
   caps.supportsSubgroups = gpu;
@@ -66,8 +65,6 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
   caps.maxTextureDimension = properties.limits.maxImageDimension2D;
   RenderPolicySupport& policy = caps.policy;
-  policy.fallback.raster = RasterStrategy::hardware;
-  policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = VulkanLodSelection::Quality{}.pixelLimit;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = RenderPolicy{}.subpixelThreshold;

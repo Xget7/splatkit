@@ -23,7 +23,6 @@ const capabilities = {
     minResidencyCapacitySplats: 100_000,
     maxResidencyCapacitySplats: 5_000_000,
   },
-  supportsComputeTiles: true,
   supportsHiZOcclusion: true,
   supportsSubgroups: true,
   maxTextureDimension: 16_384,
@@ -56,8 +55,7 @@ test('presets have real values and later manual options predictably override the
 test('requested policy resolves to only values the current Fabric contract can apply', () => {
   const config = build(builder =>
     builder.withPerformance({
-      raster: 'computeTile',
-      tileSize: 32,
+      alphaThreshold: 0.5,
       renderScale: 1.1,
       shDegree: 2,
       lodBudgetSplats: 2_500_000,
@@ -66,11 +64,9 @@ test('requested policy resolves to only values the current Fabric contract can a
     }),
   );
 
-  assert.equal(config.performance.requested.raster, 'computeTile');
+  assert.equal(config.performance.requested.alphaThreshold, 0.5);
   assert.equal(config.performance.requested.targetFps, 90);
   assert.deepEqual(config.performance.effective, {
-    raster: null,
-    tileSize: null,
     lodErrorPixels: null,
     lodBudgetSplats: 2_500_000,
     alphaThreshold: null,
@@ -95,7 +91,7 @@ test('requested policy resolves to only values the current Fabric contract can a
   assert(
     config.performance.diagnostics.some(
       diagnostic =>
-        diagnostic.option === 'tileSize' &&
+        diagnostic.option === 'alphaThreshold' &&
         diagnostic.code === 'native-support-unknown',
     ),
   );
@@ -228,30 +224,12 @@ test('clamps valid requests to supplied limits and reports each fallback', () =>
   }
 });
 
-test('hardware-only snapshot suggests but does not claim a raster fallback', () => {
-  const config = new SplatKitBuilder()
-    .withWorld(world)
-    .withPerformance({
-      raster: 'computeTile',
-    })
-    .build({...capabilities, supportsComputeTiles: false});
-  const diagnostic = config.performance.diagnostics.find(
-    item => item.option === 'raster',
-  );
-
-  assert.equal(config.performance.effective.raster, null);
-  assert.equal(diagnostic.code, 'capability-fallback-unavailable');
-  assert.equal(diagnostic.fallback, 'hardware');
-});
-
 test('rejects malformed numeric, enum and duplicate-authority inputs', () => {
   const invalid = [
     {lodBudgetSplats: NaN},
     {lodBudgetSplats: 1.5},
     {residencyCapacitySplats: Infinity},
-    {tileSize: 12},
     {sortDepth: 24},
-    {raster: 'magic'},
     {targetFps: 0},
     {enableHiZOcclusion: 1},
   ];
@@ -301,7 +279,7 @@ test('classifies only operations represented by the Fabric contract', () => {
   );
   // Renderer policy fields travel in the versioned policy prop, not a world reload.
   assert.equal(
-    classifyPolicyChange(policy, {...policy, raster: 'hybrid'}),
+    classifyPolicyChange(policy, {...policy, alphaThreshold: 0.5}),
     'nativePropUpdate',
   );
   assert.equal(
@@ -318,13 +296,9 @@ const nativeCapabilitiesEvent = Object.freeze({
   maxLodCapacitySplats: 2_200_000,
   minResidencyCapacitySplats: 100_000,
   maxResidencyCapacitySplats: 8_000_000,
-  supportsComputeTiles: false,
   supportsHiZOcclusion: false,
   supportsSubgroups: true,
   maxTextureDimension: 16_384,
-  policyRaster: false,
-  policyRasterMask: 0,
-  policyTileSize: false,
   policyLodErrorPixels: false,
   policyAlphaThreshold: false,
   policySubpixelThreshold: false,
@@ -365,7 +339,6 @@ test('native capabilities resolve the requested policy against what the adapter 
   const config = new SplatKitBuilder()
     .withWorld(world)
     .withPerformance({
-      raster: 'hybrid',
       sortDepth: 16,
       subpixelThreshold: 0.75,
       alphaThreshold: 0.5,
@@ -377,10 +350,9 @@ test('native capabilities resolve the requested policy against what the adapter 
   // Supported-by-contract numeric budgets are unchanged.
   assert.equal(config.performance.effective.lodBudgetSplats, 2_000_000);
   // Unsupported fields stay null and warn once each with the native fallback code.
-  assert.equal(config.performance.effective.raster, null);
   assert.equal(config.performance.effective.alphaThreshold, null);
   assert.equal(config.performance.effective.subpixelThreshold, null);
-  for (const option of ['raster', 'alphaThreshold', 'subpixelThreshold']) {
+  for (const option of ['alphaThreshold', 'subpixelThreshold']) {
     assert(
       config.performance.diagnostics.some(
         diagnostic =>
@@ -391,52 +363,15 @@ test('native capabilities resolve the requested policy against what the adapter 
   }
 });
 
-test('every preset rasterizes in hardware; hybrid tiles are an explicit choice', () => {
-  for (const preset of ['highEnd', 'high', 'balanced', 'performance']) {
-    const config = build(builder => builder.withPreset(preset));
-    assert.equal(config.performance.requested.raster, 'hardware', preset);
-    assert(
-      !config.performance.diagnostics.some(item => item.option === 'raster'),
-      preset,
-    );
-  }
-});
-
-test('a hardware-only raster mask resolves every other strategy to the fallback', () => {
-  const metal = nativeCapabilitiesFromEvent({
-    ...nativeCapabilitiesEvent,
-    policyRaster: true,
-    policyRasterMask: 0b001,
-  });
-  assert.deepEqual(metal.policy.rasterStrategies, ['hardware']);
-  for (const raster of ['hybrid', 'computeTile']) {
-    const config = new SplatKitBuilder()
-      .withWorld(world)
-      .withPerformance({raster})
-      .build(metal);
-    assert.equal(config.performance.effective.raster, null, raster);
-    assert(
-      config.performance.diagnostics.some(
-        item =>
-          item.option === 'raster' && item.code === 'native-option-fallback',
-      ),
-      raster,
-    );
-  }
-});
-
 test('builds the versioned native policy prop from the requested values', () => {
   const config = build(builder =>
     builder.withPerformance({
-      raster: 'computeTile',
       sortDepth: 16,
       subpixelThreshold: 0.25,
     }),
   );
   assert.deepEqual(toNativePolicyProp(config, 7), {
     revision: 7,
-    raster: 1,
-    tileSize: 16,
     lodErrorPixels: 1.25,
     alphaThreshold: 1 / 255,
     subpixelThreshold: 0.25,

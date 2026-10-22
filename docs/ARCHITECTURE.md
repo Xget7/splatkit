@@ -52,7 +52,7 @@ Both backends:
 - Splats blend in the encoded space by default; linear blending (off by default) applies `pow(rgb, 2.2)` to splat colour and presents to an sRGB surface.
 - The render policy applies per backend: both honour the sort depth and the LOD pixel error and splat limit, live ([VulkanFrameCompute.h][vk-frame]).
 - The sub-pixel cutoff rides in the camera uniform, so it applies from the next frame on both order paths: a splat whose source sigma times its quad radius is under it has no quad ([SplatProjection.metalh][mtl-proj], [splat_projection.glsl][vk-proj]).
-- Splats rasterize as hardware quads over the whole screen; `supportsComputeTiles` is false on both.
+- Splats rasterize as hardware quads over the whole screen.
 - Vulkan creates every pipeline through one `VkPipelineCache` kept in the app's cache directory, so a launch after the first reuses the driver's compiles; a file that fails its checksum or names another device or driver loads as an empty cache ([VulkanPipelineCache.cpp][vk-cache]). Metal keeps no file: the system caches compiled shaders on the device.
 - A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint]).
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).

@@ -10,8 +10,6 @@ class RenderPolicyTest {
     @Test
     fun roundTripsEveryPolicyField() {
         val policy = RenderPolicy(
-            raster = RasterStrategy.HYBRID,
-            tileSize = 32,
             lodErrorPixels = 1.25f,
             lodSplatLimit = 1_500_000,
             alphaThreshold = 0.5f,
@@ -34,7 +32,6 @@ class RenderPolicyTest {
     @Test
     fun validationMirrorsTheJsRanges() {
         assertNull(renderPolicyError(RenderPolicy()))
-        assertEquals("tileSize must be 8, 16 or 32", renderPolicyError(RenderPolicy(tileSize = 12)))
         assertTrue(renderPolicyError(RenderPolicy(lodErrorPixels = 0f)) != null)
         assertTrue(renderPolicyError(RenderPolicy(lodErrorPixels = Float.NaN)) != null)
         assertTrue(renderPolicyError(RenderPolicy(lodSplatLimit = -1)) != null)
@@ -51,12 +48,12 @@ class RenderPolicyTest {
         val effective = RenderPolicy(subpixelThreshold = 2f, sortDepth = SortDepth.BITS_16)
         encodeRenderPolicy(effective, values, offset = 2)
 
-        val resolution = decodeRenderPolicyResolution(values, arrayOf("raster fell back", "tiles fell back"))
+        val resolution = decodeRenderPolicyResolution(values, arrayOf("alphaThreshold fell back", "enableHiZOcclusion fell back"))
         assertTrue(resolution.accepted)
         assertFalse(resolution.preparationFailed)
         assertNull(resolution.error)
         assertEquals(effective, resolution.effective)
-        assertEquals(listOf("raster fell back", "tiles fell back"), resolution.warnings)
+        assertEquals(listOf("alphaThreshold fell back", "enableHiZOcclusion fell back"), resolution.warnings)
     }
 
     @Test
@@ -80,22 +77,19 @@ class RenderPolicyTest {
         values[0] = 4_000_000.0
         values[1] = 100_000.0
         values[2] = 8_000_000.0
-        values[3] = 1.0
-        values[5] = 1.0
-        values[6] = 16_384.0
-        values[15] = 1.0          // policy.sortDepth supported
-        values[11] = 1.0          // policy.subpixelThreshold supported
-        values[21] = 1.0          // policy.lodSplatLimit supported
-        values[22] = 0.0          // fallback raster hardware
-        values[23] = 16.0         // fallback tileSize
-        values[27] = 1.0          // fallback frustum culling
-        values[30] = 32.0         // fallback sortDepth
-        values[31] = 0.0          // fallback lodSplatLimit
+        values[4] = 1.0           // subgroups
+        values[5] = 16_384.0
+        values[8] = 1.0           // policy.subpixelThreshold supported
+        values[12] = 1.0          // policy.sortDepth supported
+        values[17] = 1.0          // policy.lodSplatLimit supported
+        values[18] = 1.0          // fallback lodErrorPixels
+        values[21] = 1.0          // fallback frustum culling
+        values[24] = 32.0         // fallback sortDepth
+        values[25] = 0.0          // fallback lodSplatLimit
 
         val capabilities = decodeDeviceCapabilities(values)
         assertEquals(4_000_000, capabilities.limits.maxLodCapacitySplats)
         assertEquals(8_000_000, capabilities.limits.maxResidencyCapacitySplats)
-        assertTrue(capabilities.supportsComputeTiles)
         assertFalse(capabilities.supportsHiZOcclusion)
         assertTrue(capabilities.supportsSubgroups)
         assertEquals(16_384, capabilities.maxTextureDimension)
@@ -103,8 +97,8 @@ class RenderPolicyTest {
         assertTrue(capabilities.policy.subpixelThreshold)
         assertTrue(capabilities.policy.lodSplatLimit)
         assertFalse(capabilities.policy.lodErrorPixels)
-        assertEquals(RasterStrategy.HARDWARE, capabilities.fallback.raster)
-        assertEquals(16, capabilities.fallback.tileSize)
+        assertEquals(1f, capabilities.fallback.lodErrorPixels)
+        assertTrue(capabilities.fallback.enableFrustumCulling)
         assertEquals(SortDepth.BITS_32, capabilities.fallback.sortDepth)
         assertEquals(0, capabilities.fallback.lodSplatLimit)
     }

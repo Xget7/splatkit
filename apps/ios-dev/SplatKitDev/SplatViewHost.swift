@@ -69,10 +69,10 @@ final class SplatSession: ObservableObject {
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities
         NSLog("SplatPolicy: %@", "sortDepth=\(applied.sortDepth) subpixelThreshold=\(applied.subpixelThreshold) "
-              + "raster=\(applied.raster) tileSize=\(applied.tileSize) hiZ=\(applied.enableHiZOcclusion.boolValue) "
+              + "hiZ=\(applied.enableHiZOcclusion.boolValue) "
               + "supports sortDepth=\(caps.policy.sortDepth.boolValue) subpixelThreshold=\(caps.policy.subpixelThreshold.boolValue) "
               + "in [\(caps.policy.minSubpixelThreshold), \(caps.policy.maxSubpixelThreshold)] "
-              + "computeTiles=\(caps.supportsComputeTiles.boolValue) maxLod=\(caps.maxLodCapacitySplats) "
+              + "maxLod=\(caps.maxLodCapacitySplats) "
               + "residency=[\(caps.minResidencyCapacitySplats), \(caps.maxResidencyCapacitySplats)]")
         if monitorResources {
             memoryWarningObserver = NotificationCenter.default.addObserver(

@@ -5,16 +5,6 @@ package com.splatkit
  * wire values and numeric ranges must stay identical across the three so the JS
  * authority and the native re-validation agree; keep them in step.
  */
-enum class RasterStrategy(val wire: Int) {
-    HARDWARE(0),
-    COMPUTE_TILE(1),
-    HYBRID(2);
-
-    companion object {
-        fun fromWire(wire: Int): RasterStrategy? = entries.firstOrNull { it.wire == wire }
-    }
-}
-
 /** Sort depth-key width: 16 quantizes camera depth linearly, 32 keeps the float bits. */
 enum class SortDepth(val wire: Int) {
     BITS_16(16),
@@ -27,8 +17,6 @@ enum class SortDepth(val wire: Int) {
 
 /** Renderer policy values. See the C++ RenderPolicy for the field meanings. */
 data class RenderPolicy(
-    val raster: RasterStrategy = RasterStrategy.HARDWARE,
-    val tileSize: Int = 16,
     val lodErrorPixels: Float = 1f,
     val lodSplatLimit: Int = 0,
     val alphaThreshold: Float = 1f / 255f,
@@ -41,8 +29,6 @@ data class RenderPolicy(
 
 /** Which fields one backend can apply. A false field resolves to [Fallback]. */
 data class RenderPolicySupport(
-    val raster: Boolean = false,
-    val tileSize: Boolean = false,
     val lodErrorPixels: Boolean = false,
     val alphaThreshold: Boolean = false,
     val subpixelThreshold: Boolean = false,
@@ -51,7 +37,6 @@ data class RenderPolicySupport(
     val enableEarlyTermination: Boolean = false,
     val sortDepth: Boolean = false,
     val lodSplatLimit: Boolean = false,
-    val tileSizeMask: Int = 0,
     val minLodErrorPixels: Float = 0f,
     val maxLodErrorPixels: Float = 0f,
     val minSubpixelThreshold: Float = 0f,
@@ -67,7 +52,6 @@ data class SplatLimits(
 
 data class DeviceCapabilities(
     val limits: SplatLimits,
-    val supportsComputeTiles: Boolean,
     val supportsHiZOcclusion: Boolean,
     val supportsSubgroups: Boolean,
     val maxTextureDimension: Int,
@@ -89,19 +73,16 @@ data class RenderPolicyResolution(
     val error: String? = null,
 )
 
-const val RENDER_POLICY_FIELDS = 10
+const val RENDER_POLICY_FIELDS = 8
 /** accepted, preparationFailed, then the effective policy. */
 const val RENDER_POLICY_RESOLUTION_FIELDS = RENDER_POLICY_FIELDS + 2
-const val CAPABILITY_FIELDS = 32
+const val CAPABILITY_FIELDS = 26
 
 /**
  * Structural validation shared with the JS contract. Returns null when [policy] is valid,
  * otherwise a message naming the first invalid field.
  */
 fun renderPolicyError(policy: RenderPolicy): String? {
-    if (policy.tileSize != 8 && policy.tileSize != 16 && policy.tileSize != 32) {
-        return "tileSize must be 8, 16 or 32"
-    }
     if (!policy.lodErrorPixels.isFinite() || policy.lodErrorPixels <= 0f) {
         return "lodErrorPixels must be finite and positive"
     }
@@ -117,31 +98,27 @@ fun renderPolicyError(policy: RenderPolicy): String? {
     return null
 }
 
-/** Fills out[offset..offset+9] with the JNI policy layout. */
+/** Fills out[offset..offset+7] with the JNI policy layout. */
 fun encodeRenderPolicy(policy: RenderPolicy, out: DoubleArray, offset: Int = 0) {
-    out[offset] = policy.raster.wire.toDouble()
-    out[offset + 1] = policy.tileSize.toDouble()
-    out[offset + 2] = policy.lodErrorPixels.toDouble()
-    out[offset + 3] = policy.alphaThreshold.toDouble()
-    out[offset + 4] = policy.subpixelThreshold.toDouble()
-    out[offset + 5] = if (policy.enableFrustumCulling) 1.0 else 0.0
-    out[offset + 6] = if (policy.enableHiZOcclusion) 1.0 else 0.0
-    out[offset + 7] = if (policy.enableEarlyTermination) 1.0 else 0.0
-    out[offset + 8] = policy.sortDepth.wire.toDouble()
-    out[offset + 9] = policy.lodSplatLimit.toDouble()
+    out[offset] = policy.lodErrorPixels.toDouble()
+    out[offset + 1] = policy.alphaThreshold.toDouble()
+    out[offset + 2] = policy.subpixelThreshold.toDouble()
+    out[offset + 3] = if (policy.enableFrustumCulling) 1.0 else 0.0
+    out[offset + 4] = if (policy.enableHiZOcclusion) 1.0 else 0.0
+    out[offset + 5] = if (policy.enableEarlyTermination) 1.0 else 0.0
+    out[offset + 6] = policy.sortDepth.wire.toDouble()
+    out[offset + 7] = policy.lodSplatLimit.toDouble()
 }
 
 fun decodeRenderPolicy(source: DoubleArray, offset: Int = 0): RenderPolicy = RenderPolicy(
-    raster = RasterStrategy.fromWire(source[offset].toInt()) ?: RasterStrategy.HARDWARE,
-    tileSize = source[offset + 1].toInt(),
-    lodErrorPixels = source[offset + 2].toFloat(),
-    alphaThreshold = source[offset + 3].toFloat(),
-    subpixelThreshold = source[offset + 4].toFloat(),
-    enableFrustumCulling = source[offset + 5] != 0.0,
-    enableHiZOcclusion = source[offset + 6] != 0.0,
-    enableEarlyTermination = source[offset + 7] != 0.0,
-    sortDepth = SortDepth.fromWire(source[offset + 8].toInt()) ?: SortDepth.BITS_32,
-    lodSplatLimit = source[offset + 9].toInt(),
+    lodErrorPixels = source[offset].toFloat(),
+    alphaThreshold = source[offset + 1].toFloat(),
+    subpixelThreshold = source[offset + 2].toFloat(),
+    enableFrustumCulling = source[offset + 3] != 0.0,
+    enableHiZOcclusion = source[offset + 4] != 0.0,
+    enableEarlyTermination = source[offset + 5] != 0.0,
+    sortDepth = SortDepth.fromWire(source[offset + 6].toInt()) ?: SortDepth.BITS_32,
+    lodSplatLimit = source[offset + 7].toInt(),
 )
 
 /**
@@ -167,26 +144,22 @@ fun decodeDeviceCapabilities(source: DoubleArray, offset: Int = 0): DeviceCapabi
             minResidencyCapacitySplats = source[offset + 1].toInt(),
             maxResidencyCapacitySplats = source[offset + 2].toInt(),
         ),
-        supportsComputeTiles = source[offset + 3] != 0.0,
-        supportsHiZOcclusion = source[offset + 4] != 0.0,
-        supportsSubgroups = source[offset + 5] != 0.0,
-        maxTextureDimension = source[offset + 6].toInt(),
+        supportsHiZOcclusion = source[offset + 3] != 0.0,
+        supportsSubgroups = source[offset + 4] != 0.0,
+        maxTextureDimension = source[offset + 5].toInt(),
         policy = RenderPolicySupport(
-            raster = source[offset + 7] != 0.0,
-            tileSize = source[offset + 8] != 0.0,
-            lodErrorPixels = source[offset + 9] != 0.0,
-            alphaThreshold = source[offset + 10] != 0.0,
-            subpixelThreshold = source[offset + 11] != 0.0,
-            enableFrustumCulling = source[offset + 12] != 0.0,
-            enableHiZOcclusion = source[offset + 13] != 0.0,
-            enableEarlyTermination = source[offset + 14] != 0.0,
-            sortDepth = source[offset + 15] != 0.0,
-            tileSizeMask = source[offset + 16].toInt(),
-            minLodErrorPixels = source[offset + 17].toFloat(),
-            maxLodErrorPixels = source[offset + 18].toFloat(),
-            minSubpixelThreshold = source[offset + 19].toFloat(),
-            maxSubpixelThreshold = source[offset + 20].toFloat(),
-            lodSplatLimit = source[offset + 21] != 0.0,
+            lodErrorPixels = source[offset + 6] != 0.0,
+            alphaThreshold = source[offset + 7] != 0.0,
+            subpixelThreshold = source[offset + 8] != 0.0,
+            enableFrustumCulling = source[offset + 9] != 0.0,
+            enableHiZOcclusion = source[offset + 10] != 0.0,
+            enableEarlyTermination = source[offset + 11] != 0.0,
+            sortDepth = source[offset + 12] != 0.0,
+            minLodErrorPixels = source[offset + 13].toFloat(),
+            maxLodErrorPixels = source[offset + 14].toFloat(),
+            minSubpixelThreshold = source[offset + 15].toFloat(),
+            maxSubpixelThreshold = source[offset + 16].toFloat(),
+            lodSplatLimit = source[offset + 17] != 0.0,
         ),
-        fallback = decodeRenderPolicy(source, offset + 22),
+        fallback = decodeRenderPolicy(source, offset + 18),
     )
