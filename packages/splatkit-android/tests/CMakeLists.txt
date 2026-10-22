@@ -4,6 +4,7 @@ set(vulkan_source_dir ${SPLATKIT_ANDROID_CPP_DIR}/rendering/vulkan)
 add_library(splatkit_vulkan_test_support STATIC
   ${vulkan_source_dir}/device/VulkanContext.cpp
   ${vulkan_source_dir}/device/VulkanBuffer.cpp
+  ${vulkan_source_dir}/device/VulkanPipelineCache.cpp
   ${vulkan_source_dir}/device/Vma.cpp
 )
 target_include_directories(splatkit_vulkan_test_support PUBLIC ${SPLATKIT_ANDROID_CPP_DIR}
@@ -17,6 +18,10 @@ target_link_libraries(splatkit_vulkan_test_support PUBLIC
 
 add_executable(splatkit_vulkan_context_test rendering/vulkan/device/VulkanContextTest.cpp)
 target_link_libraries(splatkit_vulkan_context_test PRIVATE splatkit_vulkan_test_support)
+add_executable(splatkit_vulkan_pipeline_cache_test
+  rendering/vulkan/device/VulkanPipelineCacheTest.cpp)
+target_link_libraries(splatkit_vulkan_pipeline_cache_test PRIVATE
+  splatkit_vulkan_test_support splatkit_shaders)
 add_executable(splatkit_vulkan_buffer_test rendering/vulkan/device/VulkanBufferTest.cpp)
 target_link_libraries(splatkit_vulkan_buffer_test PRIVATE splatkit_vulkan_test_support)
 add_executable(splatkit_vulkan_upload_pressure_test rendering/vulkan/device/VulkanUploadPressureTest.cpp)
@@ -51,6 +56,7 @@ target_link_libraries(splatkit_vulkan_splat_pipeline_test PRIVATE
 # Building this target links every device test; scripts/lint-cpp.sh does so in CI.
 add_custom_target(splatkit_android_tests DEPENDS
   splatkit_vulkan_context_test
+  splatkit_vulkan_pipeline_cache_test
   splatkit_vulkan_buffer_test
   splatkit_vulkan_upload_pressure_test
   splatkit_vulkan_world_test
