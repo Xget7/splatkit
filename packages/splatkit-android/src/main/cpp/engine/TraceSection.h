@@ -14,6 +14,7 @@ inline constexpr char kEncodeCompute[] = "SplatKit encode compute";
 inline constexpr char kSubmitPresent[] = "SplatKit submit and present";
 inline constexpr char kUploadWorld[] = "SplatKit upload world";
 inline constexpr char kUploadTile[] = "SplatKit upload tile";
+inline constexpr char kSavePipelineCache[] = "SplatKit save pipeline cache";
 inline constexpr char kDecodeWorld[] = "SplatKit decode world";
 inline constexpr char kDecodeCollider[] = "SplatKit decode collider";
 // Async slice on the process track; one benchmark runs at a time, so one cookie.

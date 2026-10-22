@@ -139,6 +139,9 @@ void VulkanSplatRenderer::adoptWorld(std::unique_ptr<VulkanWorld> world,
   applyPolicyToCompute();
   splats_->bindWorld(*world_);
   worldFrameCompletion_.reset();
+  // A world's compute passes are the last pipelines a load creates.
+  const TraceSection section(trace::kSavePipelineCache);
+  ctx_.savePipelineCache();
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {

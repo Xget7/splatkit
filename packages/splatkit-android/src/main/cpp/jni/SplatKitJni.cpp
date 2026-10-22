@@ -113,8 +113,10 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 
 // Lifetime.
 
-SPLATKIT_JNI(jlong, nativeCreate)(JNIEnv* env, jobject thiz) {
-  auto result = splatkit::AndroidEngine::create();
+SPLATKIT_JNI(jlong, nativeCreate)(JNIEnv* env, jobject thiz, jstring cacheDir) {
+  std::string directory;
+  withUtf8(env, cacheDir, [&directory](const std::string& d) { directory = d; });
+  auto result = splatkit::AndroidEngine::create(directory);
   if (!result) {
     LOGE("engine creation failed: %s", result.error().message.c_str());
     return 0;

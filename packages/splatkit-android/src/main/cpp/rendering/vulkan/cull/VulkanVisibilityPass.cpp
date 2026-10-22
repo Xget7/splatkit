@@ -336,7 +336,7 @@ bool VulkanVisibilityPass::createPipelines() {
   for (int degree = 0; degree <= kMaxShDegree && visibilityCreated; ++degree) {
     constants.shDegree = static_cast<uint32_t>(degree);
     visibilityCreated =
-        vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &visibilityInfo, nullptr,
+        vkCreateComputePipelines(device, ctx_.pipelineCache(), 1, &visibilityInfo, nullptr,
                                  &visibilityPipelines_[static_cast<size_t>(degree)]) == VK_SUCCESS;
   }
 
@@ -347,8 +347,8 @@ bool VulkanVisibilityPass::createPipelines() {
   VkComputePipelineCreateInfo prepareInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
   prepareInfo.stage = prepareStage;
   prepareInfo.layout = prepareLayout_;
-  const VkResult prepareResult =
-      vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &prepareInfo, nullptr, &preparePipeline_);
+  const VkResult prepareResult = vkCreateComputePipelines(device, ctx_.pipelineCache(), 1,
+                                                          &prepareInfo, nullptr, &preparePipeline_);
   return visibilityCreated && prepareResult == VK_SUCCESS;
 }
 

@@ -172,8 +172,8 @@ bool VulkanRadixSort::initialize() {
     pipeline.stage.pName = "main";
     if (i == kScatterLast) pipeline.stage.pSpecializationInfo = &lastPassInfo;
     pipeline.layout = layout_;
-    const auto result =
-        vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipelines_[i]);
+    const auto result = vkCreateComputePipelines(device, ctx_.pipelineCache(), 1, &pipeline,
+                                                 nullptr, &pipelines_[i]);
     if (result != VK_SUCCESS) return false;
   }
   return true;

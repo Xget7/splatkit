@@ -220,8 +220,8 @@ bool VulkanSplatPipeline::createGraphicsPipelines(VkRenderPass renderPass, VkSha
   bool ok = true;
   for (size_t degree = 0; degree < N && ok; ++degree) {
     constants.shDegree = static_cast<uint32_t>(degree);
-    ok = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipelines[degree]) ==
-         VK_SUCCESS;
+    ok = vkCreateGraphicsPipelines(device, ctx_.pipelineCache(), 1, &info, nullptr,
+                                   &pipelines[degree]) == VK_SUCCESS;
   }
   return ok;
 }
