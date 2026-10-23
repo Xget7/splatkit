@@ -26,7 +26,7 @@ cd apps/android-dev
 ./gradlew :splatkit:assembleRelease :splatkit:testDebugUnitTest
 ```
 
-iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-beta.1`.
+iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-beta.2`.
 Use the native view, forward lifecycle and load worlds asynchronously; see each SDK's README for examples.
 
 Worlds are `.spz`, `.lodsplat` or a tileset of `.spz` tiles, prepared on a computer.
