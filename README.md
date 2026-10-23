@@ -18,7 +18,7 @@ Beta: APIs and quality/performance tradeoffs may still change before 1.0.
 
 Android: API 29+, Vulkan 1.1, arm64-v8a.
 The GPU path additionally checks subgroup and memory limits.
-Maven Central has `io.github.xget7:splatkit-android:0.1.0-beta.1`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
+Maven Central has `io.github.xget7:splatkit-android:0.1.0-beta.2`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
 To build current source:
 
 ```sh
