@@ -1,0 +1,49 @@
+Launched application with com.splatkit.devapp bundle identifier.
+Waiting for the application to terminate…
+2026-10-24 18:32:24.380833-0300 SplatKitDev[10936:1119861] Metal API Validation Enabled
+2026-10-24 18:32:24.380846-0300 SplatKitDev[10936:1119861] Metal GPU Validation Enabled
+2026-10-24 18:32:24.391639-0300 SplatKitDev[10936:1119861] SplatKit I: Metal depth keys: 32 bits, 4 radix passes (uint32 scratch)
+2026-10-24 18:32:24.391653-0300 SplatKitDev[10936:1119861] SplatKit I: Apple A19 Pro GPU, Metal
+2026-10-24 18:32:24.391656-0300 SplatKitDev[10936:1119861] SplatKit I: Metal capabilities: family Apple10, Metal 4, threadgroup memory 32768 B, threads per threadgroup 1024, max buffer 6442450944 B, working set 8589950976 B
+2026-10-24 18:32:24.392083-0300 SplatKitDev[10936:1119839] SplatPolicy: sortDepth=32 subpixelThreshold=1.0 hiZ=false supports sortDepth=true subpixelThreshold=true in [0.0, 3.4028235e+38] maxLod=4000000 residency=[100000, 32000000]
+2026-10-24 18:32:24.399694-0300 SplatKitDev[10936:1119861] SplatKit I: Metal policy: 16-bit sort keys, 0.60px LOD error, 1800000 LOD splat limit, 1.00px cutoff
+2026-10-24 18:32:24.399886-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark queued: 30.000 s, waiting for a world
+2026-10-24 18:32:24.400687-0300 SplatKitDev[10936:1119863] [Core] {"msg":"#Warning Error reading file", "file":"\/\/private\/var\/Managed Preferences\/mobile\/com.apple.CoreMotion.plist", "error":"Error Domain=NSCocoaErrorDomain Code=257 \"The file “com.apple.CoreMotion.plist” couldn’t be opened because you don’t have permission to view it.\" UserInfo={NSFilePath=\/\/private\/var\/Managed Preferences\/mobile\/com.apple.CoreMotion.plist, NSURL=file:\/\/\/\/private\/var\/Managed%20Preferences\/mobile\/com.apple.CoreMotion.plist, NSUnderlyingError=0x10de2e130 {Error Domain=NSPOSIXErrorDomain Code=1 \"Operation not permitted\"}}"}
+2026-10-24 18:32:24.404308-0300 SplatKitDev[10936:1119861] SplatKit I: pipelines for format 115
+2026-10-24 18:32:24.404317-0300 SplatKitDev[10936:1119861] SplatKit I: drawable 1206x2622, was 0x0
+2026-10-24 18:32:25.347035-0300 SplatKitDev[10936:1119853] SplatKit I: decoded 11988085 splats in 935 ms, sh degree 1, bounds y [-85.31, 95.52], reordered in 0 ms
+2026-10-24 18:32:25.347056-0300 SplatKitDev[10936:1119853] SplatKit I: level of detail tree: 13375264 nodes over 11988085 splats, built in 0 ms
+2026-10-24 18:32:25.347060-0300 SplatKitDev[10936:1119853] SplatKit I: memory: the load needs about 2761 MiB with headroom, 3341 MiB free
+2026-10-24 18:32:26.231086-0300 SplatKitDev[10936:1119861] SplatKit I: GPU LOD SSE: 1387179 interior clusters, 11988085 leaves, 19 rounds, capacity 1800000, 0.60 px, color 4.00
+2026-10-24 18:32:26.231157-0300 SplatKitDev[10936:1119861] SplatKit I: uploaded 13375264 splats in 889 ms, sh degree 1
+2026-10-24 18:32:26.231208-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark started: 13375264 splats, one turn over 30.000 s, gpu -1.0 C
+2026-10-24 18:32:26.231219-0300 SplatKitDev[10936:1119839] SplatPreparation: uploaded elapsed=1.839
+2026-10-24 18:32:26.311612-0300 SplatKitDev[10936:1119839] SplatPreparation: first-frame-ready elapsed=1.920
+2026-10-24 18:32:26.311632-0300 SplatKitDev[10936:1119839] SplatPreparation: interaction-ready orbit=0
+2026-10-24 18:32:27.302009-0300 SplatKitDev[10936:1119861] SplatKit I: 35.1 fps, gpu 23.7 ms, sort 24.1 ms, cull 0.0 ms, select 1.3 ms, 810394 drawn of 913364 selected of 13375264, pos -7.25 1.60 5.25, yaw 0.41 pitch 0.00, fly, presented frames, p95 29.2 ms, 1% low 34.3 fps, 0 dropped
+2026-10-24 18:32:29.373352-0300 SplatKitDev[10936:1119861] SplatKit I: 38.6 fps, gpu 24.1 ms, sort 22.6 ms, cull 0.0 ms, select 1.3 ms, 758116 drawn of 907081 selected of 13375264, pos -7.25 1.60 5.25, yaw 0.84 pitch 0.00, fly, presented frames, p95 29.2 ms, 1% low 34.3 fps, 0 dropped
+2026-10-24 18:32:29.481350-0300 SplatKitDev[10936:1119858] SplatKit I: LOD SSE: 1003694 selected, 132449 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:31.504164-0300 SplatKitDev[10936:1119861] SplatKit I: 24.0 fps, gpu 35.8 ms, sort 37.3 ms, cull 0.0 ms, select 1.8 ms, 1475025 drawn of 1790217 selected of 13375264, pos -7.25 1.60 5.25, yaw 1.28 pitch 0.00, fly, presented frames, p95 41.7 ms, 1% low 21.8 fps, 0 dropped
+2026-10-24 18:32:33.632233-0300 SplatKitDev[10936:1119861] SplatKit I: 23.0 fps, gpu 37.9 ms, sort 39.5 ms, cull 0.0 ms, select 2.0 ms, 1551331 drawn of 1797074 selected of 13375264, pos -7.25 1.60 5.25, yaw 1.73 pitch 0.00, fly, presented frames, p95 45.8 ms, 1% low 21.8 fps, 0 dropped
+2026-10-24 18:32:34.462375-0300 SplatKitDev[10936:1119854] SplatKit I: LOD SSE: 1752312 selected, 224152 evaluated interiors, 0 quality-limited refinements, 4.50 px
+2026-10-24 18:32:35.702372-0300 SplatKitDev[10936:1119861] SplatKit I: 22.4 fps, gpu 35.9 ms, sort 37.1 ms, cull 0.0 ms, select 1.9 ms, 1446935 drawn of 1600927 selected of 13375264, pos -7.25 1.60 5.25, yaw 2.16 pitch 0.00, fly, presented frames, p95 50.0 ms, 1% low 20.0 fps, 0 dropped
+2026-10-24 18:32:37.746966-0300 SplatKitDev[10936:1119861] SplatKit I: 39.0 fps, gpu 22.0 ms, sort 19.4 ms, cull 0.0 ms, select 1.4 ms, 542857 drawn of 623588 selected of 13375264, pos -7.25 1.60 5.25, yaw 2.59 pitch 0.00, fly, presented frames, p95 45.8 ms, 1% low 20.0 fps, 0 dropped
+2026-10-24 18:32:38.404063-0300 SplatKitDev[10936:1119854] SplatKit I: LOD SSE: 471603 selected, 63521 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:39.800371-0300 SplatKitDev[10936:1119861] SplatKit I: 41.4 fps, gpu 22.2 ms, sort 17.6 ms, cull 0.0 ms, select 1.2 ms, 340473 drawn of 410115 selected of 13375264, pos -7.25 1.60 5.25, yaw 3.02 pitch 0.00, fly, presented frames, p95 45.8 ms, 1% low 20.0 fps, 0 dropped
+2026-10-24 18:32:41.538646-0300 SplatKitDev[10936:1119855] SplatKit I: LOD SSE: 557463 selected, 72951 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:41.893602-0300 SplatKitDev[10936:1119861] SplatKit I: 32.5 fps, gpu 28.6 ms, sort 24.2 ms, cull 0.0 ms, select 1.5 ms, 539966 drawn of 625978 selected of 13375264, pos -7.25 1.60 5.25, yaw 3.46 pitch 0.00, fly, presented frames, p95 29.2 ms, 1% low 30.0 fps, 0 dropped
+2026-10-24 18:32:43.986554-0300 SplatKitDev[10936:1119861] SplatKit I: 28.5 fps, gpu 29.9 ms, sort 27.5 ms, cull 0.0 ms, select 1.5 ms, 797564 drawn of 934074 selected of 13375264, pos -7.25 1.60 5.25, yaw 3.90 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 26.7 fps, 0 dropped
+2026-10-24 18:32:45.719728-0300 SplatKitDev[10936:1119855] SplatKit I: LOD SSE: 1199753 selected, 153515 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:46.044597-0300 SplatKitDev[10936:1119861] SplatKit I: 28.0 fps, gpu 28.3 ms, sort 29.2 ms, cull 0.0 ms, select 1.8 ms, 1093443 drawn of 1218464 selected of 13375264, pos -7.25 1.60 5.25, yaw 4.33 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+2026-10-24 18:32:48.143476-0300 SplatKitDev[10936:1119861] SplatKit I: 34.2 fps, gpu 23.9 ms, sort 24.7 ms, cull 0.0 ms, select 1.6 ms, 1157134 drawn of 1290075 selected of 13375264, pos -7.25 1.60 5.25, yaw 4.77 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+2026-10-24 18:32:49.549751-0300 SplatKitDev[10936:1119855] SplatKit I: LOD SSE: 1494336 selected, 183116 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:50.199890-0300 SplatKitDev[10936:1119861] SplatKit I: 26.5 fps, gpu 30.8 ms, sort 32.3 ms, cull 0.0 ms, select 2.0 ms, 1323041 drawn of 1454330 selected of 13375264, pos -7.25 1.60 5.25, yaw 5.20 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+2026-10-24 18:32:52.288006-0300 SplatKitDev[10936:1119861] SplatKit I: 27.9 fps, gpu 30.0 ms, sort 29.1 ms, cull 0.0 ms, select 1.7 ms, 968413 drawn of 1057209 selected of 13375264, pos -7.25 1.60 5.25, yaw 5.64 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+2026-10-24 18:32:53.784411-0300 SplatKitDev[10936:1119853] SplatKit I: LOD SSE: 678301 selected, 88476 evaluated interiors, 0 quality-limited refinements, 0.60 px
+2026-10-24 18:32:54.337420-0300 SplatKitDev[10936:1119861] SplatKit I: 36.8 fps, gpu 23.0 ms, sort 20.3 ms, cull 0.0 ms, select 1.5 ms, 527197 drawn of 609123 selected of 13375264, pos -7.25 1.60 5.25, yaw 6.07 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+2026-10-24 18:32:55.367423-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark window: start 0.0 end 30.0, 899 frames, frame mean 33.4 p95 45.3 p99 47.6 max 893.3, gpu mean 27.4 p95 37.7 p99 39.3, gpu samples 899, gpu -1.0 C
+2026-10-24 18:32:55.367520-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark: 899 frames, 29.9 fps mean, frame ms mean 33.4 p50 31.7 p95 45.3 max 893.3
+2026-10-24 18:32:55.367546-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark gpu ms: mean 27.4 p50 26.3 p95 37.7 max 40.1, gpu -1.0 C at the end
+2026-10-24 18:32:55.367556-0300 SplatKitDev[10936:1119861] SplatKit I: benchmark tails: frame p99 47.6, gpu p99 39.3, gpu samples 899 of 899
+2026-10-24 18:32:56.338978-0300 SplatKitDev[10936:1119861] SplatKit I: 0.0 fps, gpu 25.4 ms, sort 23.7 ms, cull 0.0 ms, select 1.6 ms, 690840 drawn of 780904 selected of 13375264, pos -7.25 1.60 5.25, yaw 6.28 pitch 0.00, fly, presented frames, p95 37.5 ms, 1% low 24.0 fps, 0 dropped
+App terminated due to signal 15.

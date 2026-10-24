@@ -6,6 +6,11 @@ See [validation](VALIDATION.md) for reproduction and acceptance checks.
 
 ## iPhone 17 Pro: Metal
 
+October 24, PR #60: a 30-second physical iPhone 17 Pro run on `scene.lodsplat` (11,988,085 source splats, 13,375,264 prepared nodes), SH1, high, 1.8M budget, pose `-7.25,1.6,5.25,0,0`, passed with Metal API and Shader Validation enabled and no Metal errors.
+The user confirmed the room framing; the kitchen probe and a 12M run from the incorrect origin are not representative acceptance evidence.
+Instrumentation affects timings; this establishes neither speedup nor sustained performance.
+[Report](benchmarks/2026-10-24-metal-visibility-12m-validation.json), [log](benchmarks/2026-10-24-metal-visibility-12m-validation.log), [pose capture](benchmarks/2026-10-24-metal-visibility-12m-pose.png).
+
 Physical iPhone 17 Pro, A19 Pro; ISS experiments ran September 11-16, 2026.
 Settings differ between runs; exact configurations and limitations are in the linked JSON.
 ISS image quality remains unapproved.

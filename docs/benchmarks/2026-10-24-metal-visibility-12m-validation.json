@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "environment": "physical",
+  "pid": null,
+  "minimum_seconds_per_run": 30.0,
+  "runs": [
+    {
+      "status": "complete",
+      "resident_records": 13375264,
+      "requested_seconds": 30.0,
+      "windows": [
+        "benchmark window: start 0.0 end 30.0, 899 frames, frame mean 33.4 p95 45.3 p99 47.6 max 893.3, gpu mean 27.4 p95 37.7 p99 39.3, gpu samples 899, gpu -1.0 C"
+      ],
+      "frame_p99_ms": 47.6,
+      "gpu_p99_ms": 39.3,
+      "gpu_sample_count": 899,
+      "frames": 899,
+      "fps_mean": 29.9,
+      "frame_mean_ms": 33.4,
+      "frame_p50_ms": 31.7,
+      "frame_p95_ms": 45.3,
+      "frame_max_ms": 893.3,
+      "gpu_mean_ms": 27.4,
+      "gpu_p50_ms": 26.3,
+      "gpu_p95_ms": 37.7,
+      "gpu_max_ms": 40.1,
+      "tails_frame_count": 899,
+      "stage_samples": 14,
+      "stage_sample_mean_ms": {
+        "sort": 27.492857142857144,
+        "cull": 0.0,
+        "select": 1.6071428571428572
+      },
+      "drawn_sample_range": [
+        340473,
+        1551331
+      ],
+      "observed_seconds_approx": 30.0266
+    }
+  ],
+  "errors": [],
+  "phone_performance_validated": false,
+  "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+  "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+  "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+  "run": {
+    "device": "iPhone 17 Pro",
+    "name": "xgetphone",
+    "model": "iPhone18,1",
+    "ios": "27.0.1",
+    "ios_build": "24A446",
+    "build": "Release",
+    "quality": "high",
+    "pose": "-7.25,1.6,5.25,0,0",
+    "world": "scene.lodsplat",
+    "budget": 1800000,
+    "subpixel": null,
+    "seconds": 30.0,
+    "validation": true,
+    "commit": "9d5d28f25dee9dc36afecf8d79fcdd5d81e641e0",
+    "dirty": true
+  },
+  "gpu": {
+    "family": "Apple10",
+    "metal": 4,
+    "threadgroup_memory_bytes": 32768,
+    "threads_per_threadgroup": 1024,
+    "max_buffer_bytes": 6442450944,
+    "working_set_bytes": 8589950976
+  },
+  "validation_evidence": {
+    "purpose": "Physical Metal API and Shader Validation for PR #60 indexed visibility; not comparative performance",
+    "api_validation_enabled": true,
+    "shader_validation_enabled": true,
+    "validation_errors": [],
+    "source_splats": 11988085,
+    "prepared_nodes": 13375264,
+    "source_reference": {
+      "path": "build/example-worlds/scene.spz",
+      "sha256": "7ccb2e083d0311d90d18ffaae44bef09a42bda107ada7020bb225f29e3ddeb43"
+    },
+    "prepared_reference": {
+      "path": "build/example-worlds/scene.lodsplat",
+      "sha256": "9f6e33dfdf37f94714e0526c89bf85c754e47f507fabd92a38f461490fad1de2"
+    },
+    "installed_world_hash": "not independently measured; source and prepared counts match local reference",
+    "code_commit": "9d5d28f25dee9dc36afecf8d79fcdd5d81e641e0",
+    "dirty_scope": "Only benchmark procedure documentation was modified after building this commit.",
+    "pose_user_confirmed": true,
+    "pose_capture": "2026-10-24-metal-visibility-12m-pose.png",
+    "selected_sample_range": [
+      410115,
+      1797074
+    ],
+    "supersedes": "Kitchen run and incorrect-origin 12M run are not representative acceptance evidence.",
+    "limits": [
+      "Instrumentation affects timings; no speedup claim.",
+      "One 30-second physical run, not sustained thermal or memory acceptance.",
+      "Numerical identity/boundary tests ran on macOS Metal, not this phone."
+    ]
+  }
+}
