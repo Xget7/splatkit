@@ -6,7 +6,7 @@ See [validation](VALIDATION.md) for reproduction and acceptance checks.
 
 ## iPhone 17 Pro: Metal
 
-Power Profiler capture probe, October 23: physical iPhone 17 Pro, iOS 27.0.1, kitchen 500k, installed Release reused without verifying its commit.
+Historical tooling smoke only, not representative performance acceptance: Power Profiler capture probe, October 23: physical iPhone 17 Pro, iOS 27.0.1, kitchen 500k, installed Release reused without verifying its commit.
 One 30-second orbit averaged 119.2 FPS; a clipped 22-second moving-camera interval reported system consumption of 24.66 percentage points of battery per hour, brightness 55%, thermal state Nominal.
 This is the system's estimated rate during one short probe, not app-only drain, measured charge loss or sustained autonomy; no strategy A/B was run.
 The stock Instruments 27.1 template crashed twice; Blank plus the Power Profiler instrument captured and exported samples successfully.

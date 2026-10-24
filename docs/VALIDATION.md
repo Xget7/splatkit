@@ -97,13 +97,13 @@ The runner uses Blank plus the Power Profiler instrument; the stock template tra
 Build and install once, using a short unrecorded turn to check the world and pose:
 
 ```sh
-python3 scripts/ios_perf.py --udid <udid> --world kitchen_500k.spz --seconds 30
+python3 scripts/ios_perf.py --udid <udid> --world scene.lodsplat --pose=-7.25,1.6,5.25,0,0 --budget 1800000 --seconds 30
 ```
 
 Unplug, keep brightness fixed, let the phone cool, then capture one 30-second probe:
 
 ```sh
-python3 scripts/ios_perf.py --udid <udid> --world kitchen_500k.spz --seconds 30 --power --skip-build --skip-install --out output/ios-perf/power-probe
+python3 scripts/ios_perf.py --udid <udid> --world scene.lodsplat --pose=-7.25,1.6,5.25,0,0 --budget 1800000 --seconds 30 --power --skip-build --skip-install --out output/ios-perf/power-probe
 ```
 
 Each output directory must be new.
