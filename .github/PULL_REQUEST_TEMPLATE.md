@@ -15,6 +15,9 @@
   <!-- Changes to decoding, sorting, math, navigation, loading or policy add tests in `splat-core` or `splatkit-engine`. -->
 
 <!-- A performance claim needs before and after numbers on the same device and world. -->
+<!-- Material FPS, frame/GPU ms or bandwidth effects require an embedded before/after chart for the reviewing engineer, with units, absolute/percentage changes and repeated-run spread. -->
+<!-- Follow docs/VALIDATION.md#pr-benchmark-evidence; include relevant measured bandwidth/power and link source evidence. A table or raw-log link alone is insufficient. -->
+<!-- For unrelated changes or effects within noise, give a short not-applicable reason. Missing hardware/counters must be explicit; do not claim unmeasured results. -->
 
 ## Merge Danger
 

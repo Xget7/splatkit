@@ -66,6 +66,7 @@ Done when each server has answered or its failure is noted.
 
 9. **Close.** Add any newly cited fact to the backend's refs README with its source and fetch date.
    Ship through the ship skill; the PR's Evidence carries the hypothesis, both backends' figures with their spread, and the device, OS and commit of every run.
+   Follow [visual benchmark evidence](../../../docs/VALIDATION.md#pr-benchmark-evidence): a material measured effect needs an embedded before/after chart for the reviewing engineer, with source evidence and explicit bandwidth/power limits.
    Done when the pull request is open with that Evidence for both backends.
 
 ## Reading the numbers

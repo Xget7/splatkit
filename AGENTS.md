@@ -31,4 +31,6 @@ See [docs/agents/domain.md](docs/agents/domain.md).
 ### Pull requests
 
 Every pull request body follows the [template](.github/PULL_REQUEST_TEMPLATE.md): Summary, Evidence, Merge Danger.
+Changes that may materially affect FPS, frame/GPU milliseconds or memory bandwidth follow [visual benchmark evidence](docs/VALIDATION.md#pr-benchmark-evidence).
+When measurements show a substantial effect, embed a before/after chart in the PR's Evidence for the engineer reviewing it; raw logs or a table alone are insufficient.
 Split dependent work into a GitHub stack of one PR per concern with `gh stack` (`gh extension install github/gh-stack`).

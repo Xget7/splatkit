@@ -51,6 +51,71 @@ GPU timings are latest-completed-query samples, may repeat and are not guarantee
 Historical logs cannot supply missing p99 or memory/thermal evidence.
 Host callbacks may remain display-paced even when presentation vsync is disabled.
 
+## PR benchmark evidence
+
+Screen changes that plausibly affect FPS, frame/GPU time or memory bandwidth with a short matched before/after benchmark on the affected physical device/backend.
+A measured change of roughly 10-20% or more, beyond run-to-run variation, requires visual evidence, whether improvement or regression.
+A meaningful frame-budget crossing or bandwidth change also qualifies; the percentage is a screening guide, not an exemption.
+For unrelated changes or effects within noise, state why benchmarking or a chart is unnecessary; do not spend phone time producing an irrelevant benchmark.
+
+The PR's Evidence must show the engineer a rendered before/after chart, embedded in the body, with a one-sentence takeaway.
+Use English, a pure-black background, white text and a restrained accent; remove redundant labels and keep secondary provenance in the linked evidence.
+Each panel must answer a different question; choose line charts for time, bars for comparisons, clear units and enough contrast to distinguish the data.
+Correlate metric changes with recorded application events on the shared timeline: label meaningful actions or transitions and carry their markers across panels, rather than showing seconds alone.
+Link each marker to its log/trace evidence; distinguish logged events, sampled observations and hypotheses, and disclose clock alignment or sampling delay instead of implying causality.
+For a benchmark report or handoff outside a PR, present the same chart directly to the engineer in charge.
+Use a standard plotting tool to save a standalone PNG or SVG beside the benchmark evidence; a table or link to raw logs alone does not satisfy the visual requirement.
+Label baseline/change commits, device/backend, workload, metric and units; show absolute values, percentage change and direction of improvement.
+Show individual repeated runs or their spread, and keep different units on separate panels rather than a misleading shared axis.
+Include FPS and frame/GPU milliseconds when available; show bandwidth when the change concerns memory traffic and counters support it, and power when it is measured and relevant.
+Use the same device, world, camera speed, viewport, render policy and comparable image quality and starting thermal state; state deliberate differences.
+Run at least two short runs per side, alternating A/B when practical; reuse builds, installs and fixtures, then generate the chart offline.
+Link the source JSON/logs/traces and record physical-device provenance, build identity, profiling overhead and sampling limits.
+Label estimated bandwidth or power explicitly; unavailable counters are unmeasured, never zero or inferred from FPS alone.
+If hardware or counters are unavailable, report the missing check and leave the performance conclusion unvalidated instead of inventing a chart.
+
+## iOS power comparisons
+
+Requires a physical iPhone on iOS 26+, wireless debugging and no cable or MagSafe charging.
+Apple reports overall system power as zero while charging; check charging, brightness and thermal lanes in Instruments.
+See [Power Profiler](https://developer.apple.com/documentation/xcode/measuring-your-app-s-power-use-with-power-profiler).
+The runner uses Blank plus the Power Profiler instrument; the stock template trapped in `NetworkConnectionStatsModeling` on Instruments 27.1 during physical iPhone recording finalization.
+
+Build and install once, using a short unrecorded turn to check the world and pose:
+
+```sh
+python3 scripts/ios_perf.py --udid <udid> --world kitchen_500k.spz --seconds 30
+```
+
+Unplug, keep brightness fixed, let the phone cool, then capture one 30-second probe:
+
+```sh
+python3 scripts/ios_perf.py --udid <udid> --world kitchen_500k.spz --seconds 30 --power --skip-build --skip-install --out output/ios-perf/power-probe
+```
+
+Each output directory must be new.
+The recorder finishes its time limit and saves before the runner terminates its attached app.
+After the benchmark the view is still and the engine draws only on changes.
+Saving over Wi-Fi can still take minutes; export runs offline after app termination.
+Inspect `power.trace` in Instruments first; `power-export/toc.xml`, table XML and `manifest.json` preserve exportable data and original units.
+`report.json` records capture/export status separately from power metrics, which remain unvalidated until their schema, units and time range are checked on a physical capture.
+The recorder attaches after the benchmark start log, so initial frames may be missing; compare a common covered interval, not whole-turn energy divided by the full frame count.
+Empty or partially failed exports fail the run and preserve the trace for an offline retry without using the phone:
+
+```sh
+python3 scripts/ios_power.py output/ios-perf/power-probe/power.trace --out output/ios-perf/power-probe/export-retry
+```
+
+Power tables with no rows are reported as unavailable, never as zero consumption.
+An exported table alone does not establish usable power samples.
+
+Once the probe is usable, repeat identical 30-second turns in A/B/B/A order, with a new output directory per turn and comparable starting temperature.
+Change one supported runtime option (`--budget` or `--subpixel`) to avoid rebuilding; these can change image quality and require matched-image review.
+Keep world, pose, quality, brightness and orbit duration fixed; the runner does not enforce a common FPS target, so record achieved FPS with consumption.
+Compare battery percentage points per hour and CPU/GPU impact in their exported units on the same phone; impact scores are not watts or joules.
+Short runs screen for large differences; increase repetitions if their variation overlaps, and keep sustained thermal claims separate.
+No physical power capture or export-schema validation is established by host tests.
+
 ## Remaining parity gates
 
 | Contract | Metal / iOS | Vulkan / Android |

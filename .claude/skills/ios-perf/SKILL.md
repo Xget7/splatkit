@@ -7,6 +7,7 @@ description: Benchmark runs of the iOS Metal renderer on a physical iPhone, with
 
 A **run** is one release build of the dev app doing its benchmark turn on an iPhone: [scripts/ios_perf.py](../../../scripts/ios_perf.py) installs it, runs the turn through `devicectl` with the HUD off, and writes one run directory under `output/ios-perf/`.
 Its `--help` carries the flags.
+Before reporting or opening a PR, follow [visual benchmark evidence](../../../docs/VALIDATION.md#pr-benchmark-evidence): material effects require an embedded before/after chart for the reviewing engineer, backed by the run files.
 
 ## Steps
 
