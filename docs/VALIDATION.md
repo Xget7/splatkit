@@ -66,6 +66,8 @@ Host callbacks may remain display-paced even when presentation vsync is disabled
 
 ## PR benchmark evidence
 
+Metal and Vulkan share the [GPU profiling protocol](GPU_PROFILING.md) and parameter preset.
+
 Screen changes that plausibly affect FPS, frame/GPU time or memory bandwidth with a short matched before/after benchmark on the affected physical device/backend.
 A measured change of roughly 10-20% or more, beyond run-to-run variation, requires visual evidence, whether improvement or regression.
 A meaningful frame-budget crossing or bandwidth change also qualifies; the percentage is a screening guide, not an exemption.

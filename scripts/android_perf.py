@@ -90,10 +90,12 @@ CAPABILITIES = re.compile(r"Vulkan capabilities: subgroup (?P<subgroup_size>\d+)
 ENVIRONMENT = "physical"
 
 
-def perfetto_config(duration_s):
+def perfetto_config(duration_s, gpu_sources=()):
     """Text-proto Perfetto config: scheduling, clocks, thermal, memory and the app's slices."""
     events = "\n".join(f'      ftrace_events: "{event}"' for event in FTRACE_EVENTS)
     categories = "\n".join(f'      atrace_categories: "{category}"' for category in ATRACE_CATEGORIES)
+    gpu_config = "".join(f'\ndata_sources {{ config {{ name: "{name}" target_buffer: 0 }} }}\n'
+                         for name in gpu_sources if re.fullmatch(r"gpu\.renderstages(?:\.[A-Za-z0-9_-]+)?", name))
     return f"""buffers {{ size_kb: {TRACE_BUFFER_KB} fill_policy: RING_BUFFER }}
 buffers {{ size_kb: {STATS_BUFFER_KB} fill_policy: RING_BUFFER }}
 data_sources {{
@@ -122,7 +124,12 @@ data_sources {{
   }}
 }}
 duration_ms: {int(duration_s * MS_PER_S)}
-"""
+{gpu_config}"""
+
+
+def gpu_stage_sources(query):
+    """Use registered exact names, including vendor suffixes; never guess producer support."""
+    return sorted(set(re.findall(r'"(gpu\.renderstages(?:\.[A-Za-z0-9_-]+)?)"', query)))
 
 
 def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None, subpixel=None):
@@ -263,8 +270,9 @@ def run(args):
         subprocess.run(["./gradlew", gradle_task(variant), "-q"], cwd=APP_DIR, check=True)
     if args.world and adb(args.serial, "shell", "test", "-f", device_world(args.world), check=False).returncode != 0:
         raise RuntimeError(f"no world at {device_world(args.world)}; push it there with adb push")
-    print("installing", flush=True)
-    adb(args.serial, "install", "-r", str(apk(variant)))
+    if not getattr(args, "skip_install", False):
+        print("installing", flush=True)
+        adb(args.serial, "install", "-r", str(apk(variant)))
 
     saved_rotation = lock_rotation(args.serial)
     try:
@@ -280,10 +288,16 @@ def record(args, variant):
     adb(args.serial, "logcat", "-c")
     adb(args.serial, "shell", "rm", "-f", DEVICE_TRACE, check=False)
 
+    gpu_sources = []
+    if getattr(args, "gpu_stages", False):
+        query = adb(args.serial, "shell", "perfetto", "--query", check=False)
+        (out / "gpu-sources.txt").write_text(query.stdout + query.stderr)
+        if query.returncode == 0:
+            gpu_sources = gpu_stage_sources(query.stdout)
     trace_seconds = args.seconds + LOAD_ALLOWANCE_S
     print(f"tracing {trace_seconds:.0f} s: load, then a {args.seconds:g} s turn", flush=True)
     started = adb(args.serial, "shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE, "--background",
-                  input=perfetto_config(trace_seconds))
+                  input=perfetto_config(trace_seconds, gpu_sources))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
     adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world, args.budget,
                                    args.lod_splat_limit, args.subpixel))
@@ -314,6 +328,10 @@ def record(args, variant):
     summary = (benchmark_report.summarize(log, ENVIRONMENT, int(app_pid), args.seconds)
                if app_pid.isdigit() else {"status": "failed", "runs": [], "errors": ["app not running"]})
     summary["run"] = environment
+    summary["run"]["reused_install"] = getattr(args, "skip_install", False)
+    summary["gpu_trace"] = {"requested": getattr(args, "gpu_stages", False), "sources": gpu_sources,
+                            "status": ("requested_unvalidated" if gpu_sources else "unavailable") if getattr(args, "gpu_stages", False) else "not_requested",
+                            "scope": "producer registration does not prove captured GPU samples; inspect analysis/trace"}
     summary["gpu"] = gpu_capabilities(log)
     summary["trace"] = {"path": str(trace), "app_slices_found": FRAME_SLICE in trace.read_bytes()}
     failure = failure or (validation_failure(log) if args.validation else None)
@@ -368,8 +386,12 @@ def main():
                         help="debug build with the Khronos validation layer; the timings are then not comparable")
     parser.add_argument("--serial", help="adb device serial when more than one is attached")
     parser.add_argument("--out", type=Path, help=f"run directory; defaults under {RUNS_DIR.relative_to(ROOT)}")
+    parser.add_argument("--gpu-stages", action="store_true", help="query and request supported native GPU render-stage sources")
     parser.add_argument("--skip-build", action="store_true", help="install the last APK of the build")
+    parser.add_argument("--skip-install", action="store_true", help="reuse installed APK; requires --skip-build")
     args = parser.parse_args()
+    if args.skip_install and not args.skip_build:
+        parser.error("--skip-install requires --skip-build")
     try:
         return run(args)
     except (subprocess.CalledProcessError, RuntimeError, OSError) as error:

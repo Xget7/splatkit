@@ -7,6 +7,9 @@ description: Plan, implement, refactor and measure a change to the GPU pipeline 
 
 Physical acceptance and benchmark evidence use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-world); small fixtures establish only smoke or unit-test results.
 
+Use the shared [GPU profiling protocol](../../../docs/GPU_PROFILING.md) and `scripts/gpu_benchmark.py` preset for repeated comparisons; keep timing, timeline, frame capture and power experiments distinct.
+Do not claim GPU passes were profiled from app-published FPS/stage counters alone.
+
 A **run** takes one change to the GPU pipeline from a measurable hypothesis to a merged pull request with phone numbers behind it, on **both backends**.
 Metal and Vulkan carry equal weight: a change that lands on one backend only is unfinished, and a gap between them is the first thing a run closes.
 Every API, flag and limit the run touches is **grounded**: it carries a citation to a current source, because model memory lags the SDKs by a release or more.

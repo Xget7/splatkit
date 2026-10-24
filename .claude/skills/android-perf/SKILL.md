@@ -11,6 +11,9 @@ Use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-
 Before reporting or opening a PR, follow [visual benchmark evidence](../../../docs/VALIDATION.md#pr-benchmark-evidence): material effects require an embedded before/after chart for the reviewing engineer, backed by the run files.
 Every run locks the display to landscape (rotation 1) and restores the rotation settings afterwards, so runs compare whatever way the phone lies.
 
+Use the shared [GPU profiling protocol](../../../docs/GPU_PROFILING.md) and `scripts/gpu_benchmark.py` preset for repeated comparisons; keep timing, timeline, frame capture and power experiments distinct.
+Do not claim GPU passes were profiled from app-published FPS/stage counters alone.
+
 ## Steps
 
 1. **Set up once.** Create the analysis venv if `build/perf-venv` is missing:
