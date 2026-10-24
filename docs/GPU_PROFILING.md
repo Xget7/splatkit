@@ -11,7 +11,7 @@ Do not compare the backends' `high` presets as equivalent image quality or use a
 | Policy | 1.8M budget, subpixel 1; backend-specific quality recorded |
 | Timing | A-B-B-A, 2 x 30 s per build; 10 s warmup per variant |
 | Provenance | Explicit device, declared full source commit, installed executable/APK SHA-256 |
-| Outputs | `experiment.json`, per-run report/log/trace, offline `comparison.json` / `comparison.png` |
+| Outputs | `experiment.json`, per-run report/log/trace, offline `comparison.json` / `comparison.md` |
 
 Copy the preset under ignored `build/`, fill the physical device and prepared build paths/commits, and verify framing before timed runs.
 Build each variant once, serializing shared build directories; the suite never builds, checks out revisions or transfers the large world.
@@ -19,15 +19,13 @@ A full timing plan uses 140 seconds of active turns; installation, world loading
 Consecutive runs reuse the same install; variant changes reinstall, and prepared executable/APK hashes are checked before every run.
 Failed runs stop the suite and retain their artifacts; output directories are never reused.
 
-For execution/plotting, install `scripts/requirements-benchmark.txt` in the reused `build/benchmark-plot-venv` and use its Python; planning needs only the standard library.
+Planning, execution and Markdown comparisons use the standard library; install `scripts/requirements-benchmark.txt` only for optional offline plots.
 
 ```sh
-python3 -m venv build/benchmark-plot-venv
-build/benchmark-plot-venv/bin/pip install -r scripts/requirements-benchmark.txt
 python3 scripts/gpu_benchmark.py plan --config build/experiment.json --target metal
 python3 scripts/gpu_benchmark.py plan --config build/experiment.json --target vulkan
-build/benchmark-plot-venv/bin/python scripts/gpu_benchmark.py run --config build/experiment.json --target metal --out output/gpu/metal-timing
-build/benchmark-plot-venv/bin/python scripts/gpu_benchmark.py run --config build/experiment.json --target vulkan --out output/gpu/vulkan-timing
+python3 scripts/gpu_benchmark.py run --config build/experiment.json --target metal --out output/gpu/metal-timing
+python3 scripts/gpu_benchmark.py run --config build/experiment.json --target vulkan --out output/gpu/vulkan-timing
 python3 scripts/gpu_benchmark.py compare --manifest output/gpu/metal-timing/experiment.json
 ```
 
@@ -51,7 +49,7 @@ python3 scripts/gpu_benchmark.py compare --manifest output/gpu/metal-timing/expe
 4. **Power:** for a power-relevant change, run Metal `--phase power` unplugged with matched brightness and thermal state.
    The runner exports Power Profiler tables; inspect charging, range and actual populated power lanes before claiming battery/energy changes.
    Android power rails/counters require device support and a dedicated configuration; this suite rejects Android's power phase rather than substituting FPS or CPU frequency.
-5. **Engineer handoff:** render the [before/after chart](VALIDATION.md#pr-benchmark-evidence), correlate events across metric panels and link logs, raw traces, frame captures and source JSON.
+5. **Engineer handoff:** write the [before/after tables](VALIDATION.md#pr-benchmark-evidence), correlate events in a timestamped table and link logs, raw traces, frame captures and source JSON.
    Compare isolated visibility, selection, radix, raster and present where native captures resolve them; otherwise label combined intervals explicitly.
    Record unavailable bandwidth/counters as unmeasured; attach large native captures to the PR/workflow artifacts instead of source exports.
 
@@ -69,7 +67,7 @@ gpudebug --gputrace frame.gputrace --device <replay-device-id> --json
 Prefer device-wide scope when the frame spans selection, compute and render queues; a present boundary alone does not prove every queue was captured.
 Programmatic capture through `MTLCaptureManager` is an alternative when deterministic in-app event hooks are required; enable capture only in the profiling build.
 The benchmark suite does not yet schedule frame capture or extract per-pass hardware counters.
-Its current automation covers prepared-build timing, native timeline capture, iOS power capture and descriptive JSON comparison and an automatic comparison chart.
+Its current automation covers prepared-build timing, native timeline capture, iOS power capture and descriptive JSON comparison and automatic native Markdown comparison tables.
 No Android device was connected for this implementation; no native frame capture was validated on the iPhone.
 The four PR #60 runs used app-published timings, not detailed GPU timelines or frame captures.
 

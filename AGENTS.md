@@ -35,5 +35,6 @@ Every pull request body follows the [template](.github/PULL_REQUEST_TEMPLATE.md)
 Never add generated-by footers, AI/tool signatures, badges or promotional attribution to PR descriptions or commit messages, including "Generated with Claude Code".
 Metal and Vulkan benchmarks share the [GPU profiling protocol](docs/GPU_PROFILING.md) and parameter preset; app-published timings do not establish GPU pass/frame analysis.
 Changes that may materially affect FPS, frame/GPU milliseconds or memory bandwidth follow [visual benchmark evidence](docs/VALIDATION.md#pr-benchmark-evidence).
-When measurements show a substantial effect, embed a before/after chart in the PR's Evidence for the engineer reviewing it; raw logs or a table alone are insufficient.
+When measurements show a substantial effect, put native Markdown before/after tables in the PR's Evidence, with units, absolute/percentage changes and repeat ranges; do not embed benchmark images.
+Do not accept an FPS optimization without demonstrated end-to-end benefit or with unresolved critical-stage regressions; validate thermal/workload comparability before attributing changes.
 Split dependent work into a GitHub stack of one PR per concern with `gh stack` (`gh extension install github/gh-stack`).

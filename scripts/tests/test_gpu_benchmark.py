@@ -205,3 +205,40 @@ class ExperimentTest(unittest.TestCase):
             else:
                 self.assertFalse(calls[0].gpu_stages)
                 self.assertNotEqual(module.apk("release"), artifact)
+
+    def test_markdown_exposes_repeat_ranges_and_unknown_sort_without_images(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            experiment = self.fixture(root)
+            with patch.object(suite, "execute_run", side_effect=self.write_report):
+                suite.run(experiment, root / "out")
+            text = (root / "out/comparison.md").read_text()
+            self.assertIn("40.00 (40.00-40.00)", text)
+            self.assertIn("+10.0%", text)
+            self.assertIn("Visibility + sort (sampled ms)", text)
+            self.assertIn("Unmeasured | Unmeasured", text)
+            self.assertNotIn("![", text)
+            self.assertNotIn("None", text)
+            self.assertFalse((root / "out/comparison.png").exists())
+
+    def test_fps_gain_does_not_hide_a_sort_stage_slowdown(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            experiment = self.fixture(root)
+
+            def stages(*args):
+                self.write_report(*args)
+                item, out = args[1], args[-1]
+                path = out / "report.json"
+                report = json.loads(path.read_text())
+                report["runs"][0]["stage_valid_sample_mean_ms"] = {
+                    "sort": 2 if item["variant"] == "before" else 4
+                }
+                path.write_text(json.dumps(report))
+                return 0
+
+            with patch.object(suite, "execute_run", side_effect=stages):
+                suite.run(experiment, root / "out")
+            result = json.loads((root / "out/comparison.json").read_text())
+            self.assertEqual(result["optimization_decision"], "not_accepted")
+            self.assertIn("Sort-stage slowdown", result["stage_warning"])

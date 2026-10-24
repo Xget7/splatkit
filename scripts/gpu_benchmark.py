@@ -253,8 +253,7 @@ def run(experiment, out):
         raise
     finally:
         manifest.write_text(json.dumps(experiment, indent=2) + "\n")
-    if compare(manifest) is not None:
-        plot(manifest)
+    compare(manifest)
 
 
 def compare(manifest):
@@ -293,7 +292,11 @@ def compare(manifest):
         "unmeasured": ["battery", "energy", "bandwidth"],
         "native_frames": "not collected by this runner",
     }
-    for key in ("fps_mean", "frame_p95_ms", "gpu_mean_ms"):
+    for key in ("fps_mean", "frame_p95_ms", "gpu_mean_ms", "sort_sample_mean_ms"):
+        if key == "sort_sample_mean_ms":
+            for runs in data.values():
+                for row in runs:
+                    row[key] = row.get("stage_valid_sample_mean_ms", {}).get("sort")
         groups = {v: [r.get(key) for r in data[v]] for v in data}
         if any(value is None for values in groups.values() for value in values):
             result["metrics"][key] = {"status": "unavailable"}
@@ -319,10 +322,84 @@ def compare(manifest):
             takeaway = "Observed FPS slowdown; thermal/image-quality attribution remains unvalidated."
         result["takeaway"] = takeaway
         result["fps_repeat_range"] = repeat_range
+        result["optimization_decision"] = (
+            "not_accepted" if delta <= repeat_range else "needs_validation"
+        )
+    result["acceptance_scope"] = (
+        "FPS optimization only; do not accept a change without demonstrated end-to-end benefit or with unresolved critical-stage regressions."
+    )
+    sort = result["metrics"]["sort_sample_mean_ms"]
+    if sort["status"] == "measured":
+        sort_range = max(max(sort[v]) - min(sort[v]) for v in ("before", "change"))
+        if sort["delta"] > sort_range:
+            result["optimization_decision"] = "not_accepted"
+            result["stage_warning"] = (
+                "Sort-stage slowdown exceeds the observed repeat range; investigate before accepting an optimization."
+            )
     (manifest.parent / "comparison.json").write_text(
         json.dumps(result, indent=2) + "\n"
     )
+    (manifest.parent / "comparison.md").write_text(markdown(result) + "\n")
     return result
+
+
+def markdown(result):
+    """GitHub-native comparison; unavailable measurements never become zero."""
+
+    def cell(text):
+        return str(text).replace("|", "\\|").replace("\n", " ")
+
+    rows = [
+        f"**{cell(result['backend'].title())} / {cell(result['device'])}**",
+        "",
+        result.get("takeaway", "No FPS conclusion available."),
+        "",
+        "| Metric | Before mean (range) | Change mean (range) | Delta | Delta % |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    labels = {
+        "fps_mean": "FPS - higher is better",
+        "frame_p95_ms": "Frame interval p95 (ms) - lower is better",
+        "gpu_mean_ms": "GPU interval (ms) - lower is better",
+        "sort_sample_mean_ms": (
+            "Visibility + sort" if result["backend"] == "metal" else "Sort stage"
+        )
+        + " (sampled ms) - lower is better",
+    }
+    for key, label in labels.items():
+        metric = result["metrics"][key]
+        if metric["status"] != "measured":
+            rows.append(f"| {label} | Unmeasured | Unmeasured | - | - |")
+            continue
+        values = []
+        for variant in ("before", "change"):
+            repeated = metric[variant]
+            values.append(
+                f"{metric[variant + '_mean']:.2f} ({min(repeated):.2f}-{max(repeated):.2f})"
+            )
+        percent = (
+            "-"
+            if metric["delta_percent"] is None
+            else f"{metric['delta_percent']:+.1f}%"
+        )
+        rows.append(
+            f"| {label} | {values[0]} | {values[1]} | {metric['delta']:+.2f} | {percent} |"
+        )
+    rows += [
+        "",
+        f"**FPS optimization: {result.get('optimization_decision', 'unvalidated').replace('_', ' ')}.**",
+    ]
+    if "stage_warning" in result:
+        rows += ["", result["stage_warning"]]
+    rows += [
+        "",
+        "Ranges describe individual run summaries; they are not confidence intervals.",
+        "Stage values exclude unavailable zero/startup samples; they are periodic observations, not isolated kernel timings.",
+        "Battery, energy and bandwidth: unmeasured.",
+        "Thermal comparability, native frame analysis and causal attribution remain unvalidated.",
+        "Source: [comparison.json](comparison.json), [run manifest](experiment.json).",
+    ]
+    return "\n".join(rows)
 
 
 def plot(manifest):
@@ -416,9 +493,6 @@ def main():
             return 0
         if not args.out:
             p.error("run requires a new --out directory")
-        # Resolve plotting before spending physical-device time.
-        import matplotlib  # noqa: F401
-
         run(experiment, args.out)
         return 0
     except (

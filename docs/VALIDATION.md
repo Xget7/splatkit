@@ -71,23 +71,24 @@ Metal and Vulkan share the [GPU profiling protocol](GPU_PROFILING.md) and parame
 Screen changes that plausibly affect FPS, frame/GPU time or memory bandwidth with a short matched before/after benchmark on the affected physical device/backend.
 A measured change of roughly 10-20% or more, beyond run-to-run variation, requires visual evidence, whether improvement or regression.
 A meaningful frame-budget crossing or bandwidth change also qualifies; the percentage is a screening guide, not an exemption.
-For unrelated changes or effects within noise, state why benchmarking or a chart is unnecessary; do not spend phone time producing an irrelevant benchmark.
+For unrelated changes or effects within noise, state why benchmarking or a comparison is unnecessary; do not spend phone time producing an irrelevant benchmark.
 
-The PR's Evidence must show the engineer a rendered before/after chart, embedded in the body, with a one-sentence takeaway.
-Use English, a pure-black background, white text and a restrained accent; remove redundant labels and keep secondary provenance in the linked evidence.
-Each panel must answer a different question; choose line charts for time, bars for comparisons, clear units and enough contrast to distinguish the data.
-Correlate metric changes with recorded application events on the shared timeline: label meaningful actions or transitions and carry their markers across panels, rather than showing seconds alone.
-Link each marker to its log/trace evidence; distinguish logged events, sampled observations and hypotheses, and disclose clock alignment or sampling delay instead of implying causality.
-For a benchmark report or handoff outside a PR, present the same chart directly to the engineer in charge.
-Use a standard plotting tool to save a standalone PNG or SVG beside the benchmark evidence; a table or link to raw logs alone does not satisfy the visual requirement.
+The PR's Evidence uses native Markdown comparative tables, with a one-sentence outcome; do not embed benchmark images.
+Use English, compact rows and explicit units, before/change means, absolute/percentage deltas and repeated-run ranges.
+Put secondary provenance and raw runs under a collapsible details section; do not repeat table values in prose.
+For event correlation, add a table of event ID, timestamp, observed workload, relevant timing and log/trace link.
+Distinguish recorded events, sampled observations and hypotheses; timestamp alignment and sampling delay do not establish causality.
+Use the same tables in engineer handoffs; optional plots remain linked offline artifacts.
+Do not accept an FPS optimization without demonstrated end-to-end benefit or with unresolved critical-stage regressions.
+With unmatched thermal state or adaptive workloads, mark attribution unvalidated and investigate using native traces/frames before accepting a performance claim.
 Label baseline/change commits, device/backend, workload, metric and units; show absolute values, percentage change and direction of improvement.
-Show individual repeated runs or their spread, and keep different units on separate panels rather than a misleading shared axis.
+Show individual repeated runs or their spread, and keep units explicit in separate rows.
 Include FPS and frame/GPU milliseconds when available; show bandwidth when the change concerns memory traffic and counters support it, and power when it is measured and relevant.
 Use the same device, world, camera speed, viewport, render policy and comparable image quality and starting thermal state; state deliberate differences.
-Run at least two short runs per side, alternating A/B when practical; reuse builds, installs and fixtures, then generate the chart offline.
+Run at least two short runs per side, alternating A/B when practical; reuse builds, installs and fixtures, then generate the comparison tables offline.
 Link the source JSON/logs/traces and record physical-device provenance, build identity, profiling overhead and sampling limits.
 Label estimated bandwidth or power explicitly; unavailable counters are unmeasured, never zero or inferred from FPS alone.
-If hardware or counters are unavailable, report the missing check and leave the performance conclusion unvalidated instead of inventing a chart.
+If hardware or counters are unavailable, report the missing check and leave the performance conclusion unvalidated instead of inventing results.
 
 ## iOS power comparisons
 
