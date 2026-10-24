@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "scenario": {
+    "world": "scene.lodsplat",
+    "source_splats": 11988085,
+    "prepared_nodes": 13375264,
+    "pose": [-7.25, 1.6, 5.25, 0, 0],
+    "seconds": 30,
+    "warmup_seconds": 10,
+    "budget": 1800000,
+    "subpixel": 1.0,
+    "order": ["before", "change", "change", "before"]
+  },
+  "targets": {
+    "metal": {
+      "backend": "metal",
+      "device": "SET_IPHONE_UDID",
+      "quality": "high",
+      "builds": {
+        "before": {"artifact": "build/gpu-benchmark/metal/before.app", "commit": "SET_FULL_COMMIT"},
+        "change": {"artifact": "build/gpu-benchmark/metal/change.app", "commit": "SET_FULL_COMMIT"}
+      }
+    },
+    "vulkan": {
+      "backend": "vulkan",
+      "device": "SET_ADB_SERIAL",
+      "quality": "high",
+      "builds": {
+        "before": {"artifact": "build/gpu-benchmark/vulkan/before.apk", "commit": "SET_FULL_COMMIT"},
+        "change": {"artifact": "build/gpu-benchmark/vulkan/change.apk", "commit": "SET_FULL_COMMIT"}
+      }
+    }
+  }
+}

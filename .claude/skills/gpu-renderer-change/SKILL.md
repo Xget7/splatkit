@@ -5,6 +5,11 @@ description: Plan, implement, refactor and measure a change to the GPU pipeline 
 
 # GPU renderer change
 
+Physical acceptance and benchmark evidence use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-world); small fixtures establish only smoke or unit-test results.
+
+Use the shared [GPU profiling protocol](../../../docs/GPU_PROFILING.md) and `scripts/gpu_benchmark.py` preset for repeated comparisons; keep timing, timeline, frame capture and power experiments distinct.
+Do not claim GPU passes were profiled from app-published FPS/stage counters alone.
+
 A **run** takes one change to the GPU pipeline from a measurable hypothesis to a merged pull request with phone numbers behind it, on **both backends**.
 Metal and Vulkan carry equal weight: a change that lands on one backend only is unfinished, and a gap between them is the first thing a run closes.
 Every API, flag and limit the run touches is **grounded**: it carries a citation to a current source, because model memory lags the SDKs by a release or more.
@@ -66,6 +71,7 @@ Done when each server has answered or its failure is noted.
 
 9. **Close.** Add any newly cited fact to the backend's refs README with its source and fetch date.
    Ship through the ship skill; the PR's Evidence carries the hypothesis, both backends' figures with their spread, and the device, OS and commit of every run.
+   Follow [visual benchmark evidence](../../../docs/VALIDATION.md#pr-benchmark-evidence): a material measured effect needs native Markdown before/after tables for the reviewing engineer, with source evidence and explicit bandwidth/power limits.
    Done when the pull request is open with that Evidence for both backends.
 
 ## Reading the numbers

@@ -10,7 +10,7 @@ Terms follow [CONTEXT.md](../CONTEXT.md); the linked files are the source of tru
 [Code layout](../CONTRIBUTING.md#code-layout) says what each package and folder owns.
 Around the packages:
 
-- [scripts](../scripts): world preparation (`prepare-world.sh`), iOS packaging and source export, the [SDK harness](AGENT_HARNESS.md), Perfetto and benchmark analysis, and their tests.
+- [scripts](../scripts): world preparation (`prepare-world.sh`), iOS packaging and source export, the [SDK harness](AGENT_HARNESS.md), Perfetto and benchmark analysis, the shared [GPU experiment runner](GPU_PROFILING.md), and their tests.
 - [.github/workflows](../.github/workflows): one workflow per package plus lint, release and the iOS mirror; [ci-filters.yml](../.github/ci-filters.yml) maps changed files to jobs.
 - [VALIDATION.md](VALIDATION.md), [BENCHMARKS.md](BENCHMARKS.md), [RELEASING.md](RELEASING.md) and [VULKAN.md](../packages/splatkit-android/docs/VULKAN.md) for checks, measurements, releases and the Vulkan contracts.
 

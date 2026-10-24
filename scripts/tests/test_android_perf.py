@@ -209,3 +209,46 @@ class AnalysisTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class NativeGpuTraceTest(unittest.TestCase):
+    def test_vendor_sources_are_used_exactly_without_guessing_counter_support(self):
+        query = 'name: "gpu.renderstages.adreno" name: "gpu.renderstages" name: "gpu.counters"'
+        sources = perf.gpu_stage_sources(query)
+        self.assertEqual(sources, ['gpu.renderstages','gpu.renderstages.adreno'])
+        config = perf.perfetto_config(30, sources)
+        self.assertIn('name: "gpu.renderstages.adreno"',config)
+        self.assertNotIn('name: "gpu.counters"',config)
+        self.assertEqual(perf.gpu_stage_sources('name: "linux.ftrace"'), [])
+        self.assertNotIn('gpu.renderstages',perf.perfetto_config(30))
+
+    def test_gpu_query_aggregates_native_slices_inside_the_window(self):
+        import sqlite3
+        db=sqlite3.connect(':memory:'); db.row_factory=sqlite3.Row
+        db.executescript('''
+            create table gpu_track(id integer, name text);
+            create table gpu_slice(name text, track_id integer, ts integer, dur integer);
+            insert into gpu_track values(1,'Compute');
+            insert into gpu_slice values('visibility',1,1000000,1000000);
+            insert into gpu_slice values('visibility',1,2000000,2000000);
+            insert into gpu_slice values('past-window',1,9000000,3000000);
+            insert into gpu_slice values('unfinished',1,3000000,-1);
+        ''')
+        trace=analysis.Trace.__new__(analysis.Trace)
+        trace.rows=lambda sql:[dict(row) for row in db.execute(sql)]
+        try:
+            result=trace.gpu_stages((1000000,10000000))
+            self.assertEqual(result['status'],'measured')
+            self.assertEqual(result['stages'],[{'name':'visibility','queue':'Compute','samples':2,'mean_ms':1.5,'max_ms':2.0}])
+            self.assertIn('device-wide',result['scope'])
+            self.assertEqual(trace.gpu_stages((20000000,30000000))['status'],'unavailable')
+        finally:
+            db.close()
+
+    def test_unsupported_schema_does_not_become_zero_gpu_time(self):
+        trace=analysis.Trace.__new__(analysis.Trace)
+        def missing(sql): raise RuntimeError('no such table: gpu_slice')
+        trace.rows=missing
+        result=trace.gpu_stages((0,100))
+        self.assertEqual(result['status'],'unavailable')
+        self.assertIn('gpu_slice',result['reason'])
+        self.assertNotIn('mean_ms',result)

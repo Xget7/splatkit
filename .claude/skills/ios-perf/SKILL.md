@@ -7,13 +7,18 @@ description: Benchmark runs of the iOS Metal renderer on a physical iPhone, with
 
 A **run** is one release build of the dev app doing its benchmark turn on an iPhone: [scripts/ios_perf.py](../../../scripts/ios_perf.py) installs it, runs the turn through `devicectl` with the HUD off, and writes one run directory under `output/ios-perf/`.
 Its `--help` carries the flags.
+Use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-world) for physical acceptance and benchmarks; always pass `--world scene.lodsplat`, never substitute kitchen for representative evidence.
+Before reporting or opening a PR, follow [visual benchmark evidence](../../../docs/VALIDATION.md#pr-benchmark-evidence): material effects require native Markdown before/after tables for the reviewing engineer, backed by the run files.
+
+Use the shared [GPU profiling protocol](../../../docs/GPU_PROFILING.md) and `scripts/gpu_benchmark.py` preset for repeated comparisons; keep timing, timeline, frame capture and power experiments distinct.
+Do not claim GPU passes were profiled from app-published FPS/stage counters alone.
 
 ## Steps
 
 1. **Check the phone.** `xcrun devicectl list devices` shows it `available (paired)`; take its UDID from there.
    The screen is unlocked and stays awake, and nothing else holds the GPU (Xcode GPU capture, Instruments).
    The script stops at once on a locked phone.
-2. **Record.** `python3 scripts/ios_perf.py --udid <UDID> --seconds 30` with the same `--quality`, `--pose` and `--world` for every run you will compare.
+2. **Record.** `python3 scripts/ios_perf.py --udid <UDID> --world scene.lodsplat --pose=-7.25,1.6,5.25,0,0 --budget 1800000 --seconds 30` with the same `--quality`, `--pose` and `--world` for every run you will compare.
    Pass `--skip-build` only when the last release build in `build/ios-dev-derived` is from the commit you mean to measure.
    Done when it prints `status passed`.
    For a comparison, record at least two runs per side; the run-to-run spread is the noise floor.

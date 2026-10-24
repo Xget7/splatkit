@@ -62,6 +62,14 @@ class BenchmarkReportTest(unittest.TestCase):
         run = report.summarize(START + sample + FRAME + GPU + sample, "host")["runs"][0]
         self.assertEqual(run["stage_samples"], 1)
 
+    def test_valid_stage_samples_exclude_startup_and_unavailable_zeros(self):
+        startup = "0.0 fps, gpu 1.0 ms, sort 0.0 ms, cull 0.0 ms, select 0.0 ms, 0 drawn of 200 selected of 2970075\n"
+        ready = "40.0 fps, gpu 23.0 ms, sort 6.0 ms, cull 0.0 ms, select 2.0 ms, 100 drawn of 200 selected of 2970075\n"
+        run = report.summarize(START + startup + ready + FRAME + GPU, "host")["runs"][0]
+        self.assertEqual(run["stage_valid_sample_mean_ms"], {"sort": 6, "cull": None, "select": 2})
+        self.assertEqual(run["stage_valid_samples"], {"sort": 1, "cull": 0, "select": 1})
+        self.assertEqual(run["stage_sample_mean_ms"]["sort"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

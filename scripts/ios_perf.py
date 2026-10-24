@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build the iOS dev app as release, run its benchmark turn on an iPhone and summarize it.
 
-Writes console.log and report.json to one run directory, plus metal.trace with --trace (open it
-in Instruments). Needs a paired iPhone that stays awake and unlocked; --world names a file in
-the app's Documents or bundle.
+Writes console.log and report.json, plus metal.trace with --trace or power.trace and exported
+XML with --power. Needs a paired iPhone that stays awake and unlocked; --world names a file
+in the app's Documents or bundle. Power comparisons require unplugged wireless debugging.
 """
 
 import argparse
@@ -18,6 +18,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import benchmark_report  # noqa: E402
+import ios_power  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "apps" / "ios-dev"
@@ -41,6 +42,7 @@ VALIDATION_VARIABLES = {"MTL_DEBUG_LAYER": "1", "MTL_SHADER_VALIDATION": "1"}
 # devicectl --console relays NSLog only with this set.
 CONSOLE_VARIABLES = {"OS_ACTIVITY_DT_MODE": "enable"}
 TRACE_TEMPLATE = "Metal System Trace"
+POWER_TEMPLATE = "Power Profiler"
 # Over Wi-Fi the iPhone 17 Pro took about 5 minutes to save a 30 s trace and as long for a 10 s one.
 TRACE_SAVE_ALLOWANCE_S = 600
 
@@ -148,19 +150,22 @@ def build(udid):
                     "-allowProvisioningUpdates", "-quiet", "build"], cwd=ROOT, check=True)
 
 
-def trace_command(device_name, pid, seconds, path):
+def trace_command(device_name, pid, seconds, path, template=TRACE_TEMPLATE):
     """Metal System Trace attached to the app for the turn's length.
 
     Names the device and the pid: xctrace lists a phone reached over Wi-Fi as offline under its UDID,
     and finds no process by the app's name there.
     """
-    return ["xcrun", "xctrace", "record", "--template", TRACE_TEMPLATE, "--device", device_name,
-            "--attach", str(pid), "--time-limit", f"{int(seconds)}s", "--no-prompt", "--output", str(path)]
+    # The stock Power Profiler template also enables network/CPU/Metal instruments.
+    # Instruments 27.1 traps in NetworkConnectionStatsModeling when closing that template.
+    instruments = ["--template", "Blank", "--instrument", POWER_TEMPLATE] if template == POWER_TEMPLATE else ["--template", template]
+    return ["xcrun", "xctrace", "record", *instruments, "--device", device_name,
+            "--attach", str(pid), "--time-limit", f"{seconds:g}s", "--no-prompt", "--output", str(path)]
 
 
-def trace_failure(requested, recorded):
+def trace_failure(requested, recorded, template=TRACE_TEMPLATE):
     if requested and not recorded:
-        return f"{TRACE_TEMPLATE} was not recorded; see trace.log"
+        return f"{template} was not recorded; see trace.log"
     return None
 
 
@@ -190,16 +195,21 @@ def run(args):
     if not unlocked(devicectl_json("device", "info", "lockState", "--device", args.udid)):
         raise RuntimeError("the iPhone is locked; unlock it and keep it awake")
     device = device_environment(devicectl_json("device", "info", "details", "--device", args.udid))
+    if args.power and int(device["ios"].split(".")[0]) < 26:
+        raise RuntimeError("Power Profiler requires iOS 26 or later")
     if not args.skip_build:
         build(args.udid)
-    print("installing", flush=True)
-    subprocess.run(["xcrun", "devicectl", "device", "install", "app", "--device", args.udid, str(APP)],
-                   check=True, capture_output=True, text=True)
+    if not args.skip_install:
+        print("installing", flush=True)
+        subprocess.run(["xcrun", "devicectl", "device", "install", "app", "--device", args.udid, str(APP)],
+                       check=True, capture_output=True, text=True)
 
     out = args.out or RUNS_DIR / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=False)
     console_path = out / "console.log"
-    trace_path = out / "metal.trace"
+    template = POWER_TEMPLATE if args.power else TRACE_TEMPLATE
+    tracing = args.trace or args.power
+    trace_path = out / ("power.trace" if args.power else "metal.trace")
     trace = []
     print(f"running a {args.seconds:g} s turn", flush=True)
     with console_path.open("w") as console, (out / "trace.log").open("w") as trace_log:
@@ -207,9 +217,11 @@ def run(args):
                                               args.validation, args.budget, args.subpixel),
                                stdout=console, stderr=subprocess.STDOUT)
         def on_started():
-            if args.trace:
+            if tracing:
                 pid = app_pid(devicectl_json("device", "info", "processes", "--device", args.udid))
-                trace.append(subprocess.Popen(trace_command(device["name"], pid, args.seconds, trace_path),
+                if pid is None:
+                    raise RuntimeError("the benchmark process disappeared before trace attachment")
+                trace.append(subprocess.Popen(trace_command(device["name"], pid, args.seconds, trace_path, template),
                                               stdout=trace_log, stderr=subprocess.STDOUT))
 
         failure = None
@@ -220,6 +232,9 @@ def run(args):
         except RuntimeError as error:
             failure = str(error)
         finally:
+            # Let xctrace finish and close its document before terminating its target.
+            # A recorder crash or target termination can leave a bundle without a template.
+            # The completed benchmark leaves a still view; the engine draws only on changes.
             for recorder in trace:
                 try:
                     recorder.wait(timeout=TRACE_SAVE_ALLOWANCE_S)
@@ -233,16 +248,29 @@ def run(args):
     log = console_path.read_text(errors="replace")
     environment = {**device, "build": CONFIGURATION, "quality": args.quality, "pose": args.pose, "world": args.world,
                    "budget": args.budget, "subpixel": args.subpixel, "seconds": args.seconds,
-                   "validation": args.validation, **git_state()}
+                   "validation": args.validation, "reused_install": args.skip_install,
+                   "installed_build_provenance": "not verified" if args.skip_install else str(APP), **git_state()}
     summary = benchmark_report.summarize(log, ENVIRONMENT, None, args.seconds)
     summary["run"] = environment
     summary["gpu"] = gpu_capabilities(log)
     summary["errors"] = sorted(set(summary["errors"]) | set(console_errors(log)))
     # A killed recorder can leave a partial trace bundle behind.
     recorded = bool(trace) and trace[0].returncode == 0 and trace_path.exists()
-    if args.trace:
-        summary["trace"] = {"path": str(trace_path), "recorded": recorded}
-    failure = failure or trace_failure(args.trace, recorded) or touch_failure(log)
+    if tracing:
+        summary["trace"] = {"path": str(trace_path), "recorded": recorded, "template": template,
+                            "recorder_exit_code": trace[0].returncode if trace else None}
+    if args.power:
+        summary["power"] = {
+            "metrics_status": "unvalidated", "charging_state": "not verified",
+            "coverage": "attachment requested after benchmark start; initial frames may be missing",
+            "limitations": "Inspect charging, thermal state and time range in Instruments before comparing.",
+        }
+        if recorded:
+            summary["power"]["export"] = ios_power.export_trace(trace_path, out / "power-export")
+            summary["power"]["metrics_status"] = summary["power"]["export"].get("metrics_status", "unvalidated")
+            if summary["power"]["export"]["status"] != "exported":
+                failure = failure or "Power trace export failed; retry offline with scripts/ios_power.py"
+    failure = failure or trace_failure(tracing, recorded, template) or touch_failure(log)
     if failure or summary["errors"]:
         summary["status"] = "failed"
     if failure:
@@ -262,6 +290,8 @@ def print_summary(summary, out):
               f"gpu {'n/a' if gpu is None else f'{gpu:.1f}'} ms, sort {stages['sort'] or 0:.1f} ms, "
               f"select {stages['select'] or 0:.1f} ms, drawn {run_summary['drawn_sample_range']}")
     print(f"status {summary['status']}")
+    if "power" in summary:
+        print("power metrics unvalidated: inspect charging, thermal state and capture coverage in Instruments")
     for error in summary.get("errors", [])[:10]:
         print(f"error: {error}")
     print(f"run directory: {out}")
@@ -277,12 +307,21 @@ def main():
     parser.add_argument("--budget", type=int,
                         help="LOD budget: the world loads as a hierarchy drawing at most this many splats")
     parser.add_argument("--subpixel", type=float, help="sub-pixel cutoff in pixels; the policy default otherwise")
-    parser.add_argument("--trace", action="store_true", help=f"also record {TRACE_TEMPLATE} for the turn")
+    tracing = parser.add_mutually_exclusive_group()
+    tracing.add_argument("--trace", action="store_true", help=f"also record {TRACE_TEMPLATE} for the turn")
+    tracing.add_argument("--power", action="store_true", help="record and export Power Profiler; iOS 26+, unplugged Wi-Fi")
     parser.add_argument("--validation", action="store_true",
                         help="enable Metal API and Shader Validation; the timings are then not comparable")
     parser.add_argument("--out", type=Path, help=f"run directory; defaults under {RUNS_DIR.relative_to(ROOT)}")
     parser.add_argument("--skip-build", action="store_true", help="install the last release build")
+    parser.add_argument("--skip-install", action="store_true", help="reuse the installed app; requires --skip-build")
     args = parser.parse_args()
+    if args.skip_install and not args.skip_build:
+        parser.error("--skip-install requires --skip-build")
+    if args.power and args.validation:
+        parser.error("--power cannot be combined with --validation")
+    if not 0 < args.seconds <= 3600:
+        parser.error("--seconds must be finite and in (0, 3600]")
     try:
         return run(args)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError, OSError) as error:

@@ -1,6 +1,9 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -95,6 +98,71 @@ class CapabilitiesTest(unittest.TestCase):
 
 
 class TraceTest(unittest.TestCase):
+    def test_power_reuses_install_and_saves_trace_before_terminating_attached_app(self):
+        events = []
+        recorder = MagicMock(returncode=0)
+        recorder.poll.return_value = None
+        recorder.wait.side_effect = lambda **kwargs: events.append("save trace")
+        app = MagicMock()
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "run"
+            args = SimpleNamespace(udid=UDID, power=True, trace=False, skip_build=True, skip_install=True,
+                                   out=out, seconds=30, quality="high", pose=None, world=None,
+                                   validation=False, budget=None, subpixel=None)
+
+            def popen(command, **kwargs):
+                if "xctrace" in command:
+                    (out / "power.trace").mkdir()
+                    return recorder
+                return app
+
+            def watch(path, timeout, on_started):
+                on_started()
+                return perf.DONE
+
+            def export(trace, destination):
+                events.append("offline export")
+                return {"status": "exported"}
+
+            with patch.object(perf, "devicectl_json", return_value={}), \
+                    patch.object(perf, "unlocked", return_value=True), \
+                    patch.object(perf, "device_environment", return_value={"ios": "27.0", "name": "phone"}), \
+                    patch.object(perf, "app_pid", return_value=812), \
+                    patch.object(perf, "build") as build, \
+                    patch.object(perf.subprocess, "run") as command, \
+                    patch.object(perf.subprocess, "Popen", side_effect=popen), \
+                    patch.object(perf, "watch", side_effect=watch), \
+                    patch.object(perf, "terminate_app", side_effect=lambda udid: events.append("stop app")), \
+                    patch.object(perf, "git_state", return_value={}), \
+                    patch.object(perf.benchmark_report, "summarize", return_value={"status": "passed", "errors": []}), \
+                    patch.object(perf.ios_power, "export_trace", side_effect=export), \
+                    patch.object(perf, "print_summary"), patch("builtins.print"):
+                self.assertEqual(perf.run(args), 0)
+                build.assert_not_called()
+                command.assert_not_called()
+            self.assertEqual(events, ["save trace", "stop app", "offline export"])
+            report = (out / "report.json").read_text()
+            self.assertIn('"metrics_status": "unvalidated"', report)
+            self.assertIn('"recorded": true', report)
+
+    def test_power_attaches_to_one_process_and_keeps_fractional_duration(self):
+        command = perf.trace_command("phone", 812, 0.5, Path("power.trace"), perf.POWER_TEMPLATE)
+        self.assertEqual(command[command.index("--template") + 1], "Blank")
+        self.assertEqual(command[command.index("--instrument") + 1], "Power Profiler")
+        self.assertEqual(command[command.index("--attach") + 1], "812")
+        self.assertEqual(command[command.index("--time-limit") + 1], "0.5s")
+        self.assertNotIn("--all-processes", command)
+
+    def test_invalid_combinations_fail_before_contacting_a_device(self):
+        for arguments in (["--power", "--trace"], ["--power", "--validation"], ["--skip-install"],
+                          ["--seconds", "nan"], ["--seconds", "0"], ["--seconds", "3601"]):
+            with patch("sys.argv", ["ios_perf.py", "--udid", UDID, *arguments]), \
+                    patch.object(perf, "run") as run, patch("sys.stderr"):
+                with self.assertRaises(SystemExit) as error:
+                    perf.main()
+                self.assertEqual(error.exception.code, 2)
+                run.assert_not_called()
+
     def test_a_requested_trace_that_was_not_recorded_fails_the_run(self):
         self.assertIsNone(perf.trace_failure(requested=False, recorded=False))
         self.assertIsNone(perf.trace_failure(requested=True, recorded=True))

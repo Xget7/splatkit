@@ -65,6 +65,12 @@ def summarize(contents, environment, pid=None, minimum_seconds=0):
         run["stage_sample_mean_ms"] = {
             name: statistics.mean(row[index] for row in samples) if samples else None
             for name, index in (("sort", 2), ("cull", 3), ("select", 4))}
+        valid_stages = {
+            name: [row[index] for row in samples if row[5] > 0 and row[index] > 0]
+            for name, index in (("sort", 2), ("cull", 3), ("select", 4))}
+        run["stage_valid_sample_mean_ms"] = {
+            name: statistics.mean(values) if values else None for name, values in valid_stages.items()}
+        run["stage_valid_samples"] = {name: len(values) for name, values in valid_stages.items()}
         run["drawn_sample_range"] = [int(min(s[5] for s in samples)), int(max(s[5] for s in samples))] if samples else None
         if "frames" not in run or "gpu_mean_ms" not in run:
             continue

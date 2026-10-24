@@ -104,6 +104,21 @@ class Trace:
             where t.name = '{thread}' and {self.process} and s.name = '{name}' {clause}
             order by s.ts""")
 
+    def gpu_stages(self, window):
+        """Native GPU slices only; never substitute CPU encode sections or invent PID attribution."""
+        scope = "device-wide GPU slices fully inside the app benchmark window; no verified per-process attribution"
+        try:
+            rows = self.rows(f"""
+                select gs.name, gt.name queue, count(*) samples,
+                       avg(gs.dur) / 1000000.0 mean_ms, max(gs.dur) / 1000000.0 max_ms
+                from gpu_slice gs join gpu_track gt on gs.track_id = gt.id
+                where gs.dur > 0 and gs.ts >= {window[0]} and gs.ts + gs.dur <= {window[1]}
+                group by gs.name, gt.name order by mean_ms desc""")
+        except Exception as error:
+            return {"status": "unavailable", "scope": scope, "reason": str(error)}
+        return {"status": "measured" if rows else "unavailable", "scope": scope, "stages": rows,
+                "reason": None if rows else "no native GPU slices in this window"}
+
     def benchmark_window(self):
         """The async slice the app keeps open over a benchmark turn, if the trace saw it end."""
         rows = self.rows(f"""
@@ -214,6 +229,7 @@ def analyze(path, pid=None):
         "submitted_frames": len(submits),
         "submit_fps": len(submits) / window_s,
         "render_thread_slices": stages,
+        "native_gpu_slices": trace.gpu_stages(window),
         "pacing": pacing([s["ts"] for s in submits]),
         "render_thread": render_thread_breakdown(trace.thread_states(window), clusters, window),
         "cpu_clusters": clusters,
