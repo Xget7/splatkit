@@ -5,6 +5,7 @@ Implementation: follow [CONTRIBUTING.md](CONTRIBUTING.md); terminology lives in 
 Architecture (packages, load and frame pipeline on Metal and Vulkan): read [ARCHITECTURE.md](docs/ARCHITECTURE.md) before exploring; a change to a stage, GPU layout or package dependency updates it in the same PR.
 Keep documentation terse; link code/contracts instead of duplicating them.
 Report skipped checks, approximation limits and emulator/physical-device provenance explicitly.
+Use the [12M reference world](docs/VALIDATION.md#reference-performance-world) for renderer acceptance, performance and battery benchmarks; small worlds do not establish representative results.
 
 Build storage: reuse ignored build directories in this checkout across sessions and reference large fixtures by path.
 Reserve session scratchpads for small disposable probes.

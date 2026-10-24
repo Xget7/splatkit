@@ -7,6 +7,7 @@ description: Perfetto performance runs of the Android Vulkan renderer on a physi
 
 A **run** is one release build of the dev app doing its benchmark turn under Perfetto: [scripts/android_perf.py](../../../scripts/android_perf.py) records it and [scripts/perfetto_analysis.py](../../../scripts/perfetto_analysis.py) reads the trace.
 Both scripts' `--help` carry the flags.
+Use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-world) for physical acceptance and benchmarks; pass its installed filename explicitly and never substitute kitchen for representative evidence.
 Every run locks the display to landscape (rotation 1) and restores the rotation settings afterwards, so runs compare whatever way the phone lies.
 
 ## Steps
