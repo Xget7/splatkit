@@ -5,6 +5,8 @@ description: Plan, implement, refactor and measure a change to the GPU pipeline 
 
 # GPU renderer change
 
+Physical acceptance and benchmark evidence use the [12M reference world](../../../docs/VALIDATION.md#reference-performance-world); small fixtures establish only smoke or unit-test results.
+
 A **run** takes one change to the GPU pipeline from a measurable hypothesis to a merged pull request with phone numbers behind it, on **both backends**.
 Metal and Vulkan carry equal weight: a change that lands on one backend only is unfinished, and a gap between them is the first thing a run closes.
 Every API, flag and limit the run touches is **grounded**: it carries a citation to a current source, because model memory lags the SDKs by a release or more.
