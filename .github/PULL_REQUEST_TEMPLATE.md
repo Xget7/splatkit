@@ -1,5 +1,7 @@
 ## Summary
 
+<!-- Never append generated-by footers or AI/tool signatures to this PR. -->
+
 <!-- The smallest view that makes the change clear: a call tree, a file tree, a diff sketch, pseudocode or a Mermaid diagram, each beside one or two lines of text. -->
 <!-- Link the issue if there is one, and give the reasoning here: this repo keeps no decision documents. -->
 
