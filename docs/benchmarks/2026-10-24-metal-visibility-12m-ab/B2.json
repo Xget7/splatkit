@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "environment": "physical",
+  "pid": null,
+  "minimum_seconds_per_run": 30,
+  "runs": [
+    {
+      "status": "complete",
+      "resident_records": 13375264,
+      "requested_seconds": 30.0,
+      "windows": [
+        "benchmark window: start 0.0 end 30.0, 1199 frames, frame mean 25.0 p95 33.1 p99 34.4 max 994.3, gpu mean 38.1 p95 51.1 p99 54.0, gpu samples 1199, gpu -1.0 C"
+      ],
+      "frame_p99_ms": 34.4,
+      "gpu_p99_ms": 54.0,
+      "gpu_sample_count": 1199,
+      "frames": 1199,
+      "fps_mean": 40.0,
+      "frame_mean_ms": 25.0,
+      "frame_p50_ms": 24.8,
+      "frame_p95_ms": 33.1,
+      "frame_max_ms": 994.3,
+      "gpu_mean_ms": 38.1,
+      "gpu_p50_ms": 37.8,
+      "gpu_p95_ms": 51.1,
+      "gpu_max_ms": 54.9,
+      "tails_frame_count": 1199,
+      "stage_samples": 15,
+      "stage_sample_mean_ms": {
+        "sort": 8.613333333333333,
+        "cull": 0.0,
+        "select": 2.3333333333333335
+      },
+      "drawn_sample_range": [
+        0,
+        1545419
+      ],
+      "observed_seconds_approx": 29.975
+    }
+  ],
+  "errors": [],
+  "phone_performance_validated": false,
+  "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+  "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+  "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+  "run": {
+    "device": "iPhone 17 Pro",
+    "name": "xgetphone",
+    "model": "iPhone18,1",
+    "ios": "27.0.1",
+    "ios_build": "24A446",
+    "build": "Release",
+    "quality": "high",
+    "pose": "-7.25,1.6,5.25,0,0",
+    "world": "scene.lodsplat",
+    "budget": 1800000,
+    "subpixel": 1.0,
+    "seconds": 30,
+    "validation": false,
+    "commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+    "dirty": true,
+    "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+    "binary_sha256": "fa8ddf103404412e0732edd64f94a76241d37fc7f67e88a5ae7f591bd24019f1",
+    "variant": "change",
+    "resource_monitor_hz": 0,
+    "thermal_trace_available": false
+  },
+  "gpu": {
+    "family": "Apple10",
+    "metal": 4,
+    "threadgroup_memory_bytes": 32768,
+    "threads_per_threadgroup": 1024,
+    "max_buffer_bytes": 6442450944,
+    "working_set_bytes": 8589950976
+  }
+}

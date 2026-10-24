@@ -6,10 +6,16 @@ See [validation](VALIDATION.md) for reproduction and acceptance checks.
 
 ## iPhone 17 Pro: Metal
 
+October 24, PR #60: matched A-B-B-A, two 30-second turns per variant on the 12M reference world, without validation instrumentation.
+Mean FPS was 42.90 before and 41.55 after (-3.1%); the baseline repeats alone ranged from 39.7 to 46.1 FPS.
+Visibility + sort was 8.97 versus 8.96 ms in eligible periodic samples; these runs demonstrate no gain and do not isolate a causal regression.
+No thermal/memory trace, battery, energy or bandwidth measurement was collected.
+[Comparison chart](benchmarks/2026-10-24-metal-visibility-12m-ab/comparison.png), [source data and limits](benchmarks/2026-10-24-metal-visibility-12m-ab/comparison.json), [raw runs and reproduction](benchmarks/2026-10-24-metal-visibility-12m-ab/).
+
 October 24, PR #60: a 30-second physical iPhone 17 Pro run on `scene.lodsplat` (11,988,085 source splats, 13,375,264 prepared nodes), SH1, high, 1.8M budget, pose `-7.25,1.6,5.25,0,0`, passed with Metal API and Shader Validation enabled and no Metal errors.
 The user confirmed the room framing; the kitchen probe and a 12M run from the incorrect origin are not representative acceptance evidence.
 Instrumentation affects timings; this establishes neither speedup nor sustained performance.
-[Report](benchmarks/2026-10-24-metal-visibility-12m-validation.json), [log](benchmarks/2026-10-24-metal-visibility-12m-validation.log), [pose capture](benchmarks/2026-10-24-metal-visibility-12m-pose.png).
+[Report](benchmarks/2026-10-24-metal-visibility-12m-validation.json), [log](benchmarks/2026-10-24-metal-visibility-12m-validation.log), [pose capture](https://github.com/Xget7/splatkit/blob/gpu/metal-visibility-skip/.github/benchmark-assets/2026-10-24-metal-visibility-12m-pose.png).
 
 Physical iPhone 17 Pro, A19 Pro; ISS experiments ran September 11-16, 2026.
 Settings differ between runs; exact configurations and limitations are in the linked JSON.

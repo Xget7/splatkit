@@ -88,7 +88,7 @@
     "code_commit": "9d5d28f25dee9dc36afecf8d79fcdd5d81e641e0",
     "dirty_scope": "Only benchmark procedure documentation was modified after building this commit.",
     "pose_user_confirmed": true,
-    "pose_capture": "2026-10-24-metal-visibility-12m-pose.png",
+    "pose_capture": "https://github.com/Xget7/splatkit/blob/gpu/metal-visibility-skip/.github/benchmark-assets/2026-10-24-metal-visibility-12m-pose.png",
     "selected_sample_range": [
       410115,
       1797074

@@ -1,0 +1,1019 @@
+{
+  "schema_version": 1,
+  "order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2"
+  ],
+  "metrics": {
+    "fps": {
+      "before": [
+        46.1,
+        39.7
+      ],
+      "change": [
+        43.1,
+        40.0
+      ],
+      "before_mean": 42.900000000000006,
+      "change_mean": 41.55,
+      "delta": -1.3500000000000085,
+      "delta_percent": -3.146853146853166
+    },
+    "gpu_ms": {
+      "before": [
+        32.6,
+        38.1
+      ],
+      "change": [
+        35.1,
+        38.1
+      ],
+      "before_mean": 35.35,
+      "change_mean": 36.6,
+      "delta": 1.25,
+      "delta_percent": 3.536067892503536
+    },
+    "visibility_sort_ms": {
+      "before": [
+        8.34,
+        9.592857142857143
+      ],
+      "change": [
+        8.686666666666667,
+        9.228571428571428
+      ],
+      "before_mean": 8.966428571428573,
+      "change_mean": 8.957619047619048,
+      "delta": -0.008809523809524933,
+      "delta_percent": -0.098250086300764
+    }
+  },
+  "runs": {
+    "A1": {
+      "report": {
+        "schema_version": 1,
+        "status": "passed",
+        "environment": "physical",
+        "pid": null,
+        "minimum_seconds_per_run": 30,
+        "runs": [
+          {
+            "status": "complete",
+            "resident_records": 13375264,
+            "requested_seconds": 30.0,
+            "windows": [
+              "benchmark window: start 0.0 end 30.0, 1383 frames, frame mean 21.7 p95 28.7 p99 29.9 max 953.0, gpu mean 32.6 p95 43.3 p99 45.9, gpu samples 1383, gpu -1.0 C"
+            ],
+            "frame_p99_ms": 29.9,
+            "gpu_p99_ms": 45.9,
+            "gpu_sample_count": 1383,
+            "frames": 1383,
+            "fps_mean": 46.1,
+            "frame_mean_ms": 21.7,
+            "frame_p50_ms": 21.9,
+            "frame_p95_ms": 28.7,
+            "frame_max_ms": 953.0,
+            "gpu_mean_ms": 32.6,
+            "gpu_p50_ms": 32.0,
+            "gpu_p95_ms": 43.3,
+            "gpu_max_ms": 47.0,
+            "tails_frame_count": 1383,
+            "stage_samples": 14,
+            "stage_sample_mean_ms": {
+              "sort": 8.464285714285714,
+              "cull": 0.0,
+              "select": 1.9857142857142858
+            },
+            "drawn_sample_range": [
+              341532,
+              1475619
+            ],
+            "observed_seconds_approx": 30.0111
+          }
+        ],
+        "errors": [],
+        "phone_performance_validated": false,
+        "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+        "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+        "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+        "run": {
+          "device": "iPhone 17 Pro",
+          "name": "xgetphone",
+          "model": "iPhone18,1",
+          "ios": "27.0.1",
+          "ios_build": "24A446",
+          "build": "Release",
+          "quality": "high",
+          "pose": "-7.25,1.6,5.25,0,0",
+          "world": "scene.lodsplat",
+          "budget": 1800000,
+          "subpixel": 1.0,
+          "seconds": 30,
+          "validation": false,
+          "commit": "4062f63f2d14109769dc2a564e8bddf67a650c4f",
+          "dirty": false,
+          "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "binary_sha256": "6fe80043dffa74100e128b876da2e98afbc448c24043f2591675525458302b7f",
+          "variant": "base",
+          "resource_monitor_hz": 0,
+          "thermal_trace_available": false
+        },
+        "gpu": {
+          "family": "Apple10",
+          "metal": 4,
+          "threadgroup_memory_bytes": 32768,
+          "threads_per_threadgroup": 1024,
+          "max_buffer_bytes": 6442450944,
+          "working_set_bytes": 8589950976
+        }
+      },
+      "samples": [
+        {
+          "seconds": 1.04436,
+          "fps": 56.8,
+          "gpu_ms": 29.2,
+          "visibility_sort_ms": 5.4,
+          "select_ms": 0.9,
+          "drawn": 813283,
+          "selected": 913569,
+          "yaw": 0.41
+        },
+        {
+          "seconds": 3.064313,
+          "fps": 51.0,
+          "gpu_ms": 33.4,
+          "visibility_sort_ms": 5.8,
+          "select_ms": 1.0,
+          "drawn": 755783,
+          "selected": 907073,
+          "yaw": 0.84
+        },
+        {
+          "seconds": 5.117375,
+          "fps": 38.5,
+          "gpu_ms": 41.2,
+          "visibility_sort_ms": 11.3,
+          "select_ms": 2.4,
+          "drawn": 1466879,
+          "selected": 1739496,
+          "yaw": 1.27
+        },
+        {
+          "seconds": 7.164083,
+          "fps": 36.1,
+          "gpu_ms": 41.6,
+          "visibility_sort_ms": 12.7,
+          "select_ms": 3.1,
+          "drawn": 1475619,
+          "selected": 1732424,
+          "yaw": 1.69
+        },
+        {
+          "seconds": 9.212571,
+          "fps": 37.1,
+          "gpu_ms": 39.2,
+          "visibility_sort_ms": 12.4,
+          "select_ms": 2.3,
+          "drawn": 1457424,
+          "selected": 1614892,
+          "yaw": 2.12
+        },
+        {
+          "seconds": 11.242979,
+          "fps": 57.0,
+          "gpu_ms": 29.5,
+          "visibility_sort_ms": 6.1,
+          "select_ms": 1.3,
+          "drawn": 574540,
+          "selected": 644594,
+          "yaw": 2.55
+        },
+        {
+          "seconds": 13.299016,
+          "fps": 51.8,
+          "gpu_ms": 31.4,
+          "visibility_sort_ms": 6.1,
+          "select_ms": 3.2,
+          "drawn": 341532,
+          "selected": 419225,
+          "yaw": 2.98
+        },
+        {
+          "seconds": 15.325418,
+          "fps": 43.1,
+          "gpu_ms": 39.2,
+          "visibility_sort_ms": 7.2,
+          "select_ms": 3.0,
+          "drawn": 493090,
+          "selected": 573239,
+          "yaw": 3.4
+        },
+        {
+          "seconds": 17.39397,
+          "fps": 40.6,
+          "gpu_ms": 41.3,
+          "visibility_sort_ms": 6.4,
+          "select_ms": 1.7,
+          "drawn": 778973,
+          "selected": 902287,
+          "yaw": 3.84
+        },
+        {
+          "seconds": 19.423598,
+          "fps": 43.7,
+          "gpu_ms": 33.2,
+          "visibility_sort_ms": 8.7,
+          "select_ms": 1.7,
+          "drawn": 1062498,
+          "selected": 1197580,
+          "yaw": 4.26
+        },
+        {
+          "seconds": 21.475791,
+          "fps": 69.3,
+          "gpu_ms": 18.0,
+          "visibility_sort_ms": 9.6,
+          "select_ms": 1.9,
+          "drawn": 1095236,
+          "selected": 1218204,
+          "yaw": 4.69
+        },
+        {
+          "seconds": 23.500749,
+          "fps": 53.7,
+          "gpu_ms": 25.8,
+          "visibility_sort_ms": 11.8,
+          "select_ms": 2.4,
+          "drawn": 1355968,
+          "selected": 1487284,
+          "yaw": 5.12
+        },
+        {
+          "seconds": 25.541876,
+          "fps": 46.0,
+          "gpu_ms": 33.3,
+          "visibility_sort_ms": 9.0,
+          "select_ms": 1.7,
+          "drawn": 1028637,
+          "selected": 1180387,
+          "yaw": 5.54
+        },
+        {
+          "seconds": 27.579257,
+          "fps": 51.1,
+          "gpu_ms": 30.9,
+          "visibility_sort_ms": 6.0,
+          "select_ms": 1.2,
+          "drawn": 588589,
+          "selected": 663292,
+          "yaw": 5.97
+        },
+        {
+          "seconds": 29.574886,
+          "fps": 6.0,
+          "gpu_ms": 30.3,
+          "visibility_sort_ms": 6.6,
+          "select_ms": 1.2,
+          "drawn": 690845,
+          "selected": 780883,
+          "yaw": 6.28
+        }
+      ],
+      "log_sha256": "1c8276850c091490ed2752c4cb8d24c5429a07c0a61f016a1cf743b25fba4536"
+    },
+    "B1": {
+      "report": {
+        "schema_version": 1,
+        "status": "passed",
+        "environment": "physical",
+        "pid": null,
+        "minimum_seconds_per_run": 30,
+        "runs": [
+          {
+            "status": "complete",
+            "resident_records": 13375264,
+            "requested_seconds": 30.0,
+            "windows": [
+              "benchmark window: start 0.0 end 30.0, 1294 frames, frame mean 23.2 p95 29.0 p99 30.0 max 1015.9, gpu mean 35.1 p95 44.2 p99 46.0, gpu samples 1294, gpu -1.0 C"
+            ],
+            "frame_p99_ms": 30.0,
+            "gpu_p99_ms": 46.0,
+            "gpu_sample_count": 1294,
+            "frames": 1294,
+            "fps_mean": 43.1,
+            "frame_mean_ms": 23.2,
+            "frame_p50_ms": 23.8,
+            "frame_p95_ms": 29.0,
+            "frame_max_ms": 1015.9,
+            "gpu_mean_ms": 35.1,
+            "gpu_p50_ms": 35.0,
+            "gpu_p95_ms": 44.2,
+            "gpu_max_ms": 47.4,
+            "tails_frame_count": 1294,
+            "stage_samples": 14,
+            "stage_sample_mean_ms": {
+              "sort": 8.814285714285715,
+              "cull": 0.0,
+              "select": 2.0642857142857145
+            },
+            "drawn_sample_range": [
+              339768,
+              1544602
+            ],
+            "observed_seconds_approx": 30.020799999999998
+          }
+        ],
+        "errors": [],
+        "phone_performance_validated": false,
+        "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+        "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+        "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+        "run": {
+          "device": "iPhone 17 Pro",
+          "name": "xgetphone",
+          "model": "iPhone18,1",
+          "ios": "27.0.1",
+          "ios_build": "24A446",
+          "build": "Release",
+          "quality": "high",
+          "pose": "-7.25,1.6,5.25,0,0",
+          "world": "scene.lodsplat",
+          "budget": 1800000,
+          "subpixel": 1.0,
+          "seconds": 30,
+          "validation": false,
+          "commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "dirty": true,
+          "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "binary_sha256": "fa8ddf103404412e0732edd64f94a76241d37fc7f67e88a5ae7f591bd24019f1",
+          "variant": "change",
+          "resource_monitor_hz": 0,
+          "thermal_trace_available": false
+        },
+        "gpu": {
+          "family": "Apple10",
+          "metal": 4,
+          "threadgroup_memory_bytes": 32768,
+          "threads_per_threadgroup": 1024,
+          "max_buffer_bytes": 6442450944,
+          "working_set_bytes": 8589950976
+        }
+      },
+      "samples": [
+        {
+          "seconds": 1.024906,
+          "fps": 53.6,
+          "gpu_ms": 32.4,
+          "visibility_sort_ms": 5.3,
+          "select_ms": 1.1,
+          "drawn": 814357,
+          "selected": 913680,
+          "yaw": 0.42
+        },
+        {
+          "seconds": 3.070398,
+          "fps": 49.5,
+          "gpu_ms": 34.7,
+          "visibility_sort_ms": 6.5,
+          "select_ms": 1.3,
+          "drawn": 811153,
+          "selected": 969935,
+          "yaw": 0.85
+        },
+        {
+          "seconds": 5.145468,
+          "fps": 37.8,
+          "gpu_ms": 41.7,
+          "visibility_sort_ms": 11.9,
+          "select_ms": 2.4,
+          "drawn": 1544602,
+          "selected": 1790781,
+          "yaw": 1.28
+        },
+        {
+          "seconds": 7.214715,
+          "fps": 36.2,
+          "gpu_ms": 42.8,
+          "visibility_sort_ms": 12.4,
+          "select_ms": 2.5,
+          "drawn": 1543666,
+          "selected": 1786399,
+          "yaw": 1.72
+        },
+        {
+          "seconds": 9.280806,
+          "fps": 36.8,
+          "gpu_ms": 38.2,
+          "visibility_sort_ms": 13.0,
+          "select_ms": 2.5,
+          "drawn": 1444486,
+          "selected": 1603089,
+          "yaw": 2.15
+        },
+        {
+          "seconds": 11.309612,
+          "fps": 55.0,
+          "gpu_ms": 31.0,
+          "visibility_sort_ms": 6.2,
+          "select_ms": 1.3,
+          "drawn": 555554,
+          "selected": 628087,
+          "yaw": 2.58
+        },
+        {
+          "seconds": 13.316494,
+          "fps": 50.0,
+          "gpu_ms": 32.7,
+          "visibility_sort_ms": 5.9,
+          "select_ms": 3.2,
+          "drawn": 339768,
+          "selected": 414762,
+          "yaw": 3.0
+        },
+        {
+          "seconds": 15.359586,
+          "fps": 41.8,
+          "gpu_ms": 41.0,
+          "visibility_sort_ms": 7.0,
+          "select_ms": 3.1,
+          "drawn": 510250,
+          "selected": 592507,
+          "yaw": 3.42
+        },
+        {
+          "seconds": 17.414997,
+          "fps": 38.7,
+          "gpu_ms": 43.7,
+          "visibility_sort_ms": 6.8,
+          "select_ms": 1.8,
+          "drawn": 786110,
+          "selected": 907961,
+          "yaw": 3.85
+        },
+        {
+          "seconds": 19.48163,
+          "fps": 40.9,
+          "gpu_ms": 35.9,
+          "visibility_sort_ms": 8.6,
+          "select_ms": 2.0,
+          "drawn": 1066751,
+          "selected": 1189950,
+          "yaw": 4.29
+        },
+        {
+          "seconds": 21.507189,
+          "fps": 61.0,
+          "gpu_ms": 21.4,
+          "visibility_sort_ms": 10.5,
+          "select_ms": 1.9,
+          "drawn": 1116102,
+          "selected": 1241403,
+          "yaw": 4.71
+        },
+        {
+          "seconds": 23.562804,
+          "fps": 46.1,
+          "gpu_ms": 31.3,
+          "visibility_sort_ms": 12.5,
+          "select_ms": 2.4,
+          "drawn": 1342138,
+          "selected": 1473029,
+          "yaw": 5.14
+        },
+        {
+          "seconds": 25.593504,
+          "fps": 39.9,
+          "gpu_ms": 38.7,
+          "visibility_sort_ms": 10.6,
+          "select_ms": 2.0,
+          "drawn": 1022878,
+          "selected": 1151699,
+          "yaw": 5.57
+        },
+        {
+          "seconds": 27.631927,
+          "fps": 45.9,
+          "gpu_ms": 35.2,
+          "visibility_sort_ms": 6.2,
+          "select_ms": 1.4,
+          "drawn": 567733,
+          "selected": 664423,
+          "yaw": 6.0
+        },
+        {
+          "seconds": 29.632823,
+          "fps": 0.0,
+          "gpu_ms": 34.3,
+          "visibility_sort_ms": 6.9,
+          "select_ms": 1.3,
+          "drawn": 690846,
+          "selected": 780878,
+          "yaw": 6.28
+        }
+      ],
+      "log_sha256": "fb375dedb10f7fc8bd4f74a58e834f6b6a662b71e0727bfccf6bd73427a40939"
+    },
+    "B2": {
+      "report": {
+        "schema_version": 1,
+        "status": "passed",
+        "environment": "physical",
+        "pid": null,
+        "minimum_seconds_per_run": 30,
+        "runs": [
+          {
+            "status": "complete",
+            "resident_records": 13375264,
+            "requested_seconds": 30.0,
+            "windows": [
+              "benchmark window: start 0.0 end 30.0, 1199 frames, frame mean 25.0 p95 33.1 p99 34.4 max 994.3, gpu mean 38.1 p95 51.1 p99 54.0, gpu samples 1199, gpu -1.0 C"
+            ],
+            "frame_p99_ms": 34.4,
+            "gpu_p99_ms": 54.0,
+            "gpu_sample_count": 1199,
+            "frames": 1199,
+            "fps_mean": 40.0,
+            "frame_mean_ms": 25.0,
+            "frame_p50_ms": 24.8,
+            "frame_p95_ms": 33.1,
+            "frame_max_ms": 994.3,
+            "gpu_mean_ms": 38.1,
+            "gpu_p50_ms": 37.8,
+            "gpu_p95_ms": 51.1,
+            "gpu_max_ms": 54.9,
+            "tails_frame_count": 1199,
+            "stage_samples": 15,
+            "stage_sample_mean_ms": {
+              "sort": 8.613333333333333,
+              "cull": 0.0,
+              "select": 2.3333333333333335
+            },
+            "drawn_sample_range": [
+              0,
+              1545419
+            ],
+            "observed_seconds_approx": 29.975
+          }
+        ],
+        "errors": [],
+        "phone_performance_validated": false,
+        "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+        "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+        "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+        "run": {
+          "device": "iPhone 17 Pro",
+          "name": "xgetphone",
+          "model": "iPhone18,1",
+          "ios": "27.0.1",
+          "ios_build": "24A446",
+          "build": "Release",
+          "quality": "high",
+          "pose": "-7.25,1.6,5.25,0,0",
+          "world": "scene.lodsplat",
+          "budget": 1800000,
+          "subpixel": 1.0,
+          "seconds": 30,
+          "validation": false,
+          "commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "dirty": true,
+          "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "binary_sha256": "fa8ddf103404412e0732edd64f94a76241d37fc7f67e88a5ae7f591bd24019f1",
+          "variant": "change",
+          "resource_monitor_hz": 0,
+          "thermal_trace_available": false
+        },
+        "gpu": {
+          "family": "Apple10",
+          "metal": 4,
+          "threadgroup_memory_bytes": 32768,
+          "threads_per_threadgroup": 1024,
+          "max_buffer_bytes": 6442450944,
+          "working_set_bytes": 8589950976
+        }
+      },
+      "samples": [
+        {
+          "seconds": 0.00703,
+          "fps": 0.0,
+          "gpu_ms": 3.8,
+          "visibility_sort_ms": 0.0,
+          "select_ms": 0.0,
+          "drawn": 0,
+          "selected": 11988085,
+          "yaw": 0.21
+        },
+        {
+          "seconds": 2.07058,
+          "fps": 39.6,
+          "gpu_ms": 44.1,
+          "visibility_sort_ms": 5.7,
+          "select_ms": 2.4,
+          "drawn": 630778,
+          "selected": 713575,
+          "yaw": 0.64
+        },
+        {
+          "seconds": 4.086646,
+          "fps": 35.7,
+          "gpu_ms": 49.2,
+          "visibility_sort_ms": 8.2,
+          "select_ms": 1.7,
+          "drawn": 1246734,
+          "selected": 1398125,
+          "yaw": 1.06
+        },
+        {
+          "seconds": 6.185909,
+          "fps": 30.1,
+          "gpu_ms": 53.7,
+          "visibility_sort_ms": 13.1,
+          "select_ms": 2.8,
+          "drawn": 1407015,
+          "selected": 1650454,
+          "yaw": 1.5
+        },
+        {
+          "seconds": 8.24192,
+          "fps": 30.3,
+          "gpu_ms": 49.0,
+          "visibility_sort_ms": 14.2,
+          "select_ms": 3.1,
+          "drawn": 1545419,
+          "selected": 1706060,
+          "yaw": 1.93
+        },
+        {
+          "seconds": 10.316871,
+          "fps": 39.3,
+          "gpu_ms": 36.0,
+          "visibility_sort_ms": 8.7,
+          "select_ms": 2.1,
+          "drawn": 831806,
+          "selected": 943820,
+          "yaw": 2.36
+        },
+        {
+          "seconds": 12.369276,
+          "fps": 44.5,
+          "gpu_ms": 36.2,
+          "visibility_sort_ms": 7.5,
+          "select_ms": 4.3,
+          "drawn": 359556,
+          "selected": 419534,
+          "yaw": 2.79
+        },
+        {
+          "seconds": 14.440033,
+          "fps": 40.2,
+          "gpu_ms": 41.1,
+          "visibility_sort_ms": 8.3,
+          "select_ms": 4.8,
+          "drawn": 358827,
+          "selected": 435087,
+          "yaw": 3.23
+        },
+        {
+          "seconds": 16.484424,
+          "fps": 37.3,
+          "gpu_ms": 46.0,
+          "visibility_sort_ms": 7.1,
+          "select_ms": 2.3,
+          "drawn": 631303,
+          "selected": 734881,
+          "yaw": 3.65
+        },
+        {
+          "seconds": 18.509212,
+          "fps": 37.7,
+          "gpu_ms": 43.9,
+          "visibility_sort_ms": 8.7,
+          "select_ms": 2.2,
+          "drawn": 998607,
+          "selected": 1119435,
+          "yaw": 4.08
+        },
+        {
+          "seconds": 20.533463,
+          "fps": 53.0,
+          "gpu_ms": 26.0,
+          "visibility_sort_ms": 8.7,
+          "select_ms": 1.7,
+          "drawn": 1085968,
+          "selected": 1230798,
+          "yaw": 4.5
+        },
+        {
+          "seconds": 22.572312,
+          "fps": 55.1,
+          "gpu_ms": 24.3,
+          "visibility_sort_ms": 12.2,
+          "select_ms": 2.2,
+          "drawn": 1299129,
+          "selected": 1425099,
+          "yaw": 4.93
+        },
+        {
+          "seconds": 24.615123,
+          "fps": 41.3,
+          "gpu_ms": 36.5,
+          "visibility_sort_ms": 12.0,
+          "select_ms": 2.1,
+          "drawn": 1218122,
+          "selected": 1352173,
+          "yaw": 5.36
+        },
+        {
+          "seconds": 26.645771,
+          "fps": 41.4,
+          "gpu_ms": 37.9,
+          "visibility_sort_ms": 8.5,
+          "select_ms": 1.6,
+          "drawn": 859056,
+          "selected": 931593,
+          "yaw": 5.78
+        },
+        {
+          "seconds": 28.682095,
+          "fps": 46.3,
+          "gpu_ms": 35.8,
+          "visibility_sort_ms": 6.3,
+          "select_ms": 1.7,
+          "drawn": 550789,
+          "selected": 658373,
+          "yaw": 6.21
+        }
+      ],
+      "log_sha256": "df54072091d12de4f1cc39831596626c66bdf6434b630e9da9cf927a8d054d8e"
+    },
+    "A2": {
+      "report": {
+        "schema_version": 1,
+        "status": "passed",
+        "environment": "physical",
+        "pid": null,
+        "minimum_seconds_per_run": 30,
+        "runs": [
+          {
+            "status": "complete",
+            "resident_records": 13375264,
+            "requested_seconds": 30.0,
+            "windows": [
+              "benchmark window: start 0.0 end 30.0, 1191 frames, frame mean 25.2 p95 29.5 p99 30.5 max 1049.3, gpu mean 38.1 p95 48.6 p99 49.8, gpu samples 1191, gpu -1.0 C"
+            ],
+            "frame_p99_ms": 30.5,
+            "gpu_p99_ms": 49.8,
+            "gpu_sample_count": 1191,
+            "frames": 1191,
+            "fps_mean": 39.7,
+            "frame_mean_ms": 25.2,
+            "frame_p50_ms": 25.5,
+            "frame_p95_ms": 29.5,
+            "frame_max_ms": 1049.3,
+            "gpu_mean_ms": 38.1,
+            "gpu_p50_ms": 39.0,
+            "gpu_p95_ms": 48.6,
+            "gpu_max_ms": 50.4,
+            "tails_frame_count": 1191,
+            "stage_samples": 15,
+            "stage_sample_mean_ms": {
+              "sort": 8.953333333333333,
+              "cull": 0.0,
+              "select": 2.3333333333333335
+            },
+            "drawn_sample_range": [
+              0,
+              1547215
+            ],
+            "observed_seconds_approx": 30.0132
+          }
+        ],
+        "errors": [],
+        "phone_performance_validated": false,
+        "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+        "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+        "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+        "run": {
+          "device": "iPhone 17 Pro",
+          "name": "xgetphone",
+          "model": "iPhone18,1",
+          "ios": "27.0.1",
+          "ios_build": "24A446",
+          "build": "Release",
+          "quality": "high",
+          "pose": "-7.25,1.6,5.25,0,0",
+          "world": "scene.lodsplat",
+          "budget": 1800000,
+          "subpixel": 1.0,
+          "seconds": 30,
+          "validation": false,
+          "commit": "4062f63f2d14109769dc2a564e8bddf67a650c4f",
+          "dirty": true,
+          "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+          "binary_sha256": "6fe80043dffa74100e128b876da2e98afbc448c24043f2591675525458302b7f",
+          "variant": "base",
+          "resource_monitor_hz": 0,
+          "thermal_trace_available": false
+        },
+        "gpu": {
+          "family": "Apple10",
+          "metal": 4,
+          "threadgroup_memory_bytes": 32768,
+          "threads_per_threadgroup": 1024,
+          "max_buffer_bytes": 6442450944,
+          "working_set_bytes": 8589950976
+        }
+      },
+      "samples": [
+        {
+          "seconds": 0.004967,
+          "fps": 0.0,
+          "gpu_ms": 0.5,
+          "visibility_sort_ms": 0.0,
+          "select_ms": 0.0,
+          "drawn": 0,
+          "selected": 11988085,
+          "yaw": 0.22
+        },
+        {
+          "seconds": 2.057793,
+          "fps": 50.8,
+          "gpu_ms": 34.0,
+          "visibility_sort_ms": 4.8,
+          "select_ms": 1.5,
+          "drawn": 625110,
+          "selected": 705387,
+          "yaw": 0.65
+        },
+        {
+          "seconds": 4.11169,
+          "fps": 40.8,
+          "gpu_ms": 40.3,
+          "visibility_sort_ms": 9.6,
+          "select_ms": 2.1,
+          "drawn": 1266208,
+          "selected": 1433507,
+          "yaw": 1.08
+        },
+        {
+          "seconds": 6.160932,
+          "fps": 33.7,
+          "gpu_ms": 46.8,
+          "visibility_sort_ms": 12.2,
+          "select_ms": 2.5,
+          "drawn": 1408852,
+          "selected": 1653214,
+          "yaw": 1.5
+        },
+        {
+          "seconds": 8.201029,
+          "fps": 34.4,
+          "gpu_ms": 43.1,
+          "visibility_sort_ms": 12.8,
+          "select_ms": 3.2,
+          "drawn": 1547215,
+          "selected": 1708839,
+          "yaw": 1.93
+        },
+        {
+          "seconds": 10.257493,
+          "fps": 40.2,
+          "gpu_ms": 35.5,
+          "visibility_sort_ms": 9.4,
+          "select_ms": 2.2,
+          "drawn": 832340,
+          "selected": 944437,
+          "yaw": 2.36
+        },
+        {
+          "seconds": 12.324523,
+          "fps": 40.8,
+          "gpu_ms": 41.2,
+          "visibility_sort_ms": 6.7,
+          "select_ms": 2.6,
+          "drawn": 358886,
+          "selected": 417595,
+          "yaw": 2.8
+        },
+        {
+          "seconds": 14.3938,
+          "fps": 36.6,
+          "gpu_ms": 44.8,
+          "visibility_sort_ms": 9.4,
+          "select_ms": 5.5,
+          "drawn": 359503,
+          "selected": 435635,
+          "yaw": 3.23
+        },
+        {
+          "seconds": 16.458346,
+          "fps": 34.7,
+          "gpu_ms": 48.9,
+          "visibility_sort_ms": 8.1,
+          "select_ms": 2.8,
+          "drawn": 635073,
+          "selected": 741643,
+          "yaw": 3.66
+        },
+        {
+          "seconds": 18.513119,
+          "fps": 35.1,
+          "gpu_ms": 47.8,
+          "visibility_sort_ms": 8.9,
+          "select_ms": 2.4,
+          "drawn": 1009378,
+          "selected": 1129466,
+          "yaw": 4.09
+        },
+        {
+          "seconds": 20.558587,
+          "fps": 50.8,
+          "gpu_ms": 27.3,
+          "visibility_sort_ms": 9.1,
+          "select_ms": 1.5,
+          "drawn": 1070584,
+          "selected": 1225433,
+          "yaw": 4.52
+        },
+        {
+          "seconds": 22.606385,
+          "fps": 49.1,
+          "gpu_ms": 28.0,
+          "visibility_sort_ms": 13.6,
+          "select_ms": 2.3,
+          "drawn": 1302088,
+          "selected": 1430664,
+          "yaw": 4.95
+        },
+        {
+          "seconds": 24.679553,
+          "fps": 36.8,
+          "gpu_ms": 40.9,
+          "visibility_sort_ms": 13.1,
+          "select_ms": 2.5,
+          "drawn": 1191213,
+          "selected": 1327243,
+          "yaw": 5.38
+        },
+        {
+          "seconds": 26.734918,
+          "fps": 38.9,
+          "gpu_ms": 40.1,
+          "visibility_sort_ms": 9.5,
+          "select_ms": 2.1,
+          "drawn": 820038,
+          "selected": 890086,
+          "yaw": 5.81
+        },
+        {
+          "seconds": 28.767692,
+          "fps": 45.6,
+          "gpu_ms": 36.8,
+          "visibility_sort_ms": 7.1,
+          "select_ms": 1.8,
+          "drawn": 611787,
+          "selected": 721436,
+          "yaw": 6.24
+        }
+      ],
+      "log_sha256": "421aa3aa0f45fdc9270b990617a228856cc4727ba3b37a22a7635580a9b52f17"
+    }
+  },
+  "events": {
+    "A": {
+      "label": "Lowest sampled LOD",
+      "seconds": 13.316494,
+      "fps": 50.0,
+      "gpu_ms": 32.7,
+      "visibility_sort_ms": 5.9,
+      "select_ms": 3.2,
+      "drawn": 339768,
+      "selected": 414762,
+      "yaw": 3.0
+    },
+    "B": {
+      "label": "Largest sampled visibility + sort interval",
+      "seconds": 9.280806,
+      "fps": 36.8,
+      "gpu_ms": 38.2,
+      "visibility_sort_ms": 13.0,
+      "select_ms": 2.5,
+      "drawn": 1444486,
+      "selected": 1603089,
+      "yaw": 2.15
+    }
+  },
+  "limits": [
+    "Two runs per variant; no significance or sustained-performance claim.",
+    "Same physical phone, world, pose, policy and Release build settings; fixed-position 360-degree turn over 30 seconds.",
+    "GPU values can lag/repeat; GPU ms is the reported renderer interval, not combined GPU queue time.",
+    "Visibility + sort intervals are periodic samples, not isolated visibility timings or all-frame means.",
+    "Adaptive LOD is enabled; selected/drawn counts can vary between runs.",
+    "Stage comparison excludes startup samples with zero drawn splats or zero stage time; original reports retain those samples.",
+    "FPS and GPU summaries include the full benchmark window, including first-frame effects.",
+    "No thermal/memory trace, power profiler, energy, battery or bandwidth measurement.",
+    "Resource monitor warmup was excluded after its 2800 MiB guard stopped the app; both measured variants ran without that optional monitor.",
+    "A/B event markers identify observed samples, not causes."
+  ]
+}

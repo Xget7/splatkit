@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "failed",
+  "environment": "physical",
+  "pid": null,
+  "minimum_seconds_per_run": 10.0,
+  "runs": [
+    {
+      "status": "incomplete",
+      "resident_records": 13375264,
+      "requested_seconds": 10.0,
+      "windows": [],
+      "frame_p99_ms": null,
+      "gpu_p99_ms": null,
+      "gpu_sample_count": null,
+      "stage_samples": 0,
+      "stage_sample_mean_ms": {
+        "sort": null,
+        "cull": null,
+        "select": null
+      },
+      "drawn_sample_range": null
+    }
+  ],
+  "errors": [
+    "the run failed; see console.log"
+  ],
+  "phone_performance_validated": false,
+  "scope": "log completeness and summaries only; frame intervals are host-loop intervals; GPU values may lag or repeat",
+  "stage_scope": "periodic samples, not all-frame averages; legacy zero stage times may mean unavailable",
+  "sustained_acceptance": "requires physical provenance, matched camera path, memory/thermal traces and visual review",
+  "run": {
+    "device": "iPhone 17 Pro",
+    "name": "xgetphone",
+    "model": "iPhone18,1",
+    "ios": "27.0.1",
+    "ios_build": "24A446",
+    "build": "Release",
+    "quality": "high",
+    "pose": "-7.25,1.6,5.25,0,0",
+    "world": "scene.lodsplat",
+    "budget": 1800000,
+    "subpixel": 1.0,
+    "seconds": 10.0,
+    "validation": false,
+    "commit": "4062f63f2d14109769dc2a564e8bddf67a650c4f",
+    "dirty": false,
+    "driver_commit": "f7c28c8eaafe05fcbc958817fb60b9840bd78aba",
+    "binary_sha256": "6fe80043dffa74100e128b876da2e98afbc448c24043f2591675525458302b7f",
+    "variant": "base",
+    "resource_monitor_hz": 2
+  },
+  "gpu": {
+    "family": "Apple10",
+    "metal": 4,
+    "threadgroup_memory_bytes": 32768,
+    "threads_per_threadgroup": 1024,
+    "max_buffer_bytes": 6442450944,
+    "working_set_bytes": 8589950976
+  }
+}
