@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 #include "rendering/vulkan/device/VulkanBuffer.h"
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
@@ -25,7 +26,7 @@ class VulkanLodSelection {
     bool frustumCull = true;
   };
   struct Input {
-    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, 176 bytes, caller-owned/flush before encode
+    VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, caller-owned/flush before encode
     VkDeviceSize cameraOffset = 0;     // minUniformBufferOffsetAlignment; buffer must cover range
   };
   struct Output {
@@ -41,7 +42,26 @@ class VulkanLodSelection {
   static constexpr VkDeviceSize kEvaluatedOffset = 20;
   static constexpr VkDeviceSize kDiagnosticBytes = 24;
 
+  // The layouts and the compute pipeline, which depend on neither tree nor budget. Compile them
+  // once and hand them to every selection, so loading another world compiles nothing.
+  struct Pipelines {
+    // Null when the device's limits fall short or the pipeline fails to build.
+    static std::shared_ptr<const Pipelines> compile(const VulkanContext& ctx);
+    explicit Pipelines(VkDevice device) : device(device) {}
+    ~Pipelines();
+    Pipelines(const Pipelines&) = delete;
+    Pipelines& operator=(const Pipelines&) = delete;
+
+    VkDevice device;
+    VkDescriptorSetLayout set = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+  };
+
+  // Compiles its own pipelines, for a selection that shares them with no other.
   static splat::Result<std::unique_ptr<VulkanLodSelection>> create(const VulkanContext& ctx);
+  static splat::Result<std::unique_ptr<VulkanLodSelection>> create(
+      const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines);
   ~VulkanLodSelection();
   VulkanLodSelection(const VulkanLodSelection&) = delete;
   VulkanLodSelection& operator=(const VulkanLodSelection&) = delete;
@@ -59,6 +79,7 @@ class VulkanLodSelection {
   bool encode(VkCommandBuffer cmd, uint32_t slot, const Input& input) const;
   Output output() const;
   uint32_t capacity() const { return capacity_; }
+  const std::shared_ptr<const Pipelines>& pipelines() const { return pipelines_; }
   // The most nodes the next selection may emit; never above capacity().
   uint32_t limit() const { return config_.limit; }
   // Applies at the next encode. Zero restores capacity().
@@ -68,8 +89,9 @@ class VulkanLodSelection {
   void setPixelLimit(float pixels) { config_.pixelLimit = pixels; }
 
  private:
-  explicit VulkanLodSelection(const VulkanContext& ctx) : ctx_(ctx) {}
-  bool initialize();
+  VulkanLodSelection(const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines)
+      : ctx_(ctx), pipelines_(std::move(pipelines)) {}
+  bool allocateSets();
   struct Config {
     uint32_t phase = 0, limit = 0, costs = 0, offsets = 0;
     uint32_t costGroups = 0, groups = 0, blocks = 0, frontier0 = 0;
@@ -78,14 +100,12 @@ class VulkanLodSelection {
     uint32_t cull = 1;
   } config_;
   const VulkanContext& ctx_;
+  std::shared_ptr<const Pipelines> pipelines_;
   VkPhysicalDeviceLimits limits_{};
   uint32_t capacity_ = 0;
   uint32_t rounds_ = 0;
-  VkDescriptorSetLayout setLayout_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
   std::array<VkDescriptorSet, kFramesInFlight> sets_{};
-  VkPipelineLayout layout_ = VK_NULL_HANDLE;
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
   std::unique_ptr<VulkanBuffer> clusters_, leaves_, scratch_, indices_;
 };
 

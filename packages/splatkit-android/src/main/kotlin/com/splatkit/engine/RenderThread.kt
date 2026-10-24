@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
  * runs on its own loader thread so frames keep flowing; the engine uploads on its next
  * frame.
  */
-internal class RenderThread {
+internal class RenderThread(cacheDir: String) {
     private val thread = HandlerThread("SplatKitRender").apply { start() }
     private val handler = Handler(thread.looper)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -59,7 +59,7 @@ internal class RenderThread {
         // Everything that must live on the render thread is created there.
         runBlockingOnThread {
             choreographer = Choreographer.getInstance()
-            engine = SplatEngine()
+            engine = SplatEngine(cacheDir)
         }
         gpuDescription = engine?.gpuDescription() ?: ""
         isAvailable = engine?.isValid == true

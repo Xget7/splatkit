@@ -19,8 +19,11 @@ struct alignas(16) CameraUniform {
   // Clockwise, 0 to 3; only the vertex stages read it (VulkanSwapchain::quarterTurns).
   uint32_t quarterTurns;
   float cameraPosition[4];
+  // Pixels: a splat whose source sigma times its quad radius is smaller is not drawn.
+  float minPixelRadius;
+  float pad[3];
 };
-static_assert(sizeof(CameraUniform) == 176);
+static_assert(sizeof(CameraUniform) == 192);
 static_assert(offsetof(CameraUniform, proj) == 64);
 static_assert(offsetof(CameraUniform, focal) == 128);
 static_assert(offsetof(CameraUniform, tanHalfFov) == 136);
@@ -28,6 +31,7 @@ static_assert(offsetof(CameraUniform, screenSize) == 144);
 static_assert(offsetof(CameraUniform, outputLinear) == 152);
 static_assert(offsetof(CameraUniform, quarterTurns) == 156);
 static_assert(offsetof(CameraUniform, cameraPosition) == 160);
+static_assert(offsetof(CameraUniform, minPixelRadius) == 176);
 
 // Peak opacity at which a splat's quad ends; below it the splat has no quad. constant_id
 // kQuadMinAlphaConstant of visibility.comp and splat.vert (splat_footprint.glsl), and the

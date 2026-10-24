@@ -100,57 +100,27 @@ VulkanRadixSort::Capabilities VulkanRadixSort::queryCapabilities(const VulkanCon
   return result;
 }
 
-splat::Result<std::unique_ptr<VulkanRadixSort>> VulkanRadixSort::create(const VulkanContext& ctx) {
-  auto capabilities = queryCapabilities(ctx);
-  if (!capabilities.supported)
-    return splat::Error{splat::ErrorCode::gpuUnavailable, "radix: " + capabilities.reason};
-  std::unique_ptr<VulkanRadixSort> sort(new VulkanRadixSort(ctx));
-  if (!sort->initialize())
-    return splat::Error{splat::ErrorCode::gpuUnavailable, "radix pipeline allocation"};
-  return sort;
-}
-
-VulkanRadixSort::~VulkanRadixSort() {
-  for (auto* pipeline : pipelines_)
-    if (pipeline) vkDestroyPipeline(ctx_.device(), pipeline, nullptr);
-  if (layout_) vkDestroyPipelineLayout(ctx_.device(), layout_, nullptr);
-  if (pool_) vkDestroyDescriptorPool(ctx_.device(), pool_, nullptr);
-  if (setLayout_) vkDestroyDescriptorSetLayout(ctx_.device(), setLayout_, nullptr);
-}
-
-bool VulkanRadixSort::initialize() {
-  auto* const device = ctx_.device();
+std::shared_ptr<const VulkanRadixSort::Pipelines> VulkanRadixSort::Pipelines::compile(
+    const VulkanContext& ctx) {
+  if (!queryCapabilities(ctx).supported) return nullptr;
+  auto* const device = ctx.device();
+  auto pipelines = std::make_shared<Pipelines>(device);
   std::array<VkDescriptorSetLayoutBinding, kBindings> bindings{};
   for (uint32_t i = 0; i < kBindings; ++i)
     bindings[i] = {i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kShader, nullptr};
   VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
   setInfo.bindingCount = kBindings;
   setInfo.pBindings = bindings.data();
-  if (vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &setLayout_) != VK_SUCCESS)
-    return false;
-  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                  kBindings * kFramesInFlight * kSets};
-  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolInfo.maxSets = kFramesInFlight * kSets;
-  poolInfo.poolSizeCount = 1;
-  poolInfo.pPoolSizes = &size;
-  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool_) != VK_SUCCESS) return false;
-  std::array<VkDescriptorSetLayout, kSets> layouts{};
-  layouts.fill(setLayout_);
-  for (auto& sets : sets_) {
-    VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    info.descriptorPool = pool_;
-    info.descriptorSetCount = kSets;
-    info.pSetLayouts = layouts.data();
-    if (vkAllocateDescriptorSets(device, &info, sets.data()) != VK_SUCCESS) return false;
-  }
+  if (vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &pipelines->set) != VK_SUCCESS)
+    return nullptr;
   const VkPushConstantRange push{kShader, 0, sizeof(PushConstants)};
   VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   layout.setLayoutCount = 1;
-  layout.pSetLayouts = &setLayout_;
+  layout.pSetLayouts = &pipelines->set;
   layout.pushConstantRangeCount = 1;
   layout.pPushConstantRanges = &push;
-  if (vkCreatePipelineLayout(device, &layout, nullptr, &layout_) != VK_SUCCESS) return false;
+  if (vkCreatePipelineLayout(device, &layout, nullptr, &pipelines->layout) != VK_SUCCESS)
+    return nullptr;
   // Indexed by Stage.
   const uint32_t* code[] = {shaders::radix_prepare_comp, shaders::radix_histogram_comp,
                             shaders::radix_scan_comp, shaders::radix_scatter_comp,
@@ -164,17 +134,65 @@ bool VulkanRadixSort::initialize() {
   const VkSpecializationInfo lastPassInfo{1, &lastPassEntry, sizeof(lastPass), &lastPass};
   for (uint32_t i = 0; i < kStageCount; ++i) {
     const VulkanShaderModule module(device, code[i], sizes[i]);
-    if (!module) return false;
+    if (!module) return nullptr;
     VkComputePipelineCreateInfo pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
     pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     pipeline.stage.stage = kShader;
     pipeline.stage.module = module.get();
     pipeline.stage.pName = "main";
     if (i == kScatterLast) pipeline.stage.pSpecializationInfo = &lastPassInfo;
-    pipeline.layout = layout_;
-    const auto result =
-        vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline, nullptr, &pipelines_[i]);
-    if (result != VK_SUCCESS) return false;
+    pipeline.layout = pipelines->layout;
+    const auto result = vkCreateComputePipelines(device, ctx.pipelineCache(), 1, &pipeline, nullptr,
+                                                 &pipelines->stages[i]);
+    if (result != VK_SUCCESS) return nullptr;
+  }
+  return pipelines;
+}
+
+VulkanRadixSort::Pipelines::~Pipelines() {
+  for (auto* pipeline : stages)
+    if (pipeline) vkDestroyPipeline(device, pipeline, nullptr);
+  if (layout) vkDestroyPipelineLayout(device, layout, nullptr);
+  if (set) vkDestroyDescriptorSetLayout(device, set, nullptr);
+}
+
+splat::Result<std::unique_ptr<VulkanRadixSort>> VulkanRadixSort::create(const VulkanContext& ctx) {
+  return create(ctx, Pipelines::compile(ctx));
+}
+
+splat::Result<std::unique_ptr<VulkanRadixSort>> VulkanRadixSort::create(
+    const VulkanContext& ctx, std::shared_ptr<const Pipelines> pipelines) {
+  auto capabilities = queryCapabilities(ctx);
+  if (!capabilities.supported)
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "radix: " + capabilities.reason};
+  if (!pipelines) return splat::Error{splat::ErrorCode::gpuUnavailable, "radix pipeline"};
+  std::unique_ptr<VulkanRadixSort> sort(new VulkanRadixSort(ctx, std::move(pipelines)));
+  if (!sort->allocateSets())
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "radix descriptor allocation"};
+  return sort;
+}
+
+VulkanRadixSort::~VulkanRadixSort() {
+  if (pool_) vkDestroyDescriptorPool(ctx_.device(), pool_, nullptr);
+}
+
+bool VulkanRadixSort::allocateSets() {
+  auto* const device = ctx_.device();
+  const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                  kBindings * kFramesInFlight * kSets};
+  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  poolInfo.maxSets = kFramesInFlight * kSets;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.pPoolSizes = &size;
+  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool_) != VK_SUCCESS) return false;
+  std::array<VkDescriptorSetLayout, kSets> layouts{};
+  layouts.fill(pipelines_->set);
+  for (auto& sets : sets_) {
+    VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    info.descriptorPool = pool_;
+    info.descriptorSetCount = kSets;
+    info.pSetLayouts = layouts.data();
+    if (vkAllocateDescriptorSets(device, &info, sets.data()) != VK_SUCCESS) return false;
   }
   return true;
 }
@@ -280,7 +298,7 @@ void VulkanRadixSort::writeDescriptorSets(uint32_t slot, const Input& input) con
 void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits keyBits) const {
   const auto& limits = ctx_.vkbDevice().physical_device.properties.limits;
   PushConstants push{capacity_, 0, limits.maxComputeWorkGroupCount[0]};
-  bindStage(cmd, layout_, pipelines_[kPrepare], sets_[slot][0], push);
+  bindStage(cmd, pipelines_->layout, pipelines_->stages[kPrepare], sets_[slot][0], push);
   vkCmdDispatch(cmd, 1, 1, 1);
   vulkanMemoryBarrier(
       cmd, kCompute, VK_ACCESS_SHADER_WRITE_BIT, kCompute | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
@@ -290,14 +308,15 @@ void VulkanRadixSort::recordSort(VkCommandBuffer cmd, uint32_t slot, KeyBits key
   for (uint32_t pass = 0; pass < passes; ++pass) {
     push.shift = pass * kDigitBits;
     const VkDescriptorSet set = sets_[slot][passSet(pass)];
-    bindStage(cmd, layout_, pipelines_[kHistogram], set, push);
+    bindStage(cmd, pipelines_->layout, pipelines_->stages[kHistogram], set, push);
     vkCmdDispatchIndirect(cmd, state, 0);
     computeBarrier(cmd);
-    bindStage(cmd, layout_, pipelines_[kScan], set, push);
+    bindStage(cmd, pipelines_->layout, pipelines_->stages[kScan], set, push);
     const uint32_t scanX = std::min(kBuckets, push.maxGroupsX);
     vkCmdDispatch(cmd, scanX, (kBuckets + scanX - 1) / scanX, 1);
     computeBarrier(cmd);
-    bindStage(cmd, layout_, pipelines_[pass + 1 == passes ? kScatterLast : kScatter], set, push);
+    bindStage(cmd, pipelines_->layout,
+              pipelines_->stages[pass + 1 == passes ? kScatterLast : kScatter], set, push);
     vkCmdDispatchIndirect(cmd, state, 0);
     computeBarrier(cmd);
   }

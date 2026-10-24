@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
@@ -9,12 +10,11 @@
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/layout/VulkanSortKeys.h"
 #include "rendering/vulkan/selection/VulkanLodSelection.h"
+#include "rendering/vulkan/sort/VulkanRadixSort.h"
 #include "splatkit/rendering/LodThreshold.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
-
-class VulkanRadixSort;
 
 // Resident-world GPU ordering. Owns LOD, culling, sorting and delayed diagnostics.
 // Render thread only. Context/inputs outlive submissions. Create/destroy while idle;
@@ -27,9 +27,28 @@ class VulkanFrameCompute {
   static constexpr uint32_t kMaxVisible = VulkanVisibilityPass::kMaxCapacity;
   // True when the device can run the GPU visibility and sort path.
   static bool supported(const VulkanContext& ctx);
+
+  // Every compute pipeline a world runs. The renderer compiles them once and each world's
+  // passes borrow them, so loading another world compiles nothing.
+  struct Pipelines {
+    // Nullopt when the device cannot run a pass or a pipeline fails to build.
+    static std::optional<Pipelines> compile(const VulkanContext& ctx);
+    bool operator==(const Pipelines& other) const {
+      return visibility == other.visibility && radix == other.radix && lod == other.lod;
+    }
+
+    std::shared_ptr<const VulkanVisibilityPass::Pipelines> visibility;
+    std::shared_ptr<const VulkanRadixSort::Pipelines> radix;
+    std::shared_ptr<const VulkanLodSelection::Pipelines> lod;
+  };
+
+  // Compiles its own pipelines, for a world that shares them with no other.
   static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
       const VulkanContext& ctx, uint32_t sourceCount, const splat::LodTree* tree = nullptr,
       uint32_t budget = VulkanLodSelection::kMaxBudget);
+  static splat::Result<std::unique_ptr<VulkanFrameCompute>> create(
+      const VulkanContext& ctx, const Pipelines& pipelines, uint32_t sourceCount,
+      const splat::LodTree* tree = nullptr, uint32_t budget = VulkanLodSelection::kMaxBudget);
   ~VulkanFrameCompute();
   VulkanFrameCompute(const VulkanFrameCompute&) = delete;
   VulkanFrameCompute& operator=(const VulkanFrameCompute&) = delete;
@@ -56,13 +75,13 @@ class VulkanFrameCompute {
   // scene that encodes nothing new reports its last frame. Never moves back to an older one.
   void collectCompleted(uint64_t completedSubmission);
   bool hasLod() const { return lod_ != nullptr; }
+  const Pipelines& pipelines() const { return pipelines_; }
 
-  // Per-instance renderer policy. Render thread, while idle. Only sortDepth,
-  // subpixelThreshold, lodErrorPixels and lodSplatLimit are honoured; the caller resolves
-  // the rest.
+  // Per-instance renderer policy. Render thread, while idle. Only sortDepth, lodErrorPixels
+  // and lodSplatLimit are honoured; the caller resolves the rest, and writes the sub-pixel
+  // cutoff into each frame's camera.
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason);
   uint32_t sortKeyBits() const { return keyBitCount(keyBits()); }
-  float minPixelRadius() const { return visibility_ ? visibility_->minPixelRadius() : 0.0f; }
   // The threshold the next hierarchy selection runs at.
   float lodPixels() const { return lodThreshold_.pixels(); }
   const VulkanVisibilityCapabilities& visibilityCapabilities() const {
@@ -70,7 +89,7 @@ class VulkanFrameCompute {
   }
 
  private:
-  explicit VulkanFrameCompute(const VulkanContext& ctx);
+  VulkanFrameCompute(const VulkanContext& ctx, Pipelines pipelines);
   KeyBits keyBits() const {
     return sortKeyBits_ == SortKeyBits::low16 ? KeyBits::low16 : KeyBits::full32;
   }
@@ -86,6 +105,7 @@ class VulkanFrameCompute {
   };
   static constexpr uint32_t kMaxRanges = 65536;
   const VulkanContext& ctx_;
+  Pipelines pipelines_;
   uint32_t sourceCount_ = 0, capacity_ = 0;
   SortKeyBits sortKeyBits_ = SortKeyBits::full32;
   uint32_t timestampBits_ = 0;

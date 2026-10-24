@@ -3,6 +3,7 @@
 A React Native 0.87.1 app, made with `npx @react-native-community/cli init`, that renders one full-screen `SplatKitView` you can walk through.
 Drag anywhere to look around.
 The world is one `.lodsplat`, the detail tree built offline by [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world); [`World.ts`](src/World.ts) names its file.
+This example uses a prepared tree; the SDK also builds trees locally from SPZ on the loader CPU ([load pipeline](../../docs/ARCHITECTURE.md#load-shared-cpu)).
 The example world is 12M splats, too many to load as one `.spz` on an iPhone 17 Pro; with its tree built offline it loads in seconds.
 Once the collider is ready a thumb stick appears; it is this app's own control, in [`Joystick.tsx`](src/Joystick.tsx), and it drives the view through `SplatKitCommands.setWalkVelocity`.
 After loading, `Orbit` applies a revisioned camera transaction around an example anchor; `Closer` moves in another 0.3 m.

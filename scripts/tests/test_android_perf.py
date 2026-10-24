@@ -22,11 +22,12 @@ MS = 1_000_000
 class SettingsTest(unittest.TestCase):
     def test_the_report_records_the_lod_budget_and_limit(self):
         args = perf.argparse.Namespace(quality="high", pose=None, world=None, budget=300000,
-                                       lod_splat_limit=150000, seconds=30, validation=False)
+                                       lod_splat_limit=150000, subpixel=1.0, seconds=30, validation=False)
         settings = perf.run_settings(args)
         self.assertEqual(settings["budget"], 300000)
         self.assertEqual(settings["lod_splat_limit"], 150000)
         self.assertEqual(settings["quality"], "high")
+        self.assertEqual(settings["subpixel"], 1.0)
 
 
 class RecordingTest(unittest.TestCase):
@@ -62,6 +63,14 @@ class WorldAndValidationTest(unittest.TestCase):
         activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
         self.assertIn(f'getIntExtra("{perf.EXTRA_BUDGET}"', activity)
         self.assertIn(f'getIntExtra("{perf.EXTRA_LOD_SPLAT_LIMIT}"', activity)
+
+    def test_the_cutoff_goes_to_the_extra_the_dev_app_reads(self):
+        args = perf.launch_args(20, "high", None, subpixel=1.0)
+        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) - 1], "--ef")
+        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) + 1], "1.0")
+        self.assertNotIn(perf.EXTRA_SUBPIXEL, perf.launch_args(20, "high", None))
+        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
+        self.assertIn(f'getFloatExtra("{perf.EXTRA_SUBPIXEL}"', activity)
 
     def test_relative_worlds_live_in_the_external_files_dir(self):
         self.assertEqual(perf.device_world("house.spz"), f"/sdcard/Android/data/{perf.PACKAGE}/files/house.spz")

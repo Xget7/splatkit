@@ -44,58 +44,48 @@ void statsToFloats(const Stats& stats, float* out) {
   out[5] = stats.walking ? 1.0f : 0.0f;
   out[6] = stats.motion ? 1.0f : 0.0f;
   out[7] = static_cast<float>(stats.drawnSplatCount);
-  out[8] = static_cast<float>(stats.computeTileCount);
-  out[9] = static_cast<float>(stats.nonemptyComputeTileCount);
-  out[10] = static_cast<float>(stats.hardwareTileCount);
-  out[11] = static_cast<float>(stats.loadedShDegree);
+  out[8] = static_cast<float>(stats.loadedShDegree);
 }
 
 RenderPolicy policyFromDoubles(const double* in) {
   RenderPolicy p;
-  p.raster = static_cast<RasterStrategy>(static_cast<uint32_t>(in[0]));
-  p.tileSize = static_cast<uint32_t>(in[1]);
-  p.lodErrorPixels = static_cast<float>(in[2]);
-  p.alphaThreshold = static_cast<float>(in[3]);
-  p.subpixelThreshold = static_cast<float>(in[4]);
-  p.enableFrustumCulling = in[5] != 0.0;
-  p.enableHiZOcclusion = in[6] != 0.0;
-  p.enableEarlyTermination = in[7] != 0.0;
-  p.sortDepth = static_cast<SortKeyBits>(static_cast<uint32_t>(in[8]));
-  p.lodSplatLimit = static_cast<uint32_t>(in[9]);
+  p.lodErrorPixels = static_cast<float>(in[0]);
+  p.alphaThreshold = static_cast<float>(in[1]);
+  p.subpixelThreshold = static_cast<float>(in[2]);
+  p.enableFrustumCulling = in[3] != 0.0;
+  p.enableHiZOcclusion = in[4] != 0.0;
+  p.enableEarlyTermination = in[5] != 0.0;
+  p.sortDepth = static_cast<SortKeyBits>(static_cast<uint32_t>(in[6]));
+  p.lodSplatLimit = static_cast<uint32_t>(in[7]);
   return p;
 }
 
 void policyToDoubles(const RenderPolicy& policy, double* out) {
-  out[0] = static_cast<double>(static_cast<uint32_t>(policy.raster));
-  out[1] = static_cast<double>(policy.tileSize);
-  out[2] = static_cast<double>(policy.lodErrorPixels);
-  out[3] = static_cast<double>(policy.alphaThreshold);
-  out[4] = static_cast<double>(policy.subpixelThreshold);
-  out[5] = flag(policy.enableFrustumCulling);
-  out[6] = flag(policy.enableHiZOcclusion);
-  out[7] = flag(policy.enableEarlyTermination);
-  out[8] = static_cast<double>(static_cast<uint32_t>(policy.sortDepth));
-  out[9] = static_cast<double>(policy.lodSplatLimit);
+  out[0] = static_cast<double>(policy.lodErrorPixels);
+  out[1] = static_cast<double>(policy.alphaThreshold);
+  out[2] = static_cast<double>(policy.subpixelThreshold);
+  out[3] = flag(policy.enableFrustumCulling);
+  out[4] = flag(policy.enableHiZOcclusion);
+  out[5] = flag(policy.enableEarlyTermination);
+  out[6] = static_cast<double>(static_cast<uint32_t>(policy.sortDepth));
+  out[7] = static_cast<double>(policy.lodSplatLimit);
 }
 
 namespace {
 
 void supportToDoubles(const RenderPolicySupport& support, double* out) {
-  out[0] = flag(support.raster);
-  out[1] = flag(support.tileSize);
-  out[2] = flag(support.lodErrorPixels);
-  out[3] = flag(support.alphaThreshold);
-  out[4] = flag(support.subpixelThreshold);
-  out[5] = flag(support.enableFrustumCulling);
-  out[6] = flag(support.enableHiZOcclusion);
-  out[7] = flag(support.enableEarlyTermination);
-  out[8] = flag(support.sortDepth);
-  out[9] = static_cast<double>(support.tileSizeMask);
-  out[10] = static_cast<double>(support.minLodErrorPixels);
-  out[11] = static_cast<double>(support.maxLodErrorPixels);
-  out[12] = static_cast<double>(support.minSubpixelThreshold);
-  out[13] = static_cast<double>(support.maxSubpixelThreshold);
-  out[14] = flag(support.lodSplatLimit);
+  out[0] = flag(support.lodErrorPixels);
+  out[1] = flag(support.alphaThreshold);
+  out[2] = flag(support.subpixelThreshold);
+  out[3] = flag(support.enableFrustumCulling);
+  out[4] = flag(support.enableHiZOcclusion);
+  out[5] = flag(support.enableEarlyTermination);
+  out[6] = flag(support.sortDepth);
+  out[7] = static_cast<double>(support.minLodErrorPixels);
+  out[8] = static_cast<double>(support.maxLodErrorPixels);
+  out[9] = static_cast<double>(support.minSubpixelThreshold);
+  out[10] = static_cast<double>(support.maxSubpixelThreshold);
+  out[11] = flag(support.lodSplatLimit);
 }
 
 }  // namespace
@@ -104,10 +94,9 @@ void capabilitiesToDoubles(const DeviceCapabilities& caps, double* out) {
   out[0] = static_cast<double>(caps.limits.maxLodCapacitySplats);
   out[1] = static_cast<double>(caps.limits.minResidencyCapacitySplats);
   out[2] = static_cast<double>(caps.limits.maxResidencyCapacitySplats);
-  out[3] = flag(caps.supportsComputeTiles);
-  out[4] = flag(caps.supportsHiZOcclusion);
-  out[5] = flag(caps.supportsSubgroups);
-  out[6] = static_cast<double>(caps.maxTextureDimension);
+  out[3] = flag(caps.supportsHiZOcclusion);
+  out[4] = flag(caps.supportsSubgroups);
+  out[5] = static_cast<double>(caps.maxTextureDimension);
   supportToDoubles(caps.policy, out + kCapabilityLeadFields);
   policyToDoubles(caps.policy.fallback, out + kCapabilityLeadFields + kPolicySupportFields);
 }

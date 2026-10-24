@@ -25,7 +25,6 @@ layout(std430, set = 0, binding = 9) writeonly buffer Projected { ProjectedSplat
 layout(push_constant) uniform Constants {
   uint sourceCount;
   uint capacity;
-  float minPixelRadius;
   uint dispatchGroupsX;
   uint candidateCapacity;
   uint mode;  // prefix=0, indexed=1, ranges=2
@@ -59,15 +58,6 @@ bool visible(Splat s, uint index, out uint key, out ProjectedSplat record) {
   if (!finiteFloat(v.alpha) || !finiteVec3(v.viewPos) || !finiteVec4(v.clip) || v.clip.w <= 0.0 ||
       !finiteVec3(v.covariance) || !finiteVec2(v.axis1) || !finiteVec2(v.axis2) ||
       !finiteFloat(v.radius))
-    return false;
-
-  vec3 covariance = v.covariance;
-  float halfDifference = 0.5 * (covariance.x - covariance.z);
-  float sourceVariance = 0.5 * (covariance.x + covariance.z) +
-                         sqrt(max(halfDifference * halfDifference + covariance.y * covariance.y,
-                                  0.0)) - kLowPassVariance;
-  if (!finiteFloat(sourceVariance) || sqrt(max(sourceVariance, 0.0)) * v.radius <
-                                         constants.minPixelRadius)
     return false;
 
   // A covariance-derived view-space depth interval makes near-plane handling conservative.

@@ -47,11 +47,25 @@ class LaunchTest(unittest.TestCase):
 class SettingsTest(unittest.TestCase):
     def test_the_report_records_the_lod_budget(self):
         args = perf.argparse.Namespace(quality="high", pose=None, world=None, budget=300000,
-                                       seconds=30, validation=False)
+                                       seconds=30, validation=False, subpixel=1.0)
         settings = perf.run_settings(args)
         self.assertEqual(settings["budget"], 300000)
         self.assertEqual(settings["quality"], "high")
+        self.assertEqual(settings["subpixel"], 1.0)
 
+
+    def test_budget_and_cutoff_go_to_the_switches_the_dev_app_reads(self):
+        command = perf.launch_command(UDID, 30, "high", None, None, validation=False, budget=300000,
+                                      subpixel=1.0)
+        app_args = command[command.index(perf.BUNDLE_ID) + 1:]
+        self.assertEqual(app_args[app_args.index("--budget") + 1], "300000")
+        self.assertEqual(app_args[app_args.index("--subpixel") + 1], "1.0")
+        plain = perf.launch_command(UDID, 30, "high", None, None, validation=False)
+        self.assertNotIn("--budget", plain)
+        self.assertNotIn("--subpixel", plain)
+        app = perf.ROOT / "apps/ios-dev/SplatKitDev"
+        self.assertIn('args.int("budget")', (app / "ContentView.swift").read_text())
+        self.assertIn('args.float("subpixel")', (app / "SplatViewHost.swift").read_text())
 
 class DeviceTest(unittest.TestCase):
     def test_environment_reads_model_os_and_family(self):

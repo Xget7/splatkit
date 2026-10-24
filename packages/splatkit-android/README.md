@@ -7,13 +7,13 @@ An arm64 emulator can test functionality; it is not a phone performance measurem
 
 ## Install
 
-Maven Central `0.1.0-beta.1` hands walking to the host: the view looks only, and `walkVelocity`, the character settings and the collider come from the app.
+Maven Central `0.1.0-beta.2` hands walking to the host: the view looks only, and `walkVelocity`, the character settings and the collider come from the app.
 See the [changelog](../../CHANGELOG.md) and [releases](https://github.com/Xget7/splatkit/releases).
 Avoid alpha05, which corrupts Adreno sorting.
 
 ```kotlin
 dependencies {
-    implementation("io.github.xget7:splatkit-android:0.1.0-beta.1")
+    implementation("io.github.xget7:splatkit-android:0.1.0-beta.2")
 }
 ```
 
@@ -85,7 +85,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `setLens(LensSettings)`, `lens` | Vertical `fieldOfViewDegrees` (10-120) and `depthRange` (near and far planes, at most 100,000:1); null keeps the default 65 degrees and 0.05-200. Applies at once and reframes the default orbit; false keeps the previous lens. |
 | `cameraPoseIntervalMillis`, `cameraPoseListener` | Milliseconds between pose callbacks, and the callback itself; 0, the default, never reports. |
 | `isAvailable`, `gpuDescription` | Renderer availability and driver description. |
-| `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. Only `sortDepth` and `subpixelThreshold` apply, with GPU visibility; other fields fall back with a warning each. |
+| `applyRenderPolicy(policy)`, `renderPolicy`, `deviceCapabilities` | Per-instance renderer policy, re-validated on the render thread. `sortDepth`, `lodErrorPixels` and `lodSplatLimit` apply with GPU visibility, `subpixelThreshold` from the next frame on both order paths; other fields fall back with a warning each. |
 | `readStats()` | FPS, frame/GPU/sort ms, loaded/drawn and screen-tile counts. Drawn counts and GPU ms describe the newest frame the GPU finished, also while nothing redraws, and are current when `onWorldFrameReady` fires. |
 | `startBenchmark(seconds)` | Turn-in-place benchmark logged under `SplatKit`. |
 
@@ -103,7 +103,6 @@ Above 4M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
 Parents and subpixel rejection are approximate.
 There is no universal 10M or 30/60 FPS guarantee.
-Compute screen tiles are not implemented.
 
 [Architecture, limits and evidence](docs/VULKAN.md) |
 [Agent harness](../../docs/AGENT_HARNESS.md) |

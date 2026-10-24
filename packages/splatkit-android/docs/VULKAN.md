@@ -3,7 +3,7 @@
 Public API: `SplatSurfaceView`; JNI and Vulkan classes are internal.
 Current source enables `VulkanFrameCompute`: GPU LOD → visibility → stable radix → indirect draw.
 Alpha06 fixes Adreno histogram corruption in alpha05; Maven alpha04 predates GPU ordering.
-Compute screen tiles are not implemented; per-view `sortDepth` and `subpixelThreshold` apply through `applyRenderPolicy`, which the React Native `policy` prop drives.
+Per-view `sortDepth`, `lodErrorPixels`, `lodSplatLimit` and `subpixelThreshold` apply through `applyRenderPolicy`, which the React Native `policy` prop drives.
 
 Contracts live beside code: [VulkanVisibilityPass.h](../src/main/cpp/rendering/vulkan/cull/VulkanVisibilityPass.h), [shader ABI](../src/main/cpp/rendering/vulkan/layout/VulkanShaderTypes.h).
 The context outlives allocations; reuse slots after fences, resize/destroy after all consumers finish.

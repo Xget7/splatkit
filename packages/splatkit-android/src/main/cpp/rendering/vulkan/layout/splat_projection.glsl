@@ -120,7 +120,8 @@ struct SplatView {
 };
 
 // False when the splat has no quad on screen: its peak is under the quad cutoff, its centre is
-// outside the near and far planes, or its half-packed quad misses the view.
+// outside the near and far planes, its half-packed quad misses the view, or its footprint is
+// under the camera's sub-pixel cutoff.
 bool projectSplat(Splat s, out SplatView v) {
   vec4 rgba = unpackUnorm4x8(s.rgba8);
   v.alpha = s.lodAlpha != 0u ? uintBitsToFloat(s.lodAlpha) : rgba.a;
@@ -147,7 +148,16 @@ bool projectSplat(Splat s, out SplatView v) {
   vec2 packedAxis2 = unpackHalf2x16(packHalf2x16(v.axis2));
   vec2 extentPixels = v.radius * (abs(packedAxis1) + abs(packedAxis2));
   vec2 margin = (extentPixels + 0.5) * 2.0 * v.clip.w / cam.screenSize;
-  return !any(greaterThan(abs(v.clip.xy), vec2(v.clip.w) + margin));
+  if (any(greaterThan(abs(v.clip.xy), vec2(v.clip.w) + margin))) return false;
+
+  // The largest eigenvalue of the covariance itself, the source's share of it.
+  float halfDifference = 0.5 * (v.covariance.x - v.covariance.z);
+  float sourceVariance = 0.5 * (v.covariance.x + v.covariance.z) +
+                         sqrt(max(halfDifference * halfDifference +
+                                      v.covariance.y * v.covariance.y, 0.0)) -
+                         kLowPassVariance;
+  // NaN fails the comparison.
+  return sqrt(max(sourceVariance, 0.0)) * v.radius >= cam.minPixelRadius;
 }
 
 // The record the raster stage expands, with the colour seen from the camera in the output's

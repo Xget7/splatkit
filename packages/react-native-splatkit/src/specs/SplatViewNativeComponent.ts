@@ -108,10 +108,6 @@ type NativeStatsEvent = Readonly<{
 type NativeRenderPolicy = Readonly<{
   /** Positive; 0 or less means no policy. Bump it per change: native applies each new revision. */
   revision: CodegenTypes.Int32;
-  /** 0 hardware, 1 computeTile, 2 hybrid. */
-  raster: CodegenTypes.Int32;
-  /** 8, 16 or 32. */
-  tileSize: CodegenTypes.Int32;
   lodErrorPixels: CodegenTypes.Double;
   alphaThreshold: CodegenTypes.Double;
   subpixelThreshold: CodegenTypes.Double;
@@ -133,8 +129,6 @@ type NativePolicyEvent = Readonly<{
   phase: 'applied' | 'warning' | 'rejected';
   errorCode: string;
   message: string;
-  raster: CodegenTypes.Int32;
-  tileSize: CodegenTypes.Int32;
   lodErrorPixels: CodegenTypes.Double;
   alphaThreshold: CodegenTypes.Double;
   subpixelThreshold: CodegenTypes.Double;
@@ -149,14 +143,9 @@ type NativeCapabilitiesEvent = Readonly<{
   maxLodCapacitySplats: CodegenTypes.Int32;
   minResidencyCapacitySplats: CodegenTypes.Int32;
   maxResidencyCapacitySplats: CodegenTypes.Int32;
-  supportsComputeTiles: boolean;
   supportsHiZOcclusion: boolean;
   supportsSubgroups: boolean;
   maxTextureDimension: CodegenTypes.Int32;
-  policyRaster: boolean;
-  /** Raster strategies native applies: bit 0 hardware, bit 1 computeTile, bit 2 hybrid. */
-  policyRasterMask: CodegenTypes.Int32;
-  policyTileSize: boolean;
   policyLodErrorPixels: boolean;
   policyAlphaThreshold: boolean;
   policySubpixelThreshold: boolean;

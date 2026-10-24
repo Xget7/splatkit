@@ -18,6 +18,10 @@ Around the packages:
 
 Both platforms run the same code up to the upload.
 
+SPZ tree construction runs locally on the loader CPU when the splat budget is positive.
+The tree stays in memory; loading an SPZ does not write a `.lodsplat` file.
+The optional [`splat_lod_build`](../packages/splat-core/tools/splat_lod_build.cpp) tool saves a prepared tree as `.lodsplat`; loading that file reads the tree instead of rebuilding it.
+
 1. **Decode** on a loader thread.
    SPZ v1 to v4 goes through Niantic's spz, fetched and pinned by [dependencies.cmake][deps]; [SpzDecoder.cpp][spz] inflates gzip with zlib, and spz handles zstd for v4.
    A `.lodsplat` carries its tree and skips steps 3 and 4.
@@ -26,7 +30,7 @@ Both platforms run the same code up to the upload.
    Loader threads: iOS serial queue `com.splatkit.loader` ([RenderThread.swift][ios-thread]), React Native iOS `com.splatkit.rn.loader`, Android single-thread executor `SplatKitLoader` ([RenderThread.kt][android-thread]).
 2. **Bake** per splat inside the decoder, scalar: covariance `R diag(s)^2 R^T` ([Covariance.cpp][cov]), sigmoid opacity, the band 0 spherical harmonics (SH) folded into colour, SH truncated to `maxShDegree`.
 3. **Reorder** by 30-bit Morton code ([SpatialOrder.cpp][morton]), plain SPZ only.
-4. **Tree**: with a splat budget above 0, `buildLodTree` builds a size-adaptive grid at load ([LodTree.cpp][tree]); a budget of 0 draws the flat cloud.
+4. **Tree**: with a splat budget above 0, `buildLodTree` builds an adaptive octree at load with the same builder used offline ([LodTree.cpp][tree]); a budget of 0 draws the flat cloud.
 5. **Pack** with [GpuLayout.cpp][layout]: `GpuSplat` is 32 bytes (position `f32x3`, `rgba8`, six half covariance terms, `lodAlpha`); SH sits in its own buffer as half pairs, bands 1 to the degree.
 
 The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread takes it and uploads it.
@@ -35,8 +39,8 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 
 | Stage | Metal (iOS) | Vulkan (Android) |
 |---|---|---|
-| Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | A world: 2 MiB host-visible staging windows into device-local VMA buffers, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers. Tiles pack straight into a slab mapped in device-local, host-visible memory, coherent where offered, and are staged only where the device has none ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
-| Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, in its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling; the CPU adapts the pixel threshold from counters read back one to two frames late ([lod_selection.comp][vk-lod], [LodThreshold.h][lod-threshold]) |
+| Upload | Zero copy: the packers write straight into `Shared` buffers on unified memory; tiles pack into a shared slab ([MetalWorld.mm][mtl-world]) | A world, its LOD clusters and leaves, and streamed tiles pack straight into device-local memory the CPU maps, coherent where offered, as on Metal. A device without such memory stages a world in 2 MiB host-visible windows, each a one-shot copy with a fence wait and `ALL_COMMANDS`/`TRANSFER` barriers ([VulkanBuffer.cpp][vk-buffer], [VulkanWorld.cpp][vk-world]) |
+| Selection | GPU frontier traversal of the tree by pixel error within the splat budget, with cluster frustum culling, seven dispatches per tree level in one serial compute encoder of its own command buffer; the CPU adapts the pixel threshold from counters read back one to two frames late ([MetalLodSelection.mm][mtl-lod], [SplatLOD.metal][mtl-lod-shader]) | GPU frontier traversal of the tree by pixel error within the splat budget (binary search over prefix costs), with cluster frustum culling, seven dispatches per tree level; the CPU adapts the pixel threshold from counters read back one to two frames late ([lod_selection.comp][vk-lod], [LodThreshold.h][lod-threshold]) |
 | Cull | `visibility` kernel culls alpha, behind camera, near/far, screen edge and subpixel; SIMD prefix compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated ([SplatVisibility.metal][mtl-vis], [SplatProjection.metalh][mtl-proj]) | `visibility.comp` culls alpha, behind camera, near/far by centre and by covariance, screen edge and subpixel; subgroup compaction; writes keys, values and a 32-byte `ProjectedSplat` with SH evaluated, one pipeline per SH degree ([visibility.comp][vk-vis], [splat_projection.glsl][vk-proj]) |
 | Sort | GPU LSD radix, 8-bit digits, 4 passes on 32-bit keys (default) or 2 on 16-bit; histogram and scatter rank with `simd_ballot`; indirect dispatch; needs 32-wide SIMD groups ([SplatRadixSort.metal][mtl-sort]) | GPU stable LSD radix, 8-bit digits, 4 or 2 passes; histogram with workgroup atomics because ballot loses keys on Adreno 640; scatter ranks each 128-key row with an `atomicOr` bitmask, the block's keys and values held in registers; indirect dispatch; 4M capacity ([radix_histogram.comp][vk-hist], [VulkanRadixSort.cpp][vk-sort]) |
 | Raster | Instanced quads in 7 indirect draws, front to back with "under" blending, in batches of 1, 1, 2, 4, 8, 16 and 32 sixty-fourths; between batches a mask pass writes `Depth16` where alpha reaches 254/255, so later batches skip saturated pixels; only the mask writes depth ([MetalSplatPipeline.mm][mtl-pipe], [SplatRaster.metal][mtl-raster], [PrepareIndirect.metalh][mtl-indirect]) | One indirect draw of instanced quads, back to front with "over" blending, one subpass with one colour attachment; `projected.vert` expands each quad from its record ([VulkanSplatPipeline.cpp][vk-pipe], [projected.vert][vk-projected]) |
@@ -46,10 +50,13 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 Both backends:
 
 - Splats blend in the encoded space by default; linear blending (off by default) applies `pow(rgb, 2.2)` to splat colour and presents to an sRGB surface.
-- The render policy applies per backend: both honour the sort depth and the LOD pixel error and splat limit, live; Vulkan also the subpixel threshold ([VulkanFrameCompute.h][vk-frame]).
-- Splats rasterize as hardware quads over the whole screen; `supportsComputeTiles` is false on both.
+- The render policy applies per backend: both honour the sort depth and the LOD pixel error and splat limit, live ([VulkanFrameCompute.h][vk-frame]).
+- The sub-pixel cutoff rides in the camera uniform, so it applies from the next frame on both order paths: a splat whose source sigma times its quad radius is under it has no quad ([SplatProjection.metalh][mtl-proj], [splat_projection.glsl][vk-proj]).
+- Splats rasterize as hardware quads over the whole screen.
+- Vulkan creates every pipeline through one `VkPipelineCache` kept in the app's cache directory, so a launch after the first reuses the driver's compiles; a file that fails its checksum or names another device or driver loads as an empty cache ([VulkanPipelineCache.cpp][vk-cache]). Metal keeps no file: the system caches compiled shaders on the device.
 - A splat's quad ends where its Gaussian falls to 2/255, at most 2.5 sigma (5 for LOD nodes) and 512 px; a splat with a lower peak opacity is culled ([SplatTypes.metalh][mtl-types], [splat_footprint.glsl][vk-footprint]).
 - The fragment stage shades in half precision: the vertex stage hands it log2 of the opacity and an offset scaled for `exp2`, so it discards under 1/255 before evaluating the falloff ([SplatRaster.metal][mtl-raster], [splat.frag][vk-frag]).
+- Each renderer compiles its visibility, sort and selection pipelines once and keeps them across worlds ([MetalFrameCompute.mm][mtl-frame], [VulkanFrameCompute.h][vk-frame]); a world load only allocates buffers and descriptors. On Metal a change of sort key width rebuilds the visibility pipelines; Vulkan pushes the width as a constant.
 - The radix sort's last pass writes only the values; the sorted keys are never read.
 - [SplatEngine.cpp][engine] draws only when something marks a redraw, so a still view costs no GPU time.
 - A streamed tile is written into a slab range only once every frame that drew the range finished: [TileStreamer.h][streamer] pins a replaced set until the renderer's completed frame serial passes the last frame that drew it.
@@ -81,6 +88,7 @@ Both backends:
 [mtl-indirect]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/cull/PrepareIndirect.metalh
 [mtl-surface]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/presentation/MetalSurface.mm
 [mtl-upscale]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/presentation/MetalUpscaler.mm
+[mtl-frame]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/frame/MetalFrameCompute.mm
 [mtl-renderer]: ../packages/splatkit-ios/Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
 [vk-buffer]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanBuffer.cpp
 [vk-world]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/world/VulkanWorld.cpp
@@ -98,3 +106,4 @@ Both backends:
 [vk-surface]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/presentation/VulkanSurface.cpp
 [vk-renderer]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/VulkanSplatRenderer.cpp
 [vk-frame]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/frame/VulkanFrameCompute.h
+[vk-cache]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanPipelineCache.cpp

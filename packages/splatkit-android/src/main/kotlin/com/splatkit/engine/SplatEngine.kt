@@ -34,8 +34,8 @@ import com.splatkit.renderPolicyError
  * the calling thread, and the readers marked "any thread", which lock against [destroy]
  * or read a value the render thread publishes.
  */
-internal class SplatEngine {
-    private var handle: Long = nativeCreate()
+internal class SplatEngine(cacheDir: String) {
+    private var handle: Long = nativeCreate(cacheDir)
     private val poseScratch = FloatArray(POSE_FLOATS)
     private val statsScratch = FloatArray(SPLAT_STATS_FLOATS)
     private val policyScratch = DoubleArray(RENDER_POLICY_FIELDS)
@@ -225,7 +225,7 @@ internal class SplatEngine {
         }
     }
 
-    private external fun nativeCreate(): Long
+    private external fun nativeCreate(cacheDir: String): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeGpuDescription(handle: Long): String
     private external fun nativeSetSurface(handle: Long, surface: Surface?)

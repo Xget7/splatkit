@@ -66,6 +66,7 @@ EXTRA_POSE = "pose"
 EXTRA_WORLD = "world"
 EXTRA_BUDGET = "budget"
 EXTRA_LOD_SPLAT_LIMIT = "lodSplatLimit"
+EXTRA_SUBPIXEL = "subpixel"
 QUALITY_PRESETS = ("low", "medium", "high", "ultra")
 # Every run draws in landscape, rotation 1 (Surface.ROTATION_90), whatever way the phone lies;
 # the previous settings come back afterwards.
@@ -127,10 +128,11 @@ duration_ms: {int(duration_s * MS_PER_S)}
 def run_settings(args):
     """The turn's settings as the report records them."""
     return {"quality": args.quality, "pose": args.pose, "world": args.world, "budget": args.budget,
-            "lod_splat_limit": args.lod_splat_limit, "seconds": args.seconds, "validation": args.validation}
+            "lod_splat_limit": args.lod_splat_limit, "subpixel": args.subpixel,
+            "seconds": args.seconds, "validation": args.validation}
 
 
-def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None):
+def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None, subpixel=None):
     """The am start command; --ez hud false keeps HUD redraws out of the measurement."""
     args = ["shell", "am", "start", "-n", ACTIVITY, "--ez", EXTRA_BENCHMARK, "true",
             "--ef", EXTRA_SECONDS, str(seconds), "--es", EXTRA_QUALITY, quality, "--ez", EXTRA_HUD, "false"]
@@ -142,6 +144,8 @@ def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit
         args += ["--ei", EXTRA_BUDGET, str(budget)]
     if lod_splat_limit is not None:
         args += ["--ei", EXTRA_LOD_SPLAT_LIMIT, str(lod_splat_limit)]
+    if subpixel is not None:
+        args += ["--ef", EXTRA_SUBPIXEL, str(subpixel)]
     return args
 
 
@@ -289,7 +293,7 @@ def record(args, variant):
                   input=perfetto_config(trace_seconds))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
     adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world, args.budget,
-                                   args.lod_splat_limit))
+                                   args.lod_splat_limit, args.subpixel))
 
     failure = None
     try:
@@ -364,6 +368,7 @@ def main():
                         help="LOD budget: a world loads as a hierarchy drawing at most this many splats")
     parser.add_argument("--lod-splat-limit", type=int,
                         help="most splats one frame of a hierarchy world selects, 0 for the budget")
+    parser.add_argument("--subpixel", type=float, help="sub-pixel cutoff in pixels; the policy default otherwise")
     parser.add_argument("--validation", action="store_true",
                         help="debug build with the Khronos validation layer; the timings are then not comparable")
     parser.add_argument("--serial", help="adb device serial when more than one is attached")

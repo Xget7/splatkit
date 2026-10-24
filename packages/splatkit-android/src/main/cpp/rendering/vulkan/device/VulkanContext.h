@@ -9,15 +9,18 @@
 // After vulkan.h on purpose: VkBootstrap.h would otherwise hide the prototypes.
 #include <VkBootstrap.h>
 
+#include "rendering/vulkan/device/VulkanPipelineCache.h"
 #include "splat/core/Result.h"
 
 namespace splatkit {
 
 // Instance, physical device, logical device, the single graphics+present queue,
-// and the memory allocator. Created once per engine; outlives every surface.
+// the memory allocator and the pipeline cache. Created once per engine; outlives every surface.
 class VulkanContext {
  public:
-  static splat::Result<std::unique_ptr<VulkanContext>> create();
+  // `pipelineCachePath` is the file the pipeline cache loads from and saves to; empty keeps
+  // it in memory.
+  static splat::Result<std::unique_ptr<VulkanContext>> create(std::string pipelineCachePath = {});
   ~VulkanContext();
 
   VulkanContext(const VulkanContext&) = delete;
@@ -36,6 +39,13 @@ class VulkanContext {
   // android_perf.py: subgroups, workgroup memory and size, storage range, device-local
   // memory, 16-bit arithmetic and storage.
   const std::string& capabilities() const { return capabilities_; }
+  // Every pipeline is created through it, so a later world or launch reuses the compiles.
+  // VK_NULL_HANDLE when the driver could not create one: pipelines then compile uncached.
+  VkPipelineCache pipelineCache() const {
+    return pipelineCache_ ? pipelineCache_->handle() : VK_NULL_HANDLE;
+  }
+  // Render thread, after pipelines were created. False when the file could not be written.
+  bool savePipelineCache() const { return !pipelineCache_ || pipelineCache_->save(); }
   bool validationEnabled() const { return validationEnabled_; }
   uint32_t validationMessageCount() const { return validationMessageCount_.load(); }
 
@@ -51,6 +61,7 @@ class VulkanContext {
   VkQueue queue_ = VK_NULL_HANDLE;
   uint32_t queueFamily_ = 0;
   VmaAllocator allocator_ = VK_NULL_HANDLE;
+  std::unique_ptr<VulkanPipelineCache> pipelineCache_;
   std::string deviceDescription_;
   std::string capabilities_;
   bool validationEnabled_ = false;

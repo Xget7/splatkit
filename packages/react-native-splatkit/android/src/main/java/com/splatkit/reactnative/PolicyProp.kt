@@ -1,7 +1,6 @@
 package com.splatkit.reactnative
 
 import com.facebook.react.bridge.ReadableMap
-import com.splatkit.RasterStrategy
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderPolicyResolution
 import com.splatkit.SortDepth
@@ -16,18 +15,15 @@ internal data class PolicyOutcome(val phase: String, val errorCode: String, val 
 internal fun policyPropRevision(map: ReadableMap): Int = runCatching { map.int32("revision") }.getOrDefault(0)
 
 /**
- * Parses the Fabric `policy` prop. Enum wire values must be known: an unknown raster or sort
- * depth is invalid, never a silent default. Ranges are re-validated by the engine.
+ * Parses the Fabric `policy` prop. Enum wire values must be known: an unknown sort depth is
+ * invalid, never a silent default. Ranges are re-validated by the engine.
  * Returns null for a revision of 0 or less, which both adapters treat as no policy.
  */
 internal fun parsePolicyProp(map: ReadableMap): RevisionedPolicy? {
     val revision = map.int32("revision")
     if (revision <= 0) return null
-    val raster = map.int32("raster")
     val sortDepth = map.int32("sortDepth")
     return RevisionedPolicy(revision, RenderPolicy(
-        raster = requireNotNull(RasterStrategy.fromWire(raster)) { "raster must be 0, 1 or 2" },
-        tileSize = map.int32("tileSize"),
         lodErrorPixels = map.number("lodErrorPixels").toFloat(),
         alphaThreshold = map.number("alphaThreshold").toFloat(),
         subpixelThreshold = map.number("subpixelThreshold").toFloat(),

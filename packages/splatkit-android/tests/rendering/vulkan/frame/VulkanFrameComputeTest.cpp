@@ -120,6 +120,31 @@ std::vector<uint32_t> run(const test::VulkanTestContext& gpu, VulkanFrameCompute
   return indices;
 }
 
+// The renderer compiles one set and every world borrows it, so a world's teardown must leave
+// the set to the next world.
+void sharedPipelines(const test::VulkanTestContext& gpu, const splat::LodTree& tree,
+                     const Inputs& lodInputs) {
+  const auto shared = VulkanFrameCompute::Pipelines::compile(*gpu.context);
+  require(shared.has_value(), "compile the frame pipelines");
+  for (const uint32_t budget : {1u, 2u}) {
+    auto created = VulkanFrameCompute::create(*gpu.context, *shared, 3, &tree, budget);
+    require(static_cast<bool>(created), "create GPU LOD frame on shared pipelines");
+    auto pass = std::move(created.value());
+    require(pass->pipelines() == *shared, "a world borrows the shared pipelines");
+    const auto cut = budget == 1 ? std::vector<uint32_t>{0} : std::vector<uint32_t>{2, 1};
+    require(run(gpu, *pass, lodInputs, 0, budget, {}) == cut,
+            "a hierarchy world on shared pipelines orders like one on its own");
+  }
+  {
+    auto created = VulkanFrameCompute::create(*gpu.context, *shared, 3);
+    require(static_cast<bool>(created), "create GPU frame on shared pipelines");
+    const std::vector<uint32_t> back{2, 0, 1};
+    require(run(gpu, *created.value(), lodInputs, 1, 3, {{0, 3}}) == back,
+            "a flat world after hierarchy worlds orders like one on its own");
+  }
+  std::puts("PASS worlds built one after another share one pipeline set");
+}
+
 void tests(const test::VulkanTestContext& gpu) {
   auto source = cloud(257);
   Inputs inputs(gpu, source);
@@ -133,7 +158,6 @@ void tests(const test::VulkanTestContext& gpu) {
     require(static_cast<bool>(created), "create GPU frame");
     auto pass = std::move(created.value());
     RenderPolicy policy;
-    policy.subpixelThreshold = pass->minPixelRadius();
     policy.sortDepth = bits;
     std::string reason;
     require(pass->applyRenderPolicy(policy, &reason), "apply sort depth policy");
@@ -226,6 +250,8 @@ void tests(const test::VulkanTestContext& gpu) {
   }
   std::puts("PASS hierarchical selection feeds sorted indirect draw with covering pressure");
 
+  sharedPipelines(gpu, tree, lodInputs);
+
   // One root over 64 leaves: the policy threshold picks the root or every leaf, live.
   splat::LodTree flat;
   flat.leafCount = kPolicyLeaves;
@@ -245,7 +271,6 @@ void tests(const test::VulkanTestContext& gpu) {
     uint64_t submission = 0;
     const auto apply = [&](float pixels, uint32_t limit) {
       RenderPolicy policy;
-      policy.subpixelThreshold = 0;
       policy.lodErrorPixels = pixels;
       policy.lodSplatLimit = limit;
       std::string reason;

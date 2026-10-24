@@ -91,7 +91,6 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
                                              : SplatKitViewEventEmitter::OnPolicyEventPhase::Rejected;
     value.errorCode = [event[@"errorCode"] UTF8String];
     value.message = [event[@"message"] UTF8String];
-    value.raster = [event[@"raster"] intValue]; value.tileSize = [event[@"tileSize"] intValue];
     value.lodErrorPixels = [event[@"lodErrorPixels"] doubleValue];
     value.alphaThreshold = [event[@"alphaThreshold"] doubleValue];
     value.subpixelThreshold = [event[@"subpixelThreshold"] doubleValue];
@@ -153,13 +152,9 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
     value.maxLodCapacitySplats = [event[@"maxLodCapacitySplats"] intValue];
     value.minResidencyCapacitySplats = [event[@"minResidencyCapacitySplats"] intValue];
     value.maxResidencyCapacitySplats = [event[@"maxResidencyCapacitySplats"] intValue];
-    value.supportsComputeTiles = [event[@"supportsComputeTiles"] boolValue];
     value.supportsHiZOcclusion = [event[@"supportsHiZOcclusion"] boolValue];
     value.supportsSubgroups = [event[@"supportsSubgroups"] boolValue];
     value.maxTextureDimension = [event[@"maxTextureDimension"] intValue];
-    value.policyRaster = [event[@"policyRaster"] boolValue];
-    value.policyRasterMask = [event[@"policyRasterMask"] intValue];
-    value.policyTileSize = [event[@"policyTileSize"] boolValue];
     value.policyLodErrorPixels = [event[@"policyLodErrorPixels"] boolValue];
     value.policyAlphaThreshold = [event[@"policyAlphaThreshold"] boolValue];
     value.policySubpixelThreshold = [event[@"policySubpixelThreshold"] boolValue];
@@ -205,8 +200,6 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
     if (const SKDeviceCapabilities *device = DeviceCapabilities()) {
       policy = device->fallback;
       const SKRenderPolicySupport &support = device->policy;
-      if (support.raster) policy.raster = static_cast<uint32_t>(next.policy.raster);
-      if (support.tileSize) policy.tileSize = static_cast<uint32_t>(next.policy.tileSize);
       if (support.lodErrorPixels) policy.lodErrorPixels = static_cast<float>(next.policy.lodErrorPixels);
       if (support.alphaThreshold) policy.alphaThreshold = static_cast<float>(next.policy.alphaThreshold);
       if (support.subpixelThreshold) policy.subpixelThreshold = static_cast<float>(next.policy.subpixelThreshold);

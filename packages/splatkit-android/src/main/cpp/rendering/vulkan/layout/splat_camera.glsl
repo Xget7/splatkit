@@ -10,6 +10,7 @@ layout(set = 0, binding = 0, std140) uniform Camera {
   uint outputLinear;  // 1 when the swapchain is sRGB and expects linear values
   uint quarterTurns;  // clockwise, 0 to 3: the display's rotation the image is drawn with
   vec4 cameraPosition;  // world space, for the view direction the SH is evaluated along
+  float minPixelRadius;  // pixels: smallest source sigma times quad radius that is drawn
 } cam;
 
 // Turns clip space clockwise by the display's rotation. The swapchain image has the display's

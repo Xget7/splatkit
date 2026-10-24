@@ -170,11 +170,9 @@ assert.deepEqual(policy.map(prop => prop.name).sort(), [
   'enableFrustumCulling',
   'enableHiZOcclusion',
   'lodErrorPixels',
-  'raster',
   'revision',
   'sortDepth',
   'subpixelThreshold',
-  'tileSize',
 ]);
 assert.equal(
   policy.find(prop => prop.name === 'revision').typeAnnotation.type,

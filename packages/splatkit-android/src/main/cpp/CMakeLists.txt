@@ -49,6 +49,7 @@ add_library(splatkit SHARED
   rendering/vulkan/presentation/VulkanRenderTarget.cpp
   rendering/vulkan/presentation/VulkanFrameLoop.cpp
   rendering/vulkan/device/VulkanBuffer.cpp
+  rendering/vulkan/device/VulkanPipelineCache.cpp
   rendering/vulkan/world/VulkanWorld.cpp
   rendering/vulkan/raster/VulkanSplatPipeline.cpp
   rendering/vulkan/cull/VulkanVisibilityPass.cpp

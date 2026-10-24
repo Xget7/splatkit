@@ -6,8 +6,10 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "rendering/metal/layout/MetalFrameSlots.h"
@@ -41,16 +43,18 @@ class MetalFrameCompute {
   bool gpuSort() const { return gpuSort_; }
   KeyBits depthBits() const { return visibility_.depthBits(); }
 
-  // The sort key width and the LOD threshold and splat limit of `policy`. Waits for the frames
-  // in flight when something changes. False, with `reason`, when the GPU cannot order or the
-  // visibility pipelines could not be rebuilt.
+  // The sort key width, the LOD threshold and splat limit, and the sub-pixel cutoff of `policy`.
+  // The cutoff applies from the next camera written; the rest waits for the frames in flight
+  // when it changes. False, with `reason`, when the GPU cannot order or the visibility pipelines
+  // could not be rebuilt; the cutoff is then unchanged.
   bool configure(const RenderPolicy& policy, std::string* reason);
   // Room for a world of `count` splats drawn from CPU ranges, and no LOD selection. False when
   // the buffers could not be allocated, which leaves the previous world's setup in place.
   // Frames must be idle.
   bool configureFlatWorld(uint32_t count);
   // A selection over `tree`'s nodes, with room for the cut and a readback per slot. Nothing
-  // changes on failure. Frames must be idle.
+  // changes on failure. Allocates buffers only: every pipeline was built by create() or
+  // configure(). Frames must be idle.
   bool configureLodWorld(const splat::LodTree& tree, uint32_t budget);
   bool hasLod() const { return lod_ != nullptr; }
 
@@ -75,6 +79,10 @@ class MetalFrameCompute {
   id<MTLBuffer> projected() const { return visibility_.projected(); }
   id<MTLBuffer> order() const { return sort_.values(); }
   id<MTLBuffer> drawArguments(uint32_t slot) const { return visibility_.drawArguments(slot); }
+
+  // Every compute pipeline of the ordering and the current selection, so tests can tell whether a
+  // world load rebuilt them.
+  std::vector<id<MTLComputePipelineState>> pipelines() const;
 
   double lastSortMillis() const { return report_->sortMillis.load(); }
   uint32_t lastDrawCount() const { return report_->drawCount.load(); }
@@ -105,7 +113,6 @@ class MetalFrameCompute {
 
   static constexpr float kDefaultLodPixels = 1.0f;
 
-  bool createOrdering(MetalVisibilityPass& visibility, MetalRadixSort& sort, KeyBits bits) const;
   void adaptLodThreshold();
 
   id<MTLDevice> device_ = nil;
@@ -116,10 +123,13 @@ class MetalFrameCompute {
   MetalVisibilityPass visibility_;
   MetalRadixSort sort_;
   bool gpuSort_ = false;
+  // Compiled once in create(), nullopt when they could not be; every LOD world shares them.
+  std::optional<MetalLodSelection::Pipelines> lodPipelines_;
   std::unique_ptr<MetalLodSelection> lod_;
   std::array<id<MTLBuffer>, kFramesInFlight> lodReadback_{};
   uint32_t lodSplatLimit_ = 0;
   LodThreshold lodThreshold_{kDefaultLodPixels};
+  float minPixelRadius_ = RenderPolicy{}.subpixelThreshold;
   uint32_t lodAdaptedReadback_ = 0;
   uint64_t frames_ = 0;  // submitted so far, which also paces the LOD log
   std::shared_ptr<GpuReport> report_;

@@ -12,9 +12,9 @@
 namespace splatkit {
 
 // A VkBuffer with its VMA allocation. Three flavours:
-// - deviceLocal: lives in GPU memory, filled through a staging copy. Splat data.
+// - deviceLocal: lives in GPU memory, filled through a staging copy. Buffers the GPU writes.
 // - deviceLocalMapped: GPU memory the CPU writes in place where the GPU shares it with the
-//   CPU, as on phones, and deviceLocal elsewhere. A streamed slab.
+//   CPU, as on phones, and deviceLocal elsewhere. A world, its LOD tree, a streamed slab.
 // - hostVisible: mapped for CPU writes, read by the GPU. Uniforms and sort output.
 class VulkanBuffer {
  public:

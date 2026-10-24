@@ -1845,7 +1845,7 @@ PODS:
     - Yoga
   - SocketRocket (0.7.1):
     - ReactNativeDependencies
-  - SplatKitReactNative (0.1.0-beta.1):
+  - SplatKitReactNative (0.1.0-beta.2):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2231,7 +2231,7 @@ SPEC CHECKSUMS:
   RNReanimated: 7dde9b7b1c4eea6dc8edade25db1942593feb0ba
   RNWorklets: 384550f43408c2938237f7799c9f5bd1bdefe187
   SocketRocket: d57b1af80c029e12a75cd9b218287c67381e4593
-  SplatKitReactNative: 47c1b822c0c6369e0a310a0767da4dba921e6355
+  SplatKitReactNative: 44935f691d12d88395fb421f55139e745b147e5c
   Yoga: 58b502c52b14ad3c4468805d461fc37d275c2a42
 
 PODFILE CHECKSUM: 9b0ece2bec34696702f6b30137c4b3da4e1af38a

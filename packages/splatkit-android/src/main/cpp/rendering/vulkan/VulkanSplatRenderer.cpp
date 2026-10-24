@@ -57,8 +57,7 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   caps.limits.maxLodCapacitySplats = VulkanLodSelection::kMaxBudget;
   caps.limits.minResidencyCapacitySplats = kMinResidencyCapacity;
   caps.limits.maxResidencyCapacitySplats = kMaxResidencyCapacity;
-  // Vulkan has no screen-tile rasterization and conservative occlusion is unimplemented.
-  caps.supportsComputeTiles = false;
+  // Conservative occlusion is unimplemented.
   caps.supportsHiZOcclusion = false;
   const bool gpu = selectsLodOnGpu();
   caps.supportsSubgroups = gpu;
@@ -66,22 +65,20 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   vkGetPhysicalDeviceProperties(ctx_.physicalDevice(), &properties);
   caps.maxTextureDimension = properties.limits.maxImageDimension2D;
   RenderPolicySupport& policy = caps.policy;
-  policy.fallback.raster = RasterStrategy::hardware;
-  policy.fallback.tileSize = 16;
   policy.fallback.lodErrorPixels = VulkanLodSelection::Quality{}.pixelLimit;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
-  policy.fallback.subpixelThreshold = 0.5f;
+  policy.fallback.subpixelThreshold = RenderPolicy{}.subpixelThreshold;
   policy.fallback.sortDepth = SortKeyBits::full32;
   policy.fallback.enableFrustumCulling = true;
   // Both paths draw back to front, so nothing stops at a saturated pixel. Front to back
   // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
   // termination saved.
   policy.fallback.enableEarlyTermination = false;
-  // The GPU visibility/sort path applies the sub-pixel cutoff, the key width and, on a
-  // hierarchy world, the LOD error threshold and splat limit live; without it the CPU path
-  // has none of them, and the rest is not implemented.
+  // Both paths apply the sub-pixel cutoff from the next frame. The GPU visibility/sort path
+  // applies the key width and, on a hierarchy world, the LOD error threshold and splat limit
+  // live; the CPU path has none of them, and the rest is not implemented.
   policy.sortDepth = gpu;
-  policy.subpixelThreshold = gpu;
+  policy.subpixelThreshold = true;
   policy.lodErrorPixels = gpu;
   policy.minLodErrorPixels = LodThreshold::kMinPolicyPixels;
   policy.maxLodErrorPixels = LodThreshold::kMaxPolicyPixels;
@@ -90,10 +87,10 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
 }
 
 bool VulkanSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
-  if (policy.sortDepth == policy_.sortDepth &&
-      policy.subpixelThreshold == policy_.subpixelThreshold &&
-      policy.lodErrorPixels == policy_.lodErrorPixels &&
+  if (policy.sortDepth == policy_.sortDepth && policy.lodErrorPixels == policy_.lodErrorPixels &&
       policy.lodSplatLimit == policy_.lodSplatLimit) {
+    // The cutoff rides in the camera each frame writes after its slot's fence.
+    policy_.subpixelThreshold = policy.subpixelThreshold;
     return true;
   }
   const RenderPolicy previous = policy_;
@@ -139,13 +136,30 @@ void VulkanSplatRenderer::adoptWorld(std::unique_ptr<VulkanWorld> world,
   applyPolicyToCompute();
   splats_->bindWorld(*world_);
   worldFrameCompletion_.reset();
+  // The surface and compute pipelines exist by now; with nothing newly compiled, saving only
+  // compares the cache size.
+  const TraceSection section(trace::kSavePipelineCache);
+  ctx_.savePipelineCache();
+}
+
+const VulkanFrameCompute::Pipelines* VulkanSplatRenderer::computePipelines() {
+  if (!computePipelines_) computePipelines_ = VulkanFrameCompute::Pipelines::compile(ctx_);
+  return computePipelines_ ? &*computePipelines_ : nullptr;
+}
+
+splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanSplatRenderer::createCompute(
+    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
+  const auto* pipelines = computePipelines();
+  if (pipelines == nullptr)
+    return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
+  return VulkanFrameCompute::create(ctx_, *pipelines, sourceCount, tree, budget);
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(cloud.count()));
+  auto compute = createCompute(static_cast<uint32_t>(cloud.count()));
   // sortsOnGpu() promised GPU order, so a world without its compute passes would never draw.
   if (!compute) {
     LOGE("GPU upload rejected: %s", compute.error().message.c_str());
@@ -170,8 +184,7 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute =
-      VulkanFrameCompute::create(ctx_, static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
+  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
   if (!compute) {
     LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
     return false;
@@ -186,7 +199,7 @@ bool VulkanSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_) return false;
   ctx_.waitIdle();
-  auto compute = VulkanFrameCompute::create(ctx_, capacity);
+  auto compute = createCompute(capacity);
   if (!compute) {
     LOGE("GPU slab rejected: %s", compute.error().message.c_str());
     return false;
@@ -226,7 +239,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     const VkBuffer camera = camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
-                                            view, outputLinear, turns);
+                                            view, outputLinear, turns, policy_.subpixelThreshold);
     {
       const TraceSection section(trace::kEncodeCompute);
       gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
@@ -266,8 +279,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
     if (count > 0) {
-      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view, outputLinear,
-                      turns);
+      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view, outputLinear, turns,
+                      policy_.subpixelThreshold);
     }
     splats_->draw(cmd, slot, *world_, count, std::min(frame.shDegree, world_->shDegree));
   }
