@@ -307,6 +307,19 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
+     * The frame worlds, tiles and colliders loaded after it is set were written in, for files
+     * that store a frame other than the one they declare or their format's default. Null, the
+     * default, keeps each file's own: an SPZ's coordinate system tag, else `rub`, and glTF's `rub`.
+     * Untagged World Labs Marble exports need [CoordinateFrame.RDF]. A `.lodsplat` ignores it.
+     * Each load reads it when called.
+     */
+    var sourceFrame: CoordinateFrame? = null
+        set(value) {
+            field = value
+            renderThread.setSourceFrame(value)
+        }
+
+    /**
      * Walks continuously at the given speed in meters per second until called again with
      * zeros: what a joystick or a keyboard drives. Forward is where the camera looks,
      * flattened onto the floor while walking; right strafes.

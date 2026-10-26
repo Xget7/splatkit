@@ -74,6 +74,7 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `applyQuality(RenderQuality)` | Apply preset; individual properties can override it. |
 | `renderScale` | Render-target scale, 0.1–2; changing it changes image quality. |
 | `shDegree`, `maxShDegree` | Draw/load SH cap, 0–3. Set the load cap before loading. |
+| `sourceFrame` | `CoordinateFrame` the next world, its tiles and collider were written in, read when each load is called; `CoordinateFrame.parse("rfu")` names any of the 48. Null, the default, keeps the SPZ tag, else `rub`, and glTF `rub`. Untagged World Labs Marble exports need `CoordinateFrame.RDF`; `.lodsplat` ignores it. |
 | `splatBudget` | LOD capacity for subsequent loads; zero disables automatic tree construction. Prebuilt LOD files still select a hierarchy. GPU maximum: 4M. |
 | `residencyBudget` | Resident splats for subsequent streamed worlds, separate from LOD selection. |
 | `cullMarginDegrees` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |

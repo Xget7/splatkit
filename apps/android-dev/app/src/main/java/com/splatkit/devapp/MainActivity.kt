@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.splatkit.CameraPose
+import com.splatkit.CoordinateFrame
 import com.splatkit.RenderPolicy
 import com.splatkit.RenderQuality
 import com.splatkit.SplatSurfaceView
@@ -180,11 +181,22 @@ class MainActivity : Activity() {
         }
         val worldPath = intent?.getStringExtra("world")
         val colliderPath = intent?.getStringExtra("collider")
-        val worldKey = "$worldPath|$colliderPath|${intent?.getBooleanExtra("bytes", false)}"
+        // --es sourceFrame rdf reads the world and its collider in that frame, as an untagged
+        // World Labs world needs. The bundled kitchen is one, so it always loads in rdf.
+        val requestedFrame = intent?.getStringExtra("sourceFrame")
+        val sourceFrame = when {
+            worldPath == null -> CoordinateFrame.RDF
+            requestedFrame == null -> null
+            else -> CoordinateFrame.parse(requestedFrame).also {
+                if (it == null) toast("Unknown source frame $requestedFrame, using the file's own")
+            }
+        }
+        val worldKey = "$worldPath|$colliderPath|$sourceFrame|${intent?.getBooleanExtra("bytes", false)}"
         // The same world in a second intent keeps what is loaded: the settings above switch in place.
         val reload = worldKey != loadedWorld
         Log.i(TAG, "world request: $worldKey reload=$reload")
         loadedWorld = worldKey
+        splatView.sourceFrame = sourceFrame
         // File reads are IO; keep them off the UI thread.
         if (reload) Thread {
             try {

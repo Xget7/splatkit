@@ -119,7 +119,7 @@ def main():
         print("  no collider mesh in the response; the world loads in fly mode")
     print("push and walk:")
     print(f"  adb push {args.out}/world_500k.spz {args.out}/collider.glb /sdcard/Android/data/com.splatkit.devapp/files/")
-    print("  adb shell am start -n com.splatkit.devapp/.MainActivity --es world world_500k.spz --es collider collider.glb")
+    print("  adb shell am start -n com.splatkit.devapp/.MainActivity --es world world_500k.spz --es collider collider.glb --es sourceFrame rdf")
 
 
 if __name__ == "__main__":

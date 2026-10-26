@@ -11,6 +11,7 @@ import com.splatkit.CameraRequest
 import com.splatkit.CameraResolution
 import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
+import com.splatkit.CoordinateFrame
 import com.splatkit.LensSettings
 import com.splatkit.WorldPoint
 import com.splatkit.DeviceCapabilities
@@ -42,6 +43,9 @@ internal class RenderThread(cacheDir: String) {
     private var rendering = false
     private var worldReady = false
     private val pendingCamera = ArrayDeque<Pair<CameraRequest, ((CameraResolution) -> Unit)?>>()
+    // Written by the host's thread. Each load reads it when asked for and applies it in its own
+    // loader task, so a later change never reaches a load already queued.
+    @Volatile private var sourceFrame: CoordinateFrame? = null
 
     /** GPU name and Vulkan version, or an empty string when the engine failed to start. */
     val gpuDescription: String
@@ -131,15 +135,19 @@ internal class RenderThread(cacheDir: String) {
     fun loadWorld(spzBytes: ByteArray) = decode { it.loadWorld(spzBytes) }
     fun loadCollider(glbBytes: ByteArray) = decode { it.loadCollider(glbBytes) }
     fun loadWorldFile(path: String) = decode { it.loadWorldFile(path) }
-    fun loadWorldFile(path: String, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) = post {
-        worldReady = false
-        engine?.setMaxShDegree(maxShDegree)
-        engine?.setSplatBudget(splatBudget)
-        engine?.setResidencyBudget(residencyBudget)
-        decode { it.loadWorldFile(path) }
+    fun loadWorldFile(path: String, maxShDegree: Int, splatBudget: Int, residencyBudget: Int) {
+        val frame = sourceFrame
+        post {
+            worldReady = false
+            engine?.setMaxShDegree(maxShDegree)
+            engine?.setSplatBudget(splatBudget)
+            engine?.setResidencyBudget(residencyBudget)
+            decode(frame) { it.loadWorldFile(path) }
+        }
     }
     fun loadTiledWorldFile(path: String) = decode { it.loadTiledWorldFile(path) }
     fun loadColliderFile(path: String) = decode { it.loadColliderFile(path) }
+    fun setSourceFrame(frame: CoordinateFrame?) { sourceFrame = frame }
 
     // Camera and input.
 
@@ -243,10 +251,15 @@ internal class RenderThread(cacheDir: String) {
 
     // After release() the executor is shut down and would throw; a late load from a
     // host's background thread is a no-op like every other call after release.
-    private fun decode(block: (SplatEngine) -> Unit) {
+    private fun decode(frame: CoordinateFrame? = sourceFrame, block: (SplatEngine) -> Unit) {
         if (loader.isShutdown) return
         try {
-            loader.execute { engine?.let(block) }
+            loader.execute {
+                engine?.let {
+                    if (it.isValid && !it.setSourceFrame(frame)) Log.e(TAG, "native code rejected frame $frame")
+                    block(it)
+                }
+            }
         } catch (e: RejectedExecutionException) {
             Log.w(TAG, "load after release ignored")
         }

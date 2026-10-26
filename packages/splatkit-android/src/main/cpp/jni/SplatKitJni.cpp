@@ -9,11 +9,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "engine/AndroidEngine.h"
 #include "engine/TraceSection.h"
 #include "jni/JniConversions.h"
+#include "splat/core/CoordinateFrame.h"
 #include "splatkit/Log.h"
 
 // `SPLATKIT_JNI(void, nativeLook)(JNIEnv*, jobject, ...)` declares the exported symbol
@@ -367,6 +369,24 @@ SPLATKIT_JNI(void, nativeSetMaxShDegree)(JNIEnv*, jobject, jlong handle, jint de
 
 SPLATKIT_JNI(void, nativeSetShDegree)(JNIEnv*, jobject, jlong handle, jint degree) {
   if (auto* engine = toEngine(handle)) engine->setShDegree(degree);
+}
+
+// A null `letters` clears the frame. False when they name no frame; the previous one stays.
+SPLATKIT_JNI(jboolean, nativeSetSourceFrame)(JNIEnv* env, jobject, jlong handle, jstring letters) {
+  auto* engine = toEngine(handle);
+  if (engine == nullptr) return JNI_FALSE;
+  if (letters == nullptr) {
+    engine->setSourceFrame(std::nullopt);
+    return JNI_TRUE;
+  }
+  bool parsed = false;
+  withUtf8(env, letters, [engine, &parsed](const std::string& text) {
+    const auto frame = splat::CoordinateFrame::parse(text);
+    if (!frame) return;
+    engine->setSourceFrame(frame);
+    parsed = true;
+  });
+  return toJni(parsed);
 }
 
 // Diagnostics.
