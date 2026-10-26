@@ -8,7 +8,10 @@ import Foundation
 /// `--benchmark [seconds]`, `--capture <seconds>` (writes Documents/capture.png).
 /// `--sdk-orbit-speed <degrees/s>` runs one 360-degree engine orbit after the first frame;
 /// `--sdk-orbit-dolly <metres>` adjusts its radius first (negative moves closer).
-/// The default world is kitchen_500k.spz. ISS stays in Documents; use --world iss_10M.spz.
+/// `--source-frame <letters>` names the frame the world and collider were written in, such as
+/// `rdf` for World Labs Marble exports; letters that name no frame stop the load.
+/// The default world is kitchen_500k.spz, loaded as rdf unless --source-frame says otherwise.
+/// ISS stays in Documents; use --world iss_10M.spz.
 /// ISS runs a camera shot (--shot overview|orbit|detail|flyby|tour, default orbit) with +Y up.
 /// The orbit shot circles at 135 m and 5 degrees/s from azimuth 20; --radius (at least 100),
 /// --speed and --start override it.

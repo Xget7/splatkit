@@ -89,6 +89,8 @@ struct ContentView: View {
         UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && (args.bool("keep-awake") ?? false)
         let view = session.view
         let defaultWorld = "kitchen_500k.spz"
+        // A World Labs export, stored in rdf without saying so.
+        let defaultWorldFrame = CoordinateFrame.rdf
         let requestedMap = (args.string("tileset") ?? args.string("world") ?? defaultWorld).lowercased()
         let issMap = requestedMap.contains("iss")
         let sdkOrbitEnabled = args.float("sdk-orbit-speed").map { $0.isFinite && $0 > 0 } ?? false
@@ -112,22 +114,30 @@ struct ContentView: View {
         if let v = args.float("margin") { view.cullMarginDegrees = v }
         if args.has("linear") { view.linearBlending = args.bool("linear") ?? true }
 
-        // A requested world that is missing never falls back to the default, so a scripted run
-        // cannot measure the wrong scene.
+        // A requested world that is missing, or a source frame that names no axes, never falls
+        // back to a default, so a scripted run cannot measure the wrong or a turned scene.
         let requested = args.string("tileset") ?? args.string("world") ?? defaultWorld
-        if let url = LaunchArgs.resolve(requested) {
-            if args.string("tileset") != nil {
-                view.loadTiledWorld(tileset: url)
-            } else {
-                view.loadWorld(file: url)
-            }
+        let frameLetters = args.string("source-frame")
+        let sourceFrame = frameLetters.flatMap(CoordinateFrame.init)
+        if let frameLetters, sourceFrame == nil {
+            session.status = "Unknown source frame: \(frameLetters)"
+            NSLog("SplatSourceFrameInvalid: %@", frameLetters)
         } else {
-            session.status = "World not found: \(requested)"
-            NSLog("SplatWorldMissing: %@", requested)
-        }
-        if let collider = args.string("collider"),
-           let url = LaunchArgs.resolve(collider) {
-            view.loadCollider(file: url)
+            view.sourceFrame = sourceFrame ?? (requested == defaultWorld ? defaultWorldFrame : nil)
+            if let url = LaunchArgs.resolve(requested) {
+                if args.string("tileset") != nil {
+                    view.loadTiledWorld(tileset: url)
+                } else {
+                    view.loadWorld(file: url)
+                }
+            } else {
+                session.status = "World not found: \(requested)"
+                NSLog("SplatWorldMissing: %@", requested)
+            }
+            if let collider = args.string("collider"),
+               let url = LaunchArgs.resolve(collider) {
+                view.loadCollider(file: url)
+            }
         }
         // Broadside to the truss, far enough to clear the solar arrays.
         if issMap {
