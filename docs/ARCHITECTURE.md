@@ -23,7 +23,8 @@ The tree stays in memory; loading an SPZ does not write a `.lodsplat` file.
 The optional [`splat_lod_build`](../packages/splat-core/tools/splat_lod_build.cpp) tool saves a prepared tree as `.lodsplat`; loading that file reads the tree instead of rebuilding it.
 
 1. **Decode** on a loader thread.
-   SPZ v1 to v4 goes through Niantic's spz, fetched and pinned by [dependencies.cmake][deps]; [SpzDecoder.cpp][spz] inflates gzip with zlib, and spz handles zstd for v4.
+   SPZ v1 to v4 goes through Niantic's spz, fetched and pinned by [dependencies.cmake][deps] and built with its extensions for the frame tag; [SpzDecoder.cpp][spz] inflates gzip with zlib, and spz handles zstd for v4.
+   Every decoder moves its input from the file's coordinate frame into the engine's `rub` with [FrameTransform.cpp][frame-transform]: the host's source frame, else the frame the file declares, else its format's default.
    A `.lodsplat` carries its tree and skips steps 3 and 4.
    A tileset reads only `tileset.json` at load; two `TileLoader` threads decode its tiles later.
    PLY is read only by the offline tools.
@@ -66,6 +67,7 @@ Both backends:
 
 [deps]: ../packages/splat-core/cmake/dependencies.cmake
 [spz]: ../packages/splat-core/src/formats/SpzDecoder.cpp
+[frame-transform]: ../packages/splat-core/src/formats/FrameTransform.cpp
 [cov]: ../packages/splat-core/src/math/Covariance.cpp
 [morton]: ../packages/splat-core/src/sorting/SpatialOrder.cpp
 [tree]: ../packages/splat-core/src/lod/LodTree.cpp
