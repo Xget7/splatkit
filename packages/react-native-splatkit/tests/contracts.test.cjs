@@ -75,6 +75,36 @@ test('validates SH degree rather than allowing NaN, fractional or unsupported va
   }
 });
 
+test('a source frame names three distinct axes in either case, and absent keeps the file frame', () => {
+  const {CoordinateFrame, parseCoordinateFrame} = require('../build/contracts');
+  assert.deepEqual(CoordinateFrame, {rub: 'rub', rdf: 'rdf'});
+  for (const sourceFrame of [
+    undefined,
+    CoordinateFrame.rub,
+    CoordinateFrame.rdf,
+    'rfu',
+    'RDF',
+    'lUb',
+  ]) {
+    assert.doesNotThrow(() =>
+      validateWorldRequest({...request, sourceFrame}, limits),
+    );
+  }
+  for (const sourceFrame of ['rrr', 'ru', 'xyz', 'rlu', 'rubf', '', null, 3]) {
+    assert.throws(
+      () => validateWorldRequest({...request, sourceFrame}, limits),
+      RangeError,
+    );
+  }
+  assert.equal(parseCoordinateFrame('RdF'), CoordinateFrame.rdf);
+  assert.equal(parseCoordinateFrame('udf'), null);
+  const directions = [...'rludbf'];
+  const spelled = directions.flatMap(x =>
+    directions.flatMap(y => directions.map(z => x + y + z)),
+  );
+  assert.equal(spelled.filter(parseCoordinateFrame).length, 48);
+});
+
 test('selection capacity uses native limits and permits explicit zero', () => {
   assert.doesNotThrow(() =>
     validateWorldRequest({...request, lodCapacitySplats: 0}, limits),

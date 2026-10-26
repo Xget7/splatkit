@@ -378,6 +378,7 @@ const worldFields: Readonly<Record<keyof SplatKitWorldRequest, true>> = {
   filePath: true,
   kind: true,
   maxShDegree: true,
+  sourceFrame: true,
   fieldOfViewDegrees: true,
   nearPlane: true,
   farPlane: true,

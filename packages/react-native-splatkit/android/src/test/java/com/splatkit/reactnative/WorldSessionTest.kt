@@ -1,5 +1,6 @@
 package com.splatkit.reactnative
 
+import com.splatkit.CoordinateFrame
 import com.splatkit.DepthRange
 import com.splatkit.LensSettings
 import org.junit.Assert.*
@@ -70,6 +71,20 @@ class WorldSessionTest {
                 valid.copy(nearPlane = 1f, farPlane = Float.POSITIVE_INFINITY),
                 valid.copy(nearPlane = 0.5f, farPlane = 50_001f)).forEach {
                 assertThrows(IllegalArgumentException::class.java) { it.validate() }
+            }
+        } finally { file.delete() }
+    }
+
+    @Test fun anAbsentSourceFrameKeepsTheFilesOwnAndASetOneNamesThreeAxes() {
+        val file = File.createTempFile("splat-request", ".spz")
+        try {
+            val valid = WorldRequest("request", file.absolutePath, WorldKind.FILE, 3, 0, 2_000_000)
+            valid.validate()
+            assertNull(valid.frame)
+            listOf("rub", "rdf", "rfu", "RDF").forEach { valid.copy(sourceFrame = it).validate() }
+            assertEquals(CoordinateFrame.RDF.letters, valid.copy(sourceFrame = "rdf").frame?.letters)
+            listOf("rrr", "ru", "xyz", "rlu", "rubf", "").forEach {
+                assertThrows(IllegalArgumentException::class.java) { valid.copy(sourceFrame = it).validate() }
             }
         } finally { file.delete() }
     }

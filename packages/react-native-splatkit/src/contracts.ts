@@ -27,6 +27,53 @@ export const WorldKind = {
 } as const;
 export type WorldKind = (typeof WorldKind)[keyof typeof WorldKind];
 
+// A frame names each axis once, so a direction and its opposite never appear together.
+const oppositeDirection = {
+  r: 'l',
+  l: 'r',
+  u: 'd',
+  d: 'u',
+  b: 'f',
+  f: 'b',
+} as const;
+type Direction = keyof typeof oppositeDirection;
+type AxisOf<D extends Direction> = D | (typeof oppositeDirection)[D];
+
+/**
+ * Where a file's +X, +Y and +Z point: right, left, up, down, back or forward, one letter
+ * each, along three distinct axes. These are the 48 such frames; native also reads them
+ * in upper case.
+ */
+export type CoordinateFrame = {
+  [X in Direction]: {
+    [Y in Exclude<Direction, AxisOf<X>>]: `${X}${Y}${Exclude<
+      Direction,
+      AxisOf<X> | AxisOf<Y>
+    >}`;
+  }[Exclude<Direction, AxisOf<X>>];
+}[Direction];
+
+/** The conventions with a name; spell any other {@link CoordinateFrame} out. */
+export const CoordinateFrame = {
+  /** glTF and OpenGL, and the SPZ default. */
+  rub: 'rub',
+  /** OpenCV and COLMAP. */
+  rdf: 'rdf',
+} as const satisfies Record<string, CoordinateFrame>;
+
+/** The lower-case frame `letters` spell in either case, or null when they name none. */
+export function parseCoordinateFrame(letters: string): CoordinateFrame | null {
+  if (typeof letters !== 'string' || letters.length !== 3) return null;
+  const frame = letters.toLowerCase();
+  const used = new Set<string>();
+  for (const letter of frame) {
+    if (!Object.hasOwn(oppositeDirection, letter) || used.has(letter))
+      return null;
+    used.add(letter).add(oppositeDirection[letter as Direction]);
+  }
+  return frame as CoordinateFrame;
+}
+
 /** Immutable load transaction: options apply before decoding this world. */
 export type WorldRequest = Readonly<{
   /** Unique for each replacement, including retries of the same file. */
@@ -36,6 +83,11 @@ export type WorldRequest = Readonly<{
   /** Absent means {@link WorldKind.file}. */
   kind?: WorldKind;
   maxShDegree: SHDegree;
+  /**
+   * The frame the file was written in. Absent means the frame the file declares, else its
+   * format's default, which for SPZ is `rub`. An untagged SPZ written in `rdf` needs it set.
+   */
+  sourceFrame?: CoordinateFrame;
   /** Zero disables load-time tree building, not selection of prebuilt trees. */
   lodCapacitySplats: number;
   /** Resident streaming splats of a tileset, NOT bytes or a process memory guarantee. */
@@ -176,6 +228,14 @@ export function validateWorldRequest(
     MAX_INT32,
   );
   integer('maxShDegree', request.maxShDegree, 0, MAX_SH_DEGREE);
+  if (
+    request.sourceFrame !== undefined &&
+    parseCoordinateFrame(request.sourceFrame) === null
+  ) {
+    throw new RangeError(
+      'sourceFrame must be three letters from r, l, u, d, b, f along distinct axes',
+    );
+  }
   integer(
     'lodCapacitySplats',
     request.lodCapacitySplats,

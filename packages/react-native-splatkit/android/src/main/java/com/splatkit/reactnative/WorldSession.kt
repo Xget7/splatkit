@@ -1,5 +1,6 @@
 package com.splatkit.reactnative
 
+import com.splatkit.CoordinateFrame
 import com.splatkit.DepthRange
 import com.splatkit.LensSettings
 import java.io.File
@@ -41,10 +42,15 @@ internal data class WorldRequest(
     val fieldOfViewDegrees: Float? = null,
     val nearPlane: Float? = null,
     val farPlane: Float? = null,
+    /** Three letters naming the file's axes; null keeps each file's own frame. */
+    val sourceFrame: String? = null,
 ) {
     val lens: LensSettings
         get() = LensSettings(fieldOfViewDegrees,
             if (nearPlane != null && farPlane != null) DepthRange(nearPlane, farPlane) else null)
+
+    val frame: CoordinateFrame?
+        get() = sourceFrame?.let { CoordinateFrame.parse(it) }
 
     fun validate() {
         requireRequestId(requestId)
@@ -53,6 +59,9 @@ internal data class WorldRequest(
             "kind must be ${WorldKind.FILE} (file) or ${WorldKind.TILESET} (tileset)"
         }
         require(maxShDegree in 0..MAX_SH_DEGREE) { "maxShDegree must be in 0..$MAX_SH_DEGREE" }
+        require(sourceFrame == null || frame != null) {
+            "sourceFrame must be three letters from r, l, u, d, b, f along distinct axes"
+        }
         require(lodCapacitySplats in 0..MAX_LOD_CAPACITY_SPLATS) {
             "lodCapacitySplats must be in 0..$MAX_LOD_CAPACITY_SPLATS"
         }

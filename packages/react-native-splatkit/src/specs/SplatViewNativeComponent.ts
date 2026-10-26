@@ -8,6 +8,8 @@ type NativeWorldRequest = Readonly<{
   /** 0 one file, 1 a tileset index. Optional so a request without it stays a file. */
   kind?: CodegenTypes.WithDefault<CodegenTypes.Int32, 0>;
   maxShDegree: CodegenTypes.Int32;
+  /** The file's axes as three letters; empty, as absent arrives, keeps the file's own frame. */
+  sourceFrame?: CodegenTypes.WithDefault<string, ''>;
   lodCapacitySplats: CodegenTypes.Int32;
   residencyCapacitySplats: CodegenTypes.Int32;
   /** Vertical degrees; 0, as absent arrives, keeps the native default. */

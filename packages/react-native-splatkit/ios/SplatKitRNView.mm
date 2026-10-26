@@ -475,9 +475,11 @@ static const CGFloat kMaxCullMarginDegrees = 80;
 // MARK: - Loading
 
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
-      maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
-residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
-  if (![self validateRequestId:requestId path:path kind:kind maxShDegree:maxShDegree] ||
+      maxShDegree:(NSInteger)maxShDegree sourceFrame:(nullable NSString *)sourceFrame
+      lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity
+             lens:(SKLensSettings)lens {
+  if (![self validateRequestId:requestId path:path kind:kind maxShDegree:maxShDegree
+                   sourceFrame:sourceFrame] ||
       ![SKSplatEngine acceptsLens:lens]) {
     [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
              message:@"invalid world request"];
@@ -498,6 +500,11 @@ residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
   if (![engine setLens:lens]) {
     [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
              message:@"the engine refused the lens"];
+    return;
+  }
+  if (![engine setSourceFrame:sourceFrame]) {
+    [self emitWorld:requestId phase:kWorldPhaseFailed count:0 code:kErrorInvalidRequest
+             message:@"the engine refused the source frame"];
     return;
   }
   _engine = engine;
@@ -588,12 +595,13 @@ residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens {
 }
 
 - (BOOL)validateRequestId:(NSString *)requestId path:(NSString *)path kind:(NSInteger)kind
-                maxShDegree:(NSInteger)maxShDegree {
+                maxShDegree:(NSInteger)maxShDegree sourceFrame:(nullable NSString *)sourceFrame {
   if ([requestId stringByTrimmingCharactersInSet:
       NSCharacterSet.whitespaceAndNewlineCharacterSet].length == 0) return NO;
   if (![self isLocalPath:path]) return NO;
   if (kind != kWorldKindFile && kind != kWorldKindTileset) return NO;
   if (maxShDegree < 0 || maxShDegree > kMaxShDegree) return NO;
+  if (sourceFrame != nil && [SKSplatEngine canonicalSourceFrame:sourceFrame] == nil) return NO;
   return YES;
 }
 

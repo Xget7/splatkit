@@ -392,6 +392,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     /** Queues the engine's sole decode behind the load-time options it reads. */
     private fun scheduleDecode(view: SplatSurfaceView, world: WorldRequest) {
         val file = File(world.filePath)
+        view.sourceFrame = world.frame
         if (world.kind == WorldKind.TILESET) {
             // The SDK's tiled load takes no options; it reads these, set first, when the
             // tileset uploads. A tileset builds no tree, so it has no LOD capacity to set.

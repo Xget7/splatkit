@@ -185,6 +185,28 @@ test('a world carries its lens to the native props and the build validates it', 
   );
 });
 
+test('a world carries its source frame to the native props and the build validates it', () => {
+  const {CoordinateFrame} = require('../build/contracts');
+  assert.equal(build().world.sourceFrame, undefined);
+  const config = new SplatKitBuilder()
+    .withWorld({...world, sourceFrame: CoordinateFrame.rdf})
+    .build(capabilities);
+  assert.equal(config.world.sourceFrame, CoordinateFrame.rdf);
+  assert.equal(
+    toNativeViewProps(config).world.sourceFrame,
+    CoordinateFrame.rdf,
+  );
+  for (const sourceFrame of ['rrr', 'ru', 'xyz']) {
+    assert.throws(
+      () =>
+        new SplatKitBuilder()
+          .withWorld({...world, sourceFrame})
+          .build(capabilities),
+      RangeError,
+    );
+  }
+});
+
 test('clamps valid requests to supplied limits and reports each fallback', () => {
   const limited = {
     ...capabilities,

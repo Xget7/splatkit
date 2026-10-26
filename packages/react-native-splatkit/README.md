@@ -78,7 +78,7 @@ Set `minSdkVersion = 29` and `reactNativeArchitectures=arm64-v8a` in the host ap
 
 The view reads `.spz` and `.lodsplat` files and tilesets of `.spz` tiles, never `.ply`, so a scene is prepared on your computer before it reaches the phone.
 
-- **[World Labs Marble](https://docs.worldlabs.ai/marble/export/specs#gaussian-splats) exports** are ready as they are: the SPZ is the world and the collider GLB makes it walkable.
+- **[World Labs Marble](https://docs.worldlabs.ai/marble/export/specs#gaussian-splats) exports** need no preparing: the SPZ is the world, loaded with `sourceFrame: CoordinateFrame.rdf` because it does not declare its frame, and the collider GLB makes it walkable.
 - **Any Gaussian splat PLY**, from SuperSplat, Polycam or a 3DGS training run, goes through `scripts/prepare-world.sh` in the SplatKit repository:
 
 ```sh
@@ -97,13 +97,13 @@ The first run builds the conversion tools, and every run ends by printing which 
 | `--tiles` | `out/scene.tiles/`, a `tileset.json` index and its tiles | Scenes bigger than phone memory, or a large area to walk: the detail tree is cut into chunks of at most 65536 splats with up to 4 children each, and only the chunks the camera needs are resident. |
 | `--sh N` | | Keeping spherical harmonics up to degree N, 0 to 3. Each degree dropped makes smaller files and uses less GPU memory. |
 | `--spz-version N` | `out/scene.spz` | Selecting container version 2, 3 or 4; PLY conversion defaults to 2. |
-| `--source-frame rub` | `out/scene.spz` | Normalizing right/up/back SPZ from PlayCanvas or Splat Field Guide to the SDK's right/down/forward file convention. |
+| `--source-frame F` | `out/scene.spz` | Input written in frame F, any three letters such as `rdf` or `rfu`. The SPZ is written in the spec default `rub`, so it loads with no `sourceFrame`. |
 
 On an iPhone 17 Pro, a 12M-splat SPZ at SH1 needs about 4.6 GB to load with only 3.5 GB free, so the load fails with `WORLD_LOAD_FAILED` saying so instead of the app being killed.
 The same scene prepared with `--lod --sh 1` loaded in about 4 seconds, peaking near 2.7 GB.
 A `.lodsplat` is uncompressed, so it is many times the SPZ: 1.25 GB against 214 MB for that scene.
 The script's header and the [splat-core tools](https://github.com/Xget7/splatkit/tree/main/packages/splat-core#converting-a-ply) cover the remaining options.
-`prepare-world.sh` normalizes the SPZ to the SDK's RDF file convention before building LOD or colliders; a container version does not identify the coordinate frame.
+`prepare-world.sh` copies an SPZ it has nothing to convert, so an untagged one written in another frame needs `--source-frame` here or `sourceFrame` at load; a container version does not identify the coordinate frame.
 
 ## Quick start
 
@@ -158,6 +158,11 @@ A request an adapter rejects is refused before any engine exists, so no capabili
 A `.spz` or `.lodsplat` file is decoded whole at load.
 A tileset loads with `kind: WorldKind.tileset` and `filePath` naming its `tileset.json`: only the index is read at load, and tiles stream in as the camera needs them, within `residencyCapacitySplats`.
 [Preparing a world](#preparing-a-world) turns a PLY into any of them.
+
+`sourceFrame` names where the file's +X, +Y and +Z point, three letters from r, l, u, d, b, f along distinct axes, such as `CoordinateFrame.rdf` for OpenCV and COLMAP.
+Absent, each file uses the frame it declares, else its format's default, `rub` for SPZ and glTF.
+It applies to the world's tiles and to a collider loaded with it; a `.lodsplat` is already converted and ignores it.
+`parseCoordinateFrame(letters)` turns a string from elsewhere into a `CoordinateFrame`, or null.
 
 `world` is a transaction, not a setting.
 Native reloads when `requestId` changes and ignores every other edit to the object, so changing a load-time budget means changing the id too.
@@ -340,7 +345,7 @@ const configuration = new SplatKitBuilder()
 // <SplatKitView {...toNativeViewProps(configuration)} policy={toNativePolicyProp(configuration, revision)} />
 ```
 
-- `withWorld()` takes world identity, file path, an optional `kind`, the load-time maximum SH degree and an optional [lens](#the-lens).
+- `withWorld()` takes world identity, file path, an optional `kind`, the load-time maximum SH degree, an optional [`sourceFrame`](#loading-a-world) and an optional [lens](#the-lens).
 - `withRender()` takes `paused`.
 - `withPreset(preset)` replaces the policy with one of the presets below.
 - `withPerformance(options)` overrides fields on top of the current preset and marks the policy `manual`.
@@ -391,7 +396,7 @@ Extends the standard `ViewProps`.
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `kind` (absent is `WorldKind.file`), `maxShDegree`, `lodCapacitySplats`, `residencyCapacitySplats`, and the optional [lens](#the-lens) `fieldOfViewDegrees`, `nearPlane`, `farPlane`. Omit to render nothing. |
+| `world` | `WorldRequest` | - | Load transaction: `requestId`, absolute `filePath`, `kind` (absent is `WorldKind.file`), `maxShDegree`, `sourceFrame` (absent is the file's own frame), `lodCapacitySplats`, `residencyCapacitySplats`, and the optional [lens](#the-lens) `fieldOfViewDegrees`, `nearPlane`, `farPlane`. Omit to render nothing. |
 | `collider` | `ColliderRequest` | - | `{requestId, filePath}`. An empty `requestId` releases walk mode. |
 | `character` | `Character` | - | `{eyeHeight, bodyRadius, stepHeight}` in meters. |
 | `policy` | `NativeRenderPolicy` | - | The requested renderer policy, under a `revision`. |
@@ -450,6 +455,7 @@ Every enumerated value is a frozen object with a matching type, so there are no 
 | `QualityPreset` | `highEnd`, `high`, `balanced`, `performance` |
 | `qualityPresets` | every preset in order, for rendering a picker |
 | `WorldKind` | `file`, `tileset` |
+| `CoordinateFrame` | `rub`, `rdf`; any other of the 48 frames is spelled out |
 | `WorldPhase` | `uploaded`, `frameReady`, `failed` |
 | `ColliderPhase` | `ready`, `failed` |
 | `CameraMode` | `firstPerson`, `orbit` |

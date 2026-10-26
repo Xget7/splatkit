@@ -32,11 +32,13 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock focusResultEvent;
 /// `kind` 0 decodes one `.spz` or `.lodsplat` file; 1 streams the tileset whose index
-/// `path` names. Anything else, or a lens the engine refuses, fails the load as an invalid
-/// request and keeps the current world.
+/// `path` names. Anything else, a `sourceFrame` that names no frame, or a lens the engine
+/// refuses, fails the load as an invalid request and keeps the current world. A nil
+/// `sourceFrame` keeps each file's own frame.
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
-      maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
-residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens;
+      maxShDegree:(NSInteger)maxShDegree sourceFrame:(nullable NSString *)sourceFrame
+      lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity
+             lens:(SKLensSettings)lens;
 /// Loads a collider GLB and enables walk mode when it is ready. An empty path releases it.
 - (void)loadCollider:(NSString *)path requestId:(NSString *)requestId;
 /// The walker's shape, applied at once and to a collider loaded later. NO when a value is

@@ -12,6 +12,10 @@ import com.splatkit.CharacterSettings
 private fun ReadableMap.lensField(key: String): Float? =
     if (hasKey(key) && !isNull(key)) getDouble(key).takeIf { it != 0.0 }?.toFloat() else null
 
+// Codegen sends an absent frame as empty or leaves it out; either keeps each file's own frame.
+private fun ReadableMap.sourceFrame(): String? =
+    if (hasKey("sourceFrame") && !isNull("sourceFrame")) getString("sourceFrame")?.ifEmpty { null } else null
+
 class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManagerInterface<SplatKitView> {
     private val generatedDelegate = SplatKitViewManagerDelegate(this)
     override fun getDelegate(): ViewManagerDelegate<SplatKitView> = generatedDelegate
@@ -28,7 +32,8 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
             view.setWorld(WorldRequest(
                 value.getString("requestId") ?: "", value.getString("filePath") ?: "", kind,
                 value.int32("maxShDegree"), value.int32("lodCapacitySplats"), value.int32("residencyCapacitySplats"),
-                value.lensField("fieldOfViewDegrees"), value.lensField("nearPlane"), value.lensField("farPlane")))
+                value.lensField("fieldOfViewDegrees"), value.lensField("nearPlane"), value.lensField("farPlane"),
+                value.sourceFrame()))
         } catch (error: RuntimeException) {
             view.invalidRequest(error.message ?: "Malformed world request")
         }
