@@ -173,7 +173,7 @@ FrameTransform::FrameTransform(CoordinateFrame from, CoordinateFrame to) {
     identity_ = identity_ && c == r && sign_[row] > 0;
   }
   // A signed permutation's determinant: the signs times the permutation's parity.
-  const bool odd = (sourceAxis_[0] > sourceAxis_[1]) != (sourceAxis_[0] > sourceAxis_[2]) !=
+  const bool odd = ((sourceAxis_[0] > sourceAxis_[1]) != (sourceAxis_[0] > sourceAxis_[2])) !=
                    (sourceAxis_[1] > sourceAxis_[2]);
   determinant_ = sign_[0] * sign_[1] * sign_[2] * (odd ? -1.0f : 1.0f);
   if (identity_) return;
