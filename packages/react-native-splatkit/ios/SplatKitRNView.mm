@@ -30,6 +30,10 @@ static NSString *const kPolicyPhaseRejected = @"rejected";
 static const CFTimeInterval kStatsInterval = 0.5;
 /// SplatMetalView's touch sensitivity: radians per point dragged.
 static const CGFloat kLookSensitivity = 0.004;
+/// SplatMetalView's frame rate range. A ProMotion panel would otherwise draw 120 frames a second,
+/// twice the GPU time and battery of a view that holds still most of the time.
+static const float kMinFramesPerSecond = 30;
+static const float kMaxFramesPerSecond = 60;
 
 /// World kinds, numbered as the JS WorldKind, the Codegen spec and the Android adapter number them.
 static const NSInteger kWorldKindFile = 0;
@@ -415,7 +419,8 @@ static const CGFloat kMaxCullMarginDegrees = 80;
 - (void)startDisplayLink {
   if (self.displayLink != nil || _engine == nil) return;
   CADisplayLink *link = [CADisplayLink displayLinkWithTarget:self.linkProxy selector:@selector(tick:)];
-  link.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
+  link.preferredFrameRateRange =
+      CAFrameRateRangeMake(kMinFramesPerSecond, kMaxFramesPerSecond, kMaxFramesPerSecond);
   [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
   self.displayLink = link;
   [self updateDisplayLink];

@@ -5,12 +5,16 @@ import SplatKitCore
 #endif
 
 /// Owns the native engine and drives it from a dedicated thread, one frame per display
-/// link tick, like the Android render thread.
+/// link tick and at most 60 a second, like the Android render thread.
 ///
 /// The main thread never touches the engine. Everything is posted here; the calls that
 /// must complete before the layer goes away block the caller until done. Decoding runs
 /// on a loader queue so frames keep flowing; the engine uploads on its next frame.
 final class RenderThread {
+    // A ProMotion panel would otherwise draw 120 frames a second, twice the GPU time and battery
+    // of a view that holds still most of the time.
+    private static let frameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+
     private let thread: Thread
     private let ready = DispatchSemaphore(value: 0)
     private var runLoop: CFRunLoop!
@@ -97,7 +101,7 @@ final class RenderThread {
             guard !rendering else { return }
             rendering = true
             let link = CADisplayLink(target: self, selector: #selector(frame(_:)))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+            link.preferredFrameRateRange = Self.frameRateRange
             link.add(to: RunLoop.current, forMode: .default)
             displayLink = link
         }
