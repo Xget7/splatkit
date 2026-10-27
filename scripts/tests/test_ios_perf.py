@@ -58,10 +58,11 @@ class DeviceTest(unittest.TestCase):
     def test_environment_reads_model_os_and_family(self):
         details = {"result": {"deviceProperties": {"name": "xgetphone", "osVersionNumber": "27.0",
                                                     "osBuildUpdate": "24A437"},
-                              "hardwareProperties": {"marketingName": "iPhone 17 Pro", "productType": "iPhone18,1"}}}
+                              "hardwareProperties": {"marketingName": "iPhone 17 Pro", "productType": "iPhone18,1"},
+                              "connectionProperties": {"transportType": "wired"}}}
         self.assertEqual(perf.device_environment(details),
                          {"device": "iPhone 17 Pro", "name": "xgetphone", "model": "iPhone18,1", "ios": "27.0",
-                          "ios_build": "24A437"})
+                          "ios_build": "24A437", "transport": "wired"})
 
     def test_trace_targets_the_device_by_name_and_the_app_by_pid(self):
         # xctrace lists a phone reached over Wi-Fi as offline under its UDID and online under its name.
@@ -126,7 +127,8 @@ class TraceTest(unittest.TestCase):
 
             with patch.object(perf, "devicectl_json", return_value={}), \
                     patch.object(perf, "unlocked", return_value=True), \
-                    patch.object(perf, "device_environment", return_value={"ios": "27.0", "name": "phone"}), \
+                    patch.object(perf, "device_environment",
+                                 return_value={"ios": "27.0", "name": "phone", "transport": "localNetwork"}), \
                     patch.object(perf, "app_pid", return_value=812), \
                     patch.object(perf, "build") as build, \
                     patch.object(perf.subprocess, "run") as command, \
@@ -144,6 +146,18 @@ class TraceTest(unittest.TestCase):
             report = (out / "report.json").read_text()
             self.assertIn('"metrics_status": "unvalidated"', report)
             self.assertIn('"recorded": true', report)
+
+    def test_a_metal_trace_over_wi_fi_fails_before_launching_the_app(self):
+        # xctrace stopped a Wi-Fi recording at its time limit and then never saved it.
+        args = SimpleNamespace(udid=UDID, power=False, trace=True, skip_build=True, skip_install=True)
+        with patch.object(perf, "devicectl_json", return_value={}), \
+                patch.object(perf, "unlocked", return_value=True), \
+                patch.object(perf, "device_environment",
+                             return_value={"ios": "27.0", "name": "phone", "transport": "localNetwork"}), \
+                patch.object(perf.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(RuntimeError, "USB"):
+                perf.run(args)
+            popen.assert_not_called()
 
     def test_power_attaches_to_one_process_and_keeps_fractional_duration(self):
         command = perf.trace_command("phone", 812, 0.5, Path("power.trace"), perf.POWER_TEMPLATE)

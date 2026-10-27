@@ -45,6 +45,9 @@ TRACE_TEMPLATE = "Metal System Trace"
 POWER_TEMPLATE = "Power Profiler"
 # Over Wi-Fi the iPhone 17 Pro took about 5 minutes to save a 30 s trace and as long for a 10 s one.
 TRACE_SAVE_ALLOWANCE_S = 600
+# A Wi-Fi Metal System Trace once stopped at its time limit and never saved, so it needs a cable.
+# Power Profiler stays on Wi-Fi: charging over the cable would distort the power reading.
+CABLE = "wired"
 
 BENCHMARK_STARTED = "benchmark started:"
 BENCHMARK_DONE = "benchmark gpu ms:"
@@ -92,7 +95,8 @@ def device_environment(details):
     properties = details["result"]["deviceProperties"]
     hardware = details["result"]["hardwareProperties"]
     return {"device": hardware["marketingName"], "name": properties["name"], "model": hardware["productType"],
-            "ios": properties["osVersionNumber"], "ios_build": properties["osBuildUpdate"]}
+            "ios": properties["osVersionNumber"], "ios_build": properties["osBuildUpdate"],
+            "transport": details["result"]["connectionProperties"]["transportType"]}
 
 
 def unlocked(lock_state):
@@ -195,6 +199,8 @@ def run(args):
     if not unlocked(devicectl_json("device", "info", "lockState", "--device", args.udid)):
         raise RuntimeError("the iPhone is locked; unlock it and keep it awake")
     device = device_environment(devicectl_json("device", "info", "details", "--device", args.udid))
+    if args.trace and device["transport"] != CABLE:
+        raise RuntimeError(f"the iPhone is on {device['transport']}; connect it by USB to record a trace")
     if args.power and int(device["ios"].split(".")[0]) < 26:
         raise RuntimeError("Power Profiler requires iOS 26 or later")
     if not args.skip_build:
