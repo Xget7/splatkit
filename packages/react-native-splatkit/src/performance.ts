@@ -308,7 +308,7 @@ const nativeDefaults = {
   enableFrustumCulling: true,
   enableHiZOcclusion: false,
   enableEarlyTermination: true,
-  sortDepth: 32,
+  sortDepth: 16,
 } as const;
 
 type PresetValues = Omit<PerformancePolicy, 'mode' | 'preset'>;

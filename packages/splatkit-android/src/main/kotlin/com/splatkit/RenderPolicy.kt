@@ -24,7 +24,7 @@ data class RenderPolicy(
     val enableFrustumCulling: Boolean = true,
     val enableHiZOcclusion: Boolean = false,
     val enableEarlyTermination: Boolean = true,
-    val sortDepth: SortDepth = SortDepth.BITS_32,
+    val sortDepth: SortDepth = SortDepth.BITS_16,
 )
 
 /** Which fields one backend can apply. A false field resolves to [Fallback]. */
@@ -117,7 +117,7 @@ fun decodeRenderPolicy(source: DoubleArray, offset: Int = 0): RenderPolicy = Ren
     enableFrustumCulling = source[offset + 3] != 0.0,
     enableHiZOcclusion = source[offset + 4] != 0.0,
     enableEarlyTermination = source[offset + 5] != 0.0,
-    sortDepth = SortDepth.fromWire(source[offset + 6].toInt()) ?: SortDepth.BITS_32,
+    sortDepth = SortDepth.fromWire(source[offset + 6].toInt()) ?: SortDepth.BITS_16,
     lodSplatLimit = source[offset + 7].toInt(),
 )
 

@@ -34,6 +34,7 @@ Review silhouettes, thin geometry, transparency and temporal LOD transitions sep
 The Mac integration test `MetalLodSelectionTest.OfflineFixtureRendersWithBoundedDrawCount` accepts `SPLAT_LOD_PATH`, optional `SPLAT_LOD_REFERENCE_SPZ`, `SPLAT_LOD_BUDGET` and `SPLAT_LOD_CAPTURE`.
 `SPLAT_LOD_POSE="x y z yaw pitch"` takes the pose as the SplatKit frame log prints it; without it the framing is the historical ISS view.
 `SPLAT_LOD_SIZE="width height"` and `SPLAT_LOD_ERROR_PIXELS` match the device's drawable and policy; `SPLAT_LOD_FRAMES` lets the adaptive threshold settle before the last frame is captured.
+`SPLAT_LOD_SORT_BITS` set to 16 or 32 picks the depth key width; the error-pixel policy alone draws with 16-bit keys.
 An offline hierarchy is not interchangeable evidence for the default load-time hierarchy.
 
 ## Reference performance world

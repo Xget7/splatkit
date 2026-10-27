@@ -19,8 +19,8 @@ import Foundation
 /// successful GPU frame. Loading stays covered while the renderer prepares that frame.
 /// --orbit 0, --pose, --walk or --benchmark disable the automatic orbit and enable touch look.
 /// No animated zoom. Gyro motion is opt-in with --gyro 1 on non-ISS worlds.
-/// --depth-key-bits <16|32> selects linear camera-depth quantization and two radix
-/// passes (16), or the unchanged four-pass ordering (32, default). Restart to change.
+/// --depth-key-bits <16|32> selects camera depth quantized relative to itself and two radix
+/// passes (16, default), or full float depth and four passes (32). Restart to change.
 /// Quantization can change transparency ordering within a bin; no splats are removed.
 /// --lod-error-pixels <px> sets the hierarchy refinement threshold (default 1; lower draws more).
 /// --lod-splat-limit <n> caps the splats a frame selects, 0 for the loaded budget; detail thins evenly.
