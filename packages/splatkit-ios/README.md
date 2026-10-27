@@ -106,7 +106,7 @@ Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels` and `--
 
 | Switch | Effect |
 |---|---|
-| `--depth-key-bits 16` | Two radix passes; uint32 storage unchanged; ties may shimmer |
+| `--depth-key-bits 32` | Four radix passes on full float depth instead of the default two on 16-bit relative keys |
 | `--budget 4000000` | LOD capacity, at most 4M; not guaranteed quality |
 | `--quality ultra` | Starting level of the on-screen picker: `ultra`, `high` (default), `balanced`, `fast` |
 | `--shot tour` | ISS camera, +Y up: `overview`, `orbit` (default), `detail`, `flyby`, `tour` |
