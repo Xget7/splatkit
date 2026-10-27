@@ -69,8 +69,6 @@ final class OrbitPath {
     }
 
     private static let transitionSeconds: Float = 3
-    /// The pose updates as often as SplatMetalView draws, which stops at 60 frames a second.
-    private static let frameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
     /// Tour order and how long each leg holds before easing into the next.
     private static let tourLegs: [(CameraShot, Float)] = [(.overview, 20), (.orbit, 24), (.detail, 36), (.flyby, 30)]
 
@@ -110,7 +108,7 @@ final class OrbitPath {
         lastTimestamp = nil
         applyPose()
         let link = CADisplayLink(target: target, selector: #selector(TickTarget.tick(_:)))
-        link.preferredFrameRateRange = Self.frameRateRange
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         self.link = link
     }
