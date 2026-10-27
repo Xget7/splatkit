@@ -25,7 +25,7 @@ Do not claim GPU passes were profiled from app-published FPS/stage counters alon
    An untagged World Labs `.spz` pushed as `--world` also needs `--source-frame rdf`; the bundled kitchen and `.lodsplat` worlds need none.
    Done when it prints `status passed`, `app slices in trace: True` and an analysis block.
    For a comparison, record at least two runs per side; the run-to-run spread is the noise floor.
-4. **Read** each run directory: `report.json` (app timings from GPU timestamp queries), `analysis.json` (the trace), `trace.perfetto-trace` (open at https://ui.perfetto.dev for anything the numbers leave open).
+4. **Read** each run directory: `report.json` (app timings from GPU timestamp queries), `run.json` (the [run file](../../../scripts/benchmarks/run.schema.json) the app was launched with), `analysis.json` (the trace), `trace.perfetto-trace` (open at https://ui.perfetto.dev for anything the numbers leave open).
    Done when every figure in your report traces back to one of those files.
 5. **Report** the device, Android version, commit and dirty flag from `report.json` `run`, every skipped step, and each conclusion with the figures behind it.
    A difference counts only when it exceeds the spread between runs of the same side.
