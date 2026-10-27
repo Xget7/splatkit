@@ -30,7 +30,7 @@ view.resume()
 ```
 
 Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the layer follows the view's window.
-The display link asks for 120 Hz, which an iPhone grants only when the host's Info.plist sets `CADisableMinimumFrameDurationOnPhone` to true.
+The display link draws at most 60 frames a second, so the host's Info.plist needs no `CADisableMinimumFrameDurationOnPhone` key.
 A world the app cannot hold calls `worldFailed` before it decodes, with the memory it needs and the format to prepare it as, instead of iOS ending the app; [LoadCost.cpp](../splat-core/src/loading/LoadCost.cpp) holds the estimate.
 A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xget7/splatkit/blob/main/scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 

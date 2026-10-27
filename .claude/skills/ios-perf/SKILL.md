@@ -34,7 +34,7 @@ Do not claim GPU passes were profiled from app-published FPS/stage counters alon
 ## Reading a run
 
 The turn is one full rotation at a fixed position, the gyroscope off; `--pose` keeps the position and the turn resets yaw.
-The frame budget is the display interval: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz.
+The render loop draws at most 60 frames a second, so the frame budget is 16.7 ms on every panel.
 
 `report.json` `runs`, parsed from the engine's `SplatKit I:` lines:
 

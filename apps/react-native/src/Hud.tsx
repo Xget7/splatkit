@@ -58,7 +58,7 @@ const ROUGH_FPS = 25;
 /** Stats arrive twice a second, so this many samples is the last half minute. */
 export const GRAPH_SAMPLES = 60;
 const GRAPH_HEIGHT = 40;
-/** The top of the graph: the display's refresh rate, which no sample can exceed. */
+/** The top of the graph: the render loop's 60 frame cap, which no sample can exceed. */
 const GRAPH_MAX_FPS = 60;
 const GRAPH_GUIDES: readonly number[] = Object.freeze([60, 30]);
 
