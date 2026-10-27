@@ -24,7 +24,8 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 /**
- * Owns the native engine and drives it from a dedicated thread, one frame per vsync.
+ * Owns the native engine and drives it from a dedicated thread, at most one frame per vsync
+ * and never more than [MAX_FRAMES_PER_SECOND].
  *
  * The UI thread never touches the engine. Surface changes are posted here; the ones
  * that must complete before Android reclaims the surface block the caller until done.
@@ -41,6 +42,7 @@ internal class RenderThread(cacheDir: String) {
     // Written on the render thread, read by the any-thread getters (stats, camera pose).
     @Volatile private var engine: SplatEngine? = null
     private var rendering = false
+    private var lastFrameNanos = 0L
     private var worldReady = false
     private val pendingCamera = ArrayDeque<Pair<CameraRequest, ((CameraResolution) -> Unit)?>>()
     // Written by the host's thread. Each load reads it when asked for and applies it in its own
@@ -81,7 +83,10 @@ internal class RenderThread(cacheDir: String) {
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!rendering) return
-            engine?.render(frameTimeNanos)
+            if (isFrameDue(frameTimeNanos, lastFrameNanos)) {
+                lastFrameNanos = frameTimeNanos
+                engine?.render(frameTimeNanos)
+            }
             choreographer.postFrameCallback(this)
         }
     }
