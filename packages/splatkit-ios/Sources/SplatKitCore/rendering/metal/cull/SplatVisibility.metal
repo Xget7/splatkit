@@ -35,7 +35,6 @@ kernel void visibility(uint t [[thread_position_in_grid]],
                        const device uint* rangeStarts [[buffer(3)]],
                        constant uint& rangeCount [[buffer(4)]],
                        device uint* keys [[buffer(5)]],
-                       device uint* values [[buffer(6)]],
                        device atomic_uint* count [[buffer(7)]],
                        const device uint* shData [[buffer(8)]],
                        device Projected* projected [[buffer(9)]],
@@ -75,7 +74,6 @@ kernel void visibility(uint t [[thread_position_in_grid]],
   base = simd_broadcast(base, 0);
   if (visible) {
     keys[base + rank] = key;
-    values[base + rank] = base + rank;
     projected[base + rank] = p;
   }
 }

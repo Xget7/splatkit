@@ -177,7 +177,7 @@ TEST_F(MetalVisibilityPassTest, RejectsRangesOutsideANewerSmallerWorld) {
   [cmd waitUntilCompleted];
 }
 
-TEST_F(MetalVisibilityPassTest, RejectsKeyAndValueBuffersSmallerThanTheReservation) {
+TEST_F(MetalVisibilityPassTest, RejectsAKeyBufferSmallerThanTheReservation) {
   VisibilityInput input(8);
   ASSERT_TRUE(visibility.reserve(8));
   const SplatRenderer::Range range{0, 8};
@@ -187,15 +187,13 @@ TEST_F(MetalVisibilityPassTest, RejectsKeyAndValueBuffersSmallerThanTheReservati
     return [gpu.device newBufferWithLength:length options:MTLResourceStorageModeShared];
   };
   id<MTLCommandBuffer> cmd = [gpu.queue commandBuffer];
-  auto project = [&](id<MTLBuffer> keys, id<MTLBuffer> values) {
+  auto project = [&](id<MTLBuffer> keys) {
     return visibility.pass.encodeProject(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1,
-                                         keys, values);
+                                         keys);
   };
-  EXPECT_FALSE(project(buffer(fits - 4), buffer(fits)));
-  EXPECT_FALSE(project(buffer(fits), buffer(fits - 4)));
-  EXPECT_FALSE(project(nil, buffer(fits)));
-  EXPECT_FALSE(project(buffer(fits), nil));
-  EXPECT_TRUE(project(buffer(fits), buffer(fits)));
+  EXPECT_FALSE(project(buffer(fits - 4)));
+  EXPECT_FALSE(project(nil));
+  EXPECT_TRUE(project(buffer(fits)));
   [cmd commit];
   [cmd waitUntilCompleted];
   EXPECT_EQ(cmd.status, MTLCommandBufferStatusCompleted);

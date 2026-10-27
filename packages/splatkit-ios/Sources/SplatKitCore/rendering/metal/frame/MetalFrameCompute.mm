@@ -204,7 +204,7 @@ id<MTLCommandBuffer> MetalFrameCompute::encodeVisibilityAndSort(const SplatRende
   const int degree = world.drawDegree(frame.shDegree);
   if (!visibility_.encodeProject(sort, slot, uniforms_[slot], world.splats(), world.harmonics(),
                                  degree, lod_ ? nullptr : frame.ranges, lod_ ? 0 : frame.rangeCount,
-                                 sort_.keys(), sort_.values(), lod_ ? lod_->indices() : nil,
+                                 sort_.keys(), lod_ ? lod_->indices() : nil,
                                  lod_ ? lod_->count() : nil)) {
     LOGE("invalid visibility ranges");
     return nil;
