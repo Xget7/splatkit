@@ -11,7 +11,8 @@ namespace splatkit {
 // authority and the native re-validation agree; keep them in step. A change here is a
 // wire/contract change for every adapter.
 //
-// Sort depth-key width. 16 quantizes camera depth linearly; 32 keeps the float bits.
+// Sort depth-key width. 16 quantizes camera depth in steps of at most 0.024 % of it, from the
+// near plane to 65,536 times it; 32 keeps the float bits.
 enum class SortKeyBits : uint32_t {
   low16 = 16,
   full32 = 32,

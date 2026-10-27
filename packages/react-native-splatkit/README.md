@@ -174,7 +174,7 @@ Absent, native keeps its default of 65 degrees and 0.05 to 200.
 The default orbit frames the world through whichever lens is in effect.
 The far plane may be at most 100,000 times the near one; past that the shaders lose it to float precision.
 Splats past the far plane are not drawn, so a world larger than 200 units needs a farther one.
-16-bit sort keys span the depth range, so pair a far plane well past 200 with a 32-bit `sortDepth`.
+16-bit sort keys tie depths within 0.024 % of each other and everything past 65,536 times the near plane, so pair a far plane beyond that with a 32-bit `sortDepth`.
 
 ### Getting a world file onto a device
 

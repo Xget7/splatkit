@@ -20,8 +20,9 @@ namespace splatkit {
 // Call reserve only while idle. All encodes and raster consumers use one command queue.
 class MetalVisibilityPass {
  public:
-  // Both widths sort by linear view depth: Full32 by its float bits, Low16 quantized between
-  // finite forward-Z Mat4::perspective planes. Shader key width and radix passes agree.
+  // Both widths sort by linear view depth: Full32 by its float bits, Low16 by steps of at most
+  // 0.024 % of the depth above the near plane of a finite forward-Z Mat4::perspective.
+  // Shader key width and radix passes agree.
   bool create(id<MTLDevice> device, id<MTLLibrary> library, KeyBits depthBits = KeyBits::Full32);
   // Rebuilds the visibility pipelines for a new key width, keeping every reserved buffer
   // and the radix scratch. The key width and the shader's quantized flag must agree, so
