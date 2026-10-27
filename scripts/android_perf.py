@@ -12,6 +12,7 @@ import datetime
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -19,6 +20,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import benchmark_report  # noqa: E402
 import perfetto_analysis  # noqa: E402
+import run_file  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "apps" / "android-dev"
@@ -57,17 +59,11 @@ FTRACE_EVENTS = (
     "power/gpu_frequency", "power/suspend_resume", "thermal/thermal_temperature",
 )
 ATRACE_CATEGORIES = ("gfx", "view", "am", "wm", "binder_driver", "hal", "dalvik")
-# The dev app's intent extras (MainActivity) and RenderQuality preset names.
-EXTRA_BENCHMARK = "benchmark"
-EXTRA_SECONDS = "seconds"
-EXTRA_QUALITY = "quality"
-EXTRA_HUD = "hud"
-EXTRA_POSE = "pose"
-EXTRA_WORLD = "world"
-EXTRA_BUDGET = "budget"
-EXTRA_LOD_SPLAT_LIMIT = "lodSplatLimit"
-EXTRA_SUBPIXEL = "subpixel"
-EXTRA_SOURCE_FRAME = "sourceFrame"
+# The dev app takes the whole run file, scripts/benchmarks/run.schema.json, in this string extra.
+EXTRA_RUN = "run"
+# MainActivity logs this when it refuses a run file.
+RUN_INVALID = "SplatRunInvalid: "
+# RenderQuality preset names.
 QUALITY_PRESETS = ("low", "medium", "high", "ultra")
 # Every run draws in landscape, rotation 1 (Surface.ROTATION_90), whatever way the phone lies;
 # the previous settings come back afterwards.
@@ -133,24 +129,9 @@ def gpu_stage_sources(query):
     return sorted(set(re.findall(r'"(gpu\.renderstages(?:\.[A-Za-z0-9_-]+)?)"', query)))
 
 
-def launch_args(seconds, quality, pose, world=None, budget=None, lod_splat_limit=None, subpixel=None,
-                source_frame=None):
-    """The am start command; --ez hud false keeps HUD redraws out of the measurement."""
-    args = ["shell", "am", "start", "-n", ACTIVITY, "--ez", EXTRA_BENCHMARK, "true",
-            "--ef", EXTRA_SECONDS, str(seconds), "--es", EXTRA_QUALITY, quality, "--ez", EXTRA_HUD, "false"]
-    if pose:
-        args += ["--es", EXTRA_POSE, pose]
-    if world:
-        args += ["--es", EXTRA_WORLD, world]
-    if budget is not None:
-        args += ["--ei", EXTRA_BUDGET, str(budget)]
-    if lod_splat_limit is not None:
-        args += ["--ei", EXTRA_LOD_SPLAT_LIMIT, str(lod_splat_limit)]
-    if subpixel is not None:
-        args += ["--ef", EXTRA_SUBPIXEL, str(subpixel)]
-    if source_frame:
-        args += ["--es", EXTRA_SOURCE_FRAME, source_frame]
-    return args
+def launch_args(doc):
+    """The am start command with doc as its run file. adb hands the command to the device shell, hence the quoting."""
+    return ["shell", "am", "start", "-n", ACTIVITY, "--es", EXTRA_RUN, shlex.quote(run_file.encode(doc))]
 
 
 def apk(variant):
@@ -245,6 +226,8 @@ def wait_for_benchmark(serial, timeout_s):
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         log = adb(serial, "logcat", "-d", "-v", "threadtime").stdout
+        if RUN_INVALID in log:
+            raise RuntimeError("the dev app refused the run file; see logcat.txt")
         if WORLD_FAILED in log:
             raise RuntimeError("the world failed to load; see logcat.txt")
         if BENCHMARK_DONE in log:
@@ -303,9 +286,11 @@ def record(args, variant):
     started = adb(args.serial, "shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE, "--background",
                   input=perfetto_config(trace_seconds, gpu_sources))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
-    source_frame = getattr(args, "source_frame", None)
-    adb(args.serial, *launch_args(args.seconds, args.quality, args.pose, args.world, args.budget,
-                                   args.lod_splat_limit, args.subpixel, source_frame))
+    doc = run_file.document(args.seconds, args.quality, pose=args.pose, world=args.world,
+                            source_frame=getattr(args, "source_frame", None), budget=args.budget,
+                            lod_splat_limit=args.lod_splat_limit, subpixel=args.subpixel)
+    run_file.save(doc, out)
+    adb(args.serial, *launch_args(doc))
 
     failure = None
     try:

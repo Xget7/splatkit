@@ -1,8 +1,12 @@
 import importlib.util
+import json
 from pathlib import Path
 import re
+import shlex
+from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -15,6 +19,11 @@ def load(name):
 
 
 perf = load("android_perf")
+run_file = load("run_file")
+
+
+def run_document(args):
+    return json.loads(shlex.split(args[-1])[0])
 analysis = load("perfetto_analysis")
 MS = 1_000_000
 
@@ -26,49 +35,23 @@ class RecordingTest(unittest.TestCase):
         self.assertIn("duration_ms: 45000", config)
         self.assertIn('ftrace_events: "sched/sched_switch"', config)
 
-    def test_launch_runs_the_benchmark_without_the_hud(self):
-        args = perf.launch_args(20, "high", None)
-        self.assertEqual(args[args.index(perf.EXTRA_SECONDS) + 1], "20")
-        self.assertEqual(args[args.index(perf.EXTRA_HUD) + 1], "false")
-        self.assertNotIn(perf.EXTRA_POSE, args)
-        self.assertEqual(perf.launch_args(20, "low", "1,2,3,0,0")[-1], "1,2,3,0,0")
+    def test_the_run_file_survives_the_device_shell_as_one_extra(self):
+        doc = run_file.document(20, "high", pose="1,2,3,0,0", world="my world.spz", source_frame="rdf")
+        args = perf.launch_args(doc)
+        self.assertEqual(run_document(args), doc)
+        self.assertEqual(args[:5], ["shell", "am", "start", "-n", perf.ACTIVITY])
+        self.assertEqual(args[5:7], ["--es", perf.EXTRA_RUN])
+        self.assertEqual(len(args), 8)
+        # adb joins its arguments and the device shell splits them again.
+        self.assertEqual(len(shlex.split(" ".join(args))), 8)
+
+    def test_an_invalid_run_file_stops_the_wait(self):
+        with patch.object(perf, "adb", return_value=SimpleNamespace(stdout="E SplatKitDev: SplatRunInvalid: pose: missing")):
+            with self.assertRaisesRegex(RuntimeError, "run file"):
+                perf.wait_for_benchmark("serial", 5)
 
 
 class WorldAndValidationTest(unittest.TestCase):
-    def test_world_goes_to_the_extra_the_dev_app_reads(self):
-        args = perf.launch_args(20, "high", None, "house.spz")
-        self.assertEqual(args[args.index(perf.EXTRA_WORLD) + 1], "house.spz")
-        self.assertNotIn(perf.EXTRA_WORLD, perf.launch_args(20, "high", None))
-        activity = perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt"
-        self.assertIn(f'getStringExtra("{perf.EXTRA_WORLD}")', activity.read_text())
-
-    def test_lod_controls_go_to_the_extras_the_dev_app_reads(self):
-        args = perf.launch_args(20, "high", None, budget=300000, lod_splat_limit=150000)
-        self.assertEqual(args[args.index(perf.EXTRA_BUDGET) - 1], "--ei")
-        self.assertEqual(args[args.index(perf.EXTRA_BUDGET) + 1], "300000")
-        self.assertEqual(args[args.index(perf.EXTRA_LOD_SPLAT_LIMIT) + 1], "150000")
-        self.assertNotIn(perf.EXTRA_BUDGET, perf.launch_args(20, "high", None))
-        self.assertNotIn(perf.EXTRA_LOD_SPLAT_LIMIT, perf.launch_args(20, "high", None))
-        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
-        self.assertIn(f'getIntExtra("{perf.EXTRA_BUDGET}"', activity)
-        self.assertIn(f'getIntExtra("{perf.EXTRA_LOD_SPLAT_LIMIT}"', activity)
-
-    def test_the_cutoff_goes_to_the_extra_the_dev_app_reads(self):
-        args = perf.launch_args(20, "high", None, subpixel=1.0)
-        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) - 1], "--ef")
-        self.assertEqual(args[args.index(perf.EXTRA_SUBPIXEL) + 1], "1.0")
-        self.assertNotIn(perf.EXTRA_SUBPIXEL, perf.launch_args(20, "high", None))
-        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
-        self.assertIn(f'getFloatExtra("{perf.EXTRA_SUBPIXEL}"', activity)
-
-    def test_the_source_frame_goes_to_the_extra_the_dev_app_reads(self):
-        args = perf.launch_args(20, "high", None, "kitchen.spz", source_frame="rdf")
-        self.assertEqual(args[args.index(perf.EXTRA_SOURCE_FRAME) - 1], "--es")
-        self.assertEqual(args[args.index(perf.EXTRA_SOURCE_FRAME) + 1], "rdf")
-        self.assertNotIn(perf.EXTRA_SOURCE_FRAME, perf.launch_args(20, "high", None, "kitchen.spz"))
-        activity = (perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt").read_text()
-        self.assertIn(f'getStringExtra("{perf.EXTRA_SOURCE_FRAME}"', activity)
-
     def test_relative_worlds_live_in_the_external_files_dir(self):
         self.assertEqual(perf.device_world("house.spz"), f"/sdcard/Android/data/{perf.PACKAGE}/files/house.spz")
         self.assertEqual(perf.device_world("/sdcard/house.spz"), "/sdcard/house.spz")
