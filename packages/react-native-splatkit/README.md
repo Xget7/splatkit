@@ -402,6 +402,7 @@ Extends the standard `ViewProps`.
 | `policy` | `NativeRenderPolicy` | - | The requested renderer policy, under a `revision`. |
 | `paused` | `boolean` | `false` | Freezes rendering. |
 | `renderScale` | `number` | `1` | Render resolution scale. |
+| `maxFramesPerSecond` | `number` | `0` | Most frames a second drawn, 1 to 240. `0` is the display's maximum; `60` halves the GPU work of a 120 Hz panel. |
 | `shDegree` | `number` (0-3) | `3` | Draw-time spherical-harmonics degree. |
 | `linearBlending` | `boolean` | `false` | Blends in linear light instead of the encoded space training used. |
 | `cullMarginDegrees` | `number` | `10` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |

@@ -176,6 +176,7 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
   _splatView.touchLookEnabled = next.touchLookEnabled;
   _splatView.lookSensitivity = next.lookSensitivity;
   _splatView.cameraPoseInterval = next.cameraPoseInterval;
+  _splatView.maxFramesPerSecond = next.maxFramesPerSecond;
   if (!previous || next.motionEnabled != previous->motionEnabled) {
     _splatView.motionEnabled = next.motionEnabled;
   }
