@@ -110,6 +110,19 @@ test('requested policy resolves to only values the current Fabric contract can a
   );
 });
 
+test('16-bit depth keys are the native default, so only a 32-bit request warns before capabilities', () => {
+  const warnsAboutSortDepth = sortDepth =>
+    build(builder =>
+      builder.withPerformance({sortDepth}),
+    ).performance.diagnostics.some(
+      diagnostic =>
+        diagnostic.option === 'sortDepth' &&
+        diagnostic.code === 'native-support-unknown',
+    );
+  assert.equal(warnsAboutSortDepth(16), false);
+  assert.equal(warnsAboutSortDepth(32), true);
+});
+
 test('maps scale, SH and splat capacities to actual Fabric props', () => {
   const config = build(builder =>
     builder.withRender({paused: true}).withPerformance({

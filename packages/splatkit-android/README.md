@@ -100,7 +100,7 @@ Optional `com.splatkit.ui.SplatHudView` and `JoystickView` are host conveniences
 ## GPU contract
 
 GPU LOD → visibility/compaction → stable radix → indirect hardware draw.
-Full32 keys are default; a `sortDepth` of 16 selects approximate two-pass sorting.
+16-bit keys and two-pass sorting are the default; a `sortDepth` of 32 keeps the full float depth in four passes.
 Above 4M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
 Parents and subpixel rejection are approximate.

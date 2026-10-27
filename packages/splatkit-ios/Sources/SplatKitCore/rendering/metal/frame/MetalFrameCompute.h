@@ -36,9 +36,9 @@ class MetalFrameCompute {
   MetalFrameCompute(const MetalFrameCompute&) = delete;
   MetalFrameCompute& operator=(const MetalFrameCompute&) = delete;
 
-  // Allocates the uniforms and builds the ordering pipelines with 32-bit keys. False only
-  // when the uniforms could not be allocated; a device that cannot order on the GPU leaves
-  // gpuSort() false.
+  // Allocates the uniforms and builds the ordering pipelines with the policy's default key
+  // width. False only when the uniforms could not be allocated; a device that cannot order on
+  // the GPU leaves gpuSort() false.
   bool create();
   bool gpuSort() const { return gpuSort_; }
   KeyBits depthBits() const { return visibility_.depthBits(); }

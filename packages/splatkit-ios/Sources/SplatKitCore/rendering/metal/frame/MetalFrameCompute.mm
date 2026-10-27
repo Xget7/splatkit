@@ -44,8 +44,10 @@ bool MetalFrameCompute::create() {
     uniform = metal::buffer(device_, sizeof(CameraUniform));
     if (uniform == nil) return false;
   }
-  gpuSort_ =
-      visibility_.create(device_, library_, KeyBits::Full32) && sort_.create(device_, library_);
+  // The pipelines start at the policy's default key width, which the fallback policy reports.
+  const KeyBits bits =
+      RenderPolicy{}.sortDepth == SortKeyBits::low16 ? KeyBits::Low16 : KeyBits::Full32;
+  gpuSort_ = visibility_.create(device_, library_, bits) && sort_.create(device_, library_);
   lodPipelines_ = MetalLodSelection::Pipelines::compile(device_, library_);
   LOGI("Metal depth keys: %u bits, %u radix passes (uint32 scratch)",
        static_cast<uint32_t>(depthBits()), static_cast<uint32_t>(depthBits()) / 8);

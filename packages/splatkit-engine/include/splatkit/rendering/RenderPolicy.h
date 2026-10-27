@@ -32,7 +32,7 @@ struct RenderPolicy {
   bool enableFrustumCulling = true;
   bool enableHiZOcclusion = false;
   bool enableEarlyTermination = true;
-  SortKeyBits sortDepth = SortKeyBits::full32;
+  SortKeyBits sortDepth = SortKeyBits::low16;
 };
 
 // What one backend can apply and the ranges it accepts. A field left false is not

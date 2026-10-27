@@ -97,8 +97,8 @@ export type WorldRequest = Readonly<{
   /**
    * The depth range drawn, in world units; set both planes or neither. Absent keeps the
    * native default of 0.05 to 200. The far plane may be at most 100,000 times the near one.
-   * Splats past the far plane are not drawn, and a farther one coarsens 16-bit sort keys,
-   * which span the range: pair a far plane well past 200 with a 32-bit `sortDepth`.
+   * Splats past the far plane are not drawn. The default 16-bit sort keys tie every depth past
+   * 65,536 times the near plane: pair a far plane beyond that with a 32-bit `sortDepth`.
    */
   nearPlane?: number;
   farPlane?: number;
