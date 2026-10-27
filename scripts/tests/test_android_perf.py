@@ -176,7 +176,9 @@ class SceneAssetsTest(unittest.TestCase):
 
     def test_scene_is_the_one_the_dev_app_opens_from_its_assets(self):
         activity = perf.APP_DIR / "app/src/main/java/com/splatkit/devapp/MainActivity.kt"
-        opened = tuple(re.findall(r'assets\.open\("([^"]+)"\)', activity.read_text()))
+        source = activity.read_text()
+        constants = dict(re.findall(r'const val (\w+) = "([^"]+)"', source))
+        opened = tuple(constants[name] for name in re.findall(r"assets\.open\((\w+)\)", source))
         self.assertEqual(perf.SCENE_ASSETS, opened)
 
 
