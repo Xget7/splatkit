@@ -42,9 +42,10 @@ class MetalVisibilityPass {
 
   // Resets the slot's count, then culls and projects the ranges into `projected()`, writing one
   // uint32 depth key per survivor into `keys` at its projection's index (Low16 only uses the
-  // lower 16 bits of a key). `keys` must hold at least capacity() entries, or this returns false. Invalid ranges fail before encoding any work. Empty ranges produce an
-  // empty draw. Caller owns uniforms/source buffers and must keep slot inputs unchanged until this
-  // frame completes. Ranges must be disjoint and refer to the reserved source.
+  // lower 16 bits of a key). `keys` must hold at least capacity() entries, or this returns
+  // false. Invalid ranges fail before encoding any work. Empty ranges produce an empty draw.
+  // Caller owns uniforms/source buffers and must keep slot inputs unchanged until this frame
+  // completes. Ranges must be disjoint and refer to the reserved source.
   bool encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms,
                      id<MTLBuffer> splats, id<MTLBuffer> sh, int shDegree,
                      const SplatRenderer::Range* ranges, uint32_t rangeCount, id<MTLBuffer> keys,

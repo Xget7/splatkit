@@ -90,7 +90,7 @@ void MetalRadixSort::encode(id<MTLCommandBuffer> cmd, id<MTLBuffer> count, KeyBi
     [enc setBuffer:totals_ offset:0 atIndex:2];
     [enc dispatchThreadgroups:MTLSizeMake(kBins, 1, 1) threadsPerThreadgroup:threads];
 
-    [enc setComputePipelineState:pass == 0 ? scatterFirst_
+    [enc setComputePipelineState:pass == 0            ? scatterFirst_
                                  : pass + 1 == passes ? scatterLast_
                                                       : scatter_];
     [enc setBuffer:keys_[in] offset:0 atIndex:0];

@@ -483,9 +483,9 @@ TEST(MetalVisibilityPassKeysTest, QuantizesCameraDepthRelativeToItAndSortsSource
       // The GPU's view transform rounds the depth; one step of slack covers it.
       EXPECT_NEAR(sortedKeys[i], relativeDepthKey(depths[expected[i]], zNear), 1u);
     }
-    EXPECT_LT(sortedKeys[1], sortedKeys[2]);   // 0.4002 before 0.4003
-    EXPECT_EQ(sortedKeys[3], sortedKeys[4]);   // 2.0002 and 2.0001 tie
-    EXPECT_LT(sortedKeys[kept - 1], 65535u);   // 199 m stays inside the 16 bits
+    EXPECT_LT(sortedKeys[1], sortedKeys[2]);  // 0.4002 before 0.4003
+    EXPECT_EQ(sortedKeys[3], sortedKeys[4]);  // 2.0002 and 2.0001 tie
+    EXPECT_LT(sortedKeys[kept - 1], 65535u);  // 199 m stays inside the 16 bits
   }
 }
 

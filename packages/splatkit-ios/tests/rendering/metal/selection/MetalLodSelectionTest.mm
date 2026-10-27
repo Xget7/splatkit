@@ -175,8 +175,8 @@ TEST(MetalLodSelectionTest, OfflineFixtureRendersWithBoundedDrawCount) {
   if (errorPixels || sortBits) {
     RenderPolicy policy;
     if (errorPixels) policy.lodErrorPixels = std::strtof(errorPixels, nullptr);
-    policy.sortDepth = sortBits && std::strcmp(sortBits, "32") == 0 ? SortKeyBits::full32
-                                                                     : SortKeyBits::low16;
+    policy.sortDepth =
+        sortBits && std::strcmp(sortBits, "32") == 0 ? SortKeyBits::full32 : SortKeyBits::low16;
     std::string reason;
     ASSERT_TRUE(renderer->applyRenderPolicy(policy, &reason)) << reason;
   }
