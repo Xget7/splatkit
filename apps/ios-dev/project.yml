@@ -56,6 +56,22 @@ targets:
       - sdk: ImageIO.framework
       - sdk: CoreGraphics.framework
       - sdk: UniformTypeIdentifiers.framework
+  # The run file decoder alone, on the Mac, without the app or the native libraries.
+  SplatKitDevTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: SplatKitDevTests
+      - path: SplatKitDev/RunFile.swift
+      - path: SplatKitDev/QualityTier.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.splatkit.devapp.tests
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
 schemes:
   SplatKitDev:
     build:
@@ -67,3 +83,10 @@ schemes:
       config: Release
     archive:
       config: Release
+  SplatKitDevTests:
+    build:
+      targets:
+        SplatKitDevTests: [test]
+    test:
+      targets:
+        - SplatKitDevTests
