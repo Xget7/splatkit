@@ -21,6 +21,9 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, assign) BOOL touchLookEnabled;
 @property(nonatomic, assign) CGFloat lookSensitivity;
 @property(nonatomic, assign) BOOL motionEnabled;
+/// The most frames a second the view draws, clamped to 1 to 240; 0, the default, is the
+/// display's maximum. A value that is not finite or is negative keeps the previous cap.
+@property(nonatomic, assign) CGFloat maxFramesPerSecond;
 /// Seconds between camera pose events; 0 sends none.
 @property(nonatomic, assign) CFTimeInterval cameraPoseInterval;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock worldEvent;

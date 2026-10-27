@@ -179,6 +179,11 @@ export interface NativeProps extends ViewProps {
   touchLookEnabled?: CodegenTypes.WithDefault<boolean, true>;
   /** Radians per point dragged to look. */
   lookSensitivity?: CodegenTypes.WithDefault<CodegenTypes.Double, 0.004>;
+  /**
+   * The most frames a second the view draws, 1 to 240; 0, the default, is the display's own
+   * maximum. 60 halves the GPU work of a 120 Hz panel.
+   */
+  maxFramesPerSecond?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
   /** Seconds between onCameraPose events; 0, the default, never sends one. */
   cameraPoseInterval?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
   /** The resolved renderer policy; native re-validates and reports the effective one. */

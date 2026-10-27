@@ -40,6 +40,7 @@ class SplatKitViewManager : SimpleViewManager<SplatKitView>(), SplatKitViewManag
     }
     override fun setLinearBlending(view: SplatKitView, value: Boolean) = view.setLinearBlending(value)
     override fun setCullMarginDegrees(view: SplatKitView, value: Double) = view.setCullMarginDegrees(value)
+    override fun setMaxFramesPerSecond(view: SplatKitView, value: Double) = view.setMaxFramesPerSecond(value)
     override fun setMotionEnabled(view: SplatKitView, value: Boolean) = view.setMotionEnabled(value)
     override fun setTouchLookEnabled(view: SplatKitView, value: Boolean) = view.setTouchLookEnabled(value)
     override fun setLookSensitivity(view: SplatKitView, value: Double) = view.setLookSensitivity(value)

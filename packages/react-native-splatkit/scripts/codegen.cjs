@@ -30,6 +30,7 @@ assert.deepEqual(spec.props.map(prop => prop.name).sort(), [
   'cullMarginDegrees',
   'linearBlending',
   'lookSensitivity',
+  'maxFramesPerSecond',
   'motionEnabled',
   'paused',
   'policy',
@@ -169,6 +170,15 @@ assert.equal(sourceFrame.optional, true);
 assert.deepEqual(sourceFrame.typeAnnotation, {
   type: 'StringTypeAnnotation',
   default: '',
+});
+// An absent frame rate cap reaches native as zero, which native reads as the display's maximum.
+const maxFramesPerSecond = spec.props.find(
+  prop => prop.name === 'maxFramesPerSecond',
+);
+assert.equal(maxFramesPerSecond.optional, true);
+assert.deepEqual(maxFramesPerSecond.typeAnnotation, {
+  type: 'DoubleTypeAnnotation',
+  default: 0,
 });
 const policy = spec.props.find(prop => prop.name === 'policy').typeAnnotation
   .properties;

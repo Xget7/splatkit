@@ -23,6 +23,9 @@ private const val MAX_SH_DEGREE = 3
 private const val MIN_RESIDENCY_BUDGET = 100_000
 private const val MAX_RESIDENCY_BUDGET = 8_000_000
 private const val DEFAULT_RESIDENCY_BUDGET = 2_000_000
+// A cap past the fastest panels changes nothing; one under a frame a second is a stalled view.
+private const val MIN_FRAME_RATE_CAP = 1f
+private const val MAX_FRAME_RATE_CAP = 240f
 
 internal fun dispatchSplatEvent(
     listener: SplatSurfaceView.Listener,
@@ -233,6 +236,19 @@ class SplatSurfaceView @JvmOverloads constructor(
         set(value) {
             field = value.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
             renderThread.setRenderScale(field)
+        }
+
+    /**
+     * The most frames a second the view draws, clamped to 1 to 240, or null, the default, to
+     * draw on every vsync at the panel's own rate. A 120 Hz panel capped at 60 draws every
+     * other vsync, half the GPU time and battery for a view that holds still most of the time.
+     * Throws [IllegalArgumentException] for a value that is not finite and positive.
+     */
+    var maxFramesPerSecond: Float? = null
+        set(value) {
+            require(value == null || value.isFinite() && value > 0) { "maxFramesPerSecond must be finite and positive" }
+            field = value?.coerceIn(MIN_FRAME_RATE_CAP, MAX_FRAME_RATE_CAP)
+            renderThread.setMaxFramesPerSecond(field)
         }
 
     /**

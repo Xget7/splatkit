@@ -30,6 +30,13 @@ static NSString *const kPolicyPhaseRejected = @"rejected";
 static const CFTimeInterval kStatsInterval = 0.5;
 /// SplatMetalView's touch sensitivity: radians per point dragged.
 static const CGFloat kLookSensitivity = 0.004;
+/// SplatMetalView's frame rate range: without a cap the link asks for the most a ProMotion panel
+/// shows, and the floor is as low as the system may slow the link to save power.
+static const float kDisplayMaximumFramesPerSecond = 120;
+static const float kFloorFramesPerSecond = 30;
+/// A cap past the fastest panels changes nothing; one under a frame a second is a stalled view.
+static const CGFloat kMinFrameRateCap = 1;
+static const CGFloat kMaxFrameRateCap = 240;
 
 /// World kinds, numbered as the JS WorldKind, the Codegen spec and the Android adapter number them.
 static const NSInteger kWorldKindFile = 0;
@@ -39,6 +46,13 @@ static const CGFloat kMinRenderScale = 0.1;
 static const CGFloat kMaxRenderScale = 2.0;
 static const NSInteger kMaxShDegree = 3;
 static const CGFloat kMaxCullMarginDegrees = 80;
+
+/// The display link range for a cap; 0 asks for the display's maximum.
+static CAFrameRateRange FrameRateRange(CGFloat maxFramesPerSecond) {
+  const float maximum =
+      maxFramesPerSecond > 0 ? (float)maxFramesPerSecond : kDisplayMaximumFramesPerSecond;
+  return CAFrameRateRangeMake(MIN(kFloorFramesPerSecond, maximum), maximum, maximum);
+}
 
 @class _SplatKitRNLinkProxy;
 
@@ -136,6 +150,13 @@ static const CGFloat kMaxCullMarginDegrees = 80;
 - (void)setRenderScale:(CGFloat)value {
   _renderScale = MIN(MAX(value, kMinRenderScale), kMaxRenderScale);
   [_engine setRenderScale:(float)_renderScale];
+}
+
+- (void)setMaxFramesPerSecond:(CGFloat)value {
+  // Like SplatMetalView, a cap that is not finite or is negative keeps the previous one.
+  if (!std::isfinite(value) || value < 0) return;
+  _maxFramesPerSecond = value > 0 ? MIN(MAX(value, kMinFrameRateCap), kMaxFrameRateCap) : 0;
+  self.displayLink.preferredFrameRateRange = FrameRateRange(_maxFramesPerSecond);
 }
 
 - (void)setShDegree:(NSInteger)value {
@@ -415,7 +436,7 @@ static const CGFloat kMaxCullMarginDegrees = 80;
 - (void)startDisplayLink {
   if (self.displayLink != nil || _engine == nil) return;
   CADisplayLink *link = [CADisplayLink displayLinkWithTarget:self.linkProxy selector:@selector(tick:)];
-  link.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
+  link.preferredFrameRateRange = FrameRateRange(self.maxFramesPerSecond);
   [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
   self.displayLink = link;
   [self updateDisplayLink];
