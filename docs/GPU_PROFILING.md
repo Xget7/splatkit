@@ -11,7 +11,7 @@ Do not compare the backends' `high` presets as equivalent image quality or use a
 | Policy | 1.8M budget, subpixel 1; backend-specific quality recorded |
 | Timing | A-B-B-A, 2 x 30 s per build; 10 s warmup per variant |
 | Provenance | Explicit device, declared full source commit, installed executable/APK SHA-256 |
-| Outputs | `experiment.json`, per-run report/log/trace, offline `comparison.json` / `comparison.md` |
+| Outputs | `experiment.json`, per-run report/log/trace and the app's [run file](../scripts/benchmarks/run.schema.json) as `run.json`, offline `comparison.json` / `comparison.md` |
 
 Copy the preset under ignored `build/`, fill the physical device and prepared build paths/commits, and verify framing before timed runs.
 Build each variant once, serializing shared build directories; the suite never builds, checks out revisions or transfers the large world.

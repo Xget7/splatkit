@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 import tempfile
@@ -16,43 +17,34 @@ def load(name):
 
 
 perf = load("ios_perf")
+run_file = load("run_file")
 UDID = "00008150-0019719C34E2401C"
 
 
 class LaunchTest(unittest.TestCase):
-    def test_launch_runs_the_benchmark_without_the_hud_or_validation(self):
-        command = perf.launch_command(UDID, 20, "high", None, None, validation=False)
+    def run_document(self, command):
         app_args = command[command.index(perf.BUNDLE_ID) + 1:]
-        self.assertEqual(app_args[app_args.index("--benchmark") + 1], "20")
-        self.assertEqual(app_args[app_args.index("--hud") + 1], "0")
-        self.assertEqual(app_args[app_args.index("--quality") + 1], "high")
-        self.assertNotIn("--pose", app_args)
-        self.assertNotIn("--world", app_args)
+        self.assertEqual(app_args[0], perf.RUN_ARGUMENT)
+        self.assertEqual(len(app_args), 2)
+        return json.loads(app_args[1])
+
+    def test_launch_passes_the_run_file_without_validation(self):
+        doc = run_file.document(20, "high", pose="1,2,3,0,0", world="lioness.spz")
+        command = perf.launch_command(UDID, doc, validation=False)
+        self.assertEqual(self.run_document(command), doc)
         self.assertNotIn("MTL_SHADER_VALIDATION", " ".join(command))
         self.assertLess(command.index("--console"), command.index(perf.BUNDLE_ID))
 
-    def test_launch_passes_pose_world_and_validation(self):
-        command = perf.launch_command(UDID, 30, "fast", "1,2,3,0,0", "lioness.spz", validation=True)
-        app_args = command[command.index(perf.BUNDLE_ID) + 1:]
-        self.assertEqual(app_args[app_args.index("--pose") + 1], "1,2,3,0,0")
-        self.assertEqual(app_args[app_args.index("--world") + 1], "lioness.spz")
+    def test_validation_turns_on_the_metal_layers(self):
+        command = perf.launch_command(UDID, run_file.document(30, "high"), validation=True)
         environment = command[command.index("--environment-variables") + 1]
         self.assertIn('"MTL_SHADER_VALIDATION": "1"', environment)
         self.assertIn('"MTL_DEBUG_LAYER": "1"', environment)
 
+    def test_an_invalid_run_file_fails_the_run(self):
+        self.assertTrue(perf.FAILURE.search("SplatRunInvalid: renderer.budget: below 0"))
+        self.assertTrue(perf.ERROR.search("SplatRunInvalid: unknown argument --world"))
 
-    def test_budget_and_cutoff_go_to_the_switches_the_dev_app_reads(self):
-        command = perf.launch_command(UDID, 30, "high", None, None, validation=False, budget=300000,
-                                      subpixel=1.0)
-        app_args = command[command.index(perf.BUNDLE_ID) + 1:]
-        self.assertEqual(app_args[app_args.index("--budget") + 1], "300000")
-        self.assertEqual(app_args[app_args.index("--subpixel") + 1], "1.0")
-        plain = perf.launch_command(UDID, 30, "high", None, None, validation=False)
-        self.assertNotIn("--budget", plain)
-        self.assertNotIn("--subpixel", plain)
-        app = perf.ROOT / "apps/ios-dev/SplatKitDev"
-        self.assertIn('args.int("budget")', (app / "ContentView.swift").read_text())
-        self.assertIn('args.float("subpixel")', (app / "SplatViewHost.swift").read_text())
 
 class DeviceTest(unittest.TestCase):
     def test_environment_reads_model_os_and_family(self):

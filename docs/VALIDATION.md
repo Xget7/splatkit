@@ -44,7 +44,7 @@ The local source is `build/example-worlds/scene.spz`: 11,988,085 source splats, 
 Its prepared `build/example-worlds/scene.lodsplat` has 13,375,264 nodes and is installed as `scene.lodsplat` in the iOS dev app's Documents.
 Reuse these files by path; record source/prepared hashes, format, pose, viewport, SH and render policy for each comparison.
 Pass the world explicitly (`ios_perf.py --world scene.lodsplat`); confirm the matching installed filename on Android.
-Use the example living-room pose `--pose=-7.25,1.6,5.25,0,0` with `ios_perf.py`; the native app itself takes `--pose` and its value as separate arguments.
+Use the example living-room pose `--pose=-7.25,1.6,5.25,0,0` with `ios_perf.py`; the script writes it into the app's run file as `"pose": [-7.25, 1.6, 5.25, 0, 0]`.
 Never reuse kitchen's origin `(0,0,0)` for this world; verify a capture before the timed run and record the chosen budget (1.8M for the reference view).
 If it is unavailable, locate or request it instead of falling back to kitchen or another small world.
 Small fixtures remain useful for unit tests and development smoke checks, not representative renderer acceptance or performance claims.
