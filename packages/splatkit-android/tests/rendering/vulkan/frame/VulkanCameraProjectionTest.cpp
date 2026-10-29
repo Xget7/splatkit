@@ -36,7 +36,7 @@ void testInvalidViewportAndFov() {
   require(!setCameraProjection(camera, projection(), 0, 600), "zero width");
   require(!setCameraProjection(camera, projection(), 1200, 0), "zero height");
   for (int axis = 0; axis < 2; ++axis) {
-    for (float coefficient :
+    for (const float coefficient :
          {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
           std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::max(),
           std::numeric_limits<float>::denorm_min()}) {
@@ -53,14 +53,14 @@ void testInvalidDepthRange() {
   // These used to reach the shader, including an empty low16 candidate list. Validation
   // must now reject them independently of candidate count and sort key width.
   require(!setCameraProjection(camera, splat::Mat4::identity(), 1200, 600), "identity projection");
-  for (float coefficient : {0.0f, -1.0f, 1.0f, std::numeric_limits<float>::infinity(),
-                            std::numeric_limits<float>::quiet_NaN()}) {
+  for (const float coefficient : {0.0f, -1.0f, 1.0f, std::numeric_limits<float>::infinity(),
+                                  std::numeric_limits<float>::quiet_NaN()}) {
     auto invalid = projection();
     invalid.at(2, 2) = coefficient;
     require(!setCameraProjection(camera, invalid, 1200, 600), "invalid depth coefficient");
   }
-  for (float offset : {0.0f, 1.0f, std::numeric_limits<float>::infinity(),
-                       std::numeric_limits<float>::quiet_NaN()}) {
+  for (const float offset : {0.0f, 1.0f, std::numeric_limits<float>::infinity(),
+                             std::numeric_limits<float>::quiet_NaN()}) {
     auto invalid = projection();
     invalid.at(2, 3) = offset;
     require(!setCameraProjection(camera, invalid, 1200, 600), "invalid depth offset");

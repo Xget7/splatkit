@@ -17,7 +17,7 @@ inline bool setCameraProjection(CameraUniform& camera, const splat::Mat4& projec
   for (int axis = 0; axis < 2; ++axis) {
     camera.focal[axis] = camera.screenSize[axis] * projection.at(axis, axis) / 2;
     camera.tanHalfFov[axis] = 1 / projection.at(axis, axis);
-    for (float value : {camera.screenSize[axis], camera.focal[axis], camera.tanHalfFov[axis]})
+    for (const float value : {camera.screenSize[axis], camera.focal[axis], camera.tanHalfFov[axis]})
       if (!std::isfinite(value) || value <= 0) return false;
   }
   camera.nearPlane = projection.at(2, 3) / projection.at(2, 2);
