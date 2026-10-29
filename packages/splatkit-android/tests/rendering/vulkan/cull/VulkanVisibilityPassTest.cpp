@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
-#include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "rendering/vulkan/frame/VulkanCameraProjection.h"
 #include "splat/math/Half.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
@@ -30,7 +30,8 @@ using Mode = VulkanVisibilityPass::CandidateMode;
 CameraUniform camera() {
   CameraUniform cam{};
   cam.view = splat::Mat4::identity();
-  cam.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
+  require(splatkit::setCameraProjection(cam, splat::Mat4::perspective(1, 1, 0.1f, 100), 1000, 1000),
+          "valid camera projection");
   cam.focal[0] = cam.focal[1] = 500;
   cam.tanHalfFov[0] = cam.tanHalfFov[1] = 1;
   cam.screenSize[0] = cam.screenSize[1] = 1000;
@@ -197,12 +198,8 @@ void testSparseIndexed(const Gpu& gpu, const VulkanVisibilityPass& pass, const F
   failed(run(gpu, pass, sparse), VulkanVisibilityPass::kInvalidCount);
   sparseInvalid = 0;
   require(sparseCount->upload(&sparseInvalid, 4), "sparse empty count");
-  auto invalidProjection = camera();
-  invalidProjection.proj = splat::Mat4::identity();
-  f.setCamera(invalidProjection);
   sparse.keyBits = KeyBits::low16;
-  failed(run(gpu, pass, sparse), VulkanVisibilityPass::kInvalidProjection);
-  f.setCamera(camera());
+  membership(run(gpu, pass, sparse), {});
   std::puts("PASS sparse indexed workgroups, poisoned tails and empty diagnostics");
 }
 
@@ -307,13 +304,7 @@ void testDepthKeys(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixtu
       requireDepthKeys(result, bits, order);
     }
   }
-  auto badCamera = camera();
-  badCamera.proj = splat::Mat4::identity();
-  f.setCamera(badCamera);
-  in.keyBits = KeyBits::low16;
-  failed(run(gpu, pass, in), VulkanVisibilityPass::kInvalidProjection);
-  f.setCamera(camera());
-  std::puts("PASS full32/low16 ascending/BTF keys and invalid projection");
+  std::puts("PASS full32/low16 ascending/BTF keys");
 }
 
 void testDescriptorRejection(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {

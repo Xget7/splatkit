@@ -4,8 +4,8 @@
 #include <numeric>
 #include <string>
 
+#include "rendering/vulkan/frame/VulkanCameraProjection.h"
 #include "rendering/vulkan/frame/VulkanFrameCompute.h"
-#include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "splatkit/rendering/RenderPolicy.h"
 #include "support/VulkanTestContext.h"
@@ -59,7 +59,8 @@ struct Inputs {
     CameraUniform u{};
     u.view = splat::Mat4::identity();
     u.view.at(0, 3) = x;
-    u.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
+    require(splatkit::setCameraProjection(u, splat::Mat4::perspective(1, 1, 0.1f, 100), 1000, 1000),
+            "valid camera projection");
     u.screenSize[0] = u.screenSize[1] = 1000;
     u.focal[0] = u.focal[1] = 500;
     u.tanHalfFov[0] = u.tanHalfFov[1] = 1;
