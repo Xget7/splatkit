@@ -82,6 +82,14 @@ jobs:
             packages/splatkit-android/tests/rendering/vulkan/presentation/SurfaceSizeWaitTest.cpp \
             -o build/native-contracts/surface-size-wait
           build/native-contracts/surface-size-wait
+      - name: Check camera projection on host
+        run: |
+          mkdir -p build/native-contracts
+          c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+            -I packages/splatkit-android/src/main/cpp -I packages/splat-core/include \
+            packages/splatkit-android/tests/rendering/vulkan/frame/VulkanCameraProjectionTest.cpp \
+            -o build/native-contracts/camera-projection
+          build/native-contracts/camera-projection
       - name: Keep the AAR
         uses: actions/upload-artifact@v7
         with:
