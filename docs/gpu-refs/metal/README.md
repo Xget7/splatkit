@@ -1,6 +1,6 @@
 # Metal reference facts
 
-Cited facts the Metal renderer relies on or may adopt, so GPU work checks them here instead of recalling them.
+Cited facts for the [prior-results review](../README.md#before-implementation), covering the Metal renderer's capabilities and limits.
 Each fact names its source; [scripts/fetch-gpu-refs.sh](../../../scripts/fetch-gpu-refs.sh) puts the full Apple texts in `build/gpu-refs/metal/` for grep, since Apple's license allows personal copies only.
 Refresh a fact in the same pull request as the GPU pipeline change that needs it.
 

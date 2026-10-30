@@ -3,6 +3,7 @@
 SDK integration or verification: read [the harness](docs/AGENT_HARNESS.md).
 Implementation: follow [CONTRIBUTING.md](CONTRIBUTING.md); terminology lives in [CONTEXT.md](CONTEXT.md).
 Architecture (packages, load and frame pipeline on Metal and Vulkan): read [ARCHITECTURE.md](docs/ARCHITECTURE.md) before exploring; a change to a stage, GPU layout or package dependency updates it in the same PR.
+GPU optimizations: complete the [prior-results review](docs/gpu-refs/README.md#before-implementation) before proposing, implementing or delegating an experiment.
 Keep documentation terse; link code/contracts instead of duplicating them.
 Report skipped checks, approximation limits and emulator/physical-device provenance explicitly.
 Use the [12M reference world](docs/VALIDATION.md#reference-performance-world) for renderer acceptance, performance and battery benchmarks; small worlds do not establish representative results.

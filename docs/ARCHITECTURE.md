@@ -2,6 +2,7 @@
 
 How the packages fit together and what each stage of the splat pipeline does on Metal and Vulkan.
 Terms follow [CONTEXT.md](../CONTEXT.md); the linked files are the source of truth.
+Before changing the pipeline for performance, follow the [prior-results review](gpu-refs/README.md#before-implementation).
 
 ## Packages
 
