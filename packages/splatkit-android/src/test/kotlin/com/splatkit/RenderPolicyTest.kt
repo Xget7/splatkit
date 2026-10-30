@@ -30,6 +30,11 @@ class RenderPolicyTest {
     }
 
     @Test
+    fun theSortDepthDefaultsTo16Bits() {
+        assertEquals(SortDepth.BITS_16, RenderPolicy().sortDepth)
+    }
+
+    @Test
     fun validationMirrorsTheJsRanges() {
         assertNull(renderPolicyError(RenderPolicy()))
         assertTrue(renderPolicyError(RenderPolicy(lodErrorPixels = 0f)) != null)

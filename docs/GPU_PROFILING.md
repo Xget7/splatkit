@@ -31,6 +31,7 @@ The runner's `--help` describes phase options; [optional plotting dependencies](
 
 ## Report
 
+Keep the experiment manifest, per-run reports/logs/traces and the app's [run file](../scripts/benchmarks/run.schema.json) as `run.json`, alongside the offline comparison outputs.
 Follow the [evidence contract](VALIDATION.md#pr-benchmark-evidence): before/after tables, device/build provenance, workload comparability and links to raw artifacts.
 Label combined intervals and unavailable counters explicitly; app timings alone do not establish GPU pass analysis.
 Record the outcome, including regressions or no gain, in the [backend findings](gpu-refs/README.md#recording-results).

@@ -255,6 +255,29 @@ test('Android adapter streams a tileset and loads any other world as one file', 
   );
 });
 
+// Codegen sends an absent frame as empty; the frame is set before either kind of load.
+test('Android adapter validates the source frame and sets it before the load', () => {
+  const manager = read(
+    'android/src/main/java/com/splatkit/reactnative/SplatKitViewManager.kt',
+  );
+  const view = read(
+    'android/src/main/java/com/splatkit/reactnative/SplatKitView.kt',
+  );
+  const session = read(
+    'android/src/main/java/com/splatkit/reactnative/WorldSession.kt',
+  );
+  assert.match(
+    manager,
+    /hasKey\("sourceFrame"\)[^\n]*getString\("sourceFrame"\)\?\.ifEmpty \{ null \}/,
+  );
+  assert.match(session, /CoordinateFrame\.parse\(it\)/);
+  assert.match(session, /require\(sourceFrame == null \|\| frame != null\)/);
+  assert.match(
+    view,
+    /view\.sourceFrame = world\.frame\s*if \(world\.kind == WorldKind\.TILESET\)/,
+  );
+});
+
 // The adapter reported every timing as unavailable, so a HUD on Android could never show a
 // frame rate or a GPU time even while the engine was measuring both.
 test('Android adapter reports the timings the SDK measures', () => {

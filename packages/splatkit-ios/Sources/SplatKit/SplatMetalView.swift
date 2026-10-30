@@ -162,6 +162,24 @@ public final class SplatMetalView: UIView {
         }
     }
 
+    /// The most frames a second the view draws, clamped to 1 to 240, or nil, the default, for
+    /// the display's own maximum: 120 on ProMotion, which an iPhone grants only when the host's
+    /// Info.plist sets `CADisableMinimumFrameDurationOnPhone` to true. A cap of 60 halves the GPU
+    /// time and battery of a view that holds still most of the time. A value that is not finite
+    /// and positive keeps the previous cap.
+    public var maxFramesPerSecond: Float? {
+        didSet {
+            if let value = maxFramesPerSecond {
+                guard value.isFinite, value > 0 else {
+                    maxFramesPerSecond = oldValue
+                    return
+                }
+                maxFramesPerSecond = min(max(value, 1), 240)
+            }
+            renderThread.setMaxFramesPerSecond(maxFramesPerSecond)
+        }
+    }
+
     /// Below a render scale of one, upscale with MetalFX instead of a linear blit. On by
     /// default; devices without the scaler keep the blit.
     public var spatialUpscaling: Bool = true {
@@ -216,6 +234,15 @@ public final class SplatMetalView: UIView {
             maxShDegree = min(max(maxShDegree, 0), 3)
             renderThread.setMaxShDegree(maxShDegree)
         }
+    }
+
+    /// The frame worlds, tiles and colliders loaded after it is set were written in, overriding
+    /// what each file declares; for files that store a frame without declaring it, such as
+    /// `.rdf` for World Labs Marble exports. Nil, the default, leaves each file to the frame it
+    /// declares, else `rub` for SPZ and glTF. A `.lodsplat` is already in the engine's frame and
+    /// ignores it.
+    public var sourceFrame: CoordinateFrame? {
+        didSet { renderThread.setSourceFrame(sourceFrame) }
     }
 
     /// Walks continuously at the given speed in meters per second until called again with

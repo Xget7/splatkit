@@ -110,6 +110,19 @@ test('requested policy resolves to only values the current Fabric contract can a
   );
 });
 
+test('16-bit depth keys are the native default, so only a 32-bit request warns before capabilities', () => {
+  const warnsAboutSortDepth = sortDepth =>
+    build(builder =>
+      builder.withPerformance({sortDepth}),
+    ).performance.diagnostics.some(
+      diagnostic =>
+        diagnostic.option === 'sortDepth' &&
+        diagnostic.code === 'native-support-unknown',
+    );
+  assert.equal(warnsAboutSortDepth(16), false);
+  assert.equal(warnsAboutSortDepth(32), true);
+});
+
 test('maps scale, SH and splat capacities to actual Fabric props', () => {
   const config = build(builder =>
     builder.withRender({paused: true}).withPerformance({
@@ -183,6 +196,28 @@ test('a world carries its lens to the native props and the build validates it', 
         .build(capabilities),
     TypeError,
   );
+});
+
+test('a world carries its source frame to the native props and the build validates it', () => {
+  const {CoordinateFrame} = require('../build/contracts');
+  assert.equal(build().world.sourceFrame, undefined);
+  const config = new SplatKitBuilder()
+    .withWorld({...world, sourceFrame: CoordinateFrame.rdf})
+    .build(capabilities);
+  assert.equal(config.world.sourceFrame, CoordinateFrame.rdf);
+  assert.equal(
+    toNativeViewProps(config).world.sourceFrame,
+    CoordinateFrame.rdf,
+  );
+  for (const sourceFrame of ['rrr', 'ru', 'xyz']) {
+    assert.throws(
+      () =>
+        new SplatKitBuilder()
+          .withWorld({...world, sourceFrame})
+          .build(capabilities),
+      RangeError,
+    );
+  }
 });
 
 test('clamps valid requests to supplied limits and reports each fallback', () => {

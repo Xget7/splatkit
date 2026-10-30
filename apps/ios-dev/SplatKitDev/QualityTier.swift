@@ -3,7 +3,7 @@ import Foundation
 /// Live quality levels. Each changes only settings that apply without reloading the world.
 /// The splat limit is what moves the frame rate on a large hierarchy world; the error
 /// threshold is the finest detail a level asks for when the limit leaves room.
-enum QualityTier: String, CaseIterable, Identifiable {
+enum QualityTier: String, CaseIterable, Identifiable, Encodable {
     case ultra, high, balanced, fast
 
     var id: String { rawValue }
@@ -52,14 +52,4 @@ enum QualityTier: String, CaseIterable, Identifiable {
 
     /// 32-bit keys keep exact depth order; 16-bit halves the radix passes.
     var sortDepth: UInt32 { self == .ultra ? 32 : 16 }
-
-    func apply(to view: SplatMetalView) {
-        view.renderScale = renderScale
-        view.shDegree = shDegree
-        var policy = view.renderPolicy
-        policy.sortDepth = sortDepth
-        policy.lodErrorPixels = lodErrorPixels
-        policy.lodSplatLimit = lodSplatLimit
-        view.renderPolicy = policy
-    }
 }

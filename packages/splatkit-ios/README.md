@@ -30,7 +30,7 @@ view.resume()
 ```
 
 Forward `resume()`, `pause()` and `release()` from the host's lifecycle; the layer follows the view's window.
-The display link asks for 120 Hz, which an iPhone grants only when the host's Info.plist sets `CADisableMinimumFrameDurationOnPhone` to true.
+The display link asks for the display's maximum, which an iPhone grants above 60 Hz only when the host's Info.plist sets `CADisableMinimumFrameDurationOnPhone` to true; `maxFramesPerSecond` caps it.
 A world the app cannot hold calls `worldFailed` before it decodes, with the memory it needs and the format to prepare it as, instead of iOS ending the app; [LoadCost.cpp](../splat-core/src/loading/LoadCost.cpp) holds the estimate.
 A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xget7/splatkit/blob/main/scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 
@@ -49,11 +49,13 @@ A PLY is converted offline by [`scripts/prepare-world.sh`](https://github.com/Xg
 | `focus(x:y:)` | Pick an anchor through normalized view coordinates against the collider; false keeps the previous anchor |
 | `animateOrbit(degrees:degreesPerSecond:easeInOut:)` | Run a finite engine-driven orbit and idle again when it finishes |
 | `renderScale` | Fraction of the view's resolution the splats are drawn at, 0.1 to 2 |
+| `maxFramesPerSecond` | Most frames a second drawn, 1 to 240; nil, the default, is the display's maximum. 60 halves the GPU work of a 120 Hz panel |
 | `spatialUpscaling` | Below a render scale of 1, upscale with MetalFX instead of a linear blit; on by default |
 | `cullMarginDegrees` | Angular margin kept drawn around the view |
 | `linearBlending` | Blend in linear light instead of the encoded colour space |
 | `splatBudget`, `residencyBudget` | Most splats drawn per frame, most splats resident on the GPU; a tiled scene that fits the residency whole is fetched whole, so turning never meets a coarse stand-in |
 | `shDegree`, `maxShDegree` | Harmonics drawn, harmonics kept from the file |
+| `sourceFrame` | The frame later worlds, tiles and colliders were written in: `.rdf` for World Labs Marble exports, `.rub`, or `CoordinateFrame("rfu")` for any three letters from r, l, u, d, b and f. Nil, the default, keeps each file's declared frame, else `rub`; a `.lodsplat` ignores it |
 | `setWalkVelocity(forward:right:)`, `walk(forward:right:)` | Continuous walking in meters per second, or a single step in meters; the host draws its own control and drives these |
 | `look(deltaYaw:deltaPitch:)` | Turns the camera by radians, for a look pad or mouse |
 | `setCharacter(_:)`, `character` | The walker's shape in walk mode: `CharacterSettings(eyeHeight:bodyRadius:stepHeight:)` |
@@ -100,18 +102,10 @@ Colours blend in the encoded space by default, on a `bgra8Unorm` layer; `linearB
 Start motion after `splatView(_:worldFrameReady:)`, not upload-only `worldReady`.
 Keep the view attached/resumed while loading; readiness means GPU completion, not visual acceptance.
 
-Dev-only switches; `--quality`, `--depth-key-bits`, `--lod-error-pixels` and `--lod-splat-limit` set the view's `renderPolicy`, the rest apply before renderer creation:
+The dev app takes its world, renderer settings, pose and scripted run from one [run file](../../scripts/benchmarks/run.schema.json), passed whole after `--run`.
+Its `renderer` section applies the quality level (`ultra`, `high` by default, `balanced`, `fast`), then `budget`, `subpixel`, `lod_error_pixels` and `lod_splat_limit`; `run.monitor` adds the resource monitor.
 
-| Switch | Effect |
-|---|---|
-| `--depth-key-bits 16` | Two radix passes; uint32 storage unchanged; ties may shimmer |
-| `--budget 4000000` | LOD capacity, at most 4M; not guaranteed quality |
-| `--quality ultra` | Starting level of the on-screen picker: `ultra`, `high` (default), `balanced`, `fast` |
-| `--shot tour` | ISS camera, +Y up: `overview`, `orbit` (default), `detail`, `flyby`, `tour` |
-| `--run-seconds 20` | Bounded run with resource monitoring |
-| `--metalfx 0` | Upscales a `--scale` below 1 with the linear blit instead of MetalFX |
-
-Defaults: 32-bit sorting, hardware raster.
+Defaults: 16-bit sort keys (32 at the ultra level), hardware raster.
 Culling, LOD and depth quantization are approximations pending visual acceptance.
 Private allocations still consume unified memory.
 The dev memory guard cannot cancel in-flight work or prevent allocation spikes.

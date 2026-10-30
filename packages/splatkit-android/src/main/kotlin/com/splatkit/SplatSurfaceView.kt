@@ -23,6 +23,9 @@ private const val MAX_SH_DEGREE = 3
 private const val MIN_RESIDENCY_BUDGET = 100_000
 private const val MAX_RESIDENCY_BUDGET = 8_000_000
 private const val DEFAULT_RESIDENCY_BUDGET = 2_000_000
+// A cap past the fastest panels changes nothing; one under a frame a second is a stalled view.
+private const val MIN_FRAME_RATE_CAP = 1f
+private const val MAX_FRAME_RATE_CAP = 240f
 
 internal fun dispatchSplatEvent(
     listener: SplatSurfaceView.Listener,
@@ -236,6 +239,19 @@ class SplatSurfaceView @JvmOverloads constructor(
         }
 
     /**
+     * The most frames a second the view draws, clamped to 1 to 240, or null, the default, to
+     * draw on every vsync at the panel's own rate. A 120 Hz panel capped at 60 draws every
+     * other vsync, half the GPU time and battery for a view that holds still most of the time.
+     * Throws [IllegalArgumentException] for a value that is not finite and positive.
+     */
+    var maxFramesPerSecond: Float? = null
+        set(value) {
+            require(value == null || value.isFinite() && value > 0) { "maxFramesPerSecond must be finite and positive" }
+            field = value?.coerceIn(MIN_FRAME_RATE_CAP, MAX_FRAME_RATE_CAP)
+            renderThread.setMaxFramesPerSecond(field)
+        }
+
+    /**
      * CPU fallback's angular culling margin, in degrees. The GPU path evaluates the
      * current camera each frame and uses projected splat bounds instead.
      */
@@ -304,6 +320,19 @@ class SplatSurfaceView @JvmOverloads constructor(
         set(value) {
             field = value.coerceIn(0, MAX_SH_DEGREE)
             renderThread.setMaxShDegree(field)
+        }
+
+    /**
+     * The frame worlds, tiles and colliders loaded after it is set were written in, for files
+     * that store a frame other than the one they declare or their format's default. Null, the
+     * default, keeps each file's own: an SPZ's coordinate system tag, else `rub`, and glTF's `rub`.
+     * Untagged World Labs Marble exports need [CoordinateFrame.RDF]. A `.lodsplat` ignores it.
+     * Each load reads it when called.
+     */
+    var sourceFrame: CoordinateFrame? = null
+        set(value) {
+            field = value
+            renderThread.setSourceFrame(value)
         }
 
     /**

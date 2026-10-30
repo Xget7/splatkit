@@ -28,6 +28,13 @@ cd apps/android-dev
 adb logcat -s SplatKit
 ```
 
+Without a run file the app opens the bundled kitchen for interactive use.
+A [run file](scripts/benchmarks/run.schema.json) picks the world, renderer settings, pose and a scripted run, passed whole as the `run` extra:
+
+```
+adb shell am start -n com.splatkit.devapp/.MainActivity --es run \''{"schema_version":1,"world":{"file":"house.spz","collider":"house.glb"}}'\'
+```
+
 Debug builds load the Khronos validation layer; a pull request must leave it silent.
 
 ## Build and run the iOS dev app
@@ -40,10 +47,12 @@ cd apps/ios-dev
 xcodegen generate
 xcodebuild -scheme SplatKitDev -configuration Release -destination "id=<device udid>" -allowProvisioningUpdates build
 xcrun devicectl device install app --device <udid> build/Build/Products/Release-iphoneos/SplatKitDev.app
-xcrun devicectl device process launch --device <udid> --console com.splatkit.devapp -- --gyro 0
+xcrun devicectl device process launch --device <udid> --console com.splatkit.devapp --run '{"schema_version":1,"world":{"file":"house.spz"}}'
 ```
 
-The app reads its switches from the command line (`--world`, `--tileset`, `--collider`, `--scale`, `--pose`, `--benchmark`, `--capture` and more; see `LaunchArgs.swift`) and worlds from its Documents folder, which `devicectl device copy to` fills.
+The app takes the same [run file](scripts/benchmarks/run.schema.json) as the Android one, passed whole after `--run`, and reads worlds from its Documents folder, which `devicectl device copy to` fills.
+It refuses an unknown key, a bad value or any other `--` argument and logs `SplatRunInvalid:` with the key.
+`scripts/ios_perf.py` and `scripts/android_perf.py` write the run file for a benchmark and save it beside the results as `run.json`.
 The Objective-C++ sources build with warnings as errors; `scripts/lint-cpp.sh` formats them.
 
 ## Build the React Native package

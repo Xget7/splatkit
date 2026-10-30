@@ -6,13 +6,17 @@ import os
 /// The one SplatMetalView of the app, shared with SwiftUI through an observable owner so
 /// the HUD can read stats and push settings without recreating the view.
 final class SplatSession: ObservableObject {
+    /// Spherical harmonics degree the app decodes from every world, whatever the quality level draws.
+    private static let maxShDegree = 1
     private let pollInterval = 0.5
     /// 30 seconds of history at the polling rate.
     private let fpsHistoryLength = 60
-    private let defaultMemoryLimitMiB = 2800
-    private let minMemoryLimitMiB = 256
+    /// A test guard, set below the device's Jetsam limit.
+    private let memoryLimitBytes: UInt64 = 2800 * 1024 * 1024
     private let minAvailableBytes = 256 * 1024 * 1024
     let view = SplatMetalView()
+    /// Nil when the launch arguments were rejected.
+    let runFile: RunFile?
     var orbit: OrbitPath?
     @Published var stats = SplatStats()
     @Published var status = "loading"
@@ -30,11 +34,6 @@ final class SplatSession: ObservableObject {
     }
     private var timer: Timer?
     private var delegateBox: Delegate?
-    private let monitorResources: Bool
-    private let memoryLimitBytes: UInt64
-    private let runSeconds: Double?
-    private let sdkOrbitSpeed: Float?
-    private let sdkOrbitDolly: Float?
     private var sdkOrbitStartedAt: TimeInterval?
     private var sdkOrbitFps: [Float] = []
     private var sdkOrbitGpuMillis: [Float] = []
@@ -44,27 +43,62 @@ final class SplatSession: ObservableObject {
     private var peakFootprint: UInt64 = 0
     private let preparationStarted = ProcessInfo.processInfo.systemUptime
     private var resumed = false
-    private(set) var stoppedReason: String?
+    private(set) var stoppedReason: StopReason?
 
-    init() {
-        let args = LaunchArgs()
-        runSeconds = args.float("run-seconds").flatMap { $0.isFinite && $0 > 0 ? Double($0) : nil }
-        sdkOrbitSpeed = args.float("sdk-orbit-speed").flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        sdkOrbitDolly = args.float("sdk-orbit-dolly").flatMap { $0.isFinite ? $0 : nil }
-        monitorResources = (args.bool("resource-monitor") ?? false) || runSeconds != nil
-        // A test guard, not a claim about the device's Jetsam limit or total free RAM.
-        let limitMiB = min(max(args.int("memory-limit-mib") ?? defaultMemoryLimitMiB, minMemoryLimitMiB), defaultMemoryLimitMiB)
-        memoryLimitBytes = UInt64(limitMiB) * 1024 * 1024
-        resourceDevice = monitorResources ? MTLCreateSystemDefaultDevice() : nil
+    init(arguments: [String] = CommandLine.arguments) {
+        let launch = Result { try RunFile(arguments: arguments) }
+        runFile = try? launch.get()
+        resourceDevice = runFile?.run?.monitor == true ? MTLCreateSystemDefaultDevice() : nil
         let delegate = Delegate(session: self)
         delegateBox = delegate
         view.delegate = delegate
-        // Launch switches set the policy fields directly; the quality tier leaves them alone.
+        switch launch {
+        case .failure(let error):
+            reject(String(describing: error))
+        case .success(let runFile):
+            NSLog("SplatRun: %@", runFile.compactJSON)
+            view.maxShDegree = Self.maxShDegree
+            applyRenderer(runFile.renderer)
+            if monitorResources { observeMemoryWarnings() }
+        }
+    }
+
+    deinit {
+        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+    }
+
+    /// A run section makes a scripted run: no HUD, touch, gyroscope or automatic shot.
+    var isScripted: Bool { runFile?.run != nil }
+
+    private var monitorResources: Bool { runFile?.run?.monitor == true }
+
+    private func observeMemoryWarnings() {
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // Loading a large world warns at its transient peak and then settles, so a
+            // warning only samples now; the footprint and headroom limits decide.
+            NSLog("SplatMemoryWarning: sampling resources")
+            self?.sampleResources()
+        }
+    }
+
+    /// Stops the launch before anything loads or runs.
+    func reject(_ message: String) {
+        stoppedReason = .runInvalid
+        status = message
+        loadingFailed = true
+        NSLog("SplatRunInvalid: %@", message)
+    }
+
+    /// The quality level first, then each field the run file gives.
+    private func applyRenderer(_ renderer: RunFile.Renderer?) {
+        quality = renderer?.quality ?? .high
+        if let budget = renderer?.budget { view.splatBudget = budget }
         var policy = view.renderPolicy
-        if args.string("depth-key-bits") == "16" { policy.sortDepth = 16 }
-        if let pixels = args.float("lod-error-pixels"), pixels.isFinite, pixels > 0 { policy.lodErrorPixels = pixels }
-        if let limit = args.int("lod-splat-limit"), limit >= 0 { policy.lodSplatLimit = UInt32(limit) }
-        if let pixels = args.float("subpixel"), pixels.isFinite, pixels >= 0 { policy.subpixelThreshold = pixels }
+        if let pixels = renderer?.subpixel { policy.subpixelThreshold = pixels }
+        if let pixels = renderer?.lodErrorPixels { policy.lodErrorPixels = pixels }
+        if let limit = renderer?.lodSplatLimit { policy.lodSplatLimit = limit }
         view.renderPolicy = policy
         // BOOL fields of the C structs import as ObjCBool.
         let applied = view.renderPolicy, caps = view.deviceCapabilities
@@ -74,20 +108,32 @@ final class SplatSession: ObservableObject {
               + "in [\(caps.policy.minSubpixelThreshold), \(caps.policy.maxSubpixelThreshold)] "
               + "maxLod=\(caps.maxLodCapacitySplats) "
               + "residency=[\(caps.minResidencyCapacitySplats), \(caps.maxResidencyCapacitySplats)]")
-        if monitorResources {
-            memoryWarningObserver = NotificationCenter.default.addObserver(
-                forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
-            ) { [weak self] _ in
-                // Loading a large world warns at its transient peak and then settles, so a
-                // warning only samples now; the footprint and headroom limits decide.
-                NSLog("SplatMemoryWarning: sampling resources")
-                self?.sampleResources()
+    }
+
+    /// Starts what the run section times from the first world frame: the orbit and the capture.
+    private func beginScriptedRun() {
+        guard let run = runFile?.run else { return }
+        if let orbit = run.orbit {
+            view.setAnchor(orbit.anchor)
+            let speed = abs(orbit.degrees) / Float(run.seconds)
+            let accepted = view.animateOrbit(degrees: orbit.degrees, degreesPerSecond: speed)
+            NSLog("SplatSDKOrbit: accepted=%d degrees=%.2f speed=%.2f", accepted ? 1 : 0, orbit.degrees, speed)
+            if accepted {
+                sdkOrbitStartedAt = ProcessInfo.processInfo.systemUptime
+            } else {
+                stopRun(.orbitRejected)
             }
+        }
+        if let delay = run.captureAt {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.capture() }
         }
     }
 
-    deinit {
-        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+    func capture() {
+        let file = AppFiles.documents.appendingPathComponent(AppFiles.captureName)
+        view.captureFrame(to: file) { ok in
+            NSLog("SplatCapture: %@", ok ? "captured \(AppFiles.captureName)" : "capture failed")
+        }
     }
 
     func resume() {
@@ -130,9 +176,8 @@ final class SplatSession: ObservableObject {
     }
 
     private func sampleSDKOrbit() {
-        guard let started = sdkOrbitStartedAt, let speed = sdkOrbitSpeed else { return }
+        guard let started = sdkOrbitStartedAt, let duration = runFile?.run?.seconds else { return }
         let elapsed = ProcessInfo.processInfo.systemUptime - started
-        let duration = 360.0 / Double(speed)
         if elapsed > 1 && elapsed <= duration {
             sdkOrbitFps.append(stats.fps)
             sdkOrbitGpuMillis.append(stats.gpuMillis)
@@ -145,7 +190,7 @@ final class SplatSession: ObservableObject {
             NSLog("SplatSDKOrbitComplete: duration=%.2f samples=%ld meanFps=%.2f meanGpuMs=%.2f",
                   duration, sdkOrbitFps.count, fps, gpu)
             sdkOrbitStartedAt = nil
-            stopRun("orbit-complete")
+            stopRun(.orbitComplete)
         }
     }
 
@@ -160,7 +205,7 @@ final class SplatSession: ObservableObject {
                 task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
             }
         }
-        guard result == KERN_SUCCESS else { stopRun("memory-sample-failed-\(result)"); return }
+        guard result == KERN_SUCCESS else { stopRun(.memorySampleFailed(result)); return }
         let footprint = UInt64(info.phys_footprint)
         peakFootprint = max(peakFootprint, footprint)
         let available = os_proc_available_memory()
@@ -170,13 +215,12 @@ final class SplatSession: ObservableObject {
         NSLog("SplatResources: elapsed=%.3f footprint=%llu peak=%llu available=%llu metal=%llu thermal=%ld loaded=%ld drawn=%ld paused=%d",
               elapsed, footprint, peakFootprint, UInt64(available), UInt64(resourceDevice?.currentAllocatedSize ?? 0),
               thermal.rawValue, stats.loadedSplatCount, stats.drawnSplatCount, stoppedReason == nil ? 0 : 1)
-        if footprint >= memoryLimitBytes { stopRun("footprint-limit") }
-        else if available < minAvailableBytes { stopRun("available-memory-below-\(minAvailableBytes >> 20)MiB") }
-        else if thermal == .serious || thermal == .critical { stopRun("thermal-\(thermal.rawValue)") }
-        else if let runSeconds, elapsed >= runSeconds { stopRun("duration-complete") }
+        if footprint >= memoryLimitBytes { stopRun(.footprintLimit) }
+        else if available < minAvailableBytes { stopRun(.availableMemoryBelow(bytes: minAvailableBytes)) }
+        else if thermal == .serious || thermal == .critical { stopRun(.thermal(thermal)) }
     }
 
-    private func stopRun(_ reason: String) {
+    private func stopRun(_ reason: StopReason) {
         guard stoppedReason == nil else { return }
         stoppedReason = reason
         resumed = false
@@ -185,7 +229,7 @@ final class SplatSession: ObservableObject {
         stopPolling()
         status = "paused: \(reason)"
         UIApplication.shared.isIdleTimerDisabled = false
-        NSLog("SplatRunStopped: reason=%@", reason)
+        NSLog("SplatRunStopped: reason=%@", reason.description)
     }
 
     var resolutionText: String {
@@ -227,21 +271,14 @@ final class SplatSession: ObservableObject {
             guard let session, session.stoppedReason == nil else { return }
             session.scenePrepared = true
             session.status = "\(splatCount) splats"
-            session.firstLoadedTime = ProcessInfo.processInfo.systemUptime
+            let firstWorldFrame = session.firstLoadedTime == nil
+            if firstWorldFrame { session.firstLoadedTime = ProcessInfo.processInfo.systemUptime }
             NSLog("SplatPreparation: first-frame-ready elapsed=%.3f", ProcessInfo.processInfo.systemUptime - session.preparationStarted)
             if session.resumed {
                 session.orbit?.begin()
                 NSLog("SplatPreparation: interaction-ready orbit=%d", session.orbit == nil ? 0 : 1)
             }
-            if let speed = session.sdkOrbitSpeed {
-                if let dolly = session.sdkOrbitDolly {
-                    NSLog("SplatSDKOrbit: dolly=%.2f accepted=%d", dolly,
-                          view.dolly(deltaRadius: dolly) ? 1 : 0)
-                }
-                let accepted = view.animateOrbit(degrees: 360, degreesPerSecond: speed)
-                NSLog("SplatSDKOrbit: accepted=%d degrees=360 speed=%.2f", accepted ? 1 : 0, speed)
-                if accepted { session.sdkOrbitStartedAt = ProcessInfo.processInfo.systemUptime }
-            }
+            if firstWorldFrame { session.beginScriptedRun() }
         }
 
         func splatView(_ view: SplatMetalView, worldFailed message: String) {
@@ -250,11 +287,32 @@ final class SplatSession: ObservableObject {
         }
 
         func splatViewColliderReady(_ view: SplatMetalView) {
-            session?.walking = true
+            guard let session, !session.isScripted else { return }
+            session.walking = true
         }
 
         func splatView(_ view: SplatMetalView, colliderFailed message: String) {
             session?.status = "collider failed: \(message)"
+        }
+    }
+}
+
+/// Why a run stopped, logged as `SplatRunStopped: reason=`.
+enum StopReason: Equatable, CustomStringConvertible {
+    case runInvalid, orbitRejected, orbitComplete, footprintLimit
+    case memorySampleFailed(kern_return_t)
+    case availableMemoryBelow(bytes: Int)
+    case thermal(ProcessInfo.ThermalState)
+
+    var description: String {
+        switch self {
+        case .runInvalid: "run-invalid"
+        case .orbitRejected: "orbit-rejected"
+        case .orbitComplete: "orbit-complete"
+        case .footprintLimit: "footprint-limit"
+        case .memorySampleFailed(let result): "memory-sample-failed-\(result)"
+        case .availableMemoryBelow(let bytes): "available-memory-below-\(bytes >> 20)MiB"
+        case .thermal(let state): "thermal-\(state.rawValue)"
         }
     }
 }
@@ -264,4 +322,17 @@ struct SplatViewHost: UIViewRepresentable {
 
     func makeUIView(context: Context) -> SplatMetalView { session.view }
     func updateUIView(_ uiView: SplatMetalView, context: Context) {}
+}
+
+// Here, beside the view, so QualityTier.swift stays Foundation-only for the macOS test target.
+extension QualityTier {
+    func apply(to view: SplatMetalView) {
+        view.renderScale = renderScale
+        view.shDegree = shDegree
+        var policy = view.renderPolicy
+        policy.sortDepth = sortDepth
+        policy.lodErrorPixels = lodErrorPixels
+        policy.lodSplatLimit = lodSplatLimit
+        view.renderPolicy = policy
+    }
 }

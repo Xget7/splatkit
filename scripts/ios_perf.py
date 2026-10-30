@@ -19,6 +19,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import benchmark_report  # noqa: E402
 import ios_power  # noqa: E402
+import run_file  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "apps" / "ios-dev"
@@ -28,6 +29,8 @@ CONFIGURATION = "Release"
 DERIVED_DATA = ROOT / "build" / "ios-dev-derived"
 APP = DERIVED_DATA / "Build" / "Products" / f"{CONFIGURATION}-iphoneos" / "SplatKitDev.app"
 BUNDLE_ID = "com.splatkit.devapp"
+# The dev app takes the whole run file, scripts/benchmarks/run.schema.json, in this argument.
+RUN_ARGUMENT = "--run"
 EXECUTABLE = "SplatKitDev.app/SplatKitDev"
 RUNS_DIR = ROOT / "output" / "ios-perf"
 # The dev app's QualityTier raw values.
@@ -45,13 +48,16 @@ TRACE_TEMPLATE = "Metal System Trace"
 POWER_TEMPLATE = "Power Profiler"
 # Over Wi-Fi the iPhone 17 Pro took about 5 minutes to save a 30 s trace and as long for a 10 s one.
 TRACE_SAVE_ALLOWANCE_S = 600
+# A Wi-Fi Metal System Trace once stopped at its time limit and never saved, so it needs a cable.
+# Power Profiler stays on Wi-Fi: charging over the cable would distort the power reading.
+CABLE = "wired"
 
 BENCHMARK_STARTED = "benchmark started:"
 BENCHMARK_DONE = "benchmark gpu ms:"
-FAILURE = re.compile(r"SplatKit E: |SplatWorldMissing: |SplatRunStopped: ")
+FAILURE = re.compile(r"SplatKit E: |SplatWorldMissing: |SplatRunStopped: |SplatRunInvalid: ")
 # Engine errors, Metal API Validation assertions and Shader Validation reports.
 ERROR = re.compile(r"SplatKit E: |failed assertion|-\[MTLDebug|Invalid (device|constant|threadgroup|texture) "
-                   r"(load|store)|Shader Validation|SplatWorldMissing: ")
+                   r"(load|store)|Shader Validation|SplatWorldMissing: |SplatRunInvalid: ")
 WAITING, STARTED, DONE, FAILED = "waiting", "started", "done", "failed"
 # The turn holds pitch, so a change during it means a touch moved the camera.
 PITCH = re.compile(r" pitch (-?\d+\.\d+),")
@@ -62,21 +68,12 @@ CAPABILITIES = re.compile(r"Metal capabilities: family (?P<family>Apple\d+), Met
                           r"max buffer (?P<max_buffer_bytes>\d+) B, working set (?P<working_set_bytes>\d+) B")
 
 
-def launch_command(udid, seconds, quality, pose, world, validation, budget=None, subpixel=None):
-    """The devicectl launch that streams the app's console; --hud 0 keeps HUD redraws out."""
+def launch_command(udid, doc, validation):
+    """The devicectl launch that streams the app's console, with doc as its run file."""
     variables = {**CONSOLE_VARIABLES, **(VALIDATION_VARIABLES if validation else {})}
-    command = ["xcrun", "devicectl", "device", "process", "launch", "--device", udid, "--console",
-               "--terminate-existing", "--environment-variables", json.dumps(variables), BUNDLE_ID,
-               "--benchmark", str(seconds), "--quality", quality, "--hud", "0", "--keep-awake", "1"]
-    if pose:
-        command += ["--pose", pose]
-    if world:
-        command += ["--world", world]
-    if budget is not None:
-        command += ["--budget", str(budget)]
-    if subpixel is not None:
-        command += ["--subpixel", str(subpixel)]
-    return command
+    return ["xcrun", "devicectl", "device", "process", "launch", "--device", udid, "--console",
+            "--terminate-existing", "--environment-variables", json.dumps(variables), BUNDLE_ID,
+            RUN_ARGUMENT, run_file.encode(doc)]
 
 
 def devicectl_json(*args):
@@ -92,7 +89,8 @@ def device_environment(details):
     properties = details["result"]["deviceProperties"]
     hardware = details["result"]["hardwareProperties"]
     return {"device": hardware["marketingName"], "name": properties["name"], "model": hardware["productType"],
-            "ios": properties["osVersionNumber"], "ios_build": properties["osBuildUpdate"]}
+            "ios": properties["osVersionNumber"], "ios_build": properties["osBuildUpdate"],
+            "transport": details["result"]["connectionProperties"]["transportType"]}
 
 
 def unlocked(lock_state):
@@ -195,6 +193,8 @@ def run(args):
     if not unlocked(devicectl_json("device", "info", "lockState", "--device", args.udid)):
         raise RuntimeError("the iPhone is locked; unlock it and keep it awake")
     device = device_environment(devicectl_json("device", "info", "details", "--device", args.udid))
+    if args.trace and device["transport"] != CABLE:
+        raise RuntimeError(f"the iPhone is on {device['transport']}; connect it by USB to record a trace")
     if args.power and int(device["ios"].split(".")[0]) < 26:
         raise RuntimeError("Power Profiler requires iOS 26 or later")
     if not args.skip_build:
@@ -212,10 +212,12 @@ def run(args):
     trace_path = out / ("power.trace" if args.power else "metal.trace")
     trace = []
     print(f"running a {args.seconds:g} s turn", flush=True)
+    doc = run_file.document(args.seconds, args.quality, pose=args.pose, world=args.world, budget=args.budget,
+                            subpixel=args.subpixel)
+    run_file.save(doc, out)
+    command = launch_command(args.udid, doc, args.validation)
     with console_path.open("w") as console, (out / "trace.log").open("w") as trace_log:
-        app = subprocess.Popen(launch_command(args.udid, args.seconds, args.quality, args.pose, args.world,
-                                              args.validation, args.budget, args.subpixel),
-                               stdout=console, stderr=subprocess.STDOUT)
+        app = subprocess.Popen(command, stdout=console, stderr=subprocess.STDOUT)
         def on_started():
             if tracing:
                 pid = app_pid(devicectl_json("device", "info", "processes", "--device", args.udid))

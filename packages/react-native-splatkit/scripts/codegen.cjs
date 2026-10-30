@@ -30,6 +30,7 @@ assert.deepEqual(spec.props.map(prop => prop.name).sort(), [
   'cullMarginDegrees',
   'linearBlending',
   'lookSensitivity',
+  'maxFramesPerSecond',
   'motionEnabled',
   'paused',
   'policy',
@@ -141,6 +142,7 @@ assert.deepEqual(world.map(prop => prop.name).sort(), [
   'nearPlane',
   'requestId',
   'residencyCapacitySplats',
+  'sourceFrame',
 ]);
 assert.equal(
   world.find(prop => prop.name === 'lodCapacitySplats').typeAnnotation.type,
@@ -162,6 +164,22 @@ for (const name of ['fieldOfViewDegrees', 'nearPlane', 'farPlane']) {
     default: 0,
   });
 }
+// An absent frame reaches native as empty, which native reads as the file's own frame.
+const sourceFrame = world.find(prop => prop.name === 'sourceFrame');
+assert.equal(sourceFrame.optional, true);
+assert.deepEqual(sourceFrame.typeAnnotation, {
+  type: 'StringTypeAnnotation',
+  default: '',
+});
+// An absent frame rate cap reaches native as zero, which native reads as the display's maximum.
+const maxFramesPerSecond = spec.props.find(
+  prop => prop.name === 'maxFramesPerSecond',
+);
+assert.equal(maxFramesPerSecond.optional, true);
+assert.deepEqual(maxFramesPerSecond.typeAnnotation, {
+  type: 'DoubleTypeAnnotation',
+  default: 0,
+});
 const policy = spec.props.find(prop => prop.name === 'policy').typeAnnotation
   .properties;
 assert.deepEqual(policy.map(prop => prop.name).sort(), [

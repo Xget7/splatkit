@@ -21,6 +21,9 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, assign) BOOL touchLookEnabled;
 @property(nonatomic, assign) CGFloat lookSensitivity;
 @property(nonatomic, assign) BOOL motionEnabled;
+/// The most frames a second the view draws, clamped to 1 to 240; 0, the default, is the
+/// display's maximum. A value that is not finite or is negative keeps the previous cap.
+@property(nonatomic, assign) CGFloat maxFramesPerSecond;
 /// Seconds between camera pose events; 0 sends none.
 @property(nonatomic, assign) CFTimeInterval cameraPoseInterval;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock worldEvent;
@@ -32,11 +35,13 @@ typedef void (^SplatKitRNEventBlock)(NSDictionary *event);
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock cameraEvent;
 @property(nonatomic, copy, nullable) SplatKitRNEventBlock focusResultEvent;
 /// `kind` 0 decodes one `.spz` or `.lodsplat` file; 1 streams the tileset whose index
-/// `path` names. Anything else, or a lens the engine refuses, fails the load as an invalid
-/// request and keeps the current world.
+/// `path` names. Anything else, a `sourceFrame` that names no frame, or a lens the engine
+/// refuses, fails the load as an invalid request and keeps the current world. A nil
+/// `sourceFrame` keeps each file's own frame.
 - (void)loadWorld:(NSString *)path requestId:(NSString *)requestId kind:(NSInteger)kind
-      maxShDegree:(NSInteger)maxShDegree lodCapacity:(NSInteger)lodCapacity
-residencyCapacity:(NSInteger)residencyCapacity lens:(SKLensSettings)lens;
+      maxShDegree:(NSInteger)maxShDegree sourceFrame:(nullable NSString *)sourceFrame
+      lodCapacity:(NSInteger)lodCapacity residencyCapacity:(NSInteger)residencyCapacity
+             lens:(SKLensSettings)lens;
 /// Loads a collider GLB and enables walk mode when it is ready. An empty path releases it.
 - (void)loadCollider:(NSString *)path requestId:(NSString *)requestId;
 /// The walker's shape, applied at once and to a collider loaded later. NO when a value is

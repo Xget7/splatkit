@@ -8,6 +8,8 @@ type NativeWorldRequest = Readonly<{
   /** 0 one file, 1 a tileset index. Optional so a request without it stays a file. */
   kind?: CodegenTypes.WithDefault<CodegenTypes.Int32, 0>;
   maxShDegree: CodegenTypes.Int32;
+  /** The file's axes as three letters; empty, as absent arrives, keeps the file's own frame. */
+  sourceFrame?: CodegenTypes.WithDefault<string, ''>;
   lodCapacitySplats: CodegenTypes.Int32;
   residencyCapacitySplats: CodegenTypes.Int32;
   /** Vertical degrees; 0, as absent arrives, keeps the native default. */
@@ -177,6 +179,11 @@ export interface NativeProps extends ViewProps {
   touchLookEnabled?: CodegenTypes.WithDefault<boolean, true>;
   /** Radians per point dragged to look. */
   lookSensitivity?: CodegenTypes.WithDefault<CodegenTypes.Double, 0.004>;
+  /**
+   * The most frames a second the view draws, 1 to 240; 0, the default, is the display's own
+   * maximum. 60 halves the GPU work of a 120 Hz panel.
+   */
+  maxFramesPerSecond?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
   /** Seconds between onCameraPose events; 0, the default, never sends one. */
   cameraPoseInterval?: CodegenTypes.WithDefault<CodegenTypes.Double, 0>;
   /** The resolved renderer policy; native re-validates and reports the effective one. */

@@ -16,7 +16,9 @@ bool MetalVisibilityPass::create(id<MTLDevice> device, id<MTLLibrary> library, K
   bool ok = true;
   for (uint32_t slot = 0; slot < kFramesInFlight; ++slot) {
     count_[slot] = metal::buffer(device, sizeof(uint32_t));
-    drawArguments_[slot] = metal::buffer(device, kDrawBatches * kDrawArgumentBytes);
+    // The CPU reads the count and writes the ranges; only the GPU touches the draw arguments.
+    drawArguments_[slot] =
+        metal::buffer(device, kDrawBatches * kDrawArgumentBytes, MTLResourceStorageModePrivate);
     ranges_[slot] = metal::buffer(device, size_t{kMaxRanges} * sizeof(SplatRenderer::Range));
     rangeStarts_[slot] = metal::buffer(device, size_t{kMaxRanges + 1} * sizeof(uint32_t));
     ok = ok && count_[slot] != nil && drawArguments_[slot] != nil && ranges_[slot] != nil &&
@@ -83,7 +85,8 @@ bool MetalVisibilityPass::reserve(uint32_t capacity, uint32_t activeCapacity) {
     indexedOnly_ = activeCapacity > 0 && activeCapacity < sourceCapacity;
     return true;
   }
-  id<MTLBuffer> projected = metal::buffer(device_, size_t{capacity} * sizeof(ProjectedSplat));
+  id<MTLBuffer> projected = metal::buffer(device_, size_t{capacity} * sizeof(ProjectedSplat),
+                                          MTLResourceStorageModePrivate);
   if (projected == nil) {
     LOGE("visibility buffers for %u splats failed", capacity);
     return false;
@@ -99,16 +102,15 @@ bool MetalVisibilityPass::encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot,
                                         id<MTLBuffer> uniforms, id<MTLBuffer> splats,
                                         id<MTLBuffer> sh, int shDegree,
                                         const SplatRenderer::Range* ranges, uint32_t rangeCount,
-                                        id<MTLBuffer> keys, id<MTLBuffer> values,
-                                        id<MTLBuffer> indices, id<MTLBuffer> activeCount) {
+                                        id<MTLBuffer> keys, id<MTLBuffer> indices,
+                                        id<MTLBuffer> activeCount) {
   const bool indexed = indices != nil;
   if (indexedOnly_ && !indexed) return false;
   if (indexed != (activeCount != nil)) return false;
   if (slot >= kFramesInFlight || rangeCount > kMaxRanges || capacity_ == 0 ||
       (rangeCount > 0 && ranges == nullptr))
     return false;
-  const size_t sortBytes = size_t{capacity_} * sizeof(uint32_t);
-  if (keys.length < sortBytes || values.length < sortBytes) return false;
+  if (keys.length < size_t{capacity_} * sizeof(uint32_t)) return false;
   // Validate before writing slot inputs, so a rejected request cannot corrupt them.
   uint32_t total = 0;
   for (uint32_t i = 0; i < rangeCount; ++i) {
@@ -140,7 +142,6 @@ bool MetalVisibilityPass::encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot,
   [cull setBuffer:rangeStarts_[slot] offset:0 atIndex:3];
   [cull setBytes:&rangeCount length:sizeof(rangeCount) atIndex:4];
   [cull setBuffer:keys offset:0 atIndex:5];
-  [cull setBuffer:values offset:0 atIndex:6];
   [cull setBuffer:count_[slot] offset:0 atIndex:7];
   [cull setBuffer:sh offset:0 atIndex:8];
   [cull setBuffer:projected_ offset:0 atIndex:9];

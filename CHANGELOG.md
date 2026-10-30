@@ -8,12 +8,20 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ### Added
 
-- Offline SPZ v2/v3/v4 selection and explicit RDF/RUB normalization through `splat-convert`, `ply2spz` and `prepare-world.sh`, with pinned PlayCanvas/SplatTransform interoperability checks in CI.
+- Offline SPZ v2/v3/v4 selection through `splat-convert`, `ply2spz` and `prepare-world.sh`, with pinned PlayCanvas/SplatTransform interoperability checks in CI.
+- Any of the 48 axis-aligned coordinate frames, named by three letters such as `rub`, `rdf` or `rfu`, as the source frame of a world, its tiles and its collider: `SplatEngine::setSourceFrame`, `SplatSurfaceView.sourceFrame` and `--source-frame` on `splat-convert`, `splat-tile`, `splat_collider`, `splat_lod_build` and `prepare-world.sh`.
 - Android Fabric adapter compilation and host tests join the React Native CI gate.
 - `ios-package.yml` builds a device/simulator XCFramework candidate with its checksum and source/Xcode provenance for release integration.
 
+### Changed
+
+- Breaking: an SPZ loads in the frame its `SPZ_ADOBE_coordinate_system` tag declares, else in the SPZ default `rub`, so an untagged `rdf` file, such as a World Labs Marble export, needs source frame `rdf`.
+  PLY defaults to `rdf` and glTF to its own frame.
+- Breaking: `splat-convert` and `ply2spz` write untagged `rub` by default; any other `--target-frame` is tagged and needs `--spz-version 4`.
+
 ### Fixed
 
+- SPZ v2 and v3 files that carry a frame tag load in that frame; the tag was dropped while reading.
 - The React Native mirror's `publish.yml` no longer passes `--prerelease`, so `react-native-splatkit` shows a Latest release the way the Android and iOS repositories already do.
 - The React Native example builds without warnings on either platform.
   Its `Info.plist` no longer declares an empty `NSLocationWhenInUseUsageDescription`, which the app never used and App Store validation rejects, and `MainActivity` uses the `DefaultReactActivityDelegate` constructor React Native 0.87 has not deprecated.

@@ -26,7 +26,7 @@ Do not claim GPU passes were profiled from app-published FPS/stage counters alon
    It records Metal System Trace for the whole turn into `metal.trace`, and the run fails when the trace is missing.
    Over Wi-Fi, saving the trace takes about 5 minutes and about 200 MB.
    Keep traced runs out of the comparison, since tracing adds load.
-4. **Read** each run directory: `report.json` (the summary), `console.log` (every engine line), `metal.trace` (open in Instruments).
+4. **Read** each run directory: `report.json` (the summary), `run.json` (the [run file](../../../scripts/benchmarks/run.schema.json) the app was launched with), `console.log` (every engine line), `metal.trace` (open in Instruments).
    Done when every figure in your report traces back to one of those files.
 5. **Report** the device, iOS version, commit and dirty flag from `report.json` `run`, every skipped step, and each conclusion with the figures behind it.
    A difference counts only when it exceeds the spread between runs of the same side.

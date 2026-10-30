@@ -73,7 +73,9 @@ The [React Native package](../react-native-splatkit/README.md) maps its `policy`
 | `animateOrbit(degrees, degreesPerSecond, easeInOut)` | Run a finite engine-driven orbit and idle again when it finishes. |
 | `applyQuality(RenderQuality)` | Apply preset; individual properties can override it. |
 | `renderScale` | Render-target scale, 0.1–2; changing it changes image quality. |
+| `maxFramesPerSecond` | Most frames a second drawn, 1 to 240; null, the default, draws every vsync. 60 halves the GPU work of a 120 Hz panel. |
 | `shDegree`, `maxShDegree` | Draw/load SH cap, 0–3. Set the load cap before loading. |
+| `sourceFrame` | `CoordinateFrame` the next world, its tiles and collider were written in, read when each load is called; `CoordinateFrame.parse("rfu")` names any of the 48. Null, the default, keeps the SPZ tag, else `rub`, and glTF `rub`. Untagged World Labs Marble exports need `CoordinateFrame.RDF`; `.lodsplat` ignores it. |
 | `splatBudget` | LOD capacity for subsequent loads; zero disables automatic tree construction. Prebuilt LOD files still select a hierarchy. GPU maximum: 4M. |
 | `residencyBudget` | Resident splats for subsequent streamed worlds, separate from LOD selection. |
 | `cullMarginDegrees` | Margin a streamed tileset keeps loaded around the view, so a turn finds tiles already there. |
@@ -98,7 +100,7 @@ Optional `com.splatkit.ui.SplatHudView` and `JoystickView` are host conveniences
 ## GPU contract
 
 GPU LOD → visibility/compaction → stable radix → indirect hardware draw.
-Full32 keys are default; a `sortDepth` of 16 selects approximate two-pass sorting.
+16-bit keys and two-pass sorting are the default; a `sortDepth` of 32 keeps the full float depth in four passes.
 Above 4M visibility survivors the draw fails closed with diagnostics.
 Source capacity depends on `maxStorageBufferRange` and memory; full LOD hierarchy residency is required.
 Parents and subpixel rejection are approximate.

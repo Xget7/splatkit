@@ -1,0 +1,143 @@
+[
+  {
+    "name": "an empty run opens the default world",
+    "run": { "schema_version": 1 }
+  },
+  {
+    "name": "the 12M reference benchmark",
+    "run": {
+      "schema_version": 1,
+      "world": { "file": "scene.lodsplat" },
+      "renderer": { "quality": "high", "budget": 1800000, "subpixel": 1.0 },
+      "pose": [-7.25, 1.6, 5.25, 0, 0],
+      "run": { "seconds": 30 }
+    }
+  },
+  {
+    "name": "every shared field",
+    "run": {
+      "schema_version": 1,
+      "world": { "file": "house.spz", "source_frame": "RDF", "collider": "house.glb" },
+      "renderer": { "quality": "ultra", "budget": 0, "subpixel": 0, "lod_error_pixels": 0.5, "lod_splat_limit": 1000000 },
+      "pose": [0, 1.2, 3, -1.57, 0.1],
+      "run": { "seconds": 12.5 }
+    }
+  },
+  {
+    "name": "an orbit",
+    "run": { "schema_version": 1, "run": { "seconds": 12.5, "orbit": { "anchor": [0, 1, 0], "degrees": -120 } } },
+    "android_error": "run.orbit"
+  },
+  {
+    "name": "a capture and the resource monitor",
+    "run": { "schema_version": 1, "run": { "seconds": 10, "capture_at": 4, "monitor": true } },
+    "android_error": "run.capture_at"
+  },
+  {
+    "name": "an iOS quality level",
+    "run": { "schema_version": 1, "renderer": { "quality": "balanced" } },
+    "android_error": "renderer.quality"
+  },
+  {
+    "name": "an Android quality level",
+    "run": { "schema_version": 1, "renderer": { "quality": "medium" } },
+    "ios_error": "renderer.quality"
+  },
+  {
+    "name": "a misspelt key",
+    "run": { "schema_version": 1, "renderer": { "lod_eror_pixels": 0.5 } },
+    "error": "renderer.lod_eror_pixels"
+  },
+  {
+    "name": "a dropped launch flag",
+    "run": { "schema_version": 1, "hud": false },
+    "error": "hud"
+  },
+  {
+    "name": "a missing schema version",
+    "run": { "world": { "file": "scene.lodsplat" } },
+    "error": "schema_version"
+  },
+  {
+    "name": "an unknown schema version",
+    "run": { "schema_version": 2 },
+    "error": "schema_version"
+  },
+  {
+    "name": "a number written as a string",
+    "run": { "schema_version": 1, "renderer": { "subpixel": "1.o" } },
+    "error": "renderer.subpixel"
+  },
+  {
+    "name": "a fractional budget",
+    "run": { "schema_version": 1, "renderer": { "budget": 1.5 } },
+    "error": "renderer.budget"
+  },
+  {
+    "name": "a negative splat limit",
+    "run": { "schema_version": 1, "renderer": { "lod_splat_limit": -1 } },
+    "error": "renderer.lod_splat_limit"
+  },
+  {
+    "name": "a zero error threshold",
+    "run": { "schema_version": 1, "renderer": { "lod_error_pixels": 0 } },
+    "error": "renderer.lod_error_pixels"
+  },
+  {
+    "name": "an unknown quality level",
+    "run": { "schema_version": 1, "renderer": { "quality": "max" } },
+    "error": "renderer.quality"
+  },
+  {
+    "name": "a world without a file",
+    "run": { "schema_version": 1, "world": { "collider": "house.glb" } },
+    "error": "world.file"
+  },
+  {
+    "name": "a source frame that is not three axis letters",
+    "run": { "schema_version": 1, "world": { "file": "house.spz", "source_frame": "xyz" } },
+    "error": "world.source_frame"
+  },
+  {
+    "name": "a source frame naming one axis twice",
+    "run": { "schema_version": 1, "world": { "file": "house.spz", "source_frame": "rrd" } },
+    "error": "world.source_frame"
+  },
+  {
+    "name": "a source frame with a trailing newline",
+    "run": { "schema_version": 1, "world": { "file": "house.spz", "source_frame": "rdf\n" } },
+    "error": "world.source_frame"
+  },
+  {
+    "name": "a budget past a 32-bit integer",
+    "run": { "schema_version": 1, "renderer": { "budget": 2147483648 } },
+    "error": "renderer.budget"
+  },
+  {
+    "name": "a pose with four numbers",
+    "run": { "schema_version": 1, "pose": [0, 1, 2, 0] },
+    "error": "pose"
+  },
+  {
+    "name": "a run without its length",
+    "run": { "schema_version": 1, "run": { "monitor": true } },
+    "error": "run.seconds"
+  },
+  {
+    "name": "a run of zero seconds",
+    "run": { "schema_version": 1, "run": { "seconds": 0 } },
+    "error": "run.seconds"
+  },
+  {
+    "name": "an orbit of zero degrees",
+    "run": { "schema_version": 1, "run": { "seconds": 10, "orbit": { "anchor": [0, 0, 0], "degrees": 0 } } },
+    "error": "run.orbit.degrees",
+    "android_error": "run.orbit"
+  },
+  {
+    "name": "an orbit without an anchor",
+    "run": { "schema_version": 1, "run": { "seconds": 10, "orbit": { "degrees": 90 } } },
+    "error": "run.orbit.anchor",
+    "android_error": "run.orbit"
+  }
+]

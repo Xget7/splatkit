@@ -8,6 +8,7 @@ import com.splatkit.CameraRequest
 import com.splatkit.CameraResolution
 import com.splatkit.CameraState
 import com.splatkit.CharacterSettings
+import com.splatkit.CoordinateFrame
 import com.splatkit.LensSettings
 import com.splatkit.DeviceCapabilities
 import com.splatkit.RenderPolicy
@@ -93,6 +94,8 @@ internal class SplatEngine(cacheDir: String) {
     fun loadWorldFile(path: String) = nativeLoadWorldFile(handle, path)
     fun loadTiledWorldFile(path: String) = nativeLoadTiledWorldFile(handle, path)
     fun loadColliderFile(path: String) = nativeLoadColliderFile(handle, path)
+    /** Null clears it. False when native code names no frame by these letters; the previous one stays. */
+    fun setSourceFrame(frame: CoordinateFrame?): Boolean = nativeSetSourceFrame(handle, frame?.letters)
 
     // Camera and input.
 
@@ -236,6 +239,7 @@ internal class SplatEngine(cacheDir: String) {
     private external fun nativeLoadWorldFile(handle: Long, path: String)
     private external fun nativeLoadTiledWorldFile(handle: Long, path: String)
     private external fun nativeLoadColliderFile(handle: Long, path: String)
+    private external fun nativeSetSourceFrame(handle: Long, letters: String?): Boolean
     private external fun nativeSetCameraPose(handle: Long, x: Float, y: Float, z: Float, yaw: Float, pitch: Float)
     private external fun nativeSetCameraLookAt(
         handle: Long,

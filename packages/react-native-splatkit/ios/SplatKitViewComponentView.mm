@@ -176,6 +176,7 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
   _splatView.touchLookEnabled = next.touchLookEnabled;
   _splatView.lookSensitivity = next.lookSensitivity;
   _splatView.cameraPoseInterval = next.cameraPoseInterval;
+  _splatView.maxFramesPerSecond = next.maxFramesPerSecond;
   if (!previous || next.motionEnabled != previous->motionEnabled) {
     _splatView.motionEnabled = next.motionEnabled;
   }
@@ -256,11 +257,15 @@ static const SKDeviceCapabilities *DeviceCapabilities() {
       lens.hasDepthRange = world.nearPlane != 0 || world.farPlane != 0;
       lens.nearPlane = static_cast<float>(world.nearPlane);
       lens.farPlane = static_cast<float>(world.farPlane);
+      // An absent frame arrives empty, and nil keeps each file's own.
+      NSString *sourceFrame = world.sourceFrame.empty()
+          ? nil : [NSString stringWithUTF8String:world.sourceFrame.c_str()];
       // The engine this load creates applies the stored policy, so it is applied once.
       [_splatView loadWorld:[NSString stringWithUTF8String:world.filePath.c_str()]
                    requestId:[NSString stringWithUTF8String:world.requestId.c_str()]
                         kind:world.kind
                  maxShDegree:world.maxShDegree
+                 sourceFrame:sourceFrame
                  lodCapacity:world.lodCapacitySplats
            residencyCapacity:world.residencyCapacitySplats
                         lens:lens];

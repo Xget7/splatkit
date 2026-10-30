@@ -22,9 +22,10 @@ Do not claim GPU passes were profiled from app-published FPS/stage counters alon
 2. **Check the phone.** `adb devices -l` lists exactly one device (else pass `--serial`), the screen is unlocked and awake, and nothing else holds the GPU (Snapdragon Profiler capture, other apps).
 3. **Record.** `python3 scripts/android_perf.py --seconds 30` with the same `--quality`, `--pose` and `--world` for every run you will compare.
    `--world` names a file pushed under `/sdcard/Android/data/com.splatkit.devapp/files/`; without it the run loads the bundled kitchen.
+   An untagged World Labs `.spz` pushed as `--world` also needs `--source-frame rdf`; the bundled kitchen and `.lodsplat` worlds need none.
    Done when it prints `status passed`, `app slices in trace: True` and an analysis block.
    For a comparison, record at least two runs per side; the run-to-run spread is the noise floor.
-4. **Read** each run directory: `report.json` (app timings from GPU timestamp queries), `analysis.json` (the trace), `trace.perfetto-trace` (open at https://ui.perfetto.dev for anything the numbers leave open).
+4. **Read** each run directory: `report.json` (app timings from GPU timestamp queries), `run.json` (the [run file](../../../scripts/benchmarks/run.schema.json) the app was launched with), `analysis.json` (the trace), `trace.perfetto-trace` (open at https://ui.perfetto.dev for anything the numbers leave open).
    Done when every figure in your report traces back to one of those files.
 5. **Report** the device, Android version, commit and dirty flag from `report.json` `run`, every skipped step, and each conclusion with the figures behind it.
    A difference counts only when it exceeds the spread between runs of the same side.

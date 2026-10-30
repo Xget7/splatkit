@@ -5,7 +5,6 @@ struct ContentView: View {
     @StateObject private var session = SplatSession()
     @Environment(\.scenePhase) private var scenePhase
     @State private var walkSpeed: Float = 1.5
-    private let args = LaunchArgs()
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -21,7 +20,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("splat.preparing")
             }
-            if session.scenePrepared && (args.bool("hud") ?? true) {
+            if session.scenePrepared && !session.isScripted {
                 overlay
             }
             // The SDK ships no walking control; this is the app's own, over the SDK's view.
@@ -42,7 +41,7 @@ struct ContentView: View {
         .onAppear(perform: start)
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .onChange(of: scenePhase) { _, phase in
-            UIApplication.shared.isIdleTimerDisabled = phase == .active && session.stoppedReason == nil && (args.bool("keep-awake") ?? false)
+            UIApplication.shared.isIdleTimerDisabled = phase == .active && session.stoppedReason == nil && session.isScripted
             switch phase {
             case .active: session.resume()
             case .inactive, .background: session.pause()
@@ -79,55 +78,49 @@ struct ContentView: View {
                 session.view.setMotionEnabled(!session.view.isMotionEnabled)
                 session.motion = session.view.isMotionEnabled
             }
-            Button("capture") { capture() }
+            Button("capture") { session.capture() }
         }
         .buttonStyle(.bordered)
         .tint(.white)
     }
 
     private func start() {
-        UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && (args.bool("keep-awake") ?? false)
+        guard let runFile = session.runFile, session.stoppedReason == nil else { return }
+        UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && session.isScripted
         let view = session.view
-        let defaultWorld = "kitchen_500k.spz"
-        let requestedMap = (args.string("tileset") ?? args.string("world") ?? defaultWorld).lowercased()
-        let issMap = requestedMap.contains("iss")
-        let sdkOrbitEnabled = args.float("sdk-orbit-speed").map { $0.isFinite && $0 > 0 } ?? false
-        let orbitEnabled = issMap && (args.bool("orbit") ?? true)
-            && !args.has("pose") && !args.has("benchmark") && !args.has("walk") && !sdkOrbitEnabled
+        let world = runFile.world ?? .interactive
+        let issMap = world.file.lowercased().contains(RunFile.World.issName)
+        // A pose holds the camera where the run file puts it.
+        let issShot = issMap && !session.isScripted && runFile.pose == nil
         session.orbit?.end()
         session.orbit = nil
-        // Change framing with camera distance, not render resolution or field of view.
-        view.renderScale = args.float("scale") ?? 1
-        view.spatialUpscaling = args.bool("metalfx") ?? true
-        view.touchLookEnabled = !orbitEnabled && !sdkOrbitEnabled
-        view.maxShDegree = args.int("sh") ?? 1
-        if let v = args.int("shdraw") { view.shDegree = v }
-        // Explicit renderer switches win; otherwise start at a quality level, High by default.
-        let customQuality = ["scale", "shdraw", "depth-key-bits", "lod-error-pixels", "lod-splat-limit"].contains(where: args.has)
-        if !customQuality {
-            session.quality = args.string("quality").flatMap(QualityTier.init(rawValue:)) ?? .high
-        }
-        if let v = args.int("budget") { view.splatBudget = v }
-        if let v = args.int("residency") { view.residencyBudget = v }
-        if let v = args.float("margin") { view.cullMarginDegrees = v }
-        if args.has("linear") { view.linearBlending = args.bool("linear") ?? true }
+        view.touchLookEnabled = !session.isScripted && !issShot
 
-        // A requested world that is missing never falls back to the default, so a scripted run
-        // cannot measure the wrong scene.
-        let requested = args.string("tileset") ?? args.string("world") ?? defaultWorld
-        if let url = LaunchArgs.resolve(requested) {
-            if args.string("tileset") != nil {
+        // RunFile checks the letters; the SDK decides whether they name a frame.
+        let sourceFrame = world.sourceFrame.flatMap(CoordinateFrame.init)
+        if let letters = world.sourceFrame, sourceFrame == nil {
+            NSLog("SplatSourceFrameInvalid: %@", letters)
+            session.reject("world.source_frame: \(letters) names no frame")
+            return
+        }
+        view.sourceFrame = sourceFrame
+        if let url = AppFiles.resolve(world.file) {
+            if world.streamsTiles {
                 view.loadTiledWorld(tileset: url)
             } else {
                 view.loadWorld(file: url)
             }
         } else {
-            session.status = "World not found: \(requested)"
-            NSLog("SplatWorldMissing: %@", requested)
+            session.status = "World not found: \(world.file)"
+            NSLog("SplatWorldMissing: %@", world.file)
         }
-        if let collider = args.string("collider"),
-           let url = LaunchArgs.resolve(collider) {
-            view.loadCollider(file: url)
+        if let collider = world.collider {
+            if let url = AppFiles.resolve(collider) {
+                view.loadCollider(file: url)
+            } else {
+                session.status = "Collider not found: \(collider)"
+                NSLog("SplatWorldMissing: %@", collider)
+            }
         }
         // Broadside to the truss, far enough to clear the solar arrays.
         if issMap {
@@ -135,43 +128,24 @@ struct ContentView: View {
         } else {
             view.cameraPose = CameraPose(x: 0, y: 0, z: 0, yaw: 0, pitch: 0)
         }
-        if let pose = args.string("pose") {
-            let p = pose.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
-            if p.count >= 3 {
-                view.cameraPose = CameraPose(x: p[0], y: p[1], z: p[2], yaw: p.count > 3 ? p[3] : 0, pitch: p.count > 4 ? p[4] : 0)
-            }
+        if let pose = runFile.pose {
+            view.cameraPose = CameraPose(x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch)
         }
-        if issMap || sdkOrbitEnabled {
-            view.setMotionEnabled(false)
-        } else {
-            view.setMotionEnabled(args.bool("gyro") ?? false)
-        }
+        view.setMotionEnabled(false)
         session.motion = view.isMotionEnabled
-        if orbitEnabled {
-            var settings = OrbitPath.Settings(pivot: SIMD3<Float>(0, -2, -2))
-            if let radius = args.float("radius"), radius.isFinite, radius > 0 { settings.radius = radius }
-            if let speed = args.float("speed"), speed.isFinite { settings.degreesPerSecond = speed }
-            if let start = args.float("start"), start.isFinite { settings.startDegrees = start }
-            let shot = args.string("shot").flatMap(CameraShot.init(rawValue:)) ?? .orbit
-            session.shot = shot
-            let orbit = OrbitPath(view: view, settings: settings, shot: shot)
-            session.orbit = orbit
+        if issShot {
+            session.orbit = OrbitPath(view: view, settings: OrbitPath.Settings(pivot: SIMD3<Float>(0, -2, -2)), shot: session.shot)
         }
-        if let v = args.float("walk") { view.setWalkVelocity(forward: v, right: 0) }
-        if args.has("benchmark") {
-            view.startBenchmark(seconds: args.float("benchmark") ?? 10)
-        }
-        if let delay = args.float("capture") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(delay)) { capture() }
+        if let run = runFile.run, run.orbit == nil {
+            view.startBenchmark(seconds: Float(run.seconds))
         }
         session.resume()
     }
+}
 
-    private func capture() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let file = documents.appendingPathComponent("capture.png")
-        session.view.captureFrame(to: file) { ok in
-            NSLog("SplatCapture: %@", ok ? "captured capture.png" : "capture failed")
-        }
-    }
+private extension RunFile.World {
+    /// A World Labs export, stored in rdf without saying so.
+    static let interactive = RunFile.World(file: "kitchen_500k.spz", sourceFrame: "rdf")
+    /// Worlds whose file name holds this get the station's framing and camera shots.
+    static let issName = "iss"
 }

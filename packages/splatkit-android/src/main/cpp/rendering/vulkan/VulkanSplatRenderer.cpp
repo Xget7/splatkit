@@ -68,7 +68,7 @@ DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
   policy.fallback.lodErrorPixels = VulkanLodSelection::Quality{}.pixelLimit;
   policy.fallback.alphaThreshold = kQuadMinAlpha;
   policy.fallback.subpixelThreshold = RenderPolicy{}.subpixelThreshold;
-  policy.fallback.sortDepth = SortKeyBits::full32;
+  policy.fallback.sortDepth = RenderPolicy{}.sortDepth;
   policy.fallback.enableFrustumCulling = true;
   // Both paths draw back to front, so nothing stops at a saturated pixel. Front to back
   // needs a half-float accumulation, whose blending cost Adreno 640 more than the early
@@ -236,11 +236,13 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const uint32_t slot = frameLoop_.currentSlot();
   const bool outputLinear = isSrgb(pipelineFormat_);
   // Outside the render pass: transfers are not allowed inside one.
+  const VkBuffer camera =
+      world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view,
+                               outputLinear, turns, policy_.subpixelThreshold)
+             : VK_NULL_HANDLE;
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
-    const VkBuffer camera = camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
-                                            view, outputLinear, turns, policy_.subpixelThreshold);
-    {
+    if (camera != VK_NULL_HANDLE) {
       const TraceSection section(trace::kEncodeCompute);
       gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
                                  std::clamp(frame.shDegree, 0, world_->shDegree), frame);
@@ -249,7 +251,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
       splats_->bindProjected(slot, gpuDraw->projected, gpuDraw->order, gpuDraw->capacity);
     else
       LOGE("GPU frame encode failed; submitting clear frame to preserve fence lifecycle");
-  } else if (world_ && !compute_ && frame.order != nullptr) {
+  } else if (world_ && camera != VK_NULL_HANDLE && !compute_ && frame.order != nullptr) {
     world_->recordOrderUpload(cmd, slot, frame.order, frame.orderCount);
   }
 
@@ -276,12 +278,9 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
 
   if (world_ && gpuDraw) {
     splats_->drawProjected(cmd, slot, gpuDraw->arguments);
-  } else if (world_ && !compute_ && frame.orderSource == OrderSource::cpu) {
+  } else if (world_ && camera != VK_NULL_HANDLE && !compute_ &&
+             frame.orderSource == OrderSource::cpu) {
     const uint32_t count = std::min(frame.drawCount, world_->count);
-    if (count > 0) {
-      camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view, outputLinear, turns,
-                      policy_.subpixelThreshold);
-    }
     splats_->draw(cmd, slot, *world_, count, std::min(frame.shDegree, world_->shDegree));
   }
 
@@ -295,9 +294,9 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   }
   if (gpuDraw && frameLoop_.lastSubmission() != submittedBefore)
     compute_->submitted(slot, frameLoop_.lastSubmission());
-  const bool drewWorld =
-      world_ && (gpuDraw || (!compute_ && frame.orderSource == OrderSource::cpu &&
-                             std::min(frame.drawCount, world_->count) > 0));
+  const bool drewWorld = world_ && camera != VK_NULL_HANDLE &&
+                         (gpuDraw || (!compute_ && frame.orderSource == OrderSource::cpu &&
+                                      std::min(frame.drawCount, world_->count) > 0));
   if (drewWorld && (status == VulkanFrameLoop::Status::ok ||
                     status == VulkanFrameLoop::Status::swapchainSuboptimal)) {
     worldFrameCompletion_.submitted(frameLoop_.lastSubmission());

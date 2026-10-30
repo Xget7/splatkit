@@ -308,7 +308,7 @@ const nativeDefaults = {
   enableFrustumCulling: true,
   enableHiZOcclusion: false,
   enableEarlyTermination: true,
-  sortDepth: 32,
+  sortDepth: 16,
 } as const;
 
 type PresetValues = Omit<PerformancePolicy, 'mode' | 'preset'>;
@@ -378,6 +378,7 @@ const worldFields: Readonly<Record<keyof SplatKitWorldRequest, true>> = {
   filePath: true,
   kind: true,
   maxShDegree: true,
+  sourceFrame: true,
   fieldOfViewDegrees: true,
   nearPlane: true,
   farPlane: true,

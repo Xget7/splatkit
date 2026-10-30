@@ -30,7 +30,8 @@ iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package 
 Use the native view, forward lifecycle and load worlds asynchronously; see each SDK's README for examples.
 
 Worlds are `.spz`, `.lodsplat` or a tileset of `.spz` tiles, prepared on a computer.
-World Labs Marble exports load as they are; any Gaussian splat PLY goes through one command:
+An SPZ loads in the frame it declares, else in SPZ's default `rub`; set the source frame for a file that stores another frame without saying so, such as `rdf` for World Labs Marble exports.
+Any Gaussian splat PLY goes through one command:
 
 ```sh
 scripts/prepare-world.sh scene.ply out/ --collider   # --lod for several million splats, --tiles past phone memory

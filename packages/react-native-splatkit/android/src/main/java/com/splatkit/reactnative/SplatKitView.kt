@@ -49,6 +49,8 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     private var shDegree = 3
     private var linearBlending = false
     private var cullMarginDegrees = 10.0
+    // Zero is the display's own maximum.
+    private var maxFramesPerSecond = 0.0
     private var displayChanged = false
     // The last valid host policy, applied to the current engine and every engine built after.
     private var policy: RevisionedPolicy? = null
@@ -193,6 +195,11 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         displayChanged = true
     }
     fun setLinearBlending(value: Boolean) { linearBlending = value; displayChanged = true }
+    fun setMaxFramesPerSecond(value: Double) {
+        require(value.isFinite() && value >= 0) { "maxFramesPerSecond must be finite and not negative" }
+        maxFramesPerSecond = value
+        displayChanged = true
+    }
     fun setCullMarginDegrees(value: Double) {
         require(value.isFinite() && value in 0.0..MAX_CULL_MARGIN_DEGREES) {
             "cullMarginDegrees must be in 0..${MAX_CULL_MARGIN_DEGREES.toInt()}"
@@ -274,6 +281,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
         view.shDegree = shDegree
         view.linearBlending = linearBlending
         view.cullMarginDegrees = cullMarginDegrees.toFloat()
+        view.maxFramesPerSecond = maxFramesPerSecond.takeIf { it > 0 }?.toFloat()
     }
 
     private fun applyNavigation(view: SplatSurfaceView) {
@@ -392,6 +400,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
     /** Queues the engine's sole decode behind the load-time options it reads. */
     private fun scheduleDecode(view: SplatSurfaceView, world: WorldRequest) {
         val file = File(world.filePath)
+        view.sourceFrame = world.frame
         if (world.kind == WorldKind.TILESET) {
             // The SDK's tiled load takes no options; it reads these, set first, when the
             // tileset uploads. A tileset builds no tree, so it has no LOD capacity to set.

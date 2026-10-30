@@ -256,3 +256,30 @@ test('iOS adapter validates the lens up front and sets it before the decode', ()
     /if \(!\[engine setLens:lens\]\) \{[\s\S]*?kErrorInvalidRequest[\s\S]*?return;\s*\}\s*_engine = engine;[\s\S]*loadWorldFile/,
   );
 });
+
+// An absent frame arrives empty and goes to native as nil; a malformed one fails before the
+// current world is released, and the engine the load creates gets the frame before its decode.
+test('iOS adapter validates the source frame up front and sets it before the decode', () => {
+  const mm = fs.readFileSync(
+    path.join(root, 'ios/SplatKitViewComponentView.mm'),
+    'utf8',
+  );
+  const native = fs.readFileSync(
+    path.join(root, 'ios/SplatKitRNView.mm'),
+    'utf8',
+  );
+  assert.match(mm, /world\.sourceFrame\.empty\(\)\s*\? nil/);
+  assert.match(mm, /sourceFrame:sourceFrame/);
+  assert.match(
+    native,
+    /sourceFrame != nil && \[SKSplatEngine canonicalSourceFrame:sourceFrame\] == nil\) return NO/,
+  );
+  assert.match(
+    native,
+    /validateRequestId:[\s\S]*?sourceFrame:sourceFrame\][\s\S]*?\[self dispose\]/,
+  );
+  assert.match(
+    native,
+    /if \(!\[engine setSourceFrame:sourceFrame\]\) \{[\s\S]*?kErrorInvalidRequest[\s\S]*?return;\s*\}\s*_engine = engine;[\s\S]*loadWorldFile/,
+  );
+});
