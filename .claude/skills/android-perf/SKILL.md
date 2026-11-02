@@ -55,9 +55,8 @@ The frame budget is the display interval: 16.7 ms at 60 Hz.
   Intervals alternating between one and two display periods, with many hitches, mean frames miss vsync because GPU time is near or over the budget.
 - **`render_thread`**: high `Running` means CPU-bound, and high `R` or `R+` means it waits for a core.
   Running mostly on the slowest cluster means the scheduler parked it on little cores.
-- **`cpu_clusters`**: a mean clock far below max on the render thread's cluster means throttling.
-  So does gpu ms rising across the 30-second windows in `logcat.txt`.
-  A throttled run measures heat: cool the phone and rerun.
+- **`cpu_clusters`**: a mean clock below max or rising GPU ms can indicate throttling, but also changing workload.
+  Compare thermal status, clocks and matching work before attributing the change; cool and rerun when starting conditions differ.
 - **`memory`**: process RSS.
   GPU memory is not in the trace on Android 11.
 - **`load_ms`**: world decode, collider decode and GPU upload of the last load.
@@ -70,7 +69,8 @@ Its timings come from a debug build and compare with nothing.
 
 ## Limits
 
-- Perfetto sees CPU time, scheduling, clocks and memory; GPU time comes only from the app's timestamp queries.
+- Perfetto captures CPU time, scheduling, clocks and memory; `--gpu-stages` also requests native GPU render-stage producers when available.
+  Verify populated, attributable GPU samples before treating them as pass timings; otherwise GPU timings come from the app's timestamp queries.
   Per-draw GPU counters (fragments shaded, overdraw, ALU, bandwidth) come from a Snapdragon Profiler Snapshot of a debug build, which is valid for counts and never for milliseconds.
 - `--pose` keeps the position; the turn resets yaw and pitch.
 - A run without `app slices in trace: True` lost the app's trace sections: the installed APK must be the profileable release build the script makes.

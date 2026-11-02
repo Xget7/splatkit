@@ -19,6 +19,8 @@ dependencies {
 
 For current source, use `implementation(project(":splatkit"))` in the included `apps/android-dev` host, or include `packages/splatkit-android` as a Gradle module.
 
+This README describes current source; APIs listed under Unreleased in the [changelog](../../CHANGELOG.md) require a source build until a new artifact ships.
+
 ## Host
 
 ```kotlin
@@ -53,7 +55,7 @@ Unlike iOS, loads are not checked against the memory the app has left, so a worl
 `onWorldReady` means uploaded; `onWorldFrameReady` fires once after a world draw's Vulkan fence completes.
 Keep the view resumed while waiting; completion does not prove visible pixels, presentation scanout or full streamed detail.
 Use `loadCollider(File)` for optional GLB walk collision; otherwise the camera flies.
-SPZ v2–v4 and offline `.lodsplat` worlds are supported, and `loadTiledWorld` streams a `splat-tile` tileset.
+SPZ v1-v4 and offline `.lodsplat` worlds are supported, and `loadTiledWorld` streams a `splat-tile` tileset.
 A PLY is converted offline by [`scripts/prepare-world.sh`](../../scripts/prepare-world.sh), which also builds `.lodsplat` trees and colliders.
 Compose can host the view through `AndroidView`; forward the same lifecycle.
 The [React Native package](../react-native-splatkit/README.md) maps its `policy` prop to `applyRenderPolicy`.
@@ -123,21 +125,23 @@ Artifact alignment checks do not replace execution on a 16 KB device.
 
 The `splatkit_vulkan_*_test` executables need a real Vulkan device and run without a surface.
 `scripts/lint-cpp.sh` links all of them in CI; running them is a manual device step.
-Build them outside the checkout with the NDK toolchain flags from that script plus `-DSPLATKIT_ANDROID_BUILD_TESTS=ON`.
+Reuse an ignored build directory in this checkout with the NDK toolchain flags from that script plus `-DSPLATKIT_ANDROID_BUILD_TESTS=ON`.
 The first configure fetches dependencies over the network.
 
 ```sh
-BUILD=~/.rn-build-external/android-tests
+BUILD=build/android-tests
 cmake -S packages/splatkit-android/src/main/cpp -B "$BUILD" \
   -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DANDROID_STL=c++_static \
   -DSPLATKIT_ANDROID_BUILD_TESTS=ON
 cmake --build "$BUILD" --target splatkit_android_tests
+adb shell mkdir -p /data/local/tmp/splatkit-tests
 (set -e; for t in "$BUILD"/tests/splatkit_vulkan_*_test; do
-  adb push "$t" /data/local/tmp/
-  adb shell "/data/local/tmp/$(basename "$t")"
+  adb push "$t" /data/local/tmp/splatkit-tests/
+  adb shell "cd /data/local/tmp/splatkit-tests && ./$(basename "$t")"
 done)
 ```
 
+The writable device working directory also lets the pipeline-cache test create its temporary file.
 Each test exits 0 on success; `splatkit_vulkan_buffer_test` and `splatkit_vulkan_upload_pressure_test` accept `--small` for a device with little memory, which skips their large cases.
 

@@ -33,7 +33,7 @@ Do not claim GPU passes were profiled from app-published FPS/stage counters alon
 
 ## Reading a run
 
-The turn is one full rotation at a fixed position, the gyroscope off; `--pose` keeps the position and the turn resets yaw.
+The turn is one full rotation at a fixed position, the gyroscope off; `--pose` keeps the position and the turn resets yaw and pitch.
 The frame budget is the display interval: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz.
 
 `report.json` `runs`, parsed from the engine's `SplatKit I:` lines:
@@ -45,7 +45,7 @@ The frame budget is the display interval: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz.
 
 `report.json` `gpu` is the device's newest Apple GPU family, Metal 3 or 4, and its limits, from the renderer's `Metal capabilities:` startup line.
 
-Each figure is `GPUEndTime - GPUStartTime` of one command buffer.
+Each GPU command-buffer interval is `GPUEndTime - GPUStartTime` of one command buffer.
 They are separate buffers on one queue, so `sort` can exceed `gpu`, and the frame's GPU cost is up to their sum, less any overlap the trace shows.
 A pass inside one buffer has no time of its own; Metal System Trace splits it.
 

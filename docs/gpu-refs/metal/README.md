@@ -36,7 +36,7 @@ All available from Apple7 on the Metal 3 model (FST feature availability).
 | SIMD-scoped reduction (`simd_sum`, `simd_prefix_exclusive_sum`) | Apple7 | sort, visibility, LOD |
 | SIMD-scoped permute (`simd_shuffle`, `simd_broadcast`, `simd_ballot`) | Apple6 | sort, visibility |
 | Function specialization | Apple2 | SH degree, LOD and sort variants |
-| Indirect draw and dispatch arguments | Apple3 | 7 indirect draws, sort and LOD dispatches |
+| Indirect draw and dispatch arguments | Apple3 | 4 indirect splat draws, sort and LOD dispatches |
 | Relaxed `atomic_uint` (device and threadgroup) | all | compaction, radix bins |
 
 ## Shader compilation

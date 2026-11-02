@@ -4,7 +4,7 @@ Real-time 3D Gaussian splatting in a React Native view, rendered natively on Met
 Point `SplatKitView` at an `.spz` file on disk, give it a collider, and walk through the scene.
 
 [![npm](https://img.shields.io/npm/v/@splatkit/react-native/next.svg)](https://www.npmjs.com/package/@splatkit/react-native)
-[![license: MIT](https://img.shields.io/npm/l/@splatkit/react-native.svg)](LICENSE)
+[![license: MIT](https://img.shields.io/npm/l/@splatkit/react-native.svg)](https://github.com/Xget7/react-native-splatkit/blob/main/LICENSE)
 [![platform: iOS | Android](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)](#requirements)
 [![architecture: Fabric](https://img.shields.io/badge/architecture-Fabric-blueviolet.svg)](#requirements)
 
@@ -56,6 +56,9 @@ The adapter is Fabric-only and relies on the 0.87 template's iOS 26 scene lifecy
 Run it on a physical device.
 The renderer's shaders use SIMD prefix reductions, which the iOS Simulator does not implement, so it reports `Metal is unavailable on this device` and loads nothing.
 Emulators are not a supported target on either platform.
+
+This README describes current source.
+Changes listed under Unreleased in the [changelog](CHANGELOG.md), including `sourceFrame`, require matching native source builds; the published beta.2 package and its pinned XCFramework predate them.
 
 ## Installation
 
@@ -321,7 +324,7 @@ function CameraPath({world}) {
 
 Keep every trajectory helper worklet-compatible and stop the callback on world replacement or unmount.
 `setCameraPose` still obeys first-person collider constraints; use a collider-free world for an unconstrained flythrough.
-See the [complete example](../../apps/react-native/src/App.tsx) and its [trajectory](../../apps/react-native/src/Flythrough.ts).
+See the [complete example](https://github.com/Xget7/splatkit/blob/main/apps/react-native/src/App.tsx) and its [trajectory](https://github.com/Xget7/splatkit/blob/main/apps/react-native/src/Flythrough.ts).
 The UI-thread dispatch API is documented by [Reanimated](https://docs.swmansion.com/react-native-reanimated/docs/advanced/dispatchCommand/).
 
 ## Quality and performance
@@ -353,7 +356,8 @@ const configuration = new SplatKitBuilder()
 
 ### Presets
 
-Every preset keeps frustum culling and early termination on.
+The table lists requested preset values; `build(capabilities)` resolves them against the backend.
+Both backends keep frustum culling on and Hi-Z off; Metal GPU ordering uses early termination, while Vulkan uses back-to-front blending without it.
 
 | Preset | Render scale | SH | LOD budget | Residency | LOD error px | Alpha | Sub-pixel | Hi-Z | Sort |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |
@@ -363,7 +367,7 @@ Every preset keeps frustum culling and early termination on.
 | `performance` | 0.65 | 1 | 1,000,000 | 1,000,000 | 2.0 | 2/255 | 1.0 | No | 16 |
 
 Lower `lodErrorPixels` sharpens the far field, which is where a captured room looks soft, and costs fill rate.
-The Alpha column applies on Android only; iOS is fixed at 2/255.
+Both backends fix the whole-splat alpha cutoff at 2/255 and report a fallback for a different requested value.
 
 ### Splat budgets
 
@@ -375,8 +379,8 @@ The Alpha column applies on Android only; iOS is fixed at 2/255.
 | `shDegree` | `withPerformance({shDegree})` | Draw-time SH degree, 0 to 3, clamped to `maxShDegree`. |
 | `renderScale` | `withPerformance({renderScale})` | Render resolution scale, `[0.1, 2]`. |
 
-The first two are read while the engine builds the world, so raising one takes a new `requestId` and a reload.
-Everything else updates in place.
+`lodCapacitySplats`, `residencyCapacitySplats` and `maxShDegree` apply at load time; changing them requires a new `requestId` and a reload.
+`shDegree` and `renderScale` update in place.
 `classifyPolicyChange(previous, next)` tells you which case you are in before you commit to it.
 
 ### The `policy` prop and revisions
@@ -526,11 +530,11 @@ Lower `lodErrorPixels` below the preset's value, and watch `onStats` for the fil
 
 **The HUD shows no frame rate.**
 A timing whose `*TimingAvailable` flag is `false` was not measured, which is not the same as zero.
-The Vulkan backend reports submitted frames rather than presented ones, and neither backend measures GPU time without timestamp queries.
+The Vulkan backend reports submitted frames rather than presented ones; its GPU timings use timestamp queries, while Metal uses completed command-buffer timestamps.
 
 ## Example app
 
-[`apps/react-native`](https://github.com/Xget7/splatkit/tree/main/apps/react-native) is a React Native 0.87.1 app from the community template that installs this package, draws a thumb stick and a stats and quality HUD, and walks a 6M splat capture.
+[`apps/react-native`](https://github.com/Xget7/splatkit/tree/main/apps/react-native) is a React Native 0.87.1 app from the community template that installs this package, draws a thumb stick and a stats and quality HUD, and walks the prepared 12M-splat reference world.
 Its README lists every change a fresh template needs.
 
 ## Related
@@ -540,8 +544,8 @@ Its README lists every change a fresh template needs.
 
 ## Contributing
 
-This package is generated from a monorepo; see [CONTRIBUTING.md](CONTRIBUTING.md).
+This package is generated from a monorepo; see [CONTRIBUTING.md](https://github.com/Xget7/react-native-splatkit/blob/main/CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Xget7/react-native-splatkit/blob/main/LICENSE)

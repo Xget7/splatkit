@@ -17,7 +17,7 @@ The renderer stays native; React Native passes a world, display settings and a s
 
 ## Set up
 
-Requires the Node version in `package.json` `engines` (22.13 or newer).
+Requires the Node version in `package.json` `engines` (`^22.13.0`, `^24.3.0` or `>=26.0.0`).
 
 ```sh
 npm ci
@@ -32,6 +32,7 @@ npm run lint
 
 `npm run check` runs, in order:
 
+- `npm run patch:tooling` - applies the development-tool braces guard.
 - `npm run typecheck` - TypeScript against the package sources.
 - `npm test` - compiles, then runs the contract tests in `tests/` with `node --test`.
 - `npm run codegen` - Fabric Codegen against the real, pinned generators.
@@ -43,7 +44,7 @@ The [contract workflow](.github/workflows/contract.yml) runs both commands on ev
 
 ## Native adapter changes
 
-Changes under `android/` or `ios/` need checks that cannot run in this repository, because the export ships the package but not the host tests or the example app.
+Changes under `android/` or `ios/` need checks that cannot run in this repository, because the verification build depends on the monorepo native SDK and Gradle wrapper, and the example app is kept upstream.
 Run them from the SplatKit monorepo:
 
 - Android adapter host tests:
@@ -56,7 +57,7 @@ Run them from the SplatKit monorepo:
 - The [React Native example](https://github.com/Xget7/splatkit/tree/main/apps/react-native) on a device or emulator.
 - For build wiring - the podspec, Gradle, Codegen or `package.json` `files` - install the `npm pack` tarball into a fresh React Native app outside the monorepo.
 
-The podspec fetches and checksum-verifies `SplatKitCore.xcframework` during `prepack`.
+The package prepack script fetches and checksum-verifies `SplatKitCore.xcframework` during `prepack`.
 Set `SPLATKIT_IOS_XCFRAMEWORK_PATH` to a local `scripts/package-ios.sh` build while iterating on the iOS adapter.
 
 ## Report results honestly

@@ -40,7 +40,7 @@ Then match what this app changes from the template:
 
 ## Run this app
 
-Needs Node 22.13 or newer, the Android SDK with NDK, Xcode 26 and CocoaPods.
+Needs a Node version accepted by the [package engines](../../packages/react-native-splatkit/package.json) (`^22.13.0`, `^24.3.0` or `>=26.0.0`), the Android SDK with NDK, Xcode 26 and CocoaPods.
 Worlds are not committed; [Preparing a world](../../packages/react-native-splatkit/README.md#preparing-a-world) turns a PLY into the `.lodsplat` and the collider:
 
 ```sh

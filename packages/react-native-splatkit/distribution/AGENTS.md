@@ -15,7 +15,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before editing, and keep GPU internals n
 - `tests/` - Node contract tests for the JavaScript surface and both adapters.
 - `android/` - Kotlin Fabric adapter over the Android SDK; `android/verification/` holds its host tests.
 - `ios/` - Objective-C++ Fabric adapter over `SKSplatEngine`; `SplatKitCore.xcframework` is fetched at `prepack`, not committed.
-- `scripts/` - Codegen and XCFramework fetch, `SplatKitReactNative.podspec`, `react-native.config.js`.
+- `scripts/` - Codegen, tooling patches and XCFramework fetch; `SplatKitReactNative.podspec` and `react-native.config.js` live at the package root.
 
 ## Verify
 
@@ -25,7 +25,7 @@ npm run check
 npm run lint
 ```
 
-`npm run check` is `typecheck`, the `tests/` suite and Fabric Codegen; `npm run lint` is ESLint and the Prettier check, and `npm run lint:fix` applies them.
+`npm run check` applies the tooling patch, then runs `typecheck`, the `tests/` suite and Fabric Codegen; `npm run lint` is ESLint and the Prettier check, and `npm run lint:fix` applies them.
 The [contract workflow](.github/workflows/contract.yml) runs both on every pull request.
 Native adapter changes are verified upstream in SplatKit, where the adapter host tests and the React Native example live:
 

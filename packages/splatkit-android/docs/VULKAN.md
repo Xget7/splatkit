@@ -13,7 +13,8 @@ Subgroup width is device-dependent; subpixel rejection is approximate.
 Visibility scratch: `80*capacity+64` bytes across two slots, a key, a value and a 32-byte `ProjectedSplat` per splat; radix adds ~132MB at 4M.
 Source capacity obeys `maxStorageBufferRange/32`; 10M is not guaranteed.
 Survivor overflow above 4M zeros the draw with diagnostics; it never silently truncates.
-Full32 sorting is default; a per-instance `sortDepth` of 16 uses two passes on quantized keys stored in `uint32`, without requiring native 16-bit arithmetic/storage.
+16-bit sorting is the default: two passes on quantized keys stored in `uint32`, without requiring native 16-bit arithmetic/storage.
+A per-instance `sortDepth` of 32 preserves float-depth keys in four passes.
 
 Evidence (2026-09-12): Android arm64 emulator / M4 Pro via MoltenVK passed 128 radix cases through 3M, visibility, LOD-to-indirect integration and shader-free upload pressure; native suites had layers off.
 Kitchen 500k loaded/drew with layers on and no captured validation errors.

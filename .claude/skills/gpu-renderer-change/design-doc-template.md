@@ -1,4 +1,9 @@
-# <Change name>
+# GPU change checklist
+
+Use these sections in the PR description as needed; decisions follow [CONTRIBUTING.md](../../../CONTRIBUTING.md#what-a-pull-request-needs).
+Keep the PR template's Summary, Evidence and Merge Danger headings.
+
+## <Change name>
 
 **Hypothesis:** <metric> on <scene> at <pose and quality> moves from <baseline> to <target> on <iPhone> and from <baseline> to <target> on <Android phone>.
 **Base commit:** <sha>

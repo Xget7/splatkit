@@ -45,8 +45,8 @@ Needs Xcode 26 with the iOS platform and the Metal toolchain, CMake, [xcodegen](
 scripts/build-ios.sh                      # the static libraries, into build/ios/lib
 cd apps/ios-dev
 xcodegen generate
-xcodebuild -scheme SplatKitDev -configuration Release -destination "id=<device udid>" -allowProvisioningUpdates build
-xcrun devicectl device install app --device <udid> build/Build/Products/Release-iphoneos/SplatKitDev.app
+xcodebuild -scheme SplatKitDev -configuration Release -destination "id=<device udid>" -allowProvisioningUpdates -derivedDataPath ../../build/ios-dev-derived build
+xcrun devicectl device install app --device <udid> ../../build/ios-dev-derived/Build/Products/Release-iphoneos/SplatKitDev.app
 xcrun devicectl device process launch --device <udid> --console com.splatkit.devapp --run '{"schema_version":1,"world":{"file":"house.spz"}}'
 ```
 
@@ -74,7 +74,7 @@ Check build wiring changes in a fresh React Native app outside this repository, 
 ## Release
 
 Bumping a version is the release: merge it to `main` and the workflows publish, tag and mirror on their own.
-[docs/RELEASING.md](docs/RELEASING.md) has the whole flow, including the one part still done by hand, building the iOS XCFramework on a Mac.
+[docs/RELEASING.md](docs/RELEASING.md) has the whole flow, including the manual iOS release upload and the CI or local XCFramework build.
 
 ## Lint the C++
 
@@ -121,7 +121,7 @@ Markdown runs no job, and a file in no filter runs every job unless that file's 
 ## Code layout
 
 `packages/splat-core` has no graphics dependency and is shared by every engine: formats, sorting, the level of detail tree, tile streaming, navigation, file mapping, the world loader and the visibility policy, each with tests.
-`packages/splatkit-engine` is the engine without a graphics API: one `SplatEngine` that owns the camera, the streamer for a tiled world, a `Benchmark` and a `StatsPublisher`, and draws through the `SplatRenderer` interface, which sorts and culls on the GPU; the GPU record layout (`GpuSplat` and the packing) lives here so every renderer uploads the same bytes.
+`packages/splatkit-engine` is the engine without a graphics API: one `SplatEngine` that owns the camera, the streamer for a tiled world, a `Benchmark` and a `StatsPublisher`, and draws through the `SplatRenderer` interface, which sorts and culls on the GPU; the GPU record layout (`GpuSplat` and the packing) lives here; both renderers share the splat record, while Vulkan can opt into scaled 8-bit SH storage.
 `packages/splatkit-android` owns everything Vulkan and Android: `VulkanSplatRenderer` implements the interface, `AndroidEngine` wires it under the engine, and `jni/` is the boundary to Kotlin and knows nothing else.
 `VulkanSplatRenderer` runs the frame and leaves each job to one folder of `rendering/vulkan/`: `device/` (GPU, memory, pipeline cache, shader modules), `presentation/` (surface, swapchain, render target, frame loop), `world/` (the splats on the GPU), `frame/` (camera uniforms and the per-frame compute), `selection/` (level of detail), `cull/`, `sort/`, `raster/` and `layout/` (records shared with the shaders).
 Its Kotlin has four packages: `com.splatkit` is the public API (`SplatSurfaceView` and the value types), `com.splatkit.engine` the JNI boundary and the render thread, `com.splatkit.input` touch and the gyroscope, and `com.splatkit.ui` the optional HUD and joystick views.
@@ -129,7 +129,7 @@ Its Kotlin has four packages: `com.splatkit` is the public API (`SplatSurfaceVie
 `Sources/SplatKit` is the Swift layer, laid out like the Kotlin: `engine/` holds the render thread, `input/` touch and motion, and the top level the public API (`SplatMetalView` and one file per value type).
 Each native package's `tests/` mirrors its source folders, so a class's test sits at the same path under `tests/`.
 `packages/react-native-splatkit` is the Fabric package: the builder, contracts and Codegen spec in `src`, a Kotlin adapter over `SplatSurfaceView` in `android` and an Objective-C++ adapter over `SKSplatEngine` in `ios`.
-`apps/` holds the `android-dev` and `ios-dev` dev apps and the `react-native` example, which installs the published package.
+`apps/` holds the `android-dev` and `ios-dev` dev apps and the `react-native` example, which links the local package and builds Android from source.
 The engine does not know what is hosting it.
 
 ## Names

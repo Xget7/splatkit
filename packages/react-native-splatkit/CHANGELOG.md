@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 - Breaking: `WorldRequest.sourceFrame`, a `CoordinateFrame` of three letters such as `CoordinateFrame.rdf`, names the frame a world, its tiles and its collider were written in; absent, an SPZ loads in the frame its tag declares, else `rub`, so an untagged World Labs Marble export needs `sourceFrame: CoordinateFrame.rdf`.
   `parseCoordinateFrame` turns a string into one.
+## [0.1.0-beta.2] - 2026-10-23
+
+The Android dependency and checksum-verified iOS artifact pin native SDK `0.1.0-beta.2`.
+
 - Backport a 128-level nesting guard for GHSA-vfj7-8cjw-p6xm in development-tool `braces@3.0.3`; install hooks and CI verify it without changing the version reported by `npm audit`.
 - The npm publisher rejects registry failures, serializes runs from current `main`, preserves forward-only `latest` promotion, and repairs missing release metadata using npm's published source commit.
 - Refresh the development-tool `shell-quote` dependency to 1.12.0, fixing GHSA-pqg4-j6r4-53mv.
@@ -96,3 +100,5 @@ It replaces the previous `react-native-splatkit` binding, which bound Maven `0.1
 [0.1.0-alpha.3]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-alpha.1
+
+[0.1.0-beta.2]: https://github.com/Xget7/react-native-splatkit/releases/tag/v0.1.0-beta.2

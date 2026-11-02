@@ -2,7 +2,7 @@
 
 Host integration: [Android](../packages/splatkit-android/README.md), [iOS](../packages/splatkit-ios/README.md).
 Use native views, forward lifecycle, load asynchronously; renderer internals stay private.
-The [React Native package](../packages/react-native-splatkit/README.md) wires the renderer policy prop and events; the [React Native example](../apps/react-native/README.md) installs it from npm.
+The [React Native package](../packages/react-native-splatkit/README.md) wires the renderer policy prop and events; the [React Native example](../apps/react-native/README.md) links the local package in this checkout.
 
 ```sh
 python3 scripts/sdk_harness.py plan android

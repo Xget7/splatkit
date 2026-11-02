@@ -19,6 +19,7 @@ Beta: APIs and quality/performance tradeoffs may still change before 1.0.
 Android: API 29+, Vulkan 1.1, arm64-v8a.
 The GPU path additionally checks subgroup and memory limits.
 Maven Central has `io.github.xget7:splatkit-android:0.1.0-beta.2`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
+The API guides describe current source; changes listed under Unreleased require a source build until the next artifact release.
 To build current source:
 
 ```sh
@@ -78,7 +79,7 @@ We would love help with any of them.
 - **Other GPUs.** Android is tested on one Adreno 640 phone, and Mali is untested.
 - **Lifecycle stress.** Backgrounding, rotating, switching worlds and recycling views work in normal use, but nobody has hammered them for leaks.
 - **Long sessions.** Our runs are minutes long, not hours; thermal behaviour over time is unmeasured.
-- **Very large worlds.** LOD limits what is drawn, not what is loaded, so the whole hierarchy stays in memory.
+- **Very large worlds.** LOD limits what is drawn, not what is loaded, so a single-file world keeps its whole hierarchy in memory; tilesets stream within a residency budget.
   A 13M node world raises memory warnings even on an iPhone 17 Pro.
 - **Metal and Vulkan side by side.** There is no automated image comparison between the two backends yet.
 

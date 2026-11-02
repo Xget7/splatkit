@@ -2,7 +2,7 @@
 
 A version number is the release trigger.
 Bump it in a pull request, merge to `main`, and the workflows publish; merge anything else and they do nothing.
-Nobody tags by hand.
+Android and React Native tags are automated; the iOS release upload below creates its tag manually.
 
 ## The three artifacts
 

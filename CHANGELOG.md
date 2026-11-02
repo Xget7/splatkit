@@ -8,10 +8,8 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ### Added
 
-- Offline SPZ v2/v3/v4 selection through `splat-convert`, `ply2spz` and `prepare-world.sh`, with pinned PlayCanvas/SplatTransform interoperability checks in CI.
+- Opt-in scaled 8-bit Vulkan SH storage through `SPLATKIT_VULKAN_SH8` / `splatkitVulkanSh8`, disabled by default.
 - Any of the 48 axis-aligned coordinate frames, named by three letters such as `rub`, `rdf` or `rfu`, as the source frame of a world, its tiles and its collider: `SplatEngine::setSourceFrame`, `SplatSurfaceView.sourceFrame` and `--source-frame` on `splat-convert`, `splat-tile`, `splat_collider`, `splat_lod_build` and `prepare-world.sh`.
-- Android Fabric adapter compilation and host tests join the React Native CI gate.
-- `ios-package.yml` builds a device/simulator XCFramework candidate with its checksum and source/Xcode provenance for release integration.
 
 ### Changed
 
@@ -22,6 +20,17 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 ### Fixed
 
 - SPZ v2 and v3 files that carry a frame tag load in that frame; the tag was dropped while reading.
+
+## [0.1.0-beta.2] - 2026-10-23
+
+### Added
+
+- Offline SPZ v2/v3/v4 selection and explicit RDF/RUB normalization through `splat-convert`, `ply2spz` and `prepare-world.sh`, with pinned PlayCanvas/SplatTransform interoperability checks in CI.
+- Android Fabric adapter compilation and host tests join the React Native CI gate.
+- `ios-package.yml` builds a device/simulator XCFramework candidate with its checksum and source/Xcode provenance for release integration.
+
+### Fixed
+
 - The React Native mirror's `publish.yml` no longer passes `--prerelease`, so `react-native-splatkit` shows a Latest release the way the Android and iOS repositories already do.
 - The React Native example builds without warnings on either platform.
   Its `Info.plist` no longer declares an empty `NSLocationWhenInUseUsageDescription`, which the app never used and App Store validation rejects, and `MainActivity` uses the `DefaultReactActivityDelegate` constructor React Native 0.87 has not deprecated.
@@ -172,3 +181,5 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 [0.1.0-alpha04]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-alpha04
 [0.1.0-alpha03]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha03
 [0.1.0-alpha02]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha02
+
+[0.1.0-beta.2]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-beta.2
