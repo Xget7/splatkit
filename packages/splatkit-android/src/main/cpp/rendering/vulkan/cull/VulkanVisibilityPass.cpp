@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rendering/vulkan/device/VulkanShaderModule.h"
+#include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "shaders/prepare_indirect_comp.h"
 #include "shaders/visibility_comp.h"
@@ -91,8 +92,8 @@ bool acceptsSplats(const VulkanVisibilityPass::Input& input, VkDeviceSize storag
 bool describeSh(const VulkanVisibilityPass::Input& input, VkDeviceSize storageAlignment,
                 VkDeviceSize maxStorageRange, VkDescriptorBufferInfo& info) {
   if (input.shDegree == 0) return true;
-  const VkDeviceSize bytes =
-      VkDeviceSize{std::max(input.sourceCount, 1u)} * shStride(input.shDegree) * sizeof(uint32_t);
+  const VkDeviceSize bytes = VkDeviceSize{std::max(input.sourceCount, 1u)} *
+                             shStride(input.shDegree, kVulkanShStorage) * sizeof(uint32_t);
   if (!input.sh || bytes > maxStorageRange || !isAligned(input.shOffset, storageAlignment) ||
       !validRange(input.shOffset, bytes, input.shBytes))
     return false;

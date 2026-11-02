@@ -9,6 +9,7 @@
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
 #include "rendering/vulkan/frame/VulkanCameraProjection.h"
+#include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "splat/math/Half.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
@@ -407,7 +408,7 @@ std::pair<float, float> halves(uint32_t packed) {
           splat::fromHalf(static_cast<uint16_t>(packed >> 16))};
 }
 void requireNear(float got, float expected, float tolerance, const char* what) {
-  if (std::abs(got - expected) > tolerance) {
+  if (!std::isfinite(got) || std::abs(got - expected) > tolerance) {
     std::fprintf(stderr, "%s: got %f, expected %f\n", what, got, expected);
     require(false, what);
   }
@@ -432,7 +433,7 @@ void testProjectedRecord(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixtu
   }
   cloud.shDegree = 1;
   auto splats = upload(gpu, packSplats(cloud));
-  auto sh = upload(gpu, packSh(cloud, 1));
+  auto sh = upload(gpu, packSh(cloud, 1, splatkit::kVulkanShStorage));
   require(pass.reserve(2), "projected record capacity");
   auto in = f.input();
   in.splats = splats->handle();
@@ -478,6 +479,48 @@ void testProjectedRecord(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixtu
   std::puts("PASS projected record: centre, half axes, colour with SH, opacity, radius, source");
 }
 
+// The degree-3 z term reads a late SH word and the second record's independent scale.
+void testDegree3Color(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  splat::SplatCloud cloud;
+  cloud.shDegree = 3;
+  for (const float coefficient : {0.05f, 0.3f}) {
+    cloud.positions.insert(cloud.positions.end(), {0, 0, -5});
+    cloud.covariances.insert(cloud.covariances.end(), {0.01f, 0, 0, 0.01f, 0, 0.01f});
+    cloud.colors.insert(cloud.colors.end(), {0.5f, 0.5f, 0.5f});
+    cloud.alphas.push_back(0.5f);
+    const size_t offset = cloud.sh.size();
+    cloud.sh.resize(offset + 45, 0);
+    cloud.sh[offset + 11 * 3] = coefficient;
+    cloud.sh[offset + 11 * 3 + 1] = -coefficient;
+    cloud.sh[offset + 11 * 3 + 2] = coefficient * 0.5f;
+  }
+  auto splats = upload(gpu, packSplats(cloud));
+  auto sh = upload(gpu, packSh(cloud, 3, splatkit::kVulkanShStorage));
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = 2;
+  in.shDegree = 3;
+  in.sh = sh->handle();
+  in.shBytes = sh->size();
+  require(pass.reserve(2), "degree 3 capacity");
+  const auto result = run(gpu, pass, in);
+  membership(result, {0, 1});
+  const float base = 128.0f / 255.0f;
+  // At direction (0, 0, -1), Y_3,0 = 0.3731763326 * z * 2*z*z.
+  constexpr float kZTerm = -2.0f * 0.3731763326f;
+  for (const auto& p : result.projected) {
+    const float coefficient = p.index == 0 ? 0.05f : 0.3f;
+    const auto [red, green] = halves(p.color0);
+    const auto [blue, opacity] = halves(p.color1);
+    requireNear(red, base + kZTerm * coefficient, 2e-3f, "degree 3 red");
+    requireNear(green, base - kZTerm * coefficient, 2e-3f, "degree 3 green");
+    requireNear(blue, base + kZTerm * coefficient * 0.5f, 2e-3f, "degree 3 blue");
+    requireNear(opacity, base, 1e-3f, "degree 3 opacity");
+  }
+  std::puts("PASS degree 3 projected colour and per-record SH stride");
+}
+
 void tests(const Gpu& gpu) {
   auto created = VulkanVisibilityPass::create(*gpu.context);
   require(static_cast<bool>(created), "create subgroup visibility pass");
@@ -494,6 +537,7 @@ void tests(const Gpu& gpu) {
   testQuadExtent(gpu, *pass, f);
   testCameraCutoff(gpu, *pass, f);
   testProjectedRecord(gpu, *pass, f);
+  testDegree3Color(gpu, *pass, f);
 }
 }  // namespace
 

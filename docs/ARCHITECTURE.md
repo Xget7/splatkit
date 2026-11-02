@@ -66,6 +66,12 @@ Both backends:
 - Both share one 32-byte `ProjectedSplat` ([GpuLayout.h][layout-h]); the visibility pass projects each splat once and sorts positions in that buffer.
 - Without GPU sort, Metal falls back to a CPU order with one back-to-front "over" draw whose vertex stage projects each splat; Vulkan keeps the same path in [splat.vert][vk-vert] but needs subgroup basic, ballot and arithmetic support and refuses to load a world without it.
 
+### Vulkan SH storage experiment
+
+`SPLATKIT_VULKAN_SH8`, off by default, packs four 8-bit SH coefficients per word with a per-splat float scale ([GpuLayout.cpp][layout]); Metal retains half coefficients.
+Degree-1 records shrink from 20 to 16 bytes, degree-3 from 92 to 52; the shared load-memory guard retains its conservative half-SH estimate.
+[Vulkan](../packages/splatkit-android/docs/VULKAN.md#sh-storage-experiment) documents the switch and [Mi 9 evidence](gpu-refs/vulkan/README.md#scaled-8-bit-sh-storage) its measured limits.
+
 [deps]: ../packages/splat-core/cmake/dependencies.cmake
 [spz]: ../packages/splat-core/src/formats/SpzDecoder.cpp
 [frame-transform]: ../packages/splat-core/src/formats/FrameTransform.cpp

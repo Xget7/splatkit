@@ -25,6 +25,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vk-bootstrap VulkanMemoryAllocator)
 
+option(SPLATKIT_VULKAN_SH8 "Use experimental 8-bit spherical harmonics storage" OFF)
+# Upload, descriptor bounds and shaders must agree on the storage format.
+add_compile_definitions(SPLATKIT_VULKAN_SH8=$<BOOL:${SPLATKIT_VULKAN_SH8}>)
+
 set(SPLATKIT_ENGINE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../splatkit-engine splatkit-engine)
 
