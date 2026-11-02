@@ -168,7 +168,8 @@
     "Charging throughout; GPU starts 45.1-46.3 C and ends 59.4-59.8 C; HAL thermal unavailable.",
     "One matched screenshot view; SH8 is lossy, rare channel errors up to 81/255.",
     "SH buffer saving is layout-derived; not a claim about total process-memory reduction.",
-    "No battery or sustained thermal acceptance."
+    "No battery or sustained thermal acceptance.",
+    "Raw screenshots, APKs and Perfetto traces remain local under raw_artifacts; compact reports, run files, probe patch and validation logs are committed."
   ],
   "raw_artifacts": "build/android-sh3-20261102",
   "debug_validation": [
@@ -188,5 +189,6 @@
       "errors": [],
       "passed": true
     }
-  ]
+  ],
+  "committed_artifacts": "docs/benchmarks/2026-11-02-mi9-sh3-sh8"
 }
