@@ -19,6 +19,9 @@ android {
                     "-DANDROID_STL=c++_static",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                 )
+                val sh8 = providers.gradleProperty("splatkitVulkanSh8").orElse("false").get()
+                require(sh8 == "true" || sh8 == "false") { "splatkitVulkanSh8 must be true or false" }
+                arguments += "-DSPLATKIT_VULKAN_SH8=${if (sh8 == "true") "ON" else "OFF"}"
                 cppFlags += listOf("-std=c++17")
             }
         }

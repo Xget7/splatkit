@@ -1,0 +1,192 @@
+{
+  "date": "2026-11-02",
+  "disposition": "SH8 has small image quantization error and lower SH storage; only marginal fixed-view speed difference on Mi 9. Not accepted as a general FPS optimization.",
+  "provenance": {
+    "world": "Lioness (Panthera Spelaea)",
+    "author": "Spenser Dickerson",
+    "license": "CC BY 4.0",
+    "source": "https://superspl.at/scene/7e4e9bcb",
+    "source_splats": 1855777,
+    "sh_degree": 3,
+    "source_ply": "/Users/xget/Downloads/Lioness (Panthera Spelaea)/scene.ply",
+    "source_ply_sha256": "e92fd7a5625a97ca143faaa33598bb4cc52119a87156cbab0104d5d7ed4904be",
+    "spz_sha256": "8bb44df99ac0b2799d219972520db40c788b54bcb6f82c1ee0d079ec83a2b350",
+    "conversion": "splat-convert scene.ply lioness-sh3.spz --sh 3; input PLY default rdf, output SPZ rub",
+    "pose": [
+      0,
+      0.27,
+      0.9,
+      0,
+      0
+    ],
+    "budget": 0,
+    "render_scale": 1,
+    "subpixel": 1,
+    "sort_bits": 16,
+    "gpu": "Adreno 640 Vulkan 1.1.128 driver 0x801f6000",
+    "device": "physical Xiaomi Mi 9, ec77bb25, Android 11",
+    "image_metrics": "image-metrics.json",
+    "fixed_view_probe": "fixed-view-probe.patch",
+    "fixed_view_note": "Both timing APKs apply same probe; engine source restored after building. Intended stationary full-frame workload, not production idle power."
+  },
+  "apks": {
+    "baseline": "07a8246a6654c62b1cd4eaf27b7627e1aea3bb506cc465cffd7bbde86d59229d",
+    "sh8": "85df8109638a1db7a8824b785a6d3fe955f1b4d9893659070d1cfcb84e490a0c"
+  },
+  "schedule": "10s warmup each; 30s baseline-SH8-SH8-baseline; 20s idle between runs",
+  "runs": [
+    {
+      "variant": "baseline",
+      "report": "build/android-sh3-20261102/02-timing-baseline/report.json",
+      "fps_mean": 9.1,
+      "frame_mean_ms": 110.0,
+      "frame_p95_ms": 116.9,
+      "gpu_mean_ms": 106.1,
+      "gpu_start_c": 45.5,
+      "gpu_end_c": 59.4,
+      "visible_splats": 1571303
+    },
+    {
+      "variant": "sh8",
+      "report": "build/android-sh3-20261102/03-timing-sh8/report.json",
+      "fps_mean": 9.2,
+      "frame_mean_ms": 109.3,
+      "frame_p95_ms": 116.9,
+      "gpu_mean_ms": 105.3,
+      "gpu_start_c": 46.3,
+      "gpu_end_c": 59.4,
+      "visible_splats": 1571303
+    },
+    {
+      "variant": "sh8",
+      "report": "build/android-sh3-20261102/04-timing-sh8/report.json",
+      "fps_mean": 9.2,
+      "frame_mean_ms": 109.3,
+      "frame_p95_ms": 116.9,
+      "gpu_mean_ms": 105.4,
+      "gpu_start_c": 45.1,
+      "gpu_end_c": 59.4,
+      "visible_splats": 1571303
+    },
+    {
+      "variant": "baseline",
+      "report": "build/android-sh3-20261102/05-timing-baseline/report.json",
+      "fps_mean": 9.1,
+      "frame_mean_ms": 110.2,
+      "frame_p95_ms": 116.9,
+      "gpu_mean_ms": 106.2,
+      "gpu_start_c": 46.3,
+      "gpu_end_c": 59.8,
+      "visible_splats": 1571303
+    }
+  ],
+  "timing": {
+    "baseline": {
+      "fps_mean": {
+        "mean": 9.1,
+        "range": [
+          9.1,
+          9.1
+        ]
+      },
+      "frame_mean_ms": {
+        "mean": 110.1,
+        "range": [
+          110.0,
+          110.2
+        ]
+      },
+      "frame_p95_ms": {
+        "mean": 116.9,
+        "range": [
+          116.9,
+          116.9
+        ]
+      },
+      "gpu_mean_ms": {
+        "mean": 106.15,
+        "range": [
+          106.1,
+          106.2
+        ]
+      }
+    },
+    "sh8": {
+      "fps_mean": {
+        "mean": 9.2,
+        "range": [
+          9.2,
+          9.2
+        ]
+      },
+      "frame_mean_ms": {
+        "mean": 109.3,
+        "range": [
+          109.3,
+          109.3
+        ]
+      },
+      "frame_p95_ms": {
+        "mean": 116.9,
+        "range": [
+          116.9,
+          116.9
+        ]
+      },
+      "gpu_mean_ms": {
+        "mean": 105.35,
+        "range": [
+          105.3,
+          105.4
+        ]
+      }
+    }
+  },
+  "image": {
+    "pixels": [
+      2344,
+      1082
+    ],
+    "mae_8bit": 0.16285296789537768,
+    "max_channel_error_8bit": 81.0,
+    "psnr_db": 52.05062762751262,
+    "pixels_any_difference_pct": 12.080594336111233,
+    "pixels_error_over_8_pct": 0.03134600947556352,
+    "colored_foreground_mae_8bit": 1.0158375843215066,
+    "limits": "one fixed view; no perceptual acceptance threshold; quantized SH8 approximate"
+  },
+  "sh_buffer_bytes": {
+    "baseline": 170731484,
+    "sh8": 96500404,
+    "saved": 74231080
+  },
+  "limits": [
+    "User limited Mi 9 worlds to <=2M; no 12M test.",
+    "Fixed-view continuously redrawn probe, not production idle behavior or moving-camera acceptance.",
+    "Two repeats each; rounded app-reported frame/GPU summaries, no significance claim.",
+    "GPU readings are completed-frame samples, not native per-pass analysis.",
+    "Charging throughout; GPU starts 45.1-46.3 C and ends 59.4-59.8 C; HAL thermal unavailable.",
+    "One matched screenshot view; SH8 is lossy, rare channel errors up to 81/255.",
+    "SH buffer saving is layout-derived; not a claim about total process-memory reduction.",
+    "No battery or sustained thermal acceptance."
+  ],
+  "raw_artifacts": "build/android-sh3-20261102",
+  "debug_validation": [
+    {
+      "variant": "baseline",
+      "layers_on": true,
+      "sh3_uploaded": true,
+      "nonzero_draw": true,
+      "errors": [],
+      "passed": true
+    },
+    {
+      "variant": "sh8",
+      "layers_on": true,
+      "sh3_uploaded": true,
+      "nonzero_draw": true,
+      "errors": [],
+      "passed": true
+    }
+  ]
+}
