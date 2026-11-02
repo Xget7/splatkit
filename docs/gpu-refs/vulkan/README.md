@@ -37,20 +37,6 @@ Precedence on availability: the header, then the specification, then the referen
   State that difference before implementation and use the [12M profiling protocol](../../GPU_PROFILING.md) to test end-to-end benefit and stage regressions.
   Metal correctness tests and SwiftShader smoke checks do not overturn the Mi 9 result.
 
-### Scaled 8-bit SH storage
-
-- **Disposition:** unvalidated as a general FPS optimization; lower SH storage with lossy image differences and marginal fixed-view speed improvement on Mi 9.
-- Physical Mi 9, Adreno 640, driver `0x801f6000`, Lioness SH3 with 1,855,777 splats, no LOD, 2340x1080, Release, validation off.
-  Two 30-second repeats per variant in A-B-B-A order measured 9.1 to 9.2 FPS and GPU 106.1-106.2 to 105.3-105.4 ms; frame p95 stayed 116.9 ms.
-  Both builds used the same temporary fixed-camera benchmark probe, restored after building, to keep the object visible while continuously redrawing.
-- SH storage falls from 162.8 to 92.0 MiB by layout; this is not measured total process memory.
-  One matched view gave 52.05 dB PSNR and mean absolute RGB error 0.163/255, with a rare maximum channel error of 81/255.
-- [Measurements, build hashes and local artifacts](../../benchmarks/2026-11-02-mi9-sh3-sh8.json) record the user-selected sub-2M scope, charging and thermal context, and missing moving-camera, per-pass and sustained evidence.
-- **Build provenance:** Both APKs were built from main merge 9a0551e plus the uncommitted SH8 and occlusion working tree (occlusion compiled out), with the fixed-view probe; the SH storage sources match 8f7483a byte for byte, the remaining raster-pipeline refactors are shared by both APKs.
-  Exploratory prior-WIP evidence: the A/B isolates SH8, the absolute timings are not a build of this branch.
-- **Suspected cause:** SH coefficient traffic may not dominate the frame; the marginal timings do not establish a bandwidth bottleneck.
-- **Revisit when:** a workload or GPU makes SH traffic material, with matched visual checks and native per-pass measurements before accepting an FPS claim.
-
 ### Other findings
 
 - Subgroup ballot loses keys in the radix histogram, so the histogram uses workgroup atomics ([ARCHITECTURE.md](../../ARCHITECTURE.md), Sort row).

@@ -70,7 +70,7 @@ Both backends:
 
 `SPLATKIT_VULKAN_SH8`, off by default, packs four 8-bit SH coefficients per word with a per-splat float scale ([GpuLayout.cpp][layout]); Metal retains half coefficients.
 Degree-1 records shrink from 20 to 16 bytes, degree-3 from 92 to 52; the shared load-memory guard retains its conservative half-SH estimate.
-[Vulkan](../packages/splatkit-android/docs/VULKAN.md#sh-storage-experiment) documents the switch and [Mi 9 evidence](gpu-refs/vulkan/README.md#scaled-8-bit-sh-storage) its measured limits.
+[Vulkan](../packages/splatkit-android/docs/VULKAN.md#sh-storage-experiment) documents the switch.
 
 [deps]: ../packages/splat-core/cmake/dependencies.cmake
 [spz]: ../packages/splat-core/src/formats/SpzDecoder.cpp

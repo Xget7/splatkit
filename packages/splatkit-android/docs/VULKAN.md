@@ -50,7 +50,7 @@ Direct CMake builds and native tests use `-DSPLATKIT_VULKAN_SH8=ON`.
 Upload, descriptor ranges and shader decoding share the [scaled format](../../splatkit-engine/include/splatkit/rendering/GpuLayout.h), including streamed tiles.
 Degree 0 has no SH payload; degree 1 saves 4 bytes per splat and degree 3 saves 40, excluding other GPU buffers.
 The shared load-memory guard still estimates half-SH storage conservatively.
-Quantization is lossy; [Mi 9 SH3 evidence](../../../docs/gpu-refs/vulkan/README.md#scaled-8-bit-sh-storage) covers one matched view and repeated fixed-view timings, not general visual or FPS acceptance.
+Quantization is lossy; general visual and FPS acceptance remain unvalidated.
 
 ## Metal mapping
 
