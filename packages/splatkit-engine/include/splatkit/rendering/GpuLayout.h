@@ -75,7 +75,7 @@ enum class ShStorage { float16, scaled8 };
 // float16: two halves per uint. scaled8: one float max-absolute coefficient, then four
 // bytes per uint; decode each byte as (byte - 128) / 127 * maxAbs. Finite coefficients
 // are never clipped; rounding error is at most maxAbs / 254 (plus float rounding).
-// A nonfinite coefficient marks the whole scaled8 record with a NaN scale.
+// A nonfinite coefficient makes the packed scaled8 scale NaN.
 // Degree 0 has no record. The return value includes padding and the scaled8 header.
 std::size_t shStride(int degree, ShStorage storage = ShStorage::float16);
 

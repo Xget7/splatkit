@@ -44,7 +44,7 @@ PSS snapshot: ~566 MiB.
 
 ## SH storage experiment
 
-`SPLATKIT_VULKAN_SH8` defaults off and is a build option, not public render policy.
+`SPLATKIT_VULKAN_SH8` is a build option that defaults off.
 From `apps/android-dev`, use `./gradlew :app:assembleRelease -PsplatkitVulkanSh8=true`; `false` restores half-SH storage.
 Direct CMake builds and native tests use `-DSPLATKIT_VULKAN_SH8=ON`.
 Upload, descriptor ranges and shader decoding share the [scaled format](../../splatkit-engine/include/splatkit/rendering/GpuLayout.h), including streamed tiles.

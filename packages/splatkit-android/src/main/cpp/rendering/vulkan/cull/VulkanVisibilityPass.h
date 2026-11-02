@@ -87,8 +87,8 @@ class VulkanVisibilityPass {
     VkBuffer splats = VK_NULL_HANDLE;  // resident GpuSplat records, 32 bytes each
     VkDeviceSize splatsOffset = 0;
     uint32_t sourceCount = 0;
-    // Harmonics bands 1 to shDegree, shStride(shDegree) uints per source record. Degree 0
-    // never reads it and may leave it null.
+    // Harmonics bands 1 to shDegree, shStride(shDegree, kVulkanShStorage) uints per source record.
+    // Degree 0 never reads it and may leave it null.
     VkBuffer sh = VK_NULL_HANDLE;
     VkDeviceSize shOffset = 0;
     int shDegree = 0;
