@@ -46,8 +46,8 @@ Precedence on availability: the header, then the specification, then the referen
 - SH storage falls from 162.8 to 92.0 MiB by layout; this is not measured total process memory.
   One matched view gave 52.05 dB PSNR and mean absolute RGB error 0.163/255, with a rare maximum channel error of 81/255.
 - [Measurements, build hashes and local artifacts](../../benchmarks/2026-11-02-mi9-sh3-sh8.json) record the user-selected sub-2M scope, charging and thermal context, and missing moving-camera, per-pass and sustained evidence.
-
-- **Build provenance:** Both APKs were built from main merge 9a0551e plus the uncommitted SH8 and occlusion working tree (occlusion compiled out), with the fixed-view probe; the SH storage sources match 8f7483a byte for byte, the remaining raster-pipeline refactors are shared by both APKs. Exploratory prior-WIP evidence: the A/B isolates SH8, the absolute timings are not a build of this branch.
+- **Build provenance:** Both APKs were built from main merge 9a0551e plus the uncommitted SH8 and occlusion working tree (occlusion compiled out), with the fixed-view probe; the SH storage sources match 8f7483a byte for byte, the remaining raster-pipeline refactors are shared by both APKs.
+  Exploratory prior-WIP evidence: the A/B isolates SH8, the absolute timings are not a build of this branch.
 - **Suspected cause:** SH coefficient traffic may not dominate the frame; the marginal timings do not establish a bandwidth bottleneck.
 - **Revisit when:** a workload or GPU makes SH traffic material, with matched visual checks and native per-pass measurements before accepting an FPS claim.
 
