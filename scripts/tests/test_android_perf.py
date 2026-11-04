@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
 import re
@@ -29,6 +31,61 @@ MS = 1_000_000
 
 
 class RecordingTest(unittest.TestCase):
+    def test_record_writes_the_requested_source_frame_to_both_artifacts(self):
+        for source_frame in (None, "rdf"):
+            with self.subTest(source_frame=source_frame), tempfile.TemporaryDirectory() as directory:
+                out = Path(directory)
+                args = SimpleNamespace(out=out, serial="test", seconds=30, quality="high",
+                                       pose=None, world="world.spz", source_frame=source_frame,
+                                       budget=None, lod_splat_limit=None, subpixel=None, validation=False)
+                messages = (
+                    "benchmark started: 100 splats, one turn over 30 s, gpu 40.0 C",
+                    "benchmark: 1200 frames, 40.0 fps mean, frame ms mean 25.0 p50 24.0 p95 33.0 max 50.0",
+                    "benchmark gpu ms: mean 23.0 p50 22.0 p95 32.0 max 49.0, gpu 60.0 C at the end",
+                )
+                log = "".join(f"09-12 18:00:00.001 42 99 I SplatKit: {message}\n" for message in messages)
+
+                def adb(serial, *command, **kwargs):
+                    stdout = ""
+                    if command[:2] == ("shell", "perfetto"):
+                        stdout = "123\n"
+                    elif command[:2] == ("shell", "pidof"):
+                        stdout = "42\n"
+                    elif command[:2] == ("logcat", "-d"):
+                        stdout = log
+                    elif command[0] == "pull":
+                        Path(command[2]).write_bytes(perf.FRAME_SLICE)
+                    return SimpleNamespace(stdout=stdout, stderr="", returncode=0)
+
+                with patch.object(perf, "adb", side_effect=adb), \
+                        patch.object(perf, "wait_for_exit"), \
+                        patch.object(perf, "git_state", return_value={"commit": "test", "dirty": False}), \
+                        patch.object(perf, "analyze"), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(perf.record(args, "release"), 0)
+                report = json.loads((out / "report.json").read_text())
+                doc = json.loads((out / "run.json").read_text())
+                self.assertEqual(report["run"]["source_frame"], source_frame)
+                self.assertEqual(doc["world"].get("source_frame"), source_frame)
+                self.assertEqual(report["status"], "passed")
+
+    def test_invalid_record_options_do_not_start_a_device_capture(self):
+        args = SimpleNamespace(seconds=-1, quality="high", pose=None, world=None,
+                               budget=None, lod_splat_limit=None, subpixel=None)
+        with tempfile.TemporaryDirectory() as directory, patch.object(perf, "adb") as adb:
+            args.out = Path(directory)
+            args.serial = "test"
+            adb.return_value.stdout = "123\n"
+            with self.assertRaises(ValueError):
+                perf.record(args, "release")
+            adb.assert_not_called()
+
+    def test_cli_reports_invalid_run_options_without_a_traceback(self):
+        with patch.object(perf.sys, "argv", ["android_perf.py"]), \
+                patch.object(perf, "run", side_effect=ValueError("run.seconds: below minimum")), \
+                contextlib.redirect_stderr(io.StringIO()) as stderr:
+            self.assertEqual(perf.main(), 2)
+        self.assertIn("android_perf failed: run.seconds: below minimum", stderr.getvalue())
+
     def test_config_traces_the_app_for_the_requested_time(self):
         config = perf.perfetto_config(45)
         self.assertIn(f'atrace_apps: "{perf.PACKAGE}"', config)
