@@ -269,6 +269,9 @@ def run(args):
 
 
 def record(args, variant):
+    doc = run_file.document(args.seconds, args.quality, pose=args.pose, world=args.world,
+                            source_frame=getattr(args, "source_frame", None), budget=args.budget,
+                            lod_splat_limit=args.lod_splat_limit, subpixel=args.subpixel)
     out = args.out or RUNS_DIR / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     out.mkdir(parents=True, exist_ok=True)
     adb(args.serial, "shell", "am", "force-stop", PACKAGE)
@@ -286,9 +289,6 @@ def record(args, variant):
     started = adb(args.serial, "shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE, "--background",
                   input=perfetto_config(trace_seconds, gpu_sources))
     perfetto_pid = started.stdout.strip().splitlines()[-1]
-    doc = run_file.document(args.seconds, args.quality, pose=args.pose, world=args.world,
-                            source_frame=getattr(args, "source_frame", None), budget=args.budget,
-                            lod_splat_limit=args.lod_splat_limit, subpixel=args.subpixel)
     run_file.save(doc, out)
     adb(args.serial, *launch_args(doc))
 
@@ -312,7 +312,7 @@ def record(args, variant):
         "soc": device_property(args.serial, "ro.board.platform"),
         "build": variant, "quality": args.quality, "pose": args.pose, "world": args.world,
         "budget": args.budget, "lod_splat_limit": args.lod_splat_limit, "subpixel": args.subpixel,
-        "source_frame": source_frame, "seconds": args.seconds, "validation": args.validation, "rotation": int(RUN_ROTATION),
+        "source_frame": getattr(args, "source_frame", None), "seconds": args.seconds, "validation": args.validation, "rotation": int(RUN_ROTATION),
         **git_state(),
     }
     summary = (benchmark_report.summarize(log, ENVIRONMENT, int(app_pid), args.seconds)
@@ -387,7 +387,7 @@ def main():
         parser.error("--skip-install requires --skip-build")
     try:
         return run(args)
-    except (subprocess.CalledProcessError, RuntimeError, OSError) as error:
+    except (subprocess.CalledProcessError, RuntimeError, OSError, ValueError) as error:
         detail = getattr(error, "stderr", None) or ""
         print(f"android_perf failed: {error}\n{detail}".rstrip(), file=sys.stderr)
         return 2
