@@ -3,6 +3,7 @@ add_executable(splatkit_engine_tests
   camera/WalkCameraTest.cpp
   diagnostics/BenchmarkTest.cpp
   diagnostics/StatsPublisherTest.cpp
+  engine/SplatEngineEventsTest.cpp
   engine/SplatEngineCameraTest.cpp
   engine/SplatEngineLensTest.cpp
   engine/SplatEngineMemoryTest.cpp

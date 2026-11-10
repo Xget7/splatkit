@@ -20,6 +20,7 @@
 #include "splatkit/camera/WalkCamera.h"
 #include "splatkit/diagnostics/Benchmark.h"
 #include "splatkit/diagnostics/StatsPublisher.h"
+#include "splatkit/engine/EventDispatcher.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
 namespace splatkit {
@@ -101,7 +102,9 @@ class SplatEngine {
   // once the data is in use; failures fire on whichever thread found them.
   enum class Event { worldReady = 0, worldFailed = 1, colliderReady = 2, colliderFailed = 3 };
   using EventSink = std::function<void(Event, const std::string& message, uint32_t splatCount)>;
-  void setEventSink(EventSink sink) { events_ = std::move(sink); }
+  // Any thread. Selected callbacks may finish after replacement; the host keeps their
+  // context and this engine alive until its in-flight load/render calls return.
+  void setEventSink(EventSink sink) { events_.set(std::move(sink)); }
 
   // Fraction of the surface resolution the splats are drawn at, [0.1, 2]. Away from one
   // the frame is drawn offscreen and rescaled with a linear blit: below one it is cheaper
@@ -196,7 +199,7 @@ class SplatEngine {
   };
 
   void emit(Event event, const std::string& message = {}, uint32_t splatCount = 0) const {
-    if (events_) events_(event, message, splatCount);
+    events_.emit(event, message, splatCount);
   }
   void reportWorld(const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
   void reportCollider(const splat::Result<splat::SplatWorldLoader::ColliderReport>& report);
@@ -213,7 +216,7 @@ class SplatEngine {
   void takeSortResult();
   StatsPublisher::Sample sample() const;
 
-  EventSink events_;
+  EventDispatcher<Event> events_;
   std::unique_ptr<SplatRenderer> renderer_;
   // The applied render policy; the backend's fallback until the host sets one.
   RenderPolicy policy_;
