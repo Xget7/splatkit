@@ -1,5 +1,5 @@
-#include "engine/AndroidEventMapping.h"
 #include "engine/AndroidEngine.h"
+#include "engine/AndroidEventMapping.h"
 
 #include <android/log.h>
 

@@ -1,5 +1,5 @@
-#include "engine/SKEventMapping.h"
 #include <gtest/gtest.h>
+#include "engine/SKEventMapping.h"
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -106,10 +106,14 @@ TEST_F(SKSplatEngineTest, NilClearsTheSourceFrame) {
 }  // namespace
 
 TEST(AdapterEvents, MapsEveryEngineEventAndDropsUnknownValues) {
-  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldReady), SKSplatEventWorldReady);
-  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFailed), SKSplatEventWorldFailed);
-  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderReady), SKSplatEventColliderReady);
-  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderFailed), SKSplatEventColliderFailed);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldReady),
+            SKSplatEventWorldReady);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFailed),
+            SKSplatEventWorldFailed);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderReady),
+            SKSplatEventColliderReady);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderFailed),
+            SKSplatEventColliderFailed);
   EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::gpuFailed), SKSplatEventGpuFailed);
   EXPECT_FALSE(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFrameReady));
   EXPECT_FALSE(splatkit::publicEvent(static_cast<splatkit::SplatEngine::Event>(999)));

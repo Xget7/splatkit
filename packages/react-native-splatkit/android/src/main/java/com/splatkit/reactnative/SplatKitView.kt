@@ -340,7 +340,7 @@ class SplatKitView(private val reactContext: ThemedReactContext) : FrameLayout(r
                 emitWorld(world.requestId, phase, count, code, message)
             }
             override fun onGpuFailed(message: String) {
-                if (!dropped && token == session.generation)
+                if (!dropped && session.accept(token, WorldPhase.FAILED))
                     emitWorld(world.requestId, WorldPhase.FAILED, 0, ErrorCode.GPU_FAILED, message)
             }
             override fun onWorldReady(splatCount: Int) = outcome(WorldPhase.UPLOADED, splatCount)
