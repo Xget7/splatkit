@@ -576,3 +576,22 @@ TEST(WalkCamera, ExplicitLimitsAndFramingReplaceAutomaticRotation) {
     EXPECT_EQ(camera.viewMatrix().m, view);
   }
 }
+
+TEST(WalkCamera, NonpositiveStepsPreserveImmediatelyAppliedCommands) {
+  splatkit::WalkCamera camera;
+  camera.setPosition({0, 0, 5});
+  camera.setAnchor({0, 0, 0});
+  ASSERT_TRUE(camera.orbit(1, 0.5f));
+  splatkit::WalkCamera::OrbitLimits limits;
+  limits.maxAzimuth = 0.25f;
+  ASSERT_TRUE(camera.setOrbitLimits(limits));
+  for (const float dt : {0.0f, -1.0f}) {
+    EXPECT_FALSE(camera.update(dt));
+    EXPECT_FLOAT_EQ(camera.orbitAzimuth(), 0.25f);
+  }
+  ASSERT_TRUE(camera.frameBounds({{-1, -1, -1}, {1, 1, 1}}, {}, {100, 100}, 0,
+                                 splatkit::WalkCamera::ViewDirection{0, 0}));
+  EXPECT_FALSE(camera.update(0));
+  EXPECT_FLOAT_EQ(camera.orbitAzimuth(), 0);
+  EXPECT_FLOAT_EQ(camera.orbitElevation(), 0);
+}

@@ -1,13 +1,14 @@
-#include <gtest/gtest.h>
+#include "splatkit/engine/SplatEngine.h"
 
 #include <atomic>
 #include <cmath>
 #include <thread>
 
+#include <gtest/gtest.h>
+
 #include "load-spz.h"
 #include "splat/formats/GlbEncoder.h"
 #include "splat/formats/PartLabels.h"
-#include "splatkit/engine/SplatEngine.h"
 #include "support/StubRenderer.h"
 
 namespace splatkit {
@@ -151,7 +152,7 @@ TEST(SplatEngineDrawnFrame, NewLoadReplacesUndrawnWorld) {
   EXPECT_GT(gpu->reveal.level, first);
   engine.render(32'000'001);
   EXPECT_EQ(events, (std::vector<SplatEngine::Event>{SplatEngine::Event::worldReady,
-                                                   SplatEngine::Event::worldFrameReady}));
+                                                     SplatEngine::Event::worldFrameReady}));
 }
 
 TEST(SplatEngineDrawnFrame, ColliderWaitingForUploadWakesAnIdleScene) {
