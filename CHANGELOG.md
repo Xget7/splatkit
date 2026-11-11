@@ -4,7 +4,7 @@ Notable changes to the SplatKit Android SDK, the shared C++ engine and this repo
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); alphas may break APIs.
 iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGELOG.md) and React Native changes in the [React Native changelog](packages/react-native-splatkit/CHANGELOG.md).
 
-## Unreleased
+## [0.1.0-beta.3] - 2026-11-11
 
 ### Added
 
@@ -202,4 +202,5 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 [0.1.0-alpha03]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha03
 [0.1.0-alpha02]: https://github.com/Xget7/splatkit/tree/v0.1.0-alpha02
 
+[0.1.0-beta.3]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-beta.3
 [0.1.0-beta.2]: https://github.com/Xget7/splatkit/releases/tag/v0.1.0-beta.2

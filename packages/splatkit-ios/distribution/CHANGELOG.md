@@ -3,7 +3,7 @@
 Notable changes to the SplatKit iOS SDK and the shared C++ engine it ships.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); alphas may break APIs.
 
-## Unreleased
+## [0.1.0-beta.3] - 2026-11-11
 
 ### Added
 
@@ -112,4 +112,5 @@ The XCFramework carries the same engine as alpha.4; only the Swift sources and t
 [0.1.0-alpha.2]: https://github.com/Xget7/splatkit-ios/releases/tag/v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Xget7/splatkit-ios/releases/tag/v0.1.0-alpha.1
 
+[0.1.0-beta.3]: https://github.com/Xget7/splatkit-ios/releases/tag/v0.1.0-beta.3
 [0.1.0-beta.2]: https://github.com/Xget7/splatkit-ios/releases/tag/v0.1.0-beta.2
