@@ -263,7 +263,8 @@ void mergePartWeights(PartWeights& sum, const PartWeights& child) {
 }
 
 PartWeights leafWeights(const LodTree& tree, const LodNode& node) {
-  PartWeights leaves, sum;
+  PartWeights leaves;
+  PartWeights sum;
   for (uint32_t c = node.childStart; c < node.childStart + node.childCount; ++c)
     if (tree.layout[c].childCount == 0)
       leaves.emplace_back(tree.nodes.labels[c], tree.nodes.alphas[c]);
