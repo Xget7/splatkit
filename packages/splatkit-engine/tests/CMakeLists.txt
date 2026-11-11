@@ -1,4 +1,5 @@
 add_executable(splatkit_engine_tests
+  reveal/RevealTest.cpp
   highlight/HighlightTest.cpp
   pick/PickIndexTest.cpp
   camera/LensTest.cpp

@@ -1,4 +1,5 @@
 #pragma once
+#include "splatkit/reveal/Reveal.h"
 
 #include <cstdint>
 #include <optional>
@@ -125,6 +126,8 @@ class SplatRenderer {
     // Borrowed during draw; generation changes copy states and palette into an available slot.
     // State count must equal the highest world label plus one. Null restores captured styles.
     const LabelStyles* labelStyles = nullptr;
+    // Appended to preserve existing aggregate initializers. Positive infinity means idle.
+    RevealUniform reveal;
   };
   // Records and presents one frame. Returns false when nothing was presented, e.g. the
   // surface was rebuilt instead; the caller keeps the order for the next frame.

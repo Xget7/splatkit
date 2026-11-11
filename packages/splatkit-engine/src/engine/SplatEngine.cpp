@@ -98,6 +98,18 @@ void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size, const st
 void SplatEngine::loadWorldFile(const std::string& path, const std::string& labelsPath) {
   reportWorld(loader_.loadWorldFile(path, labelsPath));
 }
+bool SplatEngine::setReveal(const RevealSettings& settings) {
+  if (!std::isfinite(settings.seconds) || settings.seconds < 0 ||
+      !std::isfinite(settings.bandShare) || settings.bandShare < 0 || settings.bandShare > 1 ||
+      !std::isfinite(settings.tintAmount) || settings.tintAmount < 0 || settings.tintAmount > 1 ||
+      !std::isfinite(settings.brightnessBoost) || settings.brightnessBoost < 0)
+    return false;
+  for (const float channel : settings.tint)
+    if (!std::isfinite(channel) || channel < 0) return false;
+  revealSettings_ = settings;
+  return true;
+}
+
 void SplatEngine::highlightParts(const std::uint16_t* labels, std::size_t count) {
   if (labelCount_ == 0) {
     if (count) LOGW("highlight request requires a loaded labelled world");
@@ -201,6 +213,7 @@ bool SplatEngine::uploadFinishedLoads() {
                     : 0;
   preparePartPicking(*world);
   highlight_.reset();
+  reveal_.start(worldBounds, revealSettings_);
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
   planner_.invalidate();
@@ -438,6 +451,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   std::optional<FrameCamera> camera;
   if (world) {
     const float wallSeconds = frameSeconds(frameTimeNanos);
+    redrawNeeded_ |= reveal_.update(wallSeconds);
     if (highlight_ && highlight_->update(wallSeconds)) redrawNeeded_ = true;
     driveBenchmark(wallSeconds, *world);
     const float dt = std::min(wallSeconds, kMaxFrameSeconds);
@@ -463,6 +477,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   }
 
   SplatRenderer::Frame frame;
+  frame.reveal = reveal_.uniform();
   frame.labelStyles = highlight_ ? &highlight_->styles() : nullptr;
   if (camera) {
     frame.orderSource = SplatRenderer::OrderSource::gpu;

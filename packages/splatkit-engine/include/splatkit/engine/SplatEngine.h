@@ -23,6 +23,7 @@
 #include "splatkit/highlight/Highlight.h"
 #include "splatkit/pick/PickIndex.h"
 #include "splatkit/rendering/SplatRenderer.h"
+#include "splatkit/reveal/Reveal.h"
 
 namespace splatkit {
 
@@ -62,6 +63,8 @@ class SplatEngine {
   RenderPolicyResolution setRenderPolicy(const RenderPolicy& requested);
 
   void render(int64_t frameTimeNanos);
+  // Render thread. Applies to the next successfully uploaded world; zero seconds disables it.
+  bool setReveal(const RevealSettings& settings);
 
   // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.
   void loadWorld(const std::uint8_t* data, std::size_t size);
@@ -81,6 +84,7 @@ class SplatEngine {
   void setPartPickingEnabled(bool enabled) { partPickingEnabled_.store(enabled); }
   // Render thread only, serialized with draws, loads and highlight changes.
   std::uint16_t pickPart(const Ray& ray) const {
+    // Picking intentionally ignores the reveal sweep.
     return picks_ ? picks_->pick(ray, highlight_ ? &highlight_->styles() : nullptr) : 0;
   }
   void loadColliderFile(const std::string& path);
@@ -213,6 +217,8 @@ class SplatEngine {
   const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
+  RevealSettings revealSettings_;
+  Reveal reveal_;
   bool pollGpuEvents();
   bool gpuFailureReported_ = false;
   bool worldFramePending_ = false;
