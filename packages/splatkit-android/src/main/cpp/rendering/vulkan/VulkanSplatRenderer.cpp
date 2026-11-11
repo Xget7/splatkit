@@ -246,7 +246,8 @@ bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& c
   return world_->uploadTile(offset, cloud);
 }
 
-bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
+bool VulkanSplatRenderer::readyForFrame(const Frame& frame) {
+  if (gpuFailed()) return false;
   if (world_ && world_->labels && frame.labelStyles &&
       !frame.labelStyles->validFor(world_->labelCount())) {
     LOGE("label state count or palette index is invalid");
@@ -262,7 +263,7 @@ bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
 }
 
 bool VulkanSplatRenderer::draw(const Frame& frame) {
-  if (gpuFailed() || !readyForFrame(frame)) return false;
+  if (!readyForFrame(frame)) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VulkanFrameLoop::Status status = [&] {

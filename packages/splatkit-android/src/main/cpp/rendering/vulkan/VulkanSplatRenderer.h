@@ -87,7 +87,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
 
  private:
   bool failed_ = false;
-  bool readyForFrame(const Frame& frame) const;
+  bool readyForFrame(const Frame& frame);
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);
