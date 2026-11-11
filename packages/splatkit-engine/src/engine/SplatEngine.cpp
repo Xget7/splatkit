@@ -77,6 +77,16 @@ void SplatEngine::setShDegree(int degree) {
 
 // Loading: decode on the calling thread, report, and leave the result for the frame.
 
+void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size,
+                            const splat::SplatWorldLoader::LoadOptions& options) {
+  reportWorld(loader_.loadWorld(data, size, options));
+}
+
+void SplatEngine::loadWorldFile(const std::string& path,
+                                const splat::SplatWorldLoader::LoadOptions& options) {
+  reportWorld(loader_.loadWorldFile(path, options));
+}
+
 void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size) {
   reportWorld(loader_.loadWorld(data, size));
 }

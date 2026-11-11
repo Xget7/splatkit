@@ -1,6 +1,7 @@
 #include "splat/loading/SplatWorldLoader.h"
 #include "splat/formats/PartLabels.h"
 
+#include <picosha2.h>
 #include <algorithm>
 #include <cstdio>
 #include <utility>
@@ -73,6 +74,35 @@ Result<SplatWorldLoader::MemoryUse> SplatWorldLoader::admit(const Result<LoadCos
                 static_cast<double>(needed) / kBytesPerGigabyte,
                 static_cast<double>(*available) / kBytesPerGigabyte, advice);
   return Error{ErrorCode::insufficientMemory, message};
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,
+                                                                  std::size_t size,
+                                                                  const LoadOptions& options) {
+  if (options.expectedSha256) {
+    if (!data && size != 0) return Error{ErrorCode::corrupt, "Missing world bytes"};
+    picosha2::hash256_one_by_one hash;
+    // Bound the hash library's input scratch independently of world size.
+    constexpr std::size_t kHashChunkBytes = 64 * 1024;
+    for (std::size_t offset = 0; offset < size;) {
+      const auto count = std::min(kHashChunkBytes, size - offset);
+      hash.process(data + offset, data + offset + count);
+      offset += count;
+    }
+    hash.finish();
+    std::array<std::uint8_t, 32> actual{};
+    hash.get_hash_bytes(actual.begin(), actual.end());
+    if (actual != *options.expectedSha256)
+      return Error{ErrorCode::corrupt, "World SHA-256 mismatch"};
+  }
+  return loadWorld(data, size);
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(const std::string& path,
+                                                                      const LoadOptions& options) {
+  auto file = MappedFile::open(path);
+  if (!file) return file.error();
+  return loadWorld(file.value().data(), file.value().size(), options);
 }
 
 Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,

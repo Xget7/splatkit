@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -90,6 +91,13 @@ class SplatWorldLoader {
   // Fails as `insufficientMemory` a load that would leave the process less than a headroom.
   // Before the first load.
   void setMemoryGuard(MemoryGuard guard);
+
+  struct LoadOptions {
+    std::optional<std::array<std::uint8_t, 32>> expectedSha256;
+  };
+  Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size,
+                                const LoadOptions& options);
+  Result<WorldReport> loadWorldFile(const std::string& path, const LoadOptions& options);
 
   // Errors leave whatever was waiting untouched.
   Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size);
