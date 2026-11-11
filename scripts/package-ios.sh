@@ -39,6 +39,8 @@ cp "$splat_build/_deps/nlohmann_json-src/LICENSE.MIT" "$splat_output/SplatKitCor
 cp "$splat_root/packages/splat-core/third_party/splat-transform-LICENSE.txt" \
   "$splat_output/SplatKitCore.xcframework/Notices/PlayCanvas.txt"
 cp "$splat_build/_deps/zstd-src/LICENSE" "$splat_output/SplatKitCore.xcframework/Notices/Zstandard.txt"
+cp "$splat_root/packages/splat-core/third_party/picosha2/LICENSE" \
+  "$splat_output/SplatKitCore.xcframework/Notices/PicoSHA2.txt"
 ditto -c -k --keepParent "$splat_output/SplatKitCore.xcframework" "$splat_output/SplatKitCore.xcframework.zip"
 swift package compute-checksum "$splat_output/SplatKitCore.xcframework.zip"
 printf 'Artifact: %s\n' "$splat_output/SplatKitCore.xcframework.zip"
