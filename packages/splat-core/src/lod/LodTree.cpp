@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <map>
+#include <stdexcept>
 #include <utility>
 
 #include "splat/math/SymmetricEigen.h"
@@ -253,8 +253,21 @@ void labelInLayoutOrder(const std::vector<uint16_t>& splatLabels,
   labels.assign(total, 0);
   // Children follow their parent in the layout, so walking it backwards meets every child
   // first. A merged node's weights live until its parent has summed them.
-  std::vector<PartWeights> merged(total);
-  std::map<uint16_t, double> sum;
+  std::vector<uint32_t> ordinals(total);
+  uint32_t interiors = 0;
+  for (std::size_t i = 0; i < total; ++i)
+    if (tree.layout[i].childCount != 0) ordinals[i] = interiors++;
+  std::vector<PartWeights> merged(interiors);
+  PartWeights sum;
+  const auto add = [&](uint16_t part, double weight) {
+    auto it = std::lower_bound(sum.begin(), sum.end(), part, [](const auto& entry, uint16_t label) {
+      return entry.first < label;
+    });
+    if (it != sum.end() && it->first == part)
+      it->second += weight;
+    else
+      sum.insert(it, {part, weight});
+  };
   for (std::size_t i = total; i-- > 0;) {
     const LodNode& node = tree.layout[i];
     if (node.childCount == 0) {
@@ -264,19 +277,19 @@ void labelInLayoutOrder(const std::vector<uint16_t>& splatLabels,
     sum.clear();
     for (uint32_t c = node.childStart; c < node.childStart + node.childCount; ++c) {
       if (tree.layout[c].childCount == 0) {
-        sum[labels[c]] += tree.nodes.alphas[c];
+        add(labels[c], tree.nodes.alphas[c]);
         continue;
       }
-      for (const auto& [part, weight] : merged[c]) {
-        sum[part] += weight;
+      for (const auto& [part, weight] : merged[ordinals[c]]) {
+        add(part, weight);
       }
-      PartWeights().swap(merged[c]);
+      PartWeights().swap(merged[ordinals[c]]);
     }
     double heaviest = -1;
     for (const auto& [part, weight] : sum) {
-      merged[i].emplace_back(static_cast<uint16_t>(part), sum[part]);
-      if (sum[part] > heaviest) {
-        heaviest = sum[part];
+      merged[ordinals[i]].emplace_back(part, weight);
+      if (weight > heaviest) {
+        heaviest = weight;
         labels[i] = static_cast<uint16_t>(part);
       }
     }
@@ -287,6 +300,8 @@ void labelInLayoutOrder(const std::vector<uint16_t>& splatLabels,
 
 LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
   const std::size_t leaves = cloud.count();
+  if (!cloud.labels.empty() && cloud.labels.size() != leaves)
+    throw std::invalid_argument("part label count must match splat count");
   Nodes nodes = takeLeaves(cloud, leaves);
 
   LodTree tree;

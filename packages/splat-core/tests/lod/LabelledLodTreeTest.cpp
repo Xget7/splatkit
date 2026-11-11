@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -46,6 +47,12 @@ std::vector<Leaf> huddle(std::vector<std::pair<float, std::uint16_t>> parts, flo
   for (std::size_t i = 0; i < parts.size(); ++i)
     leaves.push_back({x + 0.02f * static_cast<float>(i), y, 0, parts[i].first, parts[i].second});
   return leaves;
+}
+
+TEST(LabelledLodTree, RejectsMismatchedLabels) {
+  auto cloud = cloudOf(huddle({{0.9f, 1}, {0.1f, 2}}));
+  cloud.labels.pop_back();
+  EXPECT_THROW(buildLodTree(std::move(cloud)), std::invalid_argument);
 }
 
 TEST(LabelledLodTree, MergedNodesPreserveHighLabels) {

@@ -1,6 +1,8 @@
 #include "splat/formats/PartLabels.h"
 
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 #include <string>
 
 namespace splat {
@@ -62,6 +64,8 @@ std::vector<std::uint8_t> encodePartLabels(const std::vector<std::uint16_t>& lab
   using part_labels::kHeaderBytes;
   using part_labels::kMagic;
   using part_labels::kVersion;
+  if (labels.size() > std::numeric_limits<uint32_t>::max())
+    throw std::length_error("part label count exceeds u32");
   std::vector<std::uint8_t> bytes(kHeaderBytes, 0);
   std::memcpy(bytes.data(), kMagic, sizeof(kMagic));
   putU16(bytes.data() + kVersionOffset, kVersion);
