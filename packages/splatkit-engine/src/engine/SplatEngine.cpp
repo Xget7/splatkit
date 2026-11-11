@@ -137,13 +137,16 @@ bool SplatEngine::loadWorldFile(const std::string& path, const std::string& labe
   return finishLoad(request, loader_.loadWorldFile(request, path, labelsPath, options));
 }
 bool SplatEngine::setReveal(const RevealSettings& settings) {
-  if (!std::isfinite(settings.seconds) || settings.seconds < 0 ||
-      !std::isfinite(settings.bandShare) || settings.bandShare < 0 || settings.bandShare > 1 ||
-      !std::isfinite(settings.tintAmount) || settings.tintAmount < 0 || settings.tintAmount > 1 ||
-      !std::isfinite(settings.brightnessBoost) || settings.brightnessBoost < 0)
+  const auto inRange = [](float value, float maximum) {
+    return std::isfinite(value) && value >= RevealSettings::kMinValue && value <= maximum;
+  };
+  if (!inRange(settings.seconds, RevealSettings::kMaxSeconds) ||
+      !inRange(settings.bandShare, RevealSettings::kMaxBandShare) ||
+      !inRange(settings.tintAmount, RevealSettings::kMaxTintAmount) ||
+      !inRange(settings.brightnessBoost, RevealSettings::kMaxBrightnessBoost))
     return false;
   for (const float channel : settings.tint)
-    if (!std::isfinite(channel) || channel < 0) return false;
+    if (!inRange(channel, RevealSettings::kMaxTint)) return false;
   revealSettings_ = settings;
   return true;
 }

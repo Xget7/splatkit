@@ -83,6 +83,7 @@ class SplatEngine {
   // False before publication, leaving the output unchanged.
   bool drawnDirection(ViewDirection& out) const;
   // Render thread. Applies to the next successfully uploaded world; zero seconds disables it.
+  // Reject the whole request unless every value meets the RevealSettings bounds.
   bool setReveal(const RevealSettings& settings);
 
   // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.

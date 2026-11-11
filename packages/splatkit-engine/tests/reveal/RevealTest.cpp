@@ -76,3 +76,26 @@ TEST(Reveal, EngineAppliesSettingsOnLoadAndRedrawsUntilIdle) {
   }
 }
 }  // namespace splatkit
+
+TEST(Reveal, RejectsEveryOutOfRangeSetting) {
+  splatkit::SplatEngine engine(std::make_unique<splatkit::StubRenderer>());
+  using Settings = splatkit::RevealSettings;
+  const float maxima[] = {Settings::kMaxSeconds, Settings::kMaxTintAmount,
+                         Settings::kMaxBrightnessBoost, Settings::kMaxBandShare,
+                         Settings::kMaxTint, Settings::kMaxTint, Settings::kMaxTint};
+  for (int i = 0; i < 7; ++i) {
+    Settings settings;
+    float* fields[] = {&settings.seconds, &settings.tintAmount, &settings.brightnessBoost,
+                      &settings.bandShare, &settings.tint[0], &settings.tint[1], &settings.tint[2]};
+    for (const float value : {0.0f, maxima[i]}) {
+      *fields[i] = value;
+      EXPECT_TRUE(engine.setReveal(settings));
+    }
+    for (const float value : {-0.01f, maxima[i] + 0.01f,
+                              std::numeric_limits<float>::infinity(),
+                              std::numeric_limits<float>::quiet_NaN()}) {
+      *fields[i] = value;
+      EXPECT_FALSE(engine.setReveal(settings));
+    }
+  }
+}
