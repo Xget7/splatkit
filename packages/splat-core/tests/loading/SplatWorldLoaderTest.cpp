@@ -379,4 +379,11 @@ TEST(SplatWorldLoader, VerifiesIdentityBeforeDecode) {
   ASSERT_FALSE(matched);
   EXPECT_NE(matched.error().message, mismatch.error().message);
   EXPECT_FALSE(loader.takeWorld());
+  constexpr int kCount = 3;
+  const auto valid = splat::encodeSpz(kCount);
+  ASSERT_TRUE(loader.loadWorld(valid.data(), valid.size()));
+  EXPECT_FALSE(loader.loadWorld(valid.data(), valid.size(), options));
+  auto pending = loader.takeWorld();
+  ASSERT_NE(pending, nullptr);
+  EXPECT_EQ(pending->sourceCount, kCount);
 }
