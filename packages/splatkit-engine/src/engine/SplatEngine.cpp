@@ -81,6 +81,20 @@ void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size) {
   reportWorld(loader_.loadWorld(data, size));
 }
 
+void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
+                            std::size_t labelsSize) {
+  reportWorld(loader_.loadWorld(data, size, labels, labelsSize));
+}
+void SplatEngine::loadWorldFile(const std::string& path, const std::string& labelsPath) {
+  reportWorld(loader_.loadWorldFile(path, labelsPath));
+}
+void SplatEngine::highlightParts(const std::uint16_t* labels, std::size_t count) {
+  if (!highlight_ && count == 0) return;
+  if (!highlight_) highlight_ = std::make_unique<Highlight>();
+  highlight_->set(labels, count);
+  redrawNeeded_ = true;
+}
+
 void SplatEngine::loadWorldFile(const std::string& path) {
   reportWorld(loader_.loadWorldFile(path));
 }
@@ -166,6 +180,8 @@ bool SplatEngine::uploadFinishedLoads() {
     }
     streamer_.reset();
   }
+  preparePartPicking(*world);
+  highlight_.reset();
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
   planner_.invalidate();
@@ -358,6 +374,24 @@ StatsPublisher::Sample SplatEngine::sample() const {
   return s;
 }
 
+void SplatEngine::preparePartPicking(const splat::SplatWorldLoader::World& world) {
+  picks_.reset();
+  if (partPickingEnabled_.load() && !world.tiles && !world.splats().labels.empty()) {
+    splat::SplatCloud pickCloud;
+    const auto& source = world.splats();
+    for (std::size_t i = 0; i < source.count(); ++i) {
+      if (world.tree && world.tree->layout[i].childCount != 0) continue;
+      pickCloud.positions.insert(pickCloud.positions.end(), source.positions.data() + i * 3,
+                                 source.positions.data() + (i + 1) * 3);
+      pickCloud.covariances.insert(pickCloud.covariances.end(), source.covariances.data() + i * 6,
+                                   source.covariances.data() + (i + 1) * 6);
+      pickCloud.alphas.push_back(source.alphas[i]);
+      pickCloud.labels.push_back(source.labels[i]);
+    }
+    picks_ = PickIndex::take(pickCloud);
+  }
+}
+
 // The frame.
 
 float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
@@ -379,6 +413,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   std::optional<FrameCamera> camera;
   if (world) {
     const float wallSeconds = frameSeconds(frameTimeNanos);
+    if (highlight_ && highlight_->update(wallSeconds)) redrawNeeded_ = true;
     driveBenchmark(wallSeconds, *world);
     const float dt = std::min(wallSeconds, kMaxFrameSeconds);
     if (camera_.update(dt)) redrawNeeded_ = true;
@@ -403,6 +438,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   }
 
   SplatRenderer::Frame frame;
+  frame.labelStyles = highlight_ ? &highlight_->styles() : nullptr;
   if (camera) {
     frame.orderSource = SplatRenderer::OrderSource::gpu;
     // The renderer culls and sorts the ranges itself; the streamer keeps them resident

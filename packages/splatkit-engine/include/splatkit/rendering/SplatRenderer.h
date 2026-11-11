@@ -9,6 +9,7 @@
 #include "splat/lod/LodTree.h"
 #include "splat/math/Mat4.h"
 #include "splat/math/Vec3.h"
+#include "splatkit/labels/LabelStyles.h"
 #include "splatkit/rendering/RenderPolicy.h"
 
 namespace splatkit {
@@ -119,6 +120,8 @@ class SplatRenderer {
     splat::Mat4 view = splat::Mat4::identity();
     splat::Mat4 proj = splat::Mat4::identity();
     splat::Vec3 cameraPosition;
+    // Borrowed for draw only, copied into the frame slot. Null restores captured styles.
+    const LabelStyles* labelStyles = nullptr;
   };
   // Records and presents one frame. Returns false when nothing was presented, e.g. the
   // surface was rebuilt instead; the caller keeps the order for the next frame.

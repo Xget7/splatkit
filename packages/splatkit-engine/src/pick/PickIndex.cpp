@@ -23,10 +23,19 @@ struct Hit {
 // ray: with A the inverse covariance and v from the centre to the origin, it is
 // v.A.v - (d.A.v)^2 / d.A.d. False when the covariance is degenerate.
 bool rayDistanceSquared(const float* c, splat::Vec3 v, splat::Vec3 d, float* out) {
-  const float xx = c[0], xy = c[1], xz = c[2], yy = c[3], yz = c[4], zz = c[5];
+  const float xx = c[0];
+  const float xy = c[1];
+  const float xz = c[2];
+  const float yy = c[3];
+  const float yz = c[4];
+  const float zz = c[5];
   // The adjugate; its product with a vector over the determinant applies the inverse.
-  const float axx = yy * zz - yz * yz, axy = xz * yz - xy * zz, axz = xy * yz - xz * yy;
-  const float ayy = xx * zz - xz * xz, ayz = xy * xz - xx * yz, azz = xx * yy - xy * xy;
+  const float axx = yy * zz - yz * yz;
+  const float axy = xz * yz - xy * zz;
+  const float axz = xy * yz - xz * yy;
+  const float ayy = xx * zz - xz * xz;
+  const float ayz = xy * xz - xx * yz;
+  const float azz = xx * yy - xy * xy;
   const float det = xx * axx + xy * axy + xz * axz;
   if (!(det > 0)) return false;
   const auto apply = [&](splat::Vec3 u) -> splat::Vec3 {

@@ -90,8 +90,10 @@ TEST(PickIndex, LessThanHalfAPixelCoveredPicksNothing) {
 
 TEST(PickIndex, AnElongatedSplatIsHitAlongItsLengthOnly) {
   // Long in x (sigma 1), thin in y (sigma 0.05), rotated 45 degrees about z.
-  const float along = 1.0f, across = 0.05f * 0.05f;
-  const float mean = (along + across) / 2, half = (along - across) / 2;
+  const float along = 1.0f;
+  const float across = 0.05f * 0.05f;
+  const float mean = (along + across) / 2;
+  const float half = (along - across) / 2;
   splat::SplatCloud cloud;
   add(cloud, {0, 0, -5}, {mean, half, 0, mean, 0, across}, 0.99f, 9);
   EXPECT_EQ(pick(cloud, {{0.5f, 0.5f, 0}, {0, 0, -1}}), 9);   // 0.7 sigma along the length

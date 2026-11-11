@@ -1,6 +1,7 @@
 #include "splat/lod/LodTree.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -55,9 +56,10 @@ TEST(LabelledLodTree, MergedNodesPreserveHighLabels) {
 
 TEST(LabelledLodTree, LeavesKeepTheirParts) {
   std::vector<Leaf> leaves;
+  leaves.reserve(200);
   for (int i = 0; i < 200; ++i)
-    leaves.push_back({static_cast<float>(i % 7), static_cast<float>(i / 7) * 0.5f, 0, 0.5f,
-                      static_cast<std::uint16_t>(65535 - i % 5)});
+    leaves.push_back({static_cast<float>(i % 7), std::floor(static_cast<float>(i) / 7.0f) * 0.5f, 0,
+                      0.5f, static_cast<std::uint16_t>(65535 - i % 5)});
   const LodTree tree = buildLodTree(cloudOf(leaves));
   ASSERT_EQ(tree.nodes.labels.size(), tree.nodeCount());
   std::size_t checked = 0;
