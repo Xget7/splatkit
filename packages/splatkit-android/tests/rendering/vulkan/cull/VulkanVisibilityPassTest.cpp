@@ -523,13 +523,32 @@ void testDegree3Color(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture&
   std::puts("PASS degree 3 projected colour and per-record SH stride");
 }
 
-void testLabels(const Gpu& gpu, const Fixture& f) {
+std::unique_ptr<VulkanVisibilityPass> labelledPass(const Gpu& gpu, uint32_t capacity) {
   const auto pipelines = VulkanVisibilityPass::Pipelines::compile(*gpu.context, true);
   require(pipelines && pipelines->partLabels, "compile labelled pipeline family");
   auto created = VulkanVisibilityPass::create(*gpu.context, pipelines);
   require(static_cast<bool>(created), "create labelled pass");
   auto pass = std::move(created.value());
-  require(pass->reserve(300), "reserve labelled output");
+  require(pass->reserve(capacity), "reserve labelled output");
+  return pass;
+}
+// The palette and state table as the world uploads them for a frame.
+std::unique_ptr<VulkanBuffer> styleTable(const Gpu& gpu, const splatkit::LabelStyles& styles) {
+  std::vector<uint32_t> bytes(splatkit::labelStyleBytes(styles.states().size()) / sizeof(uint32_t));
+  splatkit::LabelStyleUpload revision;
+  require(revision.copy(bytes.data(), styles.states().size(), &styles), "copy state revision");
+  return upload(gpu, bytes);
+}
+void withLabels(VulkanVisibilityPass::Input& in, const VulkanBuffer& labels,
+                const VulkanBuffer& styles) {
+  in.labels = labels.handle();
+  in.labelsBytes = labels.size();
+  in.styles = styles.handle();
+  in.stylesBytes = styles.size();
+}
+
+void testLabels(const Gpu& gpu, const Fixture& f) {
+  const auto pass = labelledPass(gpu, 300);
   const auto labels = upload(gpu, std::vector<uint32_t>(150, 0xffffffffu));
   splatkit::LabelStyles styles(65536);
   auto states = styles.states();
@@ -539,20 +558,249 @@ void testLabels(const Gpu& gpu, const Fixture& f) {
   palette[1].tint[1] = 1;
   palette[1].tintAmount = 1;
   styles.setPalette(palette);
-  std::vector<uint32_t> bytes(splatkit::labelStyleBytes(styles.states().size()) / sizeof(uint32_t));
-  splatkit::LabelStyleUpload revision;
-  require(revision.copy(bytes.data(), styles.states().size(), &styles), "copy state revision");
-  const auto table = upload(gpu, bytes);
+  const auto table = styleTable(gpu, styles);
   auto in = f.input();
-  in.labels = labels->handle();
-  in.labelsBytes = labels->size();
-  in.styles = table->handle();
-  in.stylesBytes = table->size();
+  withLabels(in, *labels, *table);
   const auto result = run(gpu, *pass, in);
   require(result.count == 300 && result.status == 0, "labelled survivors");
   for (const auto& p : result.projected) {
     require(p.color0 == (uint32_t{splat::toHalf(1)} << 16), "full-width label style lookup");
   }
+}
+
+// Shared by the style and reveal cases: records at depth 5 seen head on.
+constexpr float kStyledZ = -5;
+constexpr float kStyledVariance = 0.01f;
+constexpr float kStyledAlpha = 0.5f;
+constexpr float kStyledRgb[3] = {0.2f, 0.4f, 0.6f};
+// Half-precision colour after the shader's colour maths, gamma round trips included.
+constexpr float kStyledTolerance = 3e-3f;
+constexpr float kDisplayGamma = 2.2f;           // splat_projection.glsl
+constexpr float kQuadMinAlpha = 2.0f / 255.0f;  // splat_footprint.glsl
+
+float unorm8(float v) {
+  return std::lround(v * 255) / 255.0f;
+}
+splat::SplatCloud styledCloud(const std::vector<float>& heights) {
+  splat::SplatCloud cloud;
+  for (const float y : heights) {
+    cloud.positions.insert(cloud.positions.end(), {0, y, kStyledZ});
+    cloud.covariances.insert(cloud.covariances.end(),
+                             {kStyledVariance, 0, 0, kStyledVariance, 0, kStyledVariance});
+    cloud.colors.insert(cloud.colors.end(), std::begin(kStyledRgb), std::end(kStyledRgb));
+    cloud.alphas.push_back(kStyledAlpha);
+  }
+  return cloud;
+}
+struct Rgba {
+  float rgb[3];
+  float alpha;
+};
+Rgba unstyled() {
+  return {{unorm8(kStyledRgb[0]), unorm8(kStyledRgb[1]), unorm8(kStyledRgb[2])},
+          unorm8(kStyledAlpha)};
+}
+// visibility_body.glsl: the colour is mixed toward the tint and scaled in the encoded space.
+Rgba styled(Rgba c, const splatkit::LabelStyle& style) {
+  for (int i = 0; i < 3; ++i)
+    c.rgb[i] = (c.rgb[i] + (style.tint[i] - c.rgb[i]) * style.tintAmount) * style.brightness;
+  c.alpha *= style.opacity;
+  return c;
+}
+// splat_projection.glsl revealGlow: the glow eases in over the band below the level.
+Rgba glowing(Rgba c, const splatkit::RevealUniform& reveal, float height) {
+  const float ramp = std::clamp(1 - (reveal.level - height) / reveal.band, 0.0f, 1.0f);
+  const float glow = ramp * ramp;
+  for (int i = 0; i < 3; ++i)
+    c.rgb[i] = (c.rgb[i] + (reveal.tint[i] - c.rgb[i]) * reveal.tintAmount * glow) *
+               (1 + reveal.brightnessBoost * glow);
+  return c;
+}
+void requireColour(const ProjectedSplat& p, const Rgba& expected, bool linear, const char* what) {
+  const auto [red, green] = halves(p.color0);
+  const auto [blue, opacity] = halves(p.color1);
+  const float got[3] = {red, green, blue};
+  for (int c = 0; c < 3; ++c) {
+    const float want = linear ? std::pow(expected.rgb[c], kDisplayGamma) : expected.rgb[c];
+    requireNear(got[c], want, kStyledTolerance, what);
+  }
+  requireNear(opacity, expected.alpha, kStyledTolerance, what);
+}
+bool sameRecord(const ProjectedSplat& a, const ProjectedSplat& b) {
+  return a.center[0] == b.center[0] && a.center[1] == b.center[1] && a.axis1 == b.axis1 &&
+         a.axis2 == b.axis2 && a.color0 == b.color0 && a.color1 == b.color1 &&
+         a.radius == b.radius && a.index == b.index;
+}
+const ProjectedSplat& record(const Result& result, uint32_t source) {
+  for (const auto& p : result.projected)
+    if (p.index == source) return p;
+  throw std::runtime_error("source record missing");
+}
+
+// Each record's label picks its state from its own half of the packed word, and the state's
+// tint, brightness and opacity apply; opacity under the quad cutoff hides the record.
+void testLabelStyles(const Gpu& gpu, const Fixture& f) {
+  enum State : uint32_t { kPlain, kTinted, kPartial, kHidden, kFaintCulled, kFaintKept };
+  constexpr uint16_t kTintedLabel = 1;
+  constexpr uint16_t kPartialLabel = 300;
+  constexpr uint16_t kHiddenLabel = 40000;
+  constexpr uint16_t kFaintCulledLabel = 7;
+  constexpr uint16_t kFaintKeptLabel = 8;
+  // Neighbours in a word differ, and words 0 and 3 swap the same pair of labels.
+  const std::vector<uint16_t> labels{
+      kTintedLabel,      kPartialLabel,   kHiddenLabel,  0,
+      kFaintCulledLabel, kFaintKeptLabel, kPartialLabel, kTintedLabel};
+  const std::vector<State> expected{kTinted,      kPartial,   kHidden,  kPlain,
+                                    kFaintCulled, kFaintKept, kPartial, kTinted};
+  auto cloud = styledCloud(std::vector<float>(labels.size(), 0));
+  cloud.labels = labels;
+  auto splats = upload(gpu, packSplats(cloud));
+  auto words = upload(gpu, splatkit::packLabels(cloud));
+
+  splatkit::LabelStyles styles(kHiddenLabel + 1);
+  auto states = styles.states();
+  states[kTintedLabel] = kTinted;
+  states[kPartialLabel] = kPartial;
+  states[kHiddenLabel] = kHidden;
+  states[kFaintCulledLabel] = kFaintCulled;
+  states[kFaintKeptLabel] = kFaintKept;
+  styles.setStates(states);
+  auto palette = styles.palette();
+  palette[kTinted].tint[1] = 1;
+  palette[kTinted].tintAmount = 1;
+  palette[kPartial].tint[0] = 1;
+  palette[kPartial].tintAmount = 0.25f;
+  palette[kPartial].brightness = 0.5f;
+  palette[kPartial].opacity = 0.6f;
+  palette[kHidden].opacity = 0;
+  // Peak alpha 128/255 times these lands either side of the 2/255 quad cutoff.
+  palette[kFaintCulled].opacity = 0.01f;
+  palette[kFaintKept].opacity = 0.02f;
+  styles.setPalette(palette);
+  require(unorm8(kStyledAlpha) * palette[kFaintCulled].opacity < kQuadMinAlpha &&
+              unorm8(kStyledAlpha) * palette[kFaintKept].opacity > kQuadMinAlpha,
+          "faint opacities straddle the quad cutoff");
+  const auto table = styleTable(gpu, styles);
+
+  const auto pass = labelledPass(gpu, static_cast<uint32_t>(labels.size()));
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = static_cast<uint32_t>(labels.size());
+  withLabels(in, *words, *table);
+  for (const bool linear : {false, true}) {
+    CameraUniform cam = camera();
+    cam.outputLinear = linear ? 1 : 0;
+    f.setCamera(cam);
+    const auto result = run(gpu, *pass, in);
+    membership(result, {0, 1, 3, 5, 6, 7});
+    for (const auto& p : result.projected)
+      requireColour(p, styled(unstyled(), palette[expected[p.index]]), linear,
+                    linear ? "linear-output label style" : "label style");
+  }
+  f.setCamera(camera());
+  std::puts("PASS label halves pick their own state; tint, brightness, opacity and hiding apply");
+}
+
+constexpr float kRevealLevel = 0.1f;
+constexpr float kRevealBand = 0.4f;
+splatkit::RevealUniform midSweep() {
+  splatkit::RevealUniform reveal;
+  reveal.level = kRevealLevel;
+  reveal.band = kRevealBand;
+  reveal.tintAmount = 0.8f;
+  reveal.brightnessBoost = 0.5f;
+  reveal.tint[0] = 0;
+  reveal.tint[1] = 1;
+  reveal.tint[2] = 0;
+  return reveal;
+}
+Result runReveal(const Gpu& gpu, const VulkanVisibilityPass& pass, const Fixture& f,
+                 const VulkanVisibilityPass::Input& in, const splatkit::RevealUniform& reveal) {
+  CameraUniform cam = camera();
+  cam.reveal = reveal;
+  f.setCamera(cam);
+  auto result = run(gpu, pass, in);
+  f.setCamera(camera());
+  return result;
+}
+
+// Mid-sweep, records above the level are culled, the band below it glows toward the tint and
+// records under the band are untouched. Idle leaves every record as it was.
+void testReveal(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture& f) {
+  // Above the level, at it, two in the band, one under the band, and a NaN height.
+  const std::vector<float> heights{
+      0.4f, 0.2f, kRevealLevel, 0.0f, -0.2f, -0.4f, std::numeric_limits<float>::quiet_NaN()};
+  constexpr uint32_t kUnderBand = 5;
+  auto splats = upload(gpu, packSplats(styledCloud(heights)));
+  require(pass.reserve(static_cast<uint32_t>(heights.size())), "reveal output capacity");
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = static_cast<uint32_t>(heights.size());
+
+  const auto idle = runReveal(gpu, pass, f, in, {});
+  membership(idle, {0, 1, 2, 3, 4, 5});
+  for (const auto& p : idle.projected) requireColour(p, unstyled(), false, "idle colour");
+  const auto reveal = midSweep();
+  const auto sweep = runReveal(gpu, pass, f, in, reveal);
+  membership(sweep, {2, 3, 4, 5});
+  for (const auto& p : sweep.projected) {
+    if (p.index == kUnderBand) {
+      require(sameRecord(p, record(idle, p.index)), "a record under the band is untouched");
+    } else {
+      requireColour(p, glowing(unstyled(), reveal, heights[p.index]), false, "reveal glow");
+    }
+  }
+  const auto restored = runReveal(gpu, pass, f, in, {});
+  membership(restored, {0, 1, 2, 3, 4, 5});
+  for (const auto& p : restored.projected)
+    require(sameRecord(p, record(idle, p.index)),
+            "an idle reveal after a sweep restores every record");
+  std::puts("PASS reveal culls above the level, glows in the band and idles to the same records");
+}
+
+// The reveal applies after the label style: a hidden part stays hidden in the band, and a
+// styled part glows from its styled colour.
+void testRevealWithLabels(const Gpu& gpu, const Fixture& f) {
+  enum State : uint32_t { kPlain, kHidden, kPartial };
+  constexpr uint16_t kHiddenLabel = 2;
+  constexpr uint16_t kPartialLabel = 3;
+  const std::vector<float> heights{0.4f, 0.0f, 0.0f, -0.4f, -0.4f, 0.0f};
+  const std::vector<uint16_t> labels{kPartialLabel, kHiddenLabel,  kPartialLabel,
+                                     kHiddenLabel,  kPartialLabel, 0};
+  auto cloud = styledCloud(heights);
+  cloud.labels = labels;
+  auto splats = upload(gpu, packSplats(cloud));
+  auto words = upload(gpu, splatkit::packLabels(cloud));
+  splatkit::LabelStyles styles(kPartialLabel + 1);
+  auto states = styles.states();
+  states[kHiddenLabel] = kHidden;
+  states[kPartialLabel] = kPartial;
+  styles.setStates(states);
+  auto palette = styles.palette();
+  palette[kHidden].opacity = 0;
+  palette[kPartial].tint[2] = 1;
+  palette[kPartial].tintAmount = 0.5f;
+  palette[kPartial].brightness = 0.8f;
+  palette[kPartial].opacity = 0.7f;
+  styles.setPalette(palette);
+  const auto table = styleTable(gpu, styles);
+  const auto pass = labelledPass(gpu, static_cast<uint32_t>(heights.size()));
+  auto in = f.input();
+  in.splats = splats->handle();
+  in.splatsBytes = splats->size();
+  in.sourceCount = static_cast<uint32_t>(heights.size());
+  withLabels(in, *words, *table);
+  const auto reveal = midSweep();
+  const auto result = runReveal(gpu, *pass, f, in, reveal);
+  membership(result, {2, 4, 5});
+  for (const auto& p : result.projected) {
+    const auto style = palette[labels[p.index] == kPartialLabel ? kPartial : kPlain];
+    requireColour(p, glowing(styled(unstyled(), style), reveal, heights[p.index]), false,
+                  "reveal glow over a label style");
+  }
+  std::puts("PASS reveal composes with hidden and styled label states");
 }
 
 void tests(const Gpu& gpu) {
@@ -563,6 +811,8 @@ void tests(const Gpu& gpu) {
   require(pass->reserve(300), "reserve output");
   require(!pass->pipelines()->partLabels, "default pipeline family remains unlabelled");
   testLabels(gpu, f);
+  testLabelStyles(gpu, f);
+  testRevealWithLabels(gpu, f);
   testPrefix(gpu, *pass, f);
   testSparseIndexed(gpu, *pass, f);
   testIndexedLod(gpu, *pass, f);
@@ -574,6 +824,7 @@ void tests(const Gpu& gpu) {
   testCameraCutoff(gpu, *pass, f);
   testProjectedRecord(gpu, *pass, f);
   testDegree3Color(gpu, *pass, f);
+  testReveal(gpu, *pass, f);
 }
 }  // namespace
 
