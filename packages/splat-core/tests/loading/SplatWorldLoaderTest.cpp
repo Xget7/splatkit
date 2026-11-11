@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <picosha2.h>
 
 #include "load-spz.h"
 #include "splat/formats/GlbEncoder.h"
@@ -519,3 +520,31 @@ TEST(SplatWorldLoader, ReservationDropsPendingWorldAndRejectsStaleFileRequests) 
 
 }  // namespace
 }  // namespace splat
+
+TEST(SplatWorldLoader, FileIdentitySpansHashChunks) {
+  const auto bytes = splat::encodeSpz(20000);
+  ASSERT_GT(bytes.size(), 64u * 1024u);
+  const splat::TempPath file("identity-chunks.spz");
+  {
+    std::ofstream out(file.path(), std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+  std::array<std::uint8_t, 32> digest{};
+  picosha2::hash256(bytes.begin(), bytes.end(), digest.begin(), digest.end());
+  splat::SplatWorldLoader loader;
+  splat::SplatWorldLoader::LoadOptions options;
+  options.expectedSha256 = digest;
+  ASSERT_TRUE(loader.loadWorldFile(file.string(), {}, options));
+  ASSERT_NE(loader.takeWorld(), nullptr);
+  // Change a byte in the second hashing chunk while retaining the original identity.
+  {
+    std::fstream out(file.path(), std::ios::binary | std::ios::in | std::ios::out);
+    out.seekp(64 * 1024);
+    out.put(static_cast<char>(bytes[64 * 1024] ^ 1));
+  }
+  const auto mismatch = loader.loadWorldFile(file.string(), {}, options);
+  ASSERT_FALSE(mismatch);
+  EXPECT_EQ(mismatch.error().message, "World SHA-256 mismatch");
+  EXPECT_FALSE(loader.takeWorld());
+}

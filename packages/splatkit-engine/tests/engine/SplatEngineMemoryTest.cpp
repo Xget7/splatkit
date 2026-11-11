@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+#include "splatkit/engine/SplatEngine.h"
 
 #include <atomic>
 #include <chrono>
@@ -7,10 +7,11 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "splat/formats/PartLabels.h"
+
+#include <gtest/gtest.h>
 
 #include "load-spz.h"
-#include "splatkit/engine/SplatEngine.h"
+#include "splat/formats/PartLabels.h"
 #include "support/StubRenderer.h"
 
 namespace splatkit {
