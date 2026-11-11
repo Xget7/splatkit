@@ -151,3 +151,23 @@ No physical power capture or export-schema validation is established by host tes
 Shared functionality does not imply identical internal algorithms or timing semantics.
 PNG capture is a Metal validation aid.
 Consistent stage diagnostics remain open; there is no equivalent-feature or universal 30/60 FPS claim.
+
+### Label validation and physical evidence
+
+No phone measurements are claimed for labels.
+Prior Metal measurements combine visibility and radix and do not isolate label cost; the Vulkan saturation-mask rejection remains applicable because labels do not change blending or presentation.
+Use the [profiling protocol](GPU_PROFILING.md) and [capture protocol](GPU_CAPTURE.md), with the 12M reference world and physical acceptance requirements above.
+Compare the unlabelled base build against the candidate build with no labels to check the default path, then compare labelled captured styles and an active highlight fade against the same unlabelled view.
+Record world and sidecar hashes, full build commits, device/driver/OS, viewport, SH1, 1.8M budget, pose `[-7.25, 1.6, 5.25, 0, 0]`, identical 30-second orbit speed and starting thermal state.
+Measure upload time, resident/peak CPU and GPU memory, FPS and frame/GPU milliseconds with repeated A-B-B-A runs; retain repeat ranges and absolute/percentage changes.
+Measure pick latency separately with picking enabled, including retained leaf memory, wide labels, unlabelled occlusion and misses.
+Capture matched images, reviewing label boundaries, transparency, LOD transitions and fades separately from the unlabelled image comparison.
+If timing identifies an effect, capture timelines and matched frames outside timing runs, resolving visibility, selection, radix, raster and present only where actual GPU samples support them, plus bandwidth counters where available.
+Power comparisons require unplugged matched-brightness iPhone runs with populated Power Profiler lanes; FPS is not a power measurement.
+Sustained claims require identical repeated 30-second turns for 10-15 minutes with continuous thermal and memory evidence.
+
+Copy `scripts/benchmarks/reference-12m.json` into ignored `build/`, fill device IDs and prepared build paths/commits, and run `nice -n 19 python3 scripts/gpu_benchmark.py plan --config build/labels.json --target metal`, followed by `run` with a new `--out` and `compare --manifest <out>/experiment.json`.
+Use `--target vulkan` for the corresponding Android comparison, `--phase timeline` for diagnostic traces and `--phase power` for supported iPhone power capture.
+The generated `run.json` preserves the world, pose, policy, warmup and orbit schedule.
+The current dev-app run schema does not carry label sidecars or highlight requests, so labelled phone measurements additionally require host wiring to the C++ labelled load and highlight APIs before running this protocol; do not claim the plain run file exercises labels.
+No simulator, Mac GPU or cross-compilation result establishes physical acceptance.

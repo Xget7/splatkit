@@ -11,7 +11,9 @@
 
 #include "load-spz.h"
 #include "splat/formats/GlbEncoder.h"
+#include "splat/formats/PartLabels.h"
 #include "splat/formats/SpzDecoder.h"
+#include "splat/io/MappedFile.h"
 #include "splat/lod/LodFile.h"
 #include "splat/lod/LodTree.h"
 #include "splat/tiles/TileBuilder.h"
@@ -35,6 +37,32 @@ std::vector<std::uint8_t> encodeSpz(int points) {
   std::vector<std::uint8_t> bytes;
   EXPECT_TRUE(spz::saveSpz(cloud, spz::PackOptions{}, &bytes));
   return bytes;
+}
+
+TEST(SplatWorldLoader, LabelsFollowNodesAndRejectedSidecarsPreservePendingWorld) {
+  SplatWorldLoader loader;
+  const auto bytes = encodeSpz(50);
+  const auto labels = encodePartLabels(std::vector<uint16_t>(50, 65535));
+  ASSERT_TRUE(loader.loadWorld(bytes.data(), bytes.size(), labels.data(), labels.size()));
+  const auto bad = encodePartLabels({256});
+  EXPECT_FALSE(loader.loadWorld(bytes.data(), bytes.size(), bad.data(), bad.size()));
+  auto world = loader.takeWorld();
+  ASSERT_NE(world, nullptr);
+  EXPECT_EQ(world->cloud->labels, (std::vector<uint16_t>(50, 65535)));
+  loader.setBudget(20);
+  ASSERT_TRUE(loader.loadWorld(bytes.data(), bytes.size(), labels.data(), labels.size()));
+  world = loader.takeWorld();
+  ASSERT_NE(world->tree, nullptr);
+  EXPECT_EQ(world->tree->nodes.labels.size(), world->tree->nodeCount());
+  const TempPath file("part-label-loader.lodsplat");
+  ASSERT_TRUE(writeLodSplat(*world->tree, file.string()));
+  auto mapped = MappedFile::open(file.string());
+  ASSERT_TRUE(mapped);
+  const auto& prepared = mapped.value();
+  const auto nodeLabels = encodePartLabels(world->tree->nodes.labels);
+  ASSERT_TRUE(
+      loader.loadWorld(prepared.data(), prepared.size(), nodeLabels.data(), nodeLabels.size()));
+  EXPECT_EQ(loader.takeWorld()->tree->nodes.labels, world->tree->nodes.labels);
 }
 
 TEST(SplatWorldLoader, NothingIsWaitingAtFirst) {

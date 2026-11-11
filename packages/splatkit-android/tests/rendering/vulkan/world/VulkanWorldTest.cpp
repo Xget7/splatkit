@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "splatkit/highlight/Highlight.h"
 
 #include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "rendering/vulkan/world/VulkanWorld.h"
@@ -42,6 +43,16 @@ void uploadShape(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(3), 3, true);
   require(world && world->count == 3 && world->shDegree == 0, "upload a degree 0 cloud");
   require(world->splats && world->order && world->sh, "upload creates the three buffers");
+  require(!world->labels, "plain upload has no labels allocation");
+  for (const auto& style : world->styles) require(!style, "plain upload has no style allocation");
+  auto labelled = cloud(3);
+  labelled.labels = {256, 65535, 42};
+  auto labelledWorld = VulkanWorld::upload(*gpu.context, labelled, 0, false);
+  require(labelledWorld && labelledWorld->labels, "optional labels upload");
+  const auto bytes = gpu.readback(*labelledWorld->labels, 2 * sizeof(uint32_t));
+  uint32_t words[2]{};
+  std::memcpy(words, bytes.data(), sizeof(words));
+  require(words[0] == 0xffff0100u && words[1] == 42, "packed uint16 GPU label layout");
   require(world->sh->size() == sizeof(uint32_t), "degree 0 keeps a one uint SH placeholder");
   for (const auto& staging : world->orderStaging)
     require(staging && staging->size() == 3 * sizeof(uint32_t), "CPU order staging per slot");
@@ -143,6 +154,33 @@ void worldInSharedMemory(const test::VulkanTestContext& gpu) {
       "the GPU reads the packed harmonics");
 }
 
+void labels(const test::VulkanTestContext& gpu) {
+  constexpr uint16_t kHighestLabel = 44;
+  auto source = cloud(2);
+  auto plain = VulkanWorld::upload(*gpu.context, source, 0, false);
+  require(plain && !plain->labels && !plain->styles[0], "plain world has no label buffers");
+  source.labels = {0, kHighestLabel};
+  require(!VulkanWorld::upload(*gpu.context, source, 0, true), "reject labelled CPU ordering");
+  auto labelled = VulkanWorld::upload(*gpu.context, source, 0, false);
+  require(labelled && labelled->styles[0]->size() == splatkit::labelStyleBytes(kHighestLabel + 1),
+          "state buffer scales to highest label");
+  splatkit::Highlight highlight(45);
+  labelled->updateStyles(0, &highlight.styles());
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == 0, "unchanged frame writes nothing");
+  const uint16_t selected = 44;
+  highlight.set(&selected, 1);
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == splatkit::labelStyleBytes(45), "membership upload");
+  highlight.update(splatkit::Highlight::kFadeSeconds / 2);
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == splatkit::kPaletteBytes, "fade writes palette only");
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == 0, "unchanged fade writes nothing");
+  auto slab = VulkanWorld::createSlab(*gpu.context, 2, 0, false);
+  require(slab && !slab->uploadTile(0, source), "reject labelled tiles");
+}
+
 void orderUpload(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(4), 0, true);
   require(world != nullptr, "upload for order recording");
@@ -179,6 +217,7 @@ int main() {
     std::puts("PASS tiles in shared memory");
     worldInSharedMemory(gpu);
     std::puts("PASS world in shared memory");
+    labels(gpu);
     orderUpload(gpu);
     std::puts("PASS order upload");
     gpu.requireValidationClean();

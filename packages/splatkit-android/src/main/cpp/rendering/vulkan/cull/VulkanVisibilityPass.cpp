@@ -11,9 +11,11 @@
 #include "rendering/vulkan/device/VulkanShaderModule.h"
 #include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
+#include "shaders/labelled_visibility_comp.h"
 #include "shaders/prepare_indirect_comp.h"
 #include "shaders/visibility_comp.h"
 #include "splatkit/Log.h"
+#include "splatkit/labels/LabelStyles.h"
 #include "splatkit/rendering/GpuLayout.h"
 
 namespace splatkit {
@@ -209,19 +211,27 @@ VulkanVisibilityCapabilities VulkanVisibilityPass::queryCapabilities(const Vulka
 }
 
 std::shared_ptr<const VulkanVisibilityPass::Pipelines> VulkanVisibilityPass::Pipelines::compile(
-    const VulkanContext& ctx) {
+    const VulkanContext& ctx, bool partLabels) {
   if (!queryCapabilities(ctx).supported) return nullptr;
   VkDevice device = ctx.device();
   auto pipelines = std::make_shared<Pipelines>(device);
-  VkDescriptorSetLayoutBinding visibilityBindings[kVisibilityBindings]{};
+  pipelines->partLabels = partLabels;
+  const uint32_t bindingCount = kVisibilityBindings + (partLabels ? 2u : 0u);
+  const auto& limits = ctx.vkbDevice().physical_device.properties.limits;
+  if (partLabels &&
+      (limits.maxPerStageDescriptorStorageBuffers < kVisibilityStorageBindings + 2 ||
+       limits.maxDescriptorSetStorageBuffers < kVisibilityStorageBindings + 2 ||
+       limits.maxPerStageResources < bindingCount || limits.maxStorageBufferRange < kPaletteBytes))
+    return nullptr;
+  VkDescriptorSetLayoutBinding visibilityBindings[kVisibilityBindings + 2]{};
   visibilityBindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, kComputeShader, nullptr};
-  for (uint32_t binding = 1; binding < kVisibilityBindings; ++binding) {
+  for (uint32_t binding = 1; binding < bindingCount; ++binding) {
     visibilityBindings[binding] = {binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kComputeShader,
                                    nullptr};
   }
   VkDescriptorSetLayoutCreateInfo visibilitySetInfo{
       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  visibilitySetInfo.bindingCount = kVisibilityBindings;
+  visibilitySetInfo.bindingCount = bindingCount;
   visibilitySetInfo.pBindings = visibilityBindings;
   if (vkCreateDescriptorSetLayout(device, &visibilitySetInfo, nullptr, &pipelines->visibilitySet) !=
       VK_SUCCESS)
@@ -255,8 +265,9 @@ std::shared_ptr<const VulkanVisibilityPass::Pipelines> VulkanVisibilityPass::Pip
       VK_SUCCESS)
     return nullptr;
 
-  const VulkanShaderModule visibilityModule(device, shaders::visibility_comp,
-                                            shaders::visibility_comp_size);
+  const VulkanShaderModule visibilityModule(
+      device, partLabels ? shaders::labelled_visibility_comp : shaders::visibility_comp,
+      partLabels ? shaders::labelled_visibility_comp_size : shaders::visibility_comp_size);
   const VulkanShaderModule prepareModule(device, shaders::prepare_indirect_comp,
                                          shaders::prepare_indirect_comp_size);
   if (!visibilityModule || !prepareModule) return nullptr;
@@ -341,7 +352,8 @@ bool VulkanVisibilityPass::createDescriptors() {
   VkDescriptorPoolSize sizes[kPoolSizeCount]{};
   sizes[0] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kFramesInFlight};
   sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              (kVisibilityStorageBindings + kPrepareBindings) * kFramesInFlight};
+              (kVisibilityStorageBindings + kPrepareBindings + (pipelines_->partLabels ? 2u : 0u)) *
+                  kFramesInFlight};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   poolInfo.maxSets = kSetFamilies * kFramesInFlight;
   poolInfo.poolSizeCount = kPoolSizeCount;
@@ -433,6 +445,15 @@ VulkanVisibilityPass::Output VulkanVisibilityPass::output(uint32_t slot) const {
 
 bool VulkanVisibilityPass::updateDescriptors(uint32_t slot, const Input& input) const {
   const Output out = output(slot);
+  if (pipelines_->partLabels) {
+    const VkDeviceSize labelBytes = ((VkDeviceSize{input.sourceCount} + 1) / 2) * sizeof(uint32_t);
+    if (!input.labels || !input.styles || input.labelsBytes < labelBytes ||
+        input.labelsBytes > capabilities_.maxStorageBufferRange ||
+        input.stylesBytes < kPaletteBytes + sizeof(uint32_t) ||
+        input.stylesBytes > capabilities_.maxStorageBufferRange)
+      return false;
+  } else if (input.labels || input.styles)
+    return false;
   if (!input.camera || !input.splats || !hasAllHandles(out)) return false;
   const VkPhysicalDeviceLimits& limits = ctx_.vkbDevice().physical_device.properties.limits;
   const VkDeviceSize storageAlignment = limits.minStorageBufferOffsetAlignment;
@@ -457,6 +478,24 @@ bool VulkanVisibilityPass::updateDescriptors(uint32_t slot, const Input& input) 
                                      {camera, splats, values, depthKeys, count, status,
                                       candidateInfo, candidateCountInfo, shInfo, projected},
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  if (pipelines_->partLabels) {
+    const VkDescriptorBufferInfo infos[2] = {{input.labels, 0, input.labelsBytes},
+                                             {input.styles, 0, input.stylesBytes}};
+    VkWriteDescriptorSet writes[2]{};
+    for (uint32_t i = 0; i < 2; ++i) {
+      writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                   nullptr,
+                   visibilitySets_[slot],
+                   kVisibilityBindings + i,
+                   0,
+                   1,
+                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                   nullptr,
+                   &infos[i],
+                   nullptr};
+    }
+    vkUpdateDescriptorSets(ctx_.device(), 2, writes, 0, nullptr);
+  }
   writeBindings<kPrepareBindings>(ctx_.device(), prepareSets_[slot], {count, indirect, status},
                                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
   return true;

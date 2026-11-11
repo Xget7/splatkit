@@ -81,6 +81,24 @@ void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size) {
   reportWorld(loader_.loadWorld(data, size));
 }
 
+void SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
+                            std::size_t labelsSize) {
+  reportWorld(loader_.loadWorld(data, size, labels, labelsSize));
+}
+void SplatEngine::loadWorldFile(const std::string& path, const std::string& labelsPath) {
+  reportWorld(loader_.loadWorldFile(path, labelsPath));
+}
+void SplatEngine::highlightParts(const std::uint16_t* labels, std::size_t count) {
+  if (labelCount_ == 0) {
+    if (count) LOGW("highlight request requires a loaded labelled world");
+    return;
+  }
+  if (!highlight_ && count == 0) return;
+  if (!highlight_) highlight_ = std::make_unique<Highlight>(labelCount_);
+  highlight_->set(labels, count);
+  redrawNeeded_ = true;
+}
+
 void SplatEngine::loadWorldFile(const std::string& path) {
   reportWorld(loader_.loadWorldFile(path));
 }
@@ -166,6 +184,13 @@ bool SplatEngine::uploadFinishedLoads() {
     }
     streamer_.reset();
   }
+  labelCount_ = !world->tiles && !world->splats().labels.empty()
+                    ? std::size_t{*std::max_element(world->splats().labels.begin(),
+                                                    world->splats().labels.end())} +
+                          1
+                    : 0;
+  preparePartPicking(*world);
+  highlight_.reset();
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
   planner_.invalidate();
@@ -358,6 +383,12 @@ StatsPublisher::Sample SplatEngine::sample() const {
   return s;
 }
 
+void SplatEngine::preparePartPicking(splat::SplatWorldLoader::World& world) {
+  picks_.reset();
+  if (!partPickingEnabled_.load() || world.tiles || world.splats().labels.empty()) return;
+  picks_ = world.tree ? PickIndex::share(world.tree) : PickIndex::take(*world.cloud);
+}
+
 // The frame.
 
 float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
@@ -379,6 +410,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   std::optional<FrameCamera> camera;
   if (world) {
     const float wallSeconds = frameSeconds(frameTimeNanos);
+    if (highlight_ && highlight_->update(wallSeconds)) redrawNeeded_ = true;
     driveBenchmark(wallSeconds, *world);
     const float dt = std::min(wallSeconds, kMaxFrameSeconds);
     if (camera_.update(dt)) redrawNeeded_ = true;
@@ -403,6 +435,7 @@ void SplatEngine::render(int64_t frameTimeNanos) {
   }
 
   SplatRenderer::Frame frame;
+  frame.labelStyles = highlight_ ? &highlight_->styles() : nullptr;
   if (camera) {
     frame.orderSource = SplatRenderer::OrderSource::gpu;
     // The renderer culls and sorts the ranges itself; the streamer keeps them resident

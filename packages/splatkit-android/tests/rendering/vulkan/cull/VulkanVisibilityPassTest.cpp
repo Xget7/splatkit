@@ -6,11 +6,13 @@
 #include <numeric>
 #include <set>
 #include <utility>
+#include "../../../../../splatkit-engine/src/labels/LabelStyleUpload.h"
 
 #include "rendering/vulkan/cull/VulkanVisibilityPass.h"
 #include "rendering/vulkan/frame/VulkanCameraProjection.h"
 #include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "splat/math/Half.h"
+#include "splatkit/labels/LabelStyles.h"
 #include "splatkit/rendering/GpuLayout.h"
 #include "support/VulkanTestContext.h"
 
@@ -521,12 +523,46 @@ void testDegree3Color(const Gpu& gpu, VulkanVisibilityPass& pass, const Fixture&
   std::puts("PASS degree 3 projected colour and per-record SH stride");
 }
 
+void testLabels(const Gpu& gpu, const Fixture& f) {
+  const auto pipelines = VulkanVisibilityPass::Pipelines::compile(*gpu.context, true);
+  require(pipelines && pipelines->partLabels, "compile labelled pipeline family");
+  auto created = VulkanVisibilityPass::create(*gpu.context, pipelines);
+  require(static_cast<bool>(created), "create labelled pass");
+  auto pass = std::move(created.value());
+  require(pass->reserve(300), "reserve labelled output");
+  const auto labels = upload(gpu, std::vector<uint32_t>(150, 0xffffffffu));
+  splatkit::LabelStyles styles(65536);
+  auto states = styles.states();
+  states[65535] = 1;
+  styles.setStates(states);
+  auto palette = styles.palette();
+  palette[1].tint[1] = 1;
+  palette[1].tintAmount = 1;
+  styles.setPalette(palette);
+  std::vector<uint32_t> bytes(splatkit::labelStyleBytes(styles.states().size()) / sizeof(uint32_t));
+  splatkit::LabelStyleUpload revision;
+  require(revision.copy(bytes.data(), styles.states().size(), &styles), "copy state revision");
+  const auto table = upload(gpu, bytes);
+  auto in = f.input();
+  in.labels = labels->handle();
+  in.labelsBytes = labels->size();
+  in.styles = table->handle();
+  in.stylesBytes = table->size();
+  const auto result = run(gpu, *pass, in);
+  require(result.count == 300 && result.status == 0, "labelled survivors");
+  for (const auto& p : result.projected) {
+    require(p.color0 == (uint32_t{splat::toHalf(1)} << 16), "full-width label style lookup");
+  }
+}
+
 void tests(const Gpu& gpu) {
   auto created = VulkanVisibilityPass::create(*gpu.context);
   require(static_cast<bool>(created), "create subgroup visibility pass");
   auto pass = std::move(created.value());
   const Fixture f(gpu);
   require(pass->reserve(300), "reserve output");
+  require(!pass->pipelines()->partLabels, "default pipeline family remains unlabelled");
+  testLabels(gpu, f);
   testPrefix(gpu, *pass, f);
   testSparseIndexed(gpu, *pass, f);
   testIndexedLod(gpu, *pass, f);

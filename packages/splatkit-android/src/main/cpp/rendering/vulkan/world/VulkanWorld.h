@@ -1,3 +1,4 @@
+#include "../../../../../../../splatkit-engine/src/labels/LabelStyleUpload.h"
 #pragma once
 
 #include <array>
@@ -11,12 +12,14 @@
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splat/formats/SplatCloud.h"
+#include "splatkit/labels/LabelStyles.h"
 
 namespace splatkit {
 
 // The world on the GPU: splats plus the draw order the sorter writes.
 class VulkanWorld {
  public:
+  uint32_t labelCount() const { return labelCount_; }
   // The most spherical harmonics bands a world holds.
   static constexpr int kMaxShDegree = splatkit::kMaxShDegree;
 
@@ -42,6 +45,11 @@ class VulkanWorld {
   void recordOrderUpload(VkCommandBuffer cmd, uint32_t frameSlot, const uint32_t* drawOrder,
                          uint32_t drawCount) const;
 
+  std::unique_ptr<VulkanBuffer> labels;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> styles;
+  void updateStyles(uint32_t slot, const LabelStyles* table) const;
+  std::size_t styleUploadBytes(uint32_t slot) const { return styleUploads_[slot].uploadedBytes(); }
+  std::size_t styleUploadOffset(uint32_t slot) const { return styleUploads_[slot].uploadOffset(); }
   std::unique_ptr<VulkanBuffer> splats;
   std::unique_ptr<VulkanBuffer> order;
   // Spherical harmonics bands 1 to `shDegree` in kVulkanShStorage layout.
@@ -55,6 +63,8 @@ class VulkanWorld {
   uint32_t count = 0;
 
  private:
+  uint32_t labelCount_ = 0;
+  mutable std::array<LabelStyleUpload, kFramesInFlight> styleUploads_{};
   VulkanWorld() = default;
 };
 

@@ -30,6 +30,24 @@ function(splatkit_compile_shaders target)
       COMMENT "glslc ${source}"
       VERBATIM
     )
+    if(name STREQUAL "visibility.comp" AND NOT SPLATKIT_VULKAN_SH8)
+      add_custom_command(OUTPUT "${spv}.verified"
+        COMMAND "${CMAKE_COMMAND}" "-DINPUT=${spv}"
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_visibility.cmake"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${spv}.verified"
+        DEPENDS "${spv}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_visibility.cmake"
+        VERBATIM)
+      list(APPEND headers "${spv}.verified")
+    endif()
+    if(name STREQUAL "labelled_visibility.comp")
+      find_package(Python3 REQUIRED COMPONENTS Interpreter)
+      add_custom_command(OUTPUT "${spv}.layout-verified"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_label_layout.py" "${spv}"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${spv}.layout-verified"
+        DEPENDS "${spv}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_label_layout.py"
+        VERBATIM)
+      list(APPEND headers "${spv}.layout-verified")
+    endif()
     add_custom_command(
       OUTPUT "${header}"
       COMMAND "${CMAKE_COMMAND}"

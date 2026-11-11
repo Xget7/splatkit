@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "load-spz.h"
+#include "splat/formats/PartLabels.h"
 #include "splatkit/engine/SplatEngine.h"
 #include "support/StubRenderer.h"
 
@@ -24,6 +25,65 @@ std::vector<uint8_t> pairWorldBytes() {
   std::vector<uint8_t> bytes;
   EXPECT_TRUE(spz::saveSpz(cloud, spz::PackOptions{}, &bytes));
   return bytes;
+}
+
+class LabelRecordingRenderer final : public StubRenderer {
+ public:
+  bool uploadWorld(const splat::SplatCloud& cloud, int degree) override {
+    labelled = !cloud.labels.empty();
+    return StubRenderer::uploadWorld(cloud, degree);
+  }
+  bool draw(const Frame& frame) override {
+    styled = frame.labelStyles != nullptr;
+    if (styled) brightness = (*frame.labelStyles)[65535].brightness;
+    return StubRenderer::draw(frame);
+  }
+  bool labelled = false, styled = false;
+  float brightness = 1;
+};
+
+TEST(SplatEngineLabels, LoadHighlightPickAndReplacementCrossTheRendererInterface) {
+  auto renderer = std::make_unique<LabelRecordingRenderer>();
+  auto* observed = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  engine.setPartPickingEnabled(true);
+  const auto bytes = pairWorldBytes();
+  const auto labels = splat::encodePartLabels({65535, 65535});
+  engine.loadWorld(bytes.data(), bytes.size(), labels.data(), labels.size());
+  engine.render(kFrameNanos);
+  ASSERT_TRUE(observed->labelled);
+  EXPECT_FALSE(observed->styled);
+  EXPECT_EQ(engine.pickPart({{-1, 0, 5}, {0, 0, -1}}), 65535);
+  const uint16_t selected = 65535;
+  engine.highlightParts(&selected, 1);
+  engine.render(kFrameNanos * 30);
+  EXPECT_TRUE(observed->styled);
+  EXPECT_FLOAT_EQ(observed->brightness, Highlight::kEmphasisBrightness);
+  engine.loadWorld(bytes.data(), bytes.size());
+  engine.render(kFrameNanos * 31);
+  EXPECT_FALSE(observed->labelled);
+  EXPECT_FALSE(observed->styled);
+  EXPECT_EQ(engine.pickPart({{-1, 0, 5}, {0, 0, -1}}), 0);
+}
+
+TEST(SplatEngineLabels, RejectsEarlyHighlightsAndPreparesTreeLeaves) {
+  auto renderer = std::make_unique<LabelRecordingRenderer>();
+  auto* observed = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  const uint16_t selected = 44;
+  engine.highlightParts(&selected, 1);
+  engine.setPartPickingEnabled(true);
+  engine.setSplatBudget(1);
+  const auto bytes = pairWorldBytes();
+  const auto labels = splat::encodePartLabels({selected, selected});
+  engine.loadWorld(bytes.data(), bytes.size(), labels.data(), labels.size());
+  engine.render(kFrameNanos);
+  EXPECT_GT(observed->lodBudget, 0u);
+  EXPECT_FALSE(observed->styled);
+  EXPECT_EQ(engine.pickPart({{-1, 0, 5}, {0, 0, -1}}), selected);
+  engine.highlightParts(&selected, 1);
+  engine.render(kFrameNanos * 30);
+  EXPECT_TRUE(observed->styled);
 }
 
 void expectProjection(const splat::Mat4& drawn, const Lens& lens, Extent extent) {

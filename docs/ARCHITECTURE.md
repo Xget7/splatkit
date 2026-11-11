@@ -117,3 +117,68 @@ Degree-1 records shrink from 20 to 16 bytes, degree-3 from 92 to 52; the shared 
 [vk-camera]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/frame/VulkanCameraUniforms.cpp
 [vk-frame]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/frame/VulkanFrameCompute.h
 [vk-cache]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanPipelineCache.cpp
+
+## Optional part labels
+
+`SplatCloud::labels` is empty by default, otherwise it contains one unsigned 16-bit label per splat, with 0 unlabelled and 1 through 65535 identifying parts.
+Spatial reorder preserves correspondence; a built tree preserves leaf labels and assigns each interior node the label with greatest total descendant leaf opacity, breaking ties toward the lower label.
+Prepared trees carry labels in a separate SFGL sidecar in node order, including interior nodes.
+The existing `.lodsplat` format is unchanged and does not serialize labels.
+
+The additive `SplatWorldLoader::loadWorld(data, size, labels, labelsSize)` and `loadWorldFile(path, labelsPath)` overloads validate sidecar counts before publishing a world, leaving the pending world untouched on failure.
+For SPZ the sidecar follows decoded source order before spatial reorder; for `.lodsplat` it follows stored node order.
+Existing overloads remain unlabelled.
+These overloads are also available on the shared C++ `SplatEngine`; native hosts can bind them without carrying renderer source changes.
+Part styling requires GPU ordering; labelled CPU-order draws and labelled tile uploads are rejected.
+Tiled label streaming is unsupported.
+
+### SFGL version 2
+
+All integers are little endian, with no trailing bytes.
+
+| Offset in bytes | Type | Value |
+|---|---|---|
+| 0 | ASCII, 4 bytes | `SFGL` |
+| 4 | u16 | Version 2 |
+| 6 | u16 | Label width 2 bytes |
+| 8 | u32 | Number of nodes or source splats |
+| 12 | u32 | Reserved, must be zero |
+| 16 | u16[count] | One label per node or source splat |
+
+`decodePartLabels` rejects version 1, an unsupported width, reserved bits, truncated or trailing data, and an expected count mismatch.
+`encodePartLabels` writes the same layout.
+
+### Styling and picking
+
+The shared `Highlight` eases selected labels toward a cyan tint and increased brightness, and dims other labels over 0.25 seconds.
+`SplatEngine::highlightParts(labels, count)` starts or retargets that fade on the render thread; an empty selection restores captured appearance and a successful new load resets highlights.
+Requests without a loaded labelled world log a warning and allocate nothing.
+Retargeting starts from the current resolved appearance, completing the oldest fade only when the fixed palette capacity would be exceeded.
+A direct renderer caller can supply `SplatRenderer::Frame::labelStyles`, a borrowed versioned `LabelStyles` object with uint32 state indices and a resolved palette; null restores defaults.
+`LabelStyle` contains tint RGB, tint amount, brightness and opacity plus padding, with a 32-byte stride on CPU, Metal and Vulkan.
+Use finite nonnegative colour/brightness values, tint amount in [0, 1] and opacity in [0, 1]; opacity fades reduce the existing footprint.
+The lookup covers label 0 as well as every part label.
+Callers use `setStates` and `setPalette`; private data and process-wide monotonic revisions prevent stale slot reuse.
+Invalid counts or state indices reject the draw before acquiring a slot.
+
+GPU splats and projected records remain 32 bytes.
+Unlabelled worlds allocate no label or style buffers.
+Metal specializes visibility with function constant 7 set false, which removes the style work and buffer arguments 12 and 13; labelled visibility pipelines are built during upload and preserve the original pipeline objects.
+Vulkan compiles a separate labelled visibility module with bindings 10 and 11, leaving the default module, ten-binding descriptor layout and existing pipeline families unchanged.
+A labelled world adds two packed label bytes per node, rounded to whole uint32 words, and a world-sized state table with one uint32 per label up to the highest label plus one, and ten resolved palette entries per frame slot.
+The palette and state indices share one storage binding with independent revisions.
+A slot writes the world-sized state table only when membership changes, and writes the 320-byte resolved palette only when its appearance changes.
+The CPU resolves one style per state during a fade; shaders perform one style read without mixing.
+Uploads never read mapped GPU memory.
+Identity styles bypass colour conversion and half precision repacking.
+Both backends apply styles in visibility before rasterization and retain their existing blend order, sort and presentation stages.
+
+`SplatEngine::setPartPickingEnabled(true)` before loading explicitly retains CPU geometry for picking; the default retains none.
+`pickPart(Ray)` returns an exact uint16 label, with 0 for a miss or an unlabelled occluder, on the render thread.
+The ray direction must be finite and normalized.
+`PickIndex::take` is also available directly and consumes positions, covariances, opacities and labels from its cloud.
+Picking composites ray intersections with three-sigma Gaussian supports, nearest first, and selects the strongest label after at least half coverage.
+This CPU approximation does not reproduce screen-space filtering, current adaptive node selection, partial style opacity or exact raster coverage; exact means label precision, not pixel-equivalent GPU picking.
+Hidden parts are skipped.
+Tree picking retains the entire original const tree and skips interior nodes without copying or compacting geometry.
+It scans retained leaves and allocates hit scratch and world-sized label weights per pick, so latency and additional CPU memory require measurement on large worlds.

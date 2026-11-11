@@ -1,4 +1,5 @@
 #include "rendering/vulkan/VulkanSplatRenderer.h"
+#include <mutex>
 
 #include <algorithm>
 #include <limits>
@@ -148,18 +149,26 @@ const VulkanFrameCompute::Pipelines* VulkanSplatRenderer::computePipelines() {
 }
 
 splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanSplatRenderer::createCompute(
-    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
+    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget, bool partLabels) {
   const auto* pipelines = computePipelines();
   if (pipelines == nullptr)
     return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
-  return VulkanFrameCompute::create(ctx_, *pipelines, sourceCount, tree, budget);
+  auto selected = *pipelines;
+  if (partLabels) {
+    if (!labelPipelines_) labelPipelines_ = VulkanVisibilityPass::Pipelines::compile(ctx_, true);
+    selected.visibility = labelPipelines_;
+    if (!selected.visibility)
+      return splat::Error{splat::ErrorCode::gpuUnavailable, "part label pipeline unavailable"};
+  }
+  return VulkanFrameCompute::create(ctx_, selected, sourceCount, tree, budget);
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = createCompute(static_cast<uint32_t>(cloud.count()));
+  auto compute = createCompute(static_cast<uint32_t>(cloud.count()), nullptr,
+                               VulkanLodSelection::kMaxBudget, !cloud.labels.empty());
   // sortsOnGpu() promised GPU order, so a world without its compute passes would never draw.
   if (!compute) {
     LOGE("GPU upload rejected: %s", compute.error().message.c_str());
@@ -184,7 +193,8 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
+  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget,
+                               !tree.nodes.labels.empty());
   if (!compute) {
     LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
     return false;
@@ -216,8 +226,23 @@ bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& c
   return world_->uploadTile(offset, cloud);
 }
 
+bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
+  if (world_ && world_->labels && frame.labelStyles &&
+      !frame.labelStyles->validFor(world_->labelCount())) {
+    LOGE("label state count or palette index is invalid");
+    return false;
+  }
+  // Labels are applied by visibility, so a CPU-order draw cannot honour them.
+  if (world_ && world_->labels && frame.orderSource != OrderSource::gpu) {
+    static std::once_flag warning;
+    std::call_once(warning, [] { LOGE("labelled draws require GPU ordering"); });
+    return false;
+  }
+  return ready();
+}
+
 bool VulkanSplatRenderer::draw(const Frame& frame) {
-  if (!ready()) return false;
+  if (!readyForFrame(frame)) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VulkanFrameLoop::Status status = [&] {
@@ -231,21 +256,21 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (status != VulkanFrameLoop::Status::ok) return false;
 
   const VkExtent2D extent = surface_.drawExtent();
-  const VkExtent2D view = surface_.viewExtent();
-  const uint32_t turns = surface_.quarterTurns();
   const uint32_t slot = frameLoop_.currentSlot();
-  const bool outputLinear = isSrgb(pipelineFormat_);
   // Outside the render pass: transfers are not allowed inside one.
   const VkBuffer camera =
-      world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view,
-                               outputLinear, turns, policy_.subpixelThreshold)
+      world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
+                               surface_.viewExtent(), isSrgb(pipelineFormat_),
+                               surface_.quarterTurns(), policy_.subpixelThreshold, 1)
              : VK_NULL_HANDLE;
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     if (camera != VK_NULL_HANDLE) {
       const TraceSection section(trace::kEncodeCompute);
+      world_->updateStyles(slot, frame.labelStyles);
       gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
-                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame);
+                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame,
+                                 world_->labels.get(), world_->styles[slot].get());
     }
     if (gpuDraw)
       splats_->bindProjected(slot, gpuDraw->projected, gpuDraw->order, gpuDraw->capacity);

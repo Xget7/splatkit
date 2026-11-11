@@ -31,7 +31,7 @@ class VulkanCameraUniforms {
   // VK_NULL_HANDLE without uploading; the caller must submit a clear frame without compute/draw.
   VkBuffer update(uint32_t frameSlot, const splat::Mat4& view, const splat::Mat4& proj,
                   const splat::Vec3& cameraPosition, VkExtent2D extent, bool outputLinear,
-                  uint32_t quarterTurns, float minPixelRadius);
+                  uint32_t quarterTurns, float minPixelRadius, float labelFade = 1);
   VkBuffer buffer(uint32_t frameSlot) const { return uniforms_[frameSlot]->handle(); }
 
  private:

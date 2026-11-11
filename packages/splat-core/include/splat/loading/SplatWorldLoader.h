@@ -94,6 +94,9 @@ class SplatWorldLoader {
   // Errors leave whatever was waiting untouched.
   Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size);
   Result<WorldReport> loadWorldFile(const std::string& path);
+  Result<WorldReport> loadWorld(const std::uint8_t* data, std::size_t size,
+                                const std::uint8_t* labels, std::size_t labelsSize);
+  Result<WorldReport> loadWorldFile(const std::string& path, const std::string& labelsPath);
   // A tiled world from its index (a tileset.json next to its tiles). Only the index is
   // read here; tiles stream in as the camera needs them.
   Result<WorldReport> loadTiledWorldFile(const std::string& path);

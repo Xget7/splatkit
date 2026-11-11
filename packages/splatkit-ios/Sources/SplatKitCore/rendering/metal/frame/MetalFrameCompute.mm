@@ -152,6 +152,7 @@ void MetalFrameCompute::updateCamera(const SplatRenderer::Frame& frame, uint32_t
   u.cameraPosition[0] = frame.cameraPosition.x;
   u.cameraPosition[1] = frame.cameraPosition.y;
   u.cameraPosition[2] = frame.cameraPosition.z;
+  u.cameraPosition[3] = 1;
   std::memcpy(uniforms_[slot].contents, &u, sizeof(u));
 }
 
@@ -207,7 +208,8 @@ id<MTLCommandBuffer> MetalFrameCompute::encodeVisibilityAndSort(const SplatRende
   if (!visibility_.encodeProject(sort, slot, uniforms_[slot], world.splats(), world.harmonics(),
                                  degree, lod_ ? nullptr : frame.ranges, lod_ ? 0 : frame.rangeCount,
                                  sort_.keys(), lod_ ? lod_->indices() : nil,
-                                 lod_ ? lod_->count() : nil)) {
+                                 lod_ ? lod_->count() : nil, world.labels(),
+                                 world.styles(slot, frame.labelStyles))) {
     LOGE("invalid visibility ranges");
     return nil;
   }

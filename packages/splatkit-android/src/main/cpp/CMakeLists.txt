@@ -37,6 +37,7 @@ splatkit_compile_shaders(splatkit_shaders
   rendering/vulkan/raster/splat.vert
   rendering/vulkan/raster/projected.vert
   rendering/vulkan/raster/splat.frag
+  rendering/vulkan/cull/labelled_visibility.comp
   rendering/vulkan/cull/visibility.comp
   rendering/vulkan/cull/prepare_indirect.comp
   rendering/vulkan/selection/lod_selection.comp

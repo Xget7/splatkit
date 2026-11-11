@@ -60,6 +60,23 @@ TEST_F(MetalSplatRendererTest, WorldReadinessRequiresGpuCompletionAndResetsOnRep
   EXPECT_FALSE(renderer->hasCompletedWorldFrame());
 }
 
+TEST_F(MetalSplatRendererTest, LabelledWorldRejectsCpuOrderAndTiles) {
+  auto renderer = MetalSplatRenderer::create();
+  ASSERT_NE(renderer, nullptr);
+  splat::SplatCloud cloud;
+  cloud.positions = {0, 0, -2};
+  cloud.colors = {1, 0, 0};
+  cloud.alphas = {1};
+  cloud.covariances = {0.04f, 0, 0, 0.04f, 0, 0.04f};
+  cloud.labels = {44};
+  ASSERT_TRUE(renderer->uploadWorld(cloud, 0));
+  SplatRenderer::Frame frame;
+  frame.orderSource = SplatRenderer::OrderSource::cpu;
+  EXPECT_FALSE(renderer->draw(frame));
+  ASSERT_TRUE(renderer->createSlab(1, 0));
+  EXPECT_FALSE(renderer->uploadTile(0, cloud));
+}
+
 TEST_F(MetalSplatRendererTest, TheFallbackPolicyResolvesWithoutWarnings) {
   auto renderer = MetalSplatRenderer::create();
   ASSERT_NE(renderer, nullptr);

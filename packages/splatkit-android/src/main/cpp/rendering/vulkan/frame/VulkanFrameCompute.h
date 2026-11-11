@@ -67,7 +67,9 @@ class VulkanFrameCompute {
   // `sh` holds the harmonics bands 1 to `shDegree` of every splat; degree 0 never reads it.
   std::optional<Draw> encode(VkCommandBuffer cmd, uint32_t slot, VkBuffer camera,
                              const VulkanBuffer& splats, const VulkanBuffer& sh, int shDegree,
-                             const SplatRenderer::Frame& frame);
+                             const SplatRenderer::Frame& frame,
+                             const VulkanBuffer* labels = nullptr,
+                             const VulkanBuffer* styles = nullptr);
   const Stats& stats() const { return stats_; }
   // The queue submission that carried the slot's last encode.
   void submitted(uint32_t slot, uint64_t submission);
