@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <map>
 #include <utility>
 
 #include "splat/math/SymmetricEigen.h"
@@ -241,6 +242,47 @@ void copyInLayoutOrder(const Nodes& nodes, const std::vector<uint32_t>& order, L
   }
 }
 
+// One part label per node, in node order. A leaf keeps its splat's part; a merged
+// node takes the part whose leaves under it hold the most opacity, the lower part on a tie, so a
+// wide view styles each merged node like most of what it stands in for.
+void labelInLayoutOrder(const std::vector<uint16_t>& splatLabels,
+                        const std::vector<uint32_t>& order, LodTree& tree) {
+  using PartWeights = std::vector<std::pair<uint16_t, double>>;
+  const std::size_t total = order.size();
+  std::vector<uint16_t>& labels = tree.nodes.labels;
+  labels.assign(total, 0);
+  // Children follow their parent in the layout, so walking it backwards meets every child
+  // first. A merged node's weights live until its parent has summed them.
+  std::vector<PartWeights> merged(total);
+  std::map<uint16_t, double> sum;
+  for (std::size_t i = total; i-- > 0;) {
+    const LodNode& node = tree.layout[i];
+    if (node.childCount == 0) {
+      labels[i] = splatLabels[order[i]];
+      continue;
+    }
+    sum.clear();
+    for (uint32_t c = node.childStart; c < node.childStart + node.childCount; ++c) {
+      if (tree.layout[c].childCount == 0) {
+        sum[labels[c]] += tree.nodes.alphas[c];
+        continue;
+      }
+      for (const auto& [part, weight] : merged[c]) {
+        sum[part] += weight;
+      }
+      PartWeights().swap(merged[c]);
+    }
+    double heaviest = -1;
+    for (const auto& [part, weight] : sum) {
+      merged[i].emplace_back(static_cast<uint16_t>(part), sum[part]);
+      if (sum[part] > heaviest) {
+        heaviest = sum[part];
+        labels[i] = static_cast<uint16_t>(part);
+      }
+    }
+  }
+}
+
 }  // namespace
 
 LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
@@ -255,6 +297,8 @@ LodTree buildLodTree(SplatCloud cloud, const LodBuildOptions& options) {
 
   const std::vector<uint32_t> order = layOutBreadthFirst(nodes, root, tree);
   copyInLayoutOrder(nodes, order, tree);
+  if (!cloud.labels.empty() && cloud.labels.size() == leaves)
+    labelInLayoutOrder(cloud.labels, order, tree);
   tree.nodes.shDegree = cloud.shDegree;
   tree.nodes.bounds = cloud.bounds;
   return tree;

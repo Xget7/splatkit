@@ -1,4 +1,5 @@
 #include "splat/loading/SplatWorldLoader.h"
+#include "splat/formats/PartLabels.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -76,6 +77,13 @@ Result<SplatWorldLoader::MemoryUse> SplatWorldLoader::admit(const Result<LoadCos
 
 Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,
                                                                   std::size_t size) {
+  return loadWorld(data, size, nullptr, 0);
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uint8_t* data,
+                                                                  std::size_t size,
+                                                                  const std::uint8_t* labels,
+                                                                  std::size_t labelsSize) {
   WorldReport report;
   auto start = Clock::now();
   if (isLodSplat(data, size)) {
@@ -87,6 +95,11 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uin
     report.availableBytes = memory.value().available;
     auto decoded = decodeLodSplat(data, size, maxShDegree_.load());
     if (!decoded) return decoded.error();
+    if (labelsSize != 0 || labels != nullptr) {
+      auto decodedLabels = decodePartLabels(labels, labelsSize, decoded.value().nodeCount());
+      if (!decodedLabels) return decodedLabels.error();
+      decoded.value().nodes.labels = std::move(decodedLabels.value());
+    }
     auto world = std::make_unique<World>();
     world->tree = std::make_shared<const LodTree>(std::move(decoded.value()));
     world->budget = lodBudget;
@@ -112,6 +125,11 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uin
   if (!decoded) return decoded.error();
   report.decodeMillis = millisSince(start);
   auto cloud = std::make_unique<SplatCloud>(std::move(decoded.value()));
+  if (labelsSize != 0 || labels != nullptr) {
+    auto decodedLabels = decodePartLabels(labels, labelsSize, cloud->count());
+    if (!decodedLabels) return decodedLabels.error();
+    cloud->labels = std::move(decodedLabels.value());
+  }
   report.splatCount = cloud->count();
   report.shDegree = cloud->shDegree;
   report.bounds = cloud->bounds;
@@ -141,6 +159,17 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(const std:
   auto file = MappedFile::open(path);
   if (!file) return file.error();
   return loadWorld(file.value().data(), file.value().size());
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldFile(
+    const std::string& path, const std::string& labelsPath) {
+  if (labelsPath.empty()) return loadWorldFile(path);
+  auto world = MappedFile::open(path);
+  if (!world) return world.error();
+  auto labels = MappedFile::open(labelsPath);
+  if (!labels) return labels.error();
+  return loadWorld(world.value().data(), world.value().size(), labels.value().data(),
+                   labels.value().size());
 }
 
 Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadTiledWorldFile(

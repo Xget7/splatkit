@@ -1,5 +1,7 @@
 add_executable(splat_core_tests
   formats/SplatDecoderTest.cpp
+  formats/PartLabelsTest.cpp
+  lod/LabelledLodTreeTest.cpp
   formats/SpzDecoderTest.cpp
   formats/GlbDecoderTest.cpp
   formats/GlbEncoderTest.cpp
