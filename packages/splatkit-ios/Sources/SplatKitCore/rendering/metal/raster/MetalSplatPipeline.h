@@ -1,6 +1,7 @@
 #pragma once
 
 #import <Metal/Metal.h>
+#include <TargetConditionals.h>
 
 #include <array>
 #include <cstdint>
@@ -58,7 +59,10 @@ class MetalSplatPipeline {
   // The GPU order path: front to back in batches, a saturation mask between them, the
   // background last.
   id<MTLRenderPipelineState> projectedPipeline_ = nil;
+  // No framebuffer-fetch mask pipeline is created on the simulator.
+#if !TARGET_OS_SIMULATOR
   id<MTLRenderPipelineState> maskPipeline_ = nil;
+#endif
   id<MTLRenderPipelineState> backgroundPipeline_ = nil;
   id<MTLDepthStencilState> splatDepth_ = nil;  // pass unless masked, never write
   id<MTLDepthStencilState> maskDepth_ = nil;   // always write
