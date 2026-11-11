@@ -9,6 +9,7 @@
 static NSString *const kErrorInvalidRequest = @"INVALID_REQUEST";
 static NSString *const kErrorWorldLoadFailed = @"WORLD_LOAD_FAILED";
 static NSString *const kErrorColliderLoadFailed = @"COLLIDER_LOAD_FAILED";
+static NSString *const kErrorGpuFailed = @"GPU_FAILED";
 static NSString *const kErrorGpuUnavailable = @"GPU_UNAVAILABLE";
 static NSString *const kErrorInvalidPolicy = @"INVALID_POLICY";
 static NSString *const kErrorPolicyPreparationFailed = @"POLICY_PREPARATION_FAILED";
@@ -651,7 +652,7 @@ static CAFrameRateRange FrameRateRange(CGFloat maxFramesPerSecond) {
   if (self.worldEvent == nil) return;
   NSString *phase = event == SKSplatEventWorldReady ? kWorldPhaseUploaded
       : event == SKSplatEventWorldFrameReady ? kWorldPhaseFrameReady : kWorldPhaseFailed;
-  NSString *code = event == SKSplatEventWorldFailed ? kErrorWorldLoadFailed : @"";
+  NSString *code = event == SKSplatEventGpuFailed ? kErrorGpuFailed : event == SKSplatEventWorldFailed ? kErrorWorldLoadFailed : @"";
   self.worldEvent(@{@"requestId": requestId, @"phase": phase, @"loadedSplats": @(count),
                     @"errorCode": code, @"message": message ?: @""});
 }

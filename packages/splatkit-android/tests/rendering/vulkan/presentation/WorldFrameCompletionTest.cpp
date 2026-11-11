@@ -1,3 +1,4 @@
+#include "engine/AndroidEventMapping.h"
 // Host-only test, built with include paths for splatkit-android/src/main/cpp,
 // splatkit-engine/include and splat-core/include. Run without NDEBUG.
 #include <cassert>
@@ -25,4 +26,14 @@ int main() {
   assert(!completion.completed(9));  // old world's late fence cannot ready the replacement
   assert(completion.completed(10));
   assert(!completion.completed(0));  // device/fence failure never counts as completion
+}
+
+TEST(AdapterEvents, MapsEveryEngineEventAndDropsUnknownValues) {
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldReady), 0);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFailed), 1);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderReady), 2);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderFailed), 3);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::gpuFailed), 5);
+  EXPECT_FALSE(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFrameReady));
+  EXPECT_FALSE(splatkit::publicEvent(static_cast<splatkit::SplatEngine::Event>(999)));
 }

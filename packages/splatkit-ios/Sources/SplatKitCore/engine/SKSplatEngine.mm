@@ -1,3 +1,4 @@
+#include "engine/SKEventMapping.h"
 #import "SplatKit/SKSplatEngine.h"
 
 #include <memory>
@@ -60,7 +61,8 @@ std::optional<splat::CoordinateFrame> parseFrame(NSString* letters) {
       strongSelf->_worldFrameSplatCount = splatCount;
     }
     if (strongSelf.eventHandler == nil) return;
-    strongSelf.eventHandler(static_cast<SKSplatEvent>(event), @(message.c_str()), splatCount);
+    const auto mapped = splatkit::publicEvent(event);
+    if (mapped) strongSelf.eventHandler(*mapped, @(message.c_str()), splatCount);
   });
   return self;
 }

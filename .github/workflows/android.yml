@@ -72,6 +72,7 @@ jobs:
             -I packages/splatkit-android/tests \
             -I packages/splatkit-engine/include -I packages/splat-core/include \
             packages/splatkit-android/tests/rendering/vulkan/presentation/WorldFrameCompletionTest.cpp \
+            packages/splatkit-engine/src/Log.cpp \
             -o build/native-contracts/world-frame-completion
           build/native-contracts/world-frame-completion
       - name: Check surface size wait on host
