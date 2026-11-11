@@ -8,11 +8,27 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 
 ### Added
 
+- Optional part labels: a world loads with one unsigned 16-bit label per splat, `SplatEngine::highlightParts` styles parts by label and `pickPart` returns the part under a ray once `setPartPickingEnabled` keeps CPU geometry.
+  Worlds without labels keep the default pipelines and pay nothing.
+- `SplatEngine::setHighlightLook` lets the host choose the highlight tint, tint amount, part brightness and the brightness of everything else; the defaults are the previous faint cyan style.
+- `setOrbitLimits` bounds the orbit and `frameBounds` eases it until given bounds fit the lens, optionally from a chosen direction.
+- `LoadOptions::expectedSha256`, `expectedLabelsSha256` and `expectedSplatCount` verify a world and its labels before they load; a mismatch fails the load and keeps the previous world.
+  PicoSHA2 ships with its notice in the Android library and the iOS framework.
+- `beginLoad` reserves a load that supersedes earlier decoding, pending uploads and their events.
+- Engine events `worldFrameReady` and `gpuFailed`; Android listeners get `onGpuFailed`.
+- Configurable reveal sweeps through `setReveal`.
+- Drawn frame queries: after `setDrawnFrameQueriesEnabled`, `pick` and `project` answer against the last drawn frame.
+- `render` returns whether it drew and `needsFrame` reports pending input, loads or streaming, so a host frame loop can sleep.
+- `RenderPolicy::backgroundColor`.
+- Public native renderer entry points, `splatkit/vulkan/VulkanRenderer.h` on Android and `SplatKit/metal/MetalRenderer.h` on iOS, for hosts that build a `SplatEngine` themselves.
 - Opt-in scaled 8-bit Vulkan SH storage through `SPLATKIT_VULKAN_SH8` / `splatkitVulkanSh8`, disabled by default.
 - Any of the 48 axis-aligned coordinate frames, named by three letters such as `rub`, `rdf` or `rfu`, as the source frame of a world, its tiles and its collider: `SplatEngine::setSourceFrame`, `SplatSurfaceView.sourceFrame` and `--source-frame` on `splat-convert`, `splat-tile`, `splat_collider`, `splat_lod_build` and `prepare-world.sh`.
 
 ### Changed
 
+- Breaking: `SplatEngine::render` returns `bool`, and world loads return whether the request was accepted.
+- Breaking: labels that do not match their world fail as `labelsMismatch`, which platform hosts receive as a failed world.
+- The reveal test runs in the shared projection code of both backends; while no reveal runs it costs one comparison per splat.
 - Breaking: an SPZ loads in the frame its `SPZ_ADOBE_coordinate_system` tag declares, else in the SPZ default `rub`, so an untagged `rdf` file, such as a World Labs Marble export, needs source frame `rdf`.
   PLY defaults to `rdf` and glTF to its own frame.
 - Breaking: `splat-convert` and `ply2spz` write untagged `rub` by default; any other `--target-frame` is tagged and needs `--spz-version 4`.
@@ -20,6 +36,10 @@ iOS changes are in the [iOS changelog](packages/splatkit-ios/distribution/CHANGE
 ### Fixed
 
 - SPZ v2 and v3 files that carry a frame tag load in that frame; the tag was dropped while reading.
+- Recoverable render failures stay out of the terminal GPU failure latch.
+- Automatic orbit stops at an azimuth limit instead of pressing against it, and `setOrbitLimits` and `frameBounds` cancel it.
+- The reveal clock starts on the first successful draw of the world instead of at load.
+- Completing a cut-short highlight fade keeps untinted looks instead of reading them as dimmed.
 
 ## [0.1.0-beta.2] - 2026-10-23
 

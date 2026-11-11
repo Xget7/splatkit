@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 - Breaking: `WorldRequest.sourceFrame`, a `CoordinateFrame` of three letters such as `CoordinateFrame.rdf`, names the frame a world, its tiles and its collider were written in; absent, an SPZ loads in the frame its tag declares, else `rub`, so an untagged World Labs Marble export needs `sourceFrame: CoordinateFrame.rdf`.
   `parseCoordinateFrame` turns a string into one.
+- A terminal GPU failure reaches `onWorldEvent` as a failed world with code `GPU_FAILED` on both platforms.
+
 ## [0.1.0-beta.2] - 2026-10-23
 
 The Android dependency and checksum-verified iOS artifact pin native SDK `0.1.0-beta.2`.
