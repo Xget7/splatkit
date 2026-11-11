@@ -82,6 +82,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
+  bool readyForOrder(OrderSource order) const;
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);

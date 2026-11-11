@@ -129,7 +129,8 @@ The additive `SplatWorldLoader::loadWorld(data, size, labels, labelsSize)` and `
 For SPZ the sidecar follows decoded source order before spatial reorder; for `.lodsplat` it follows stored node order.
 Existing overloads remain unlabelled.
 These overloads are also available on the shared C++ `SplatEngine`; native hosts can bind them without carrying renderer source changes.
-Tiled label streaming is unsupported and labelled tile uploads are rejected.
+Part styling requires GPU ordering; labelled CPU-order draws and labelled tile uploads are rejected.
+Tiled label streaming is unsupported.
 
 ### SFGL version 2
 

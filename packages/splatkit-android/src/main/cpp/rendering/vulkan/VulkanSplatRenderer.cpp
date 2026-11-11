@@ -224,8 +224,13 @@ bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& c
   return world_->uploadTile(offset, cloud);
 }
 
+bool VulkanSplatRenderer::readyForOrder(OrderSource order) const {
+  return ready() && (!world_ || !world_->labels || order == OrderSource::gpu);
+}
+
 bool VulkanSplatRenderer::draw(const Frame& frame) {
-  if (!ready()) return false;
+  // Labels are applied by visibility, so a CPU-order draw cannot honour them.
+  if (!readyForOrder(frame.orderSource)) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VulkanFrameLoop::Status status = [&] {

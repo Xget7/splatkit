@@ -170,6 +170,8 @@ uint32_t MetalSplatRenderer::takePresentTimes(std::vector<int64_t>* times) {
 }
 
 bool MetalSplatRenderer::draw(const Frame& frame) {
+  // Labels are applied by visibility, so a CPU-order draw cannot honour them.
+  if (world_ && world_->labels() && frame.orderSource != OrderSource::gpu) return false;
   if (frameLoop_.gpuFailed()) return false;
   if (!ready() || !pipeline_.ready()) return false;
   if (!frameLoop_.acquire()) return false;
