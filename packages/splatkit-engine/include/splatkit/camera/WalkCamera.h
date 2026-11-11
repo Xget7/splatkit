@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 
@@ -8,6 +9,7 @@
 #include "splat/navigation/CharacterController.h"
 #include "splat/navigation/Collider.h"
 #include "splatkit/camera/CameraRequest.h"
+#include "splatkit/camera/Lens.h"
 
 namespace splatkit {
 
@@ -21,6 +23,18 @@ namespace splatkit {
 class WalkCamera {
  public:
   WalkCamera();
+
+  struct OrbitLimits {
+    float minAzimuth = -std::numeric_limits<float>::infinity();
+    float maxAzimuth = std::numeric_limits<float>::infinity();
+    float minElevation = -1.48352986f;
+    float maxElevation = 1.48352986f;
+    float minRadius = 0.05f;
+    float maxRadius = std::numeric_limits<float>::infinity();
+  };
+  bool setOrbitLimits(const OrbitLimits& limits);
+  bool frameBounds(const splat::Bounds& bounds, const Lens& lens, Extent extent,
+                   float durationSeconds);
 
   void setCollider(std::unique_ptr<splat::Collider> collider);
   bool hasCollider() const { return collider_ != nullptr; }
@@ -61,7 +75,7 @@ class WalkCamera {
   // Rotates by deltaAzimuth at the average rate. Ease-in-out uses a smoothstep time
   // curve and still lands exactly at the requested azimuth and duration.
   bool animateOrbit(float deltaAzimuth, float radiansPerSecond, bool easeInOut);
-  bool orbitAnimationRunning() const { return animation_.has_value(); }
+  bool orbitAnimationRunning() const { return animation_.has_value() || framing_.has_value(); }
   float orbitRadius() const;
   float orbitAzimuth() const;
   float orbitElevation() const;
@@ -108,6 +122,15 @@ class WalkCamera {
     bool easeInOut = false;
   };
 
+  struct Framing {
+    Orbit from;
+    Orbit to;
+    float elapsed = 0;
+    float duration = 0;
+  };
+  OrbitLimits limits_;
+  std::optional<Framing> framing_;
+  void clampOrbit();
   void teleported() {
     if (teleport_) teleport_();
   }
@@ -117,6 +140,7 @@ class WalkCamera {
   void applyOrbitPose();
   void stopOrbitAnimation() {
     animation_.reset();
+    framing_.reset();
     orbitRadiansPerSecond_ = 0;
   }
 

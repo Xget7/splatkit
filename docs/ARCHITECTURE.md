@@ -182,3 +182,13 @@ This CPU approximation does not reproduce screen-space filtering, current adapti
 Hidden parts are skipped.
 Tree picking retains the entire original const tree and skips interior nodes without copying or compacting geometry.
 It scans retained leaves and allocates hit scratch and world-sized label weights per pick, so latency and additional CPU memory require measurement on large worlds.
+
+## Orbit constraints and framing
+
+The existing orbit camera and lens framing are extended by `WalkCamera::setOrbitLimits` and `frameBounds`, also exposed by `SplatEngine`.
+Limits clamp azimuth, elevation and radius on every orbit pose; invalid limits leave the previous constraints intact.
+Azimuth intervals are unwrapped radians, elevation stays inside the existing pole guard, and radius stays positive.
+Framing interpolates the anchor and lens-derived bounding-sphere radius with smoothstep, preserving angles and respecting limits even when those prevent a full fit.
+The caller supplies elapsed seconds through `WalkCamera::update`; nonpositive or nonfinite steps do nothing.
+Zero duration frames immediately; input, new limits or another animation cancels the transition.
+These render-thread operations reuse the existing camera and add no GPU resources.
