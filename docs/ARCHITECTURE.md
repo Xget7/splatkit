@@ -215,3 +215,13 @@ A backend's terminal failure latch produces one `gpuFailed` event on the next `r
 The engine then stops drawing and consuming pending loads; the host must recreate it.
 Metal command-buffer failures and Vulkan submission, fence and device failures use this path, as do renderer pipeline rebuild failures.
 Factory failures before an engine exists retain their existing null or error return; rejected render policy preparation retains its existing synchronous resolution.
+
+## Optional reveal sweep
+
+`SplatEngine::setReveal(RevealSettings)` sets the next successfully uploaded world's bottom-up sweep; zero seconds disables it.
+The render-thread setting validates finite nonnegative duration, tint and brightness, and tint amount and band share in [0, 1].
+`Reveal` advances with elapsed frame time and restores positive infinity level and zero band on completion.
+`SplatRenderer::Frame::reveal` carries a separate 32-byte `RevealUniform`, appended to each existing camera uniform without another binding or buffer.
+Each frame slot initializes idle once and writes the tail only when its cached payload differs, including the final idle transition; ordinary camera uploads retain their original byte count.
+Projection rejects heights above the level and NaN heights; visibility applies glow after label styles, preserving hidden parts.
+The neutral default tint is white, and CPU picking intentionally ignores the sweep.

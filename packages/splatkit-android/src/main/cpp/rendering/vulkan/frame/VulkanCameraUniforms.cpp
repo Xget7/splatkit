@@ -13,6 +13,9 @@ splat::Result<std::unique_ptr<VulkanCameraUniforms>> VulkanCameraUniforms::creat
     uniform =
         VulkanBuffer::hostVisible(ctx, sizeof(CameraUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     if (!uniform) return splat::Error{splat::ErrorCode::gpuUnavailable, "camera uniforms"};
+    const CameraUniform initial{};
+    std::memcpy(uniform->mapped(), &initial, sizeof(initial));
+    uniform->flush(0, sizeof(initial));
   }
   return cameras;
 }
@@ -20,7 +23,8 @@ splat::Result<std::unique_ptr<VulkanCameraUniforms>> VulkanCameraUniforms::creat
 VkBuffer VulkanCameraUniforms::update(uint32_t frameSlot, const splat::Mat4& view,
                                       const splat::Mat4& proj, const splat::Vec3& cameraPosition,
                                       VkExtent2D extent, bool outputLinear, uint32_t quarterTurns,
-                                      float minPixelRadius, float labelFade) {
+                                      float minPixelRadius, float labelFade,
+                                      const RevealUniform& reveal) {
   CameraUniform u{};
   u.cameraPosition[0] = cameraPosition.x;
   u.cameraPosition[1] = cameraPosition.y;
@@ -31,8 +35,15 @@ VkBuffer VulkanCameraUniforms::update(uint32_t frameSlot, const splat::Mat4& vie
   u.outputLinear = outputLinear ? 1u : 0u;
   u.quarterTurns = quarterTurns;
   u.minPixelRadius = minPixelRadius;
-  std::memcpy(uniforms_[frameSlot]->mapped(), &u, sizeof(u));
-  uniforms_[frameSlot]->flush(0, sizeof(u));
+  const auto prefix = offsetof(CameraUniform, reveal);
+  std::memcpy(uniforms_[frameSlot]->mapped(), &u, prefix);
+  const bool changed = !(revealCache_[frameSlot] == reveal);
+  if (changed) {
+    std::memcpy(static_cast<char*>(uniforms_[frameSlot]->mapped()) + prefix, &reveal,
+                sizeof(reveal));
+    revealCache_[frameSlot] = reveal;
+  }
+  uniforms_[frameSlot]->flush(0, changed ? sizeof(u) : prefix);
   return uniforms_[frameSlot]->handle();
 }
 

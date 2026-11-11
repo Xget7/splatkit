@@ -1,4 +1,5 @@
 #pragma once
+#include "splatkit/reveal/Reveal.h"
 
 #include <array>
 #include <cstdint>
@@ -31,10 +32,12 @@ class VulkanCameraUniforms {
   // VK_NULL_HANDLE without uploading; the caller must submit a clear frame without compute/draw.
   VkBuffer update(uint32_t frameSlot, const splat::Mat4& view, const splat::Mat4& proj,
                   const splat::Vec3& cameraPosition, VkExtent2D extent, bool outputLinear,
-                  uint32_t quarterTurns, float minPixelRadius, float labelFade = 1);
+                  uint32_t quarterTurns, float minPixelRadius, float labelFade = 1,
+                  const RevealUniform& reveal = {});
   VkBuffer buffer(uint32_t frameSlot) const { return uniforms_[frameSlot]->handle(); }
 
  private:
+  std::array<RevealUniform, kFramesInFlight> revealCache_{};
   VulkanCameraUniforms() = default;
 
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> uniforms_{};

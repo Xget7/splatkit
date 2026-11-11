@@ -96,6 +96,7 @@ bool visible(Splat s, uint index, out uint key, out ProjectedSplat record) {
   if (ba.y * style.opacity < QUAD_MIN_ALPHA) return false;
   }
 #endif
+  revealGlow(s.py, record);
   return true;
 }
 

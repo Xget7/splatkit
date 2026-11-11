@@ -133,6 +133,7 @@ struct SplatView {
 // outside the near and far planes, its half-packed quad misses the view, or its footprint is
 // under the camera's sub-pixel cutoff.
 bool projectSplat(Splat s, out SplatView v) {
+  if (!(cam.reveal.x - s.py >= 0.0)) return false;
   vec4 rgba = unpackUnorm4x8(s.rgba8);
   v.alpha = s.lodAlpha != 0u ? uintBitsToFloat(s.lodAlpha) : rgba.a;
   // Dark but opaque splats are kept: they occlude. NaN fails every comparison.
@@ -188,4 +189,18 @@ ProjectedSplat packProjected(Splat s, uint index, SplatView v) {
   p.radius = v.radius;
   p.index = index;
   return p;
+}
+
+void revealGlow(float height, inout ProjectedSplat p) {
+  if (!(cam.reveal.y > 0.0)) return;
+  float glow = clamp(1.0 - (cam.reveal.x - height) / cam.reveal.y, 0.0, 1.0);
+  glow *= glow;
+  if (!(glow > 0.0)) return;
+  vec2 rg = unpackHalf2x16(p.color0), ba = unpackHalf2x16(p.color1);
+  vec3 rgb = vec3(rg, ba.x);
+  if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(1.0 / kDisplayGamma));
+  rgb = mix(rgb, cam.revealTint.xyz, cam.reveal.z * glow) * (1.0 + cam.reveal.w * glow);
+  if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(kDisplayGamma));
+  p.color0 = packHalf2x16(rgb.rg);
+  p.color1 = packHalf2x16(vec2(rgb.b, ba.y));
 }

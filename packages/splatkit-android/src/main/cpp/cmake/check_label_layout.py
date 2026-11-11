@@ -31,3 +31,9 @@ style = types[palette][1][0]
 # PartStyle has vec3, three scalar fields and vec2 padding.
 assert [offsets[style, i] for i in range(5)] == [0, 12, 16, 20, 24]
 print('Label palette offsets and array strides match CPU layout')
+
+camera_binding = next(key for key in variables if decorations.get((key, 33)) == (0,)
+                      and decorations.get((key, 34)) == (0,))
+camera = types[variables[camera_binding]][1][1]
+assert [offsets[camera, i] for i in range(14)] == [0, 64, 128, 136, 144, 152, 156, 160, 176, 180, 184, 188, 192, 208]
+print('Camera reveal offsets match CPU layout')

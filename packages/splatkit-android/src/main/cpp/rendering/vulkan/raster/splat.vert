@@ -26,6 +26,8 @@ void main() {
     return;
   }
   vec4 position;
-  expandQuad(packProjected(s, index, v), uint(gl_VertexIndex), position, gaussian, color);
+  ProjectedSplat p = packProjected(s, index, v);
+  revealGlow(s.py, p);
+  expandQuad(p, uint(gl_VertexIndex), position, gaussian, color);
   gl_Position = position;
 }
