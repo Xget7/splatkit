@@ -65,6 +65,9 @@ class SplatEngine {
 
   // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.
   void loadWorld(const std::uint8_t* data, std::size_t size);
+  void loadWorld(const std::uint8_t* data, std::size_t size,
+                 const splat::SplatWorldLoader::LoadOptions& options);
+  void loadWorldFile(const std::string& path, const splat::SplatWorldLoader::LoadOptions& options);
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
   // The same from a file, mapped rather than copied through the host's heap.

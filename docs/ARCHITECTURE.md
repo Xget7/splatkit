@@ -192,3 +192,12 @@ Framing interpolates the anchor and lens-derived bounding-sphere radius with smo
 The caller supplies elapsed seconds through `WalkCamera::update`; nonpositive or nonfinite steps do nothing.
 Zero duration frames immediately; input, new limits or another animation cancels the transition.
 These render-thread operations reuse the existing camera and add no GPU resources.
+
+## Optional byte identity
+
+The `LoadOptions` overloads of `SplatWorldLoader::loadWorld` and `loadWorldFile` accept an optional 32-byte SHA-256 digest, also exposed through `SplatEngine`.
+The calling loader thread hashes the input before decoding and publishing it, returning `corrupt` with `World SHA-256 mismatch` on disagreement.
+The current and pending worlds remain unchanged on failure; the engine reports it through its existing `worldFailed` event.
+Absent a digest, loading takes the existing path without hashing or scratch allocation.
+File loads hash and decode the same mapping; callers must keep the bytes immutable for the call.
+PicoSHA2 is pinned with its source and MIT licence under `third_party/picosha2`, with redistribution terms in `THIRD_PARTY_LICENSES.txt`.

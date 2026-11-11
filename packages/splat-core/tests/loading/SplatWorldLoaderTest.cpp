@@ -362,3 +362,28 @@ TEST(SplatWorldLoader, ATiledWorldIsPricedByItsResidency) {
 
 }  // namespace
 }  // namespace splat
+
+TEST(SplatWorldLoader, VerifiesIdentityBeforeDecode) {
+  splat::SplatWorldLoader loader;
+  splat::SplatWorldLoader::LoadOptions options;
+  options.expectedSha256 = std::array<std::uint8_t, 32>{};
+  constexpr std::uint8_t kBytes[] = {'a', 'b', 'c'};
+  auto mismatch = loader.loadWorld(kBytes, sizeof(kBytes), options);
+  ASSERT_FALSE(mismatch);
+  EXPECT_EQ(mismatch.error().message, "World SHA-256 mismatch");
+  options.expectedSha256 =
+      std::array<std::uint8_t, 32>{0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40,
+                                   0xde, 0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17,
+                                   0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+  auto matched = loader.loadWorld(kBytes, sizeof(kBytes), options);
+  ASSERT_FALSE(matched);
+  EXPECT_NE(matched.error().message, mismatch.error().message);
+  EXPECT_FALSE(loader.takeWorld());
+  constexpr int kCount = 3;
+  const auto valid = splat::encodeSpz(kCount);
+  ASSERT_TRUE(loader.loadWorld(valid.data(), valid.size()));
+  EXPECT_FALSE(loader.loadWorld(valid.data(), valid.size(), options));
+  auto pending = loader.takeWorld();
+  ASSERT_NE(pending, nullptr);
+  EXPECT_EQ(pending->sourceCount, kCount);
+}
