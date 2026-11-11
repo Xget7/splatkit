@@ -15,6 +15,23 @@ Around the packages:
 - [.github/workflows](../.github/workflows): one workflow per package plus lint, release and the iOS mirror; [ci-filters.yml](../.github/ci-filters.yml) maps changed files to jobs.
 - [VALIDATION.md](VALIDATION.md), [BENCHMARKS.md](BENCHMARKS.md), [RELEASING.md](RELEASING.md) and [VULKAN.md](../packages/splatkit-android/docs/VULKAN.md) for checks, measurements, releases and the Vulkan contracts.
 
+## Native C++ hosts
+
+Metal hosts link `splatkit_ios` from `add_subdirectory(packages/splatkit-ios)` and include `SplatKit/metal/MetalRenderer.h` in Objective-C++.
+`MetalRenderer::create()` returns null when Metal initialization fails; `setLayer` and `setDrawableSize` attach and size its retained layer.
+Android hosts link the static `splatkit_vulkan` target from `add_subdirectory(packages/splatkit-android/src/main/cpp)` and include `splatkit/vulkan/VulkanRenderer.h`.
+`VulkanRenderer::create(optionalCacheFilePath)` returns a `splat::Result` with a failure message; an empty path keeps the pipeline cache in memory.
+The target supplies the engine, shaders, Vulkan dependencies and compile definitions without exposing implementation include directories.
+The shared JNI library links this target and retains its version-script export boundary.
+
+Both factories return unique pointers convertible to `std::unique_ptr<SplatRenderer>` for `SplatEngine` ownership.
+Keep a borrowed platform renderer pointer before moving ownership to the engine, and use it only until engine destruction.
+Surface operations and destruction must be serialized with rendering on the render thread.
+`setWindow` retains an Android window and `onSurfaceResized` reports its new size; null windows or layers detach without discarding the world.
+Vulkan owns its context and frame loop, waits for idle during renderer teardown, and destroys GPU resources before the frame loop and context.
+The narrow abstract interfaces keep platform lifecycle operations public while concrete GPU resources and pipeline types stay private, allowing implementation changes without growing a host dependency on backend internals.
+The native SDK facades use these same factories; Metal additionally exposes its existing asynchronous frame capture and Vulkan its completed-statistics refresh through these interfaces.
+
 ## Load (shared, CPU)
 
 Both platforms run the same code up to the upload.
