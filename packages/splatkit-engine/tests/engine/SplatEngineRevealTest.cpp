@@ -50,7 +50,10 @@ TEST(Reveal, EngineAppliesSettingsOnLoadAndRedrawsUntilIdle) {
       EXPECT_GT(observed->reveal.level, first);
     else
       EXPECT_EQ(first, std::numeric_limits<float>::infinity());
-    engine.render(120'500'000'001);
+    if (enabled) {
+      EXPECT_TRUE(std::isfinite(observed->reveal.level));
+    }
+    for (int i = 1; i <= 100; ++i) engine.render(20'500'000'001 + i * 100'000'000LL);
     EXPECT_EQ(observed->reveal.level, std::numeric_limits<float>::infinity());
     EXPECT_EQ(observed->reveal.band, 0);
     const auto frames = observed->frames;
