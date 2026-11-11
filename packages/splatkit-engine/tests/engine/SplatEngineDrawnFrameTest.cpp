@@ -79,7 +79,7 @@ TEST(SplatEngineDrawnFrame, PendingLoadCompletionRevealHighlightAndCamera) {
   engine.render(1'000'000'000);
   EXPECT_TRUE(engine.needsFrame());
   gpu->completed = true;
-  engine.render(1'016'000'000);
+  for (int i = 1; i <= 20; ++i) engine.render(1'000'000'000 + i * 1'000'000LL + i * 16'000'000LL);
   EXPECT_FALSE(engine.needsFrame());
   const uint16_t label = 1;
   engine.highlightParts(&label, 1);

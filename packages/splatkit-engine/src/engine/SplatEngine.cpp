@@ -265,6 +265,7 @@ bool SplatEngine::uploadFinishedLoads() {
   preparePartPicking(*world);
   highlight_.reset();
   reveal_.start(worldBounds, revealSettings_);
+  revealDrawn_ = false;
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
   loadedBudget_ = world->budget;
   planner_.invalidate();
@@ -555,7 +556,8 @@ bool SplatEngine::render(int64_t frameTimeNanos) {
   }
   if (world) {
     const float wallSeconds = frameSeconds(frameTimeNanos);
-    redrawNeeded_ |= reveal_.update(wallSeconds);
+    // Upload and rejected first draws do not consume the new world's reveal.
+    if (revealDrawn_) redrawNeeded_ |= reveal_.update(std::min(wallSeconds, kMaxFrameSeconds));
     if (highlight_ && highlight_->update(wallSeconds)) redrawNeeded_ = true;
     driveBenchmark(wallSeconds, *world);
     const float dt = std::min(wallSeconds, kMaxFrameSeconds);
@@ -592,6 +594,7 @@ bool SplatEngine::render(int64_t frameTimeNanos) {
     stats_.onFrame(frameTimeNanos, false, sampler);
     return false;  // The redraw waits for the next frame; FPS must still age to zero.
   }
+  if (world) revealDrawn_ = true;
   redrawNeeded_ = false;
   lastDrawnView_ = camera ? camera->view : splat::Mat4::identity();
   lastDrawnGeneration_ = generation;

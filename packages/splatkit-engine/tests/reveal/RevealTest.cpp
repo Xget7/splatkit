@@ -35,9 +35,10 @@ TEST(Reveal, EngineAppliesSettingsOnLoadAndRedrawsUntilIdle) {
   class RecordingRenderer : public StubRenderer {
    public:
     RevealUniform reveal;
+    bool accept = true;
     bool draw(const Frame& frame) override {
       reveal = frame.reveal;
-      return StubRenderer::draw(frame);
+      return accept && StubRenderer::draw(frame);
     }
   };
   spz::GaussianCloud cloud;
@@ -60,18 +61,25 @@ TEST(Reveal, EngineAppliesSettingsOnLoadAndRedrawsUntilIdle) {
       ASSERT_TRUE(engine.setReveal(settings));
     }
     engine.loadWorld(bytes.data(), bytes.size());
-    engine.render(1);
+    observed->accept = false;
+    EXPECT_FALSE(engine.render(1));
+    const float waiting = observed->reveal.level;
+    EXPECT_FALSE(engine.render(10'000'000'001));
+    EXPECT_EQ(observed->reveal.level, waiting);
+    observed->accept = true;
+    ASSERT_TRUE(engine.render(20'000'000'001));
+    EXPECT_EQ(observed->reveal.level, waiting);
     const float first = observed->reveal.level;
-    engine.render(500000001);
+    engine.render(20'500'000'001);
     if (enabled)
       EXPECT_GT(observed->reveal.level, first);
     else
       EXPECT_EQ(first, std::numeric_limits<float>::infinity());
-    engine.render(1500000001);
+    engine.render(120'500'000'001);
     EXPECT_EQ(observed->reveal.level, std::numeric_limits<float>::infinity());
     EXPECT_EQ(observed->reveal.band, 0);
     const auto frames = observed->frames;
-    engine.render(1600000001);
+    engine.render(31'000'000'001);
     EXPECT_EQ(observed->frames, frames);
   }
 }

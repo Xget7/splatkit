@@ -299,6 +299,7 @@ class SplatEngine {
                   const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
   RevealSettings revealSettings_;
   Reveal reveal_;
+  bool revealDrawn_ = false;
   bool pollGpuEvents();
   bool gpuFailureReported_ = false;
   bool worldFramePending_ = false;
