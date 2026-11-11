@@ -6,8 +6,9 @@ public protocol SplatViewDelegate: AnyObject {
     /// dismissing a loading cover or starting a tour. Requires resume(), even while
     /// covered. Not a guarantee that streamed tiles are resident or LOD detail is exact.
     func splatView(_ view: SplatMetalView, worldFrameReady splatCount: Int)
-    /// The file was not a readable world, or the GPU refused it; the previous world stays.
+    /// A terminal GPU failure stopped rendering; recreate the view to recover.
     func splatView(_ view: SplatMetalView, gpuFailed message: String)
+    /// The file was not a readable world, or the GPU refused it; the previous world stays.
     func splatView(_ view: SplatMetalView, worldFailed message: String)
     /// Walk mode is on.
     func splatViewColliderReady(_ view: SplatMetalView)
