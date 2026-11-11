@@ -518,12 +518,12 @@ TEST(WalkCamera, LimitsAndFramingUseInjectedTime) {
   ASSERT_TRUE(camera.dolly(100));
   EXPECT_FLOAT_EQ(camera.orbitRadius(), limits.maxRadius);
   const splat::Bounds bounds{{1, 1, 1}, {3, 3, 3}};
-  constexpr float duration = 2;
-  ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, duration));
+  constexpr float kDuration = 2;
+  ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, kDuration));
   EXPECT_FALSE(camera.update(-1));
-  EXPECT_TRUE(camera.update(duration / 2));
+  EXPECT_TRUE(camera.update(kDuration / 2));
   EXPECT_FLOAT_EQ(camera.anchor()->x, 1);
-  EXPECT_TRUE(camera.update(duration / 2));
+  EXPECT_TRUE(camera.update(kDuration / 2));
   EXPECT_FLOAT_EQ(camera.anchor()->x, 2);
   EXPECT_FALSE(camera.orbitAnimationRunning());
   limits.minRadius = -1;

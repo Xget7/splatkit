@@ -44,14 +44,15 @@ WalkCamera::WalkCamera()
     : referenceToWorld_(splat::Mat4::rotation(-kPi / 2, {1, 0, 0})) {}
 
 bool WalkCamera::setOrbitLimits(const OrbitLimits& limits) {
-  if (!(limits.minAzimuth <= limits.maxAzimuth) ||
-      limits.minAzimuth == std::numeric_limits<float>::infinity() ||
-      limits.maxAzimuth == -std::numeric_limits<float>::infinity() ||
-      !(limits.minElevation >= -kMaxPitch && limits.maxElevation <= kMaxPitch &&
-        limits.minElevation <= limits.maxElevation) ||
-      !(limits.minRadius >= kMinOrbitRadius && std::isfinite(limits.minRadius) &&
-        limits.maxRadius >= limits.minRadius))
-    return false;
+  const bool azimuthValid = limits.minAzimuth <= limits.maxAzimuth &&
+                            limits.minAzimuth != std::numeric_limits<float>::infinity() &&
+                            limits.maxAzimuth != -std::numeric_limits<float>::infinity();
+  const bool elevationValid = limits.minElevation >= -kMaxPitch &&
+                              limits.maxElevation <= kMaxPitch &&
+                              limits.minElevation <= limits.maxElevation;
+  const bool radiusValid = limits.minRadius >= kMinOrbitRadius && std::isfinite(limits.minRadius) &&
+                           limits.maxRadius >= limits.minRadius;
+  if (!azimuthValid || !elevationValid || !radiusValid) return false;
   limits_ = limits;
   stopOrbitAnimation();
   clampOrbit();
