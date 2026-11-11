@@ -82,7 +82,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
-  bool readyForOrder(OrderSource order) const;
+  bool readyForFrame(const Frame& frame) const;
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);
@@ -104,6 +104,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   VkFormat pipelineFormat_ = VK_FORMAT_UNDEFINED;  // the format the pipelines target
   std::unique_ptr<VulkanWorld> world_;
   std::optional<VulkanFrameCompute::Pipelines> computePipelines_;
+  std::shared_ptr<const VulkanVisibilityPass::Pipelines> labelPipelines_;
   std::unique_ptr<VulkanFrameCompute> compute_;
   RenderPolicy policy_;
   WorldFrameCompletion worldFrameCompletion_;

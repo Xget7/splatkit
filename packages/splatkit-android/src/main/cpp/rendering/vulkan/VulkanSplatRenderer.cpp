@@ -1,4 +1,5 @@
 #include "rendering/vulkan/VulkanSplatRenderer.h"
+#include <mutex>
 
 #include <algorithm>
 #include <limits>
@@ -154,7 +155,8 @@ splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanSplatRenderer::createCo
     return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
   auto selected = *pipelines;
   if (partLabels) {
-    selected.visibility = VulkanVisibilityPass::Pipelines::compile(ctx_, true);
+    if (!labelPipelines_) labelPipelines_ = VulkanVisibilityPass::Pipelines::compile(ctx_, true);
+    selected.visibility = labelPipelines_;
     if (!selected.visibility)
       return splat::Error{splat::ErrorCode::gpuUnavailable, "part label pipeline unavailable"};
   }
@@ -224,13 +226,23 @@ bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& c
   return world_->uploadTile(offset, cloud);
 }
 
-bool VulkanSplatRenderer::readyForOrder(OrderSource order) const {
-  return ready() && (!world_ || !world_->labels || order == OrderSource::gpu);
+bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
+  if (world_ && world_->labels && frame.labelStyles &&
+      !frame.labelStyles->validFor(world_->labelCount())) {
+    LOGE("label state count or palette index is invalid");
+    return false;
+  }
+  // Labels are applied by visibility, so a CPU-order draw cannot honour them.
+  if (world_ && world_->labels && frame.orderSource != OrderSource::gpu) {
+    static std::once_flag warning;
+    std::call_once(warning, [] { LOGE("labelled draws require GPU ordering"); });
+    return false;
+  }
+  return ready();
 }
 
 bool VulkanSplatRenderer::draw(const Frame& frame) {
-  // Labels are applied by visibility, so a CPU-order draw cannot honour them.
-  if (!readyForOrder(frame.orderSource)) return false;
+  if (!readyForFrame(frame)) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VulkanFrameLoop::Status status = [&] {
@@ -251,7 +263,8 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   // Outside the render pass: transfers are not allowed inside one.
   const VkBuffer camera =
       world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, view,
-                               outputLinear, turns, policy_.subpixelThreshold)
+                               outputLinear, turns, policy_.subpixelThreshold,
+                               frame.labelStyles ? frame.labelStyles->fade : 1)
              : VK_NULL_HANDLE;
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {

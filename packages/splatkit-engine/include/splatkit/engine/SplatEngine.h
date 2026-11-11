@@ -72,11 +72,14 @@ class SplatEngine {
   void loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
                  std::size_t labelsSize);
   void loadWorldFile(const std::string& path, const std::string& labelsPath);
-  // Render thread. Highlight state allocates only on an explicit nonempty request.
+  // Render thread. Requests before a labelled world arrives are rejected with a warning.
   void highlightParts(const std::uint16_t* labels, std::size_t count);
   // Picking retains CPU geometry only when explicitly enabled before loading.
   void setPartPickingEnabled(bool enabled) { partPickingEnabled_.store(enabled); }
-  std::uint16_t pickPart(const Ray& ray) const { return picks_ ? picks_->pick(ray) : 0; }
+  // Render thread only, serialized with draws, loads and highlight changes.
+  std::uint16_t pickPart(const Ray& ray) const {
+    return picks_ ? picks_->pick(ray, highlight_ ? &highlight_->styles() : nullptr) : 0;
+  }
   void loadColliderFile(const std::string& path);
   // A tiled world from its index file; tiles stream in as the camera needs them. Thread
   // safe. Errors are reported and leave the current world.
@@ -194,10 +197,11 @@ class SplatEngine {
   const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
-  void preparePartPicking(const splat::SplatWorldLoader::World& world);
+  void preparePartPicking(splat::SplatWorldLoader::World& world);
   std::atomic<bool> partPickingEnabled_{false};
   std::shared_ptr<const PickIndex> picks_;
   std::unique_ptr<Highlight> highlight_;
+  std::size_t labelCount_ = 0;
   static constexpr int kMaxShDegree = 3;
   static constexpr int kMinResidency = 100000;
   static constexpr int kMaxResidency = 32000000;

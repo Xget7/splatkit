@@ -544,12 +544,15 @@ TEST_F(MetalVisibilityPassTest, WideLabelStylesUseSeparatePipelinesAndPreservePl
   auto labels = [gpu.device newBufferWithBytes:&label
                                         length:sizeof(label)
                                        options:MTLResourceStorageModeShared];
-  auto styles = std::make_unique<LabelStyles>();
-  (*styles)[65535].tint[1] = 1;
-  (*styles)[65535].tintAmount = 1;
-  auto table = [gpu.device newBufferWithBytes:styles->data()
-                                       length:kLabelCount * sizeof(LabelStyle)
-                                      options:MTLResourceStorageModeShared];
+  auto styles = std::make_unique<LabelStyles>(65536);
+  styles->states[65535] = 1;
+  styles->from[1].tint[1] = styles->to[1].tint[1] = 1;
+  styles->from[1].tintAmount = styles->to[1].tintAmount = 1;
+  auto table = [gpu.device newBufferWithLength:labelStyleBytes(styles->states.size())
+                                       options:MTLResourceStorageModeShared];
+  LabelStyleUpload upload;
+  ASSERT_TRUE(upload.copy(table.contents, styles->states.size(), styles.get()));
+  ASSERT_TRUE(visibility.pass.createLabelPipelines());
   const SplatRenderer::Range range{0, 1};
   auto cmd = [gpu.queue commandBuffer];
   ASSERT_TRUE(visibility.pass.encodeProject(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1,

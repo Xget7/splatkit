@@ -9,6 +9,7 @@ struct PartStyle {
   float opacity;
   float2 reserved;
 };
+struct PartStyles { PartStyle from[10]; PartStyle to[10]; uint states[1]; };
 constant bool kIndexedLOD [[function_constant(3)]];
 constant bool kQuantizedDepth [[function_constant(4)]];
 
@@ -49,7 +50,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
                        const device uint* activeIndices [[buffer(10), function_constant(kIndexedLOD)]],
                        const device uint* activeCount [[buffer(11), function_constant(kIndexedLOD)]],
                        const device ushort* labels [[buffer(12), function_constant(kPartLabels)]],
-                       const device PartStyle* styles [[buffer(13), function_constant(kPartLabels)]]) {
+                       const device PartStyles& styles [[buffer(13), function_constant(kPartLabels)]]) {
   const uint total = kIndexedLOD ? activeCount[0] : rangeStarts[rangeCount];
   bool visible = false;
   uint key = 0;
@@ -67,7 +68,15 @@ kernel void visibility(uint t [[thread_position_in_grid]],
     Splat s = splats[index];
     visible = projectSplat(cam, s, index, shData, p);
     if (kPartLabels && visible) {
-      PartStyle style = styles[labels[index]];
+      uint state = styles.states[labels[index]];
+      PartStyle a = styles.from[state], b = styles.to[state];
+      float t = cam.cameraPosition.w;
+      PartStyle style;
+      style.tint = mix(float3(a.tint), float3(b.tint), t);
+      style.tintAmount = mix(a.tintAmount, b.tintAmount, t);
+      style.brightness = mix(a.brightness, b.brightness, t);
+      style.opacity = mix(a.opacity, b.opacity, t);
+      if (style.tintAmount != 0 || style.brightness != 1 || style.opacity != 1) {
       float2 rg = float2(as_type<half2>(p.color0));
       float2 ba = float2(as_type<half2>(p.color1));
       float3 rgb = float3(rg, ba.x);
@@ -77,6 +86,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
       p.color0 = as_type<uint>(half2(rgb.rg));
       p.color1 = as_type<uint>(half2(rgb.b, ba.y * style.opacity));
       visible = ba.y * style.opacity >= kQuadMinAlpha;
+      }
     }
     // Both key widths order by view depth, which the blend order along a view ray needs;
     // positive IEEE float bits sort in ascending numeric order. Behind the camera a

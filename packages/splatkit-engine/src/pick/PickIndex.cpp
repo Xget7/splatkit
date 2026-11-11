@@ -8,7 +8,6 @@ namespace splatkit {
 namespace {
 
 constexpr std::size_t kCovarianceFloats = 6;  // xx, xy, xz, yy, yz, zz
-constexpr std::size_t kLabelCount = 65536;
 constexpr float kCutoffSquared = PickIndex::kSigmaCutoff * PickIndex::kSigmaCutoff;
 // Past this transmittance nothing behind can change which label wins.
 constexpr float kOpaque = PickIndex::kMinAlpha;
@@ -61,15 +60,18 @@ std::shared_ptr<const PickIndex> PickIndex::take(splat::SplatCloud& cloud) {
   index->positions_ = std::move(cloud.positions);
   index->covariances_ = std::move(cloud.covariances);
   index->alphas_ = std::move(cloud.alphas);
+  index->labelCount_ = std::size_t{*std::max_element(cloud.labels.begin(), cloud.labels.end())} + 1;
   index->labels_ = std::move(cloud.labels);
   return index;
 }
 
-std::uint16_t PickIndex::pick(const Ray& ray) const {
+std::uint16_t PickIndex::pick(const Ray& ray, const LabelStyles* styles) const {
+  if (labels_.empty()) return 0;
   std::vector<Hit> hits;
   const splat::Vec3 o = ray.origin;
   const splat::Vec3 d = ray.direction;
   for (std::size_t i = 0; i < labels_.size(); ++i) {
+    if (styles && (*styles)[labels_[i]].opacity == 0) continue;
     const float* p = &positions_[i * 3];
     const float* c = &covariances_[i * kCovarianceFloats];
     const splat::Vec3 v{o.x - p[0], o.y - p[1], o.z - p[2]};
@@ -89,7 +91,7 @@ std::uint16_t PickIndex::pick(const Ray& ray) const {
   std::sort(hits.begin(), hits.end(),
             [](const Hit& a, const Hit& b) { return a.depthSquared < b.depthSquared; });
 
-  std::vector<float> weights(kLabelCount, 0);
+  std::vector<float> weights(labelCount_, 0);
   float transmittance = 1;
   for (const Hit& hit : hits) {
     weights[hit.label] += hit.alpha * transmittance;

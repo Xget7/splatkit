@@ -20,6 +20,7 @@ namespace splatkit {
 // Call reserve only while idle. All encodes and raster consumers use one command queue.
 class MetalVisibilityPass {
  public:
+  bool createLabelPipelines();
   // Both widths sort by linear view depth: Full32 by its float bits, Low16 by steps of at most
   // 0.024 % of the depth above the near plane of a finite forward-Z Mat4::perspective.
   // Shader key width and radix passes agree.
@@ -72,7 +73,7 @@ class MetalVisibilityPass {
   static constexpr int kShDegrees = 4;
 
   bool createPipelines();
-  bool createLabelPipelines();
+
   std::array<id<MTLComputePipelineState>, kShDegrees> labelled_{};
   std::array<id<MTLComputePipelineState>, kShDegrees> indexedLabelled_{};
 

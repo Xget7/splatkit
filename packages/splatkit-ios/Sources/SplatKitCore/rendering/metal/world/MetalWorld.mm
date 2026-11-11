@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include "splatkit/Log.h"
 
 #include "rendering/metal/device/MetalShaderLibrary.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -46,8 +47,9 @@ std::unique_ptr<MetalWorld> MetalWorld::upload(id<MTLDevice> device, const splat
     world->labels_ = metal::buffer(device, words.size() * sizeof(uint32_t));
     if (!world->labels_) return nullptr;
     std::memcpy(world->labels_.contents, words.data(), words.size() * sizeof(uint32_t));
+    world->labelCount_ = uint32_t{*std::max_element(cloud.labels.begin(), cloud.labels.end())} + 1;
     for (auto& buffer : world->styles_) {
-      buffer = metal::buffer(device, kLabelCount * sizeof(LabelStyle));
+      buffer = metal::buffer(device, labelStyleBytes(world->labelCount_));
       if (!buffer) return nullptr;
     }
   }
@@ -56,11 +58,7 @@ std::unique_ptr<MetalWorld> MetalWorld::upload(id<MTLDevice> device, const splat
 
 id<MTLBuffer> MetalWorld::styles(uint32_t slot, const LabelStyles* styles) const {
   if (!labels_) return nil;
-  auto* out = static_cast<LabelStyle*>(styles_[slot].contents);
-  if (styles && styles->size() == kLabelCount)
-    std::copy(styles->begin(), styles->end(), out);
-  else
-    std::fill_n(out, kLabelCount, LabelStyle{});
+  styleUploads_[slot].copy(styles_[slot].contents, labelCount_, styles);
   return styles_[slot];
 }
 
@@ -81,7 +79,11 @@ std::unique_ptr<MetalWorld> MetalWorld::slab(id<MTLDevice> device, uint32_t capa
 }
 
 bool MetalWorld::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) {
-  if (!slab_ || !validCloud(cloud) || !cloud.labels.empty()) return false;
+  if (!cloud.labels.empty()) {
+    LOGE("labelled tile uploads are unsupported");
+    return false;
+  }
+  if (!slab_ || !validCloud(cloud)) return false;
   const size_t n = cloud.count();
   if (offset > count_ || n > count_ - offset) return false;
   if (n == 0) return true;

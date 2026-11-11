@@ -30,9 +30,10 @@ bool MetalVisibilityPass::create(id<MTLDevice> device, id<MTLLibrary> library, K
 // Only the pipelines depend on the key width; the buffers and the radix scratch are reused.
 bool MetalVisibilityPass::reconfigure(KeyBits depthBits) {
   if (device_ == nil || library_ == nil) return false;
+  const bool hadLabels = labelled_[0] != nil;
   const KeyBits previousBits = depthBits_;
   depthBits_ = depthBits;
-  if (!createPipelines()) {
+  if (!createPipelines() || (hadLabels && !createLabelPipelines())) {
     depthBits_ = previousBits;
     return false;
   }
@@ -40,27 +41,26 @@ bool MetalVisibilityPass::reconfigure(KeyBits depthBits) {
 }
 
 bool MetalVisibilityPass::createLabelPipelines() {
+  if (labelled_[0]) return true;
   const bool quantized = depthBits_ == KeyBits::Low16;
   const bool labelled = true;
-  decltype(labelled_) plain{};
+  decltype(labelled_) labelPipelines{};
   decltype(indexedLabelled_) indexedPipelines{};
   for (int degree = 0; degree < kShDegrees; ++degree) {
     auto constants = [MTLFunctionConstantValues new];
     uint32_t value = static_cast<uint32_t>(degree);
-    const bool noLabels = false;
-    [constants setConstantValue:&noLabels type:MTLDataTypeBool atIndex:kFnPartLabels];
     [constants setConstantValue:&value type:MTLDataTypeUInt atIndex:kFnShDegree];
     [constants setConstantValue:&quantized type:MTLDataTypeBool atIndex:kFnQuantizedDepth];
     [constants setConstantValue:&labelled type:MTLDataTypeBool atIndex:kFnPartLabels];
     bool indexed = false;
     [constants setConstantValue:&indexed type:MTLDataTypeBool atIndex:kFnIndexedLod];
-    plain[degree] = metal::pipeline(device_, library_, "visibility", constants);
+    labelPipelines[degree] = metal::pipeline(device_, library_, "visibility", constants);
     indexed = true;
     [constants setConstantValue:&indexed type:MTLDataTypeBool atIndex:kFnIndexedLod];
     indexedPipelines[degree] = metal::pipeline(device_, library_, "visibility", constants);
-    if (!plain[degree] || !indexedPipelines[degree]) return false;
+    if (!labelPipelines[degree] || !indexedPipelines[degree]) return false;
   }
-  labelled_ = plain;
+  labelled_ = labelPipelines;
   indexedLabelled_ = indexedPipelines;
   return true;
 }
@@ -141,9 +141,9 @@ bool MetalVisibilityPass::encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot,
                                         id<MTLBuffer> styles) {
   if ((labels != nil) != (styles != nil)) return false;
   if (labels && (labels.length < size_t{sourceCapacity_} * sizeof(uint16_t) ||
-                 styles.length < kLabelCount * sizeof(LabelStyle)))
+                 styles.length < kPaletteBytes + sizeof(uint32_t)))
     return false;
-  if (labels && !labelled_[0] && !createLabelPipelines()) return false;
+  if (labels && !labelled_[0]) return false;
   const bool indexed = indices != nil;
   if (indexedOnly_ && !indexed) return false;
   if (indexed != (activeCount != nil)) return false;

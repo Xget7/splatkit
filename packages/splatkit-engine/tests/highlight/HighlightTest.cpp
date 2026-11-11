@@ -21,14 +21,15 @@ void expectAsCaptured(const LabelStyle& style) {
 }
 
 TEST(Highlight, StartsWithEverySplatAsCaptured) {
-  Highlight highlight;
+  Highlight highlight(65536);
   EXPECT_FALSE(highlight.fading());
   EXPECT_FALSE(highlight.update(1));
-  for (const LabelStyle& style : highlight.styles()) expectAsCaptured(style);
+  for (std::size_t i = 0; i < highlight.styles().states.size(); ++i)
+    expectAsCaptured(highlight.styles()[i]);
 }
 
 TEST(Highlight, EmphasisesItsPartsAndDimsEverythingElse) {
-  Highlight highlight;
+  Highlight highlight(65536);
   const std::vector<std::uint16_t> labels = {256, 65535};
   highlight.set(labels.data(), labels.size());
   finishFade(highlight);
@@ -45,7 +46,7 @@ TEST(Highlight, EmphasisesItsPartsAndDimsEverythingElse) {
 }
 
 TEST(Highlight, FadesOverAQuarterSecondThenRests) {
-  Highlight highlight;
+  Highlight highlight(65536);
   const std::uint16_t label = 5;
   highlight.set(&label, 1);
   EXPECT_TRUE(highlight.fading());
@@ -59,7 +60,7 @@ TEST(Highlight, FadesOverAQuarterSecondThenRests) {
 }
 
 TEST(Highlight, AnEmptySetFadesBackToTheCapture) {
-  Highlight highlight;
+  Highlight highlight(65536);
   const std::uint16_t label = 5;
   highlight.set(&label, 1);
   finishFade(highlight);
@@ -67,26 +68,25 @@ TEST(Highlight, AnEmptySetFadesBackToTheCapture) {
   ASSERT_TRUE(highlight.update(Highlight::kFadeSeconds / 2));
   EXPECT_EQ(highlight.styles()[label].tint[0], Highlight::kTint[0]);
   finishFade(highlight);
-  for (const LabelStyle& style : highlight.styles()) expectAsCaptured(style);
+  for (std::size_t i = 0; i < highlight.styles().states.size(); ++i)
+    expectAsCaptured(highlight.styles()[i]);
 }
 
-TEST(Highlight, ANewSetStartsFromWhereTheFadeWas) {
-  Highlight highlight;
-  const std::uint16_t first = 5;
-  const std::uint16_t second = 9;
+TEST(Highlight, RetargetCompletesThePreviousPaletteTransition) {
+  Highlight highlight(10);
+  const uint16_t first = 5;
+  const uint16_t second = 9;
   highlight.set(&first, 1);
-  ASSERT_TRUE(highlight.update(Highlight::kFadeSeconds / 2));
-  const float halfway = highlight.styles()[first].tintAmount;
+  highlight.update(Highlight::kFadeSeconds / 2);
   highlight.set(&second, 1);
-  ASSERT_TRUE(highlight.update(0));
-  EXPECT_NEAR(highlight.styles()[first].tintAmount, halfway, kTolerance);
+  EXPECT_FLOAT_EQ(highlight.styles()[first].brightness, Highlight::kEmphasisBrightness);
   finishFade(highlight);
-  EXPECT_EQ(highlight.styles()[first].tintAmount, 0.0f);
-  EXPECT_EQ(highlight.styles()[second].tintAmount, Highlight::kTintAmount);
+  EXPECT_FLOAT_EQ(highlight.styles()[first].brightness, Highlight::kDimBrightness);
+  EXPECT_FLOAT_EQ(highlight.styles()[second].brightness, Highlight::kEmphasisBrightness);
 }
 
 TEST(Highlight, TheSetItHeadsForAgainChangesNothing) {
-  Highlight highlight;
+  Highlight highlight(65536);
   const std::vector<std::uint16_t> labels = {256, 65535};
   const std::vector<std::uint16_t> sameParts = {65535, 256, 65535};
   highlight.set(labels.data(), labels.size());
@@ -100,7 +100,7 @@ TEST(Highlight, TheSetItHeadsForAgainChangesNothing) {
 }
 
 TEST(Highlight, ClearingWhatIsNotHighlightedChangesNothing) {
-  Highlight highlight;
+  Highlight highlight(65536);
   highlight.set(nullptr, 0);
   EXPECT_FALSE(highlight.fading());
 }

@@ -41,7 +41,7 @@ bool finiteVec4(vec4 v) {
 #ifdef SPLATKIT_PART_LABELS
 struct PartStyle { vec3 tint; float tintAmount; float brightness; float opacity; vec2 reserved; };
 layout(std430, set = 0, binding = 10) readonly buffer Labels { uint labelWords[]; };
-layout(std140, set = 0, binding = 11) readonly buffer Styles { PartStyle styles[65536]; };
+layout(std140, set = 0, binding = 11) readonly buffer Styles { PartStyle fromStyles[10]; PartStyle toStyles[10]; uint states[]; };
 #endif
 bool visible(Splat s, uint index, out uint key, out ProjectedSplat record) {
   key = 0u;
@@ -83,7 +83,12 @@ bool visible(Splat s, uint index, out uint key, out ProjectedSplat record) {
   record = packProjected(s, index, v);
 #ifdef SPLATKIT_PART_LABELS
   uint label = (labelWords[index >> 1u] >> ((index & 1u) * 16u)) & 65535u;
-  PartStyle style = styles[label];
+  uint state = states[label];
+  PartStyle a = fromStyles[state], b = toStyles[state];
+  float t = cam.cameraPosition.w;
+  PartStyle style = PartStyle(mix(a.tint, b.tint, t), mix(a.tintAmount, b.tintAmount, t),
+                             mix(a.brightness, b.brightness, t), mix(a.opacity, b.opacity, t), vec2(0));
+  if (style.tintAmount != 0 || style.brightness != 1 || style.opacity != 1) {
   vec2 rg = unpackHalf2x16(record.color0), ba = unpackHalf2x16(record.color1);
   vec3 rgb = vec3(rg, ba.x);
   if (cam.outputLinear == 1u) rgb = pow(rgb, vec3(1.0 / 2.2));
@@ -92,6 +97,7 @@ bool visible(Splat s, uint index, out uint key, out ProjectedSplat record) {
   record.color0 = packHalf2x16(rgb.rg);
   record.color1 = packHalf2x16(vec2(rgb.b, ba.y * style.opacity));
   if (ba.y * style.opacity < QUAD_MIN_ALPHA) return false;
+  }
 #endif
   return true;
 }

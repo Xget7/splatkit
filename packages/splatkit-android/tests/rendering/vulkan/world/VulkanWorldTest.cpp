@@ -153,6 +153,20 @@ void worldInSharedMemory(const test::VulkanTestContext& gpu) {
       "the GPU reads the packed harmonics");
 }
 
+void labels(const test::VulkanTestContext& gpu) {
+  constexpr uint16_t kHighestLabel = 44;
+  auto source = cloud(2);
+  auto plain = VulkanWorld::upload(*gpu.context, source, 0, false);
+  require(plain && !plain->labels && !plain->styles[0], "plain world has no label buffers");
+  source.labels = {0, kHighestLabel};
+  require(!VulkanWorld::upload(*gpu.context, source, 0, true), "reject labelled CPU ordering");
+  auto labelled = VulkanWorld::upload(*gpu.context, source, 0, false);
+  require(labelled && labelled->styles[0]->size() == splatkit::labelStyleBytes(kHighestLabel + 1),
+          "state buffer scales to highest label");
+  auto slab = VulkanWorld::createSlab(*gpu.context, 2, 0, false);
+  require(slab && !slab->uploadTile(0, source), "reject labelled tiles");
+}
+
 void orderUpload(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(4), 0, true);
   require(world != nullptr, "upload for order recording");
@@ -189,6 +203,7 @@ int main() {
     std::puts("PASS tiles in shared memory");
     worldInSharedMemory(gpu);
     std::puts("PASS world in shared memory");
+    labels(gpu);
     orderUpload(gpu);
     std::puts("PASS order upload");
     gpu.requireValidationClean();

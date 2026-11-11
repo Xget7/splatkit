@@ -530,10 +530,14 @@ void testLabels(const Gpu& gpu, const Fixture& f) {
   auto pass = std::move(created.value());
   require(pass->reserve(300), "reserve labelled output");
   const auto labels = upload(gpu, std::vector<uint32_t>(150, 0xffffffffu));
-  splatkit::LabelStyles styles;
-  styles[65535].tint[1] = 1;
-  styles[65535].tintAmount = 1;
-  const auto table = upload(gpu, std::vector<splatkit::LabelStyle>(styles.begin(), styles.end()));
+  splatkit::LabelStyles styles(65536);
+  styles.states[65535] = 1;
+  styles.from[1].tint[1] = styles.to[1].tint[1] = 1;
+  styles.from[1].tintAmount = styles.to[1].tintAmount = 1;
+  std::vector<uint32_t> bytes(splatkit::labelStyleBytes(styles.states.size()) / sizeof(uint32_t));
+  splatkit::LabelStyleUpload revision;
+  require(revision.copy(bytes.data(), styles.states.size(), &styles), "copy state revision");
+  const auto table = upload(gpu, bytes);
   auto in = f.input();
   in.labels = labels->handle();
   in.labelsBytes = labels->size();

@@ -66,6 +66,26 @@ TEST(SplatEngineLabels, LoadHighlightPickAndReplacementCrossTheRendererInterface
   EXPECT_EQ(engine.pickPart({{-1, 0, 5}, {0, 0, -1}}), 0);
 }
 
+TEST(SplatEngineLabels, RejectsEarlyHighlightsAndPreparesTreeLeaves) {
+  auto renderer = std::make_unique<LabelRecordingRenderer>();
+  auto* observed = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  const uint16_t selected = 44;
+  engine.highlightParts(&selected, 1);
+  engine.setPartPickingEnabled(true);
+  engine.setSplatBudget(1);
+  const auto bytes = pairWorldBytes();
+  const auto labels = splat::encodePartLabels({selected, selected});
+  engine.loadWorld(bytes.data(), bytes.size(), labels.data(), labels.size());
+  engine.render(kFrameNanos);
+  EXPECT_GT(observed->lodBudget, 0u);
+  EXPECT_FALSE(observed->styled);
+  EXPECT_EQ(engine.pickPart({{-1, 0, 5}, {0, 0, -1}}), selected);
+  engine.highlightParts(&selected, 1);
+  engine.render(kFrameNanos * 30);
+  EXPECT_TRUE(observed->styled);
+}
+
 void expectProjection(const splat::Mat4& drawn, const Lens& lens, Extent extent) {
   const splat::Mat4 expected = lens.projection(extent);
   for (size_t i = 0; i < expected.m.size(); ++i) EXPECT_FLOAT_EQ(drawn.m[i], expected.m[i]) << i;

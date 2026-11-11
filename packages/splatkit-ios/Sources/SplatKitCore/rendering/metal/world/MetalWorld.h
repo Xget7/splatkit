@@ -18,6 +18,7 @@ namespace splatkit {
 // The renderer guarantees no frame reads a slab range or order slot while it is written.
 class MetalWorld {
  public:
+  uint32_t labelCount() const { return labelCount_; }
   static std::unique_ptr<MetalWorld> upload(id<MTLDevice> device, const splat::SplatCloud& cloud,
                                             int maxShDegree);
   static std::unique_ptr<MetalWorld> slab(id<MTLDevice> device, uint32_t capacity, int shDegree);
@@ -43,6 +44,8 @@ class MetalWorld {
   id<MTLBuffer> splats_ = nil;
   id<MTLBuffer> sh_ = nil;
   id<MTLBuffer> labels_ = nil;
+  uint32_t labelCount_ = 0;
+  mutable std::array<LabelStyleUpload, kFramesInFlight> styleUploads_{};
   std::array<id<MTLBuffer>, kFramesInFlight> styles_{};
   std::array<id<MTLBuffer>, 2> orders_{};
   uint32_t currentOrder_ = 0;

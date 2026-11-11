@@ -6,6 +6,7 @@
 
 #include "splat/formats/SplatCloud.h"
 #include "splat/math/Vec3.h"
+#include "splatkit/labels/LabelStyles.h"
 
 namespace splatkit {
 
@@ -24,7 +25,7 @@ class PickIndex {
   static std::shared_ptr<const PickIndex> take(splat::SplatCloud& cloud);
 
   // The label the ray shows, or 0 for an unlabelled part or less than half a covered pixel.
-  std::uint16_t pick(const Ray& ray) const;
+  std::uint16_t pick(const Ray& ray, const LabelStyles* styles = nullptr) const;
 
   static constexpr float kSigmaCutoff = 3.0f;
   static constexpr float kMinAlpha = 1.0f / 255.0f;
@@ -32,6 +33,7 @@ class PickIndex {
 
  private:
   PickIndex() = default;
+  std::size_t labelCount_ = 0;
 
   std::vector<float> positions_;
   std::vector<float> covariances_;

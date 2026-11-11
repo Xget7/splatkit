@@ -89,8 +89,12 @@ void SplatEngine::loadWorldFile(const std::string& path, const std::string& labe
   reportWorld(loader_.loadWorldFile(path, labelsPath));
 }
 void SplatEngine::highlightParts(const std::uint16_t* labels, std::size_t count) {
+  if (labelCount_ == 0) {
+    if (count) LOGW("highlight request requires a loaded labelled world");
+    return;
+  }
   if (!highlight_ && count == 0) return;
-  if (!highlight_) highlight_ = std::make_unique<Highlight>();
+  if (!highlight_) highlight_ = std::make_unique<Highlight>(labelCount_);
   highlight_->set(labels, count);
   redrawNeeded_ = true;
 }
@@ -180,6 +184,11 @@ bool SplatEngine::uploadFinishedLoads() {
     }
     streamer_.reset();
   }
+  labelCount_ = !world->tiles && !world->splats().labels.empty()
+                    ? std::size_t{*std::max_element(world->splats().labels.begin(),
+                                                    world->splats().labels.end())} +
+                          1
+                    : 0;
   preparePartPicking(*world);
   highlight_.reset();
   sourceCount_ = static_cast<uint32_t>(world->sourceCount);
@@ -374,22 +383,26 @@ StatsPublisher::Sample SplatEngine::sample() const {
   return s;
 }
 
-void SplatEngine::preparePartPicking(const splat::SplatWorldLoader::World& world) {
+void SplatEngine::preparePartPicking(splat::SplatWorldLoader::World& world) {
   picks_.reset();
-  if (partPickingEnabled_.load() && !world.tiles && !world.splats().labels.empty()) {
-    splat::SplatCloud pickCloud;
-    const auto& source = world.splats();
+  if (!partPickingEnabled_.load() || world.tiles || world.splats().labels.empty()) return;
+  auto& source = world.tree ? world.tree->nodes : *world.cloud;
+  if (world.tree) {
+    // Compact leaves in place before transferring ownership, avoiding a second geometry copy.
+    std::size_t leaf = 0;
     for (std::size_t i = 0; i < source.count(); ++i) {
-      if (world.tree && world.tree->layout[i].childCount != 0) continue;
-      pickCloud.positions.insert(pickCloud.positions.end(), source.positions.data() + i * 3,
-                                 source.positions.data() + (i + 1) * 3);
-      pickCloud.covariances.insert(pickCloud.covariances.end(), source.covariances.data() + i * 6,
-                                   source.covariances.data() + (i + 1) * 6);
-      pickCloud.alphas.push_back(source.alphas[i]);
-      pickCloud.labels.push_back(source.labels[i]);
+      if (world.tree->layout[i].childCount != 0) continue;
+      std::copy_n(source.positions.data() + i * 3, 3, source.positions.data() + leaf * 3);
+      std::copy_n(source.covariances.data() + i * 6, 6, source.covariances.data() + leaf * 6);
+      source.alphas[leaf] = source.alphas[i];
+      source.labels[leaf++] = source.labels[i];
     }
-    picks_ = PickIndex::take(pickCloud);
+    source.positions.resize(leaf * 3);
+    source.covariances.resize(leaf * 6);
+    source.alphas.resize(leaf);
+    source.labels.resize(leaf);
   }
+  picks_ = PickIndex::take(source);
 }
 
 // The frame.

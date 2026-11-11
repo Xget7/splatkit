@@ -152,6 +152,7 @@ void MetalFrameCompute::updateCamera(const SplatRenderer::Frame& frame, uint32_t
   u.cameraPosition[0] = frame.cameraPosition.x;
   u.cameraPosition[1] = frame.cameraPosition.y;
   u.cameraPosition[2] = frame.cameraPosition.z;
+  u.cameraPosition[3] = frame.labelStyles ? frame.labelStyles->fade : 1;
   std::memcpy(uniforms_[slot].contents, &u, sizeof(u));
 }
 

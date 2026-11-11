@@ -120,7 +120,8 @@ class SplatRenderer {
     splat::Mat4 view = splat::Mat4::identity();
     splat::Mat4 proj = splat::Mat4::identity();
     splat::Vec3 cameraPosition;
-    // Borrowed for draw only, copied into the frame slot. Null restores captured styles.
+    // Borrowed during draw; generation changes copy states and palette into an available slot.
+    // State count must equal the highest world label plus one. Null restores captured styles.
     const LabelStyles* labelStyles = nullptr;
   };
   // Records and presents one frame. Returns false when nothing was presented, e.g. the

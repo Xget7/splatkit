@@ -4,6 +4,7 @@
 #include <cstring>
 #include <limits>
 #include <vector>
+#include "splatkit/Log.h"
 
 #include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "splatkit/rendering/GpuLayout.h"
@@ -108,6 +109,10 @@ bool uploadWindows(const splat::SplatCloud& cloud, const VulkanWorld& world, siz
 std::unique_ptr<VulkanWorld> VulkanWorld::upload(const VulkanContext& ctx,
                                                  const splat::SplatCloud& cloud, int maxShDegree,
                                                  bool cpuOrder) {
+  if (cpuOrder && !cloud.labels.empty()) {
+    LOGE("labelled upload requires GPU ordering");
+    return nullptr;
+  }
   if (!hasConsistentArrays(cloud)) return nullptr;
   const size_t n = cloud.count();
   const int requestedDegree = std::clamp(std::min(cloud.shDegree, maxShDegree), 0, kMaxShDegree);
@@ -135,8 +140,9 @@ std::unique_ptr<VulkanWorld> VulkanWorld::upload(const VulkanContext& ctx,
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
     if (!world->labels || !world->labels->upload(words.data(), words.size() * sizeof(uint32_t)))
       return nullptr;
+    world->labelCount_ = uint32_t{*std::max_element(cloud.labels.begin(), cloud.labels.end())} + 1;
     for (auto& style : world->styles) {
-      style = VulkanBuffer::hostVisible(ctx, kLabelCount * sizeof(LabelStyle),
+      style = VulkanBuffer::hostVisible(ctx, labelStyleBytes(world->labelCount_),
                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
       if (!style) return nullptr;
     }
@@ -174,7 +180,10 @@ std::unique_ptr<VulkanWorld> VulkanWorld::createSlab(const VulkanContext& ctx, u
 }
 
 bool VulkanWorld::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) const {
-  if (!cloud.labels.empty()) return false;
+  if (!cloud.labels.empty()) {
+    LOGE("labelled tile uploads are unsupported");
+    return false;
+  }
   const size_t n = cloud.count();
   if (n == 0) return true;
   if (offset > count || n > count - offset) return false;
@@ -240,14 +249,9 @@ void VulkanWorld::recordOrderUpload(VkCommandBuffer cmd, uint32_t frameSlot,
                        0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
-bool VulkanWorld::updateStyles(uint32_t slot, const LabelStyles* table) const {
-  if (!labels) return true;
-  auto* out = static_cast<LabelStyle*>(styles[slot]->mapped());
-  if (table && table->size() == kLabelCount)
-    std::copy(table->begin(), table->end(), out);
-  else
-    std::fill_n(out, kLabelCount, LabelStyle{});
-  styles[slot]->flush(0, kLabelCount * sizeof(LabelStyle));
-  return true;
+void VulkanWorld::updateStyles(uint32_t slot, const LabelStyles* table) const {
+  if (!labels) return;
+  if (styleUploads_[slot].copy(styles[slot]->mapped(), labelCount_, table))
+    styles[slot]->flush(styleUploads_[slot].uploadOffset(), styleUploads_[slot].uploadedBytes());
 }
 }  // namespace splatkit

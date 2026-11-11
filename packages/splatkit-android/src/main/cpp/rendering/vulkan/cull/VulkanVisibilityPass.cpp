@@ -218,10 +218,10 @@ std::shared_ptr<const VulkanVisibilityPass::Pipelines> VulkanVisibilityPass::Pip
   pipelines->partLabels = partLabels;
   const uint32_t bindingCount = kVisibilityBindings + (partLabels ? 2u : 0u);
   const auto& limits = ctx.vkbDevice().physical_device.properties.limits;
-  if (partLabels && (limits.maxPerStageDescriptorStorageBuffers < kVisibilityStorageBindings + 2 ||
-                     limits.maxDescriptorSetStorageBuffers < kVisibilityStorageBindings + 2 ||
-                     limits.maxPerStageResources < bindingCount ||
-                     limits.maxStorageBufferRange < kLabelCount * sizeof(LabelStyle)))
+  if (partLabels &&
+      (limits.maxPerStageDescriptorStorageBuffers < kVisibilityStorageBindings + 2 ||
+       limits.maxDescriptorSetStorageBuffers < kVisibilityStorageBindings + 2 ||
+       limits.maxPerStageResources < bindingCount || limits.maxStorageBufferRange < kPaletteBytes))
     return nullptr;
   VkDescriptorSetLayoutBinding visibilityBindings[kVisibilityBindings + 2]{};
   visibilityBindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, kComputeShader, nullptr};
@@ -449,7 +449,8 @@ bool VulkanVisibilityPass::updateDescriptors(uint32_t slot, const Input& input) 
     const VkDeviceSize labelBytes = ((VkDeviceSize{input.sourceCount} + 1) / 2) * sizeof(uint32_t);
     if (!input.labels || !input.styles || input.labelsBytes < labelBytes ||
         input.labelsBytes > capabilities_.maxStorageBufferRange ||
-        input.stylesBytes != kLabelCount * sizeof(LabelStyle))
+        input.stylesBytes < kPaletteBytes + sizeof(uint32_t) ||
+        input.stylesBytes > capabilities_.maxStorageBufferRange)
       return false;
   } else if (input.labels || input.styles)
     return false;

@@ -32,7 +32,7 @@ class SplatWorldLoader {
   // the attributes and whose leaves are the file's splats.
   struct World {
     std::unique_ptr<SplatCloud> cloud;
-    std::shared_ptr<const LodTree> tree;
+    std::unique_ptr<LodTree> tree;
     std::unique_ptr<TiledWorld> tiles;  // a tiled world: neither cloud nor tree
     int budget = 0;
     std::uint32_t residency = 0;  // a tiled world: the most splats held on the GPU at once

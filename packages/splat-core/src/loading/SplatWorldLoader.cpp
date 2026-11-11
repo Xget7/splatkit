@@ -101,7 +101,7 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uin
       decoded.value().nodes.labels = std::move(decodedLabels.value());
     }
     auto world = std::make_unique<World>();
-    world->tree = std::make_shared<const LodTree>(std::move(decoded.value()));
+    world->tree = std::make_unique<LodTree>(std::move(decoded.value()));
     world->budget = lodBudget;
     world->sourceCount = world->tree->leafCount;
     report.splatCount = world->sourceCount;
@@ -143,7 +143,7 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorld(const std::uin
   world->sourceCount = cloud->count();
   if (world->budget > 0) {
     start = Clock::now();
-    world->tree = std::make_shared<const LodTree>(buildLodTree(std::move(*cloud)));
+    world->tree = std::make_unique<LodTree>(buildLodTree(std::move(*cloud)));
     report.nodeCount = world->tree->nodeCount();
     report.treeMillis = millisSince(start);
   } else {

@@ -1,4 +1,5 @@
 #include "rendering/metal/MetalSplatRenderer.h"
+#include <mutex>
 
 #include <algorithm>
 #include <utility>
@@ -123,7 +124,11 @@ std::optional<std::uint64_t> MetalSplatRenderer::availableMemory() const {
 // Worlds.
 
 bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
-  if (!cloud.labels.empty() && !compute_->gpuSort()) return false;
+  frameLoop_.waitIdle();
+  if (!cloud.labels.empty() && !compute_->prepareLabels()) {
+    LOGE("labelled upload requires GPU sort and labelled visibility pipelines");
+    return false;
+  }
   auto world = MetalWorld::upload(context_->device(), cloud, maxShDegree);
   if (!world) return false;
   frameLoop_.waitIdle();
@@ -135,6 +140,11 @@ bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDe
 
 bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDegree,
                                         uint32_t budget) {
+  frameLoop_.waitIdle();
+  if (!tree.nodes.labels.empty() && !compute_->prepareLabels()) {
+    LOGE("labelled LOD visibility pipeline compilation failed");
+    return false;
+  }
   if (!compute_->gpuSort()) return false;
   auto world = MetalWorld::upload(context_->device(), tree.nodes, maxShDegree);
   if (!world) return false;
@@ -170,8 +180,17 @@ uint32_t MetalSplatRenderer::takePresentTimes(std::vector<int64_t>* times) {
 }
 
 bool MetalSplatRenderer::draw(const Frame& frame) {
+  if (world_ && world_->labels() && frame.labelStyles &&
+      !frame.labelStyles->validFor(world_->labelCount())) {
+    LOGE("label state count or palette index is invalid");
+    return false;
+  }
   // Labels are applied by visibility, so a CPU-order draw cannot honour them.
-  if (world_ && world_->labels() && frame.orderSource != OrderSource::gpu) return false;
+  if (world_ && world_->labels() && frame.orderSource != OrderSource::gpu) {
+    static std::once_flag warning;
+    std::call_once(warning, [] { LOGE("labelled draws require GPU ordering"); });
+    return false;
+  }
   if (frameLoop_.gpuFailed()) return false;
   if (!ready() || !pipeline_.ready()) return false;
   if (!frameLoop_.acquire()) return false;

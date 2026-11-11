@@ -30,6 +30,7 @@ namespace splatkit {
 // frame loop must outlive it. Encode only; draw() commits what is returned.
 class MetalFrameCompute {
  public:
+  bool prepareLabels() { return gpuSort_ && visibility_.createLabelPipelines(); }
   MetalFrameCompute(id<MTLDevice> device, id<MTLCommandQueue> queue, id<MTLLibrary> library,
                     MetalFrameLoop& frameLoop);
 

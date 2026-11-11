@@ -20,11 +20,12 @@ splat::Result<std::unique_ptr<VulkanCameraUniforms>> VulkanCameraUniforms::creat
 VkBuffer VulkanCameraUniforms::update(uint32_t frameSlot, const splat::Mat4& view,
                                       const splat::Mat4& proj, const splat::Vec3& cameraPosition,
                                       VkExtent2D extent, bool outputLinear, uint32_t quarterTurns,
-                                      float minPixelRadius) {
+                                      float minPixelRadius, float labelFade) {
   CameraUniform u{};
   u.cameraPosition[0] = cameraPosition.x;
   u.cameraPosition[1] = cameraPosition.y;
   u.cameraPosition[2] = cameraPosition.z;
+  u.cameraPosition[3] = labelFade;
   u.view = view;
   if (!setCameraProjection(u, proj, extent.width, extent.height)) return VK_NULL_HANDLE;
   u.outputLinear = outputLinear ? 1u : 0u;

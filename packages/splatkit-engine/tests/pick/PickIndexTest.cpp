@@ -32,6 +32,18 @@ std::uint16_t pick(splat::SplatCloud cloud, const Ray& ray) {
   return PickIndex::take(cloud)->pick(ray);
 }
 
+TEST(PickIndex, HiddenForegroundDoesNotOccludeAndTakeConsumesGeometry) {
+  splat::SplatCloud cloud;
+  add(cloud, {0, 0, -2}, round(0.1f), 0.99f, 1);
+  add(cloud, {0, 0, -4}, round(0.1f), 0.99f, 2);
+  const auto index = PickIndex::take(cloud);
+  EXPECT_TRUE(cloud.positions.empty());
+  EXPECT_TRUE(cloud.labels.empty());
+  LabelStyles styles(3);
+  styles.states[1] = static_cast<uint32_t>(LabelState::hidden);
+  EXPECT_EQ(index->pick(lookingAt(0, 0), &styles), 2);
+}
+
 TEST(PickIndex, PreservesTheHighestPartLabel) {
   splat::SplatCloud cloud;
   add(cloud, {0, 0, -5}, round(0.1f), 0.99f, 65535);
