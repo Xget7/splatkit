@@ -117,3 +117,76 @@ Degree-1 records shrink from 20 to 16 bytes, degree-3 from 92 to 52; the shared 
 [vk-camera]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/frame/VulkanCameraUniforms.cpp
 [vk-frame]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/frame/VulkanFrameCompute.h
 [vk-cache]: ../packages/splatkit-android/src/main/cpp/rendering/vulkan/device/VulkanPipelineCache.cpp
+
+## Optional part labels
+
+`SplatCloud::labels` is empty by default, otherwise it contains one unsigned 16-bit label per splat, with 0 unlabelled and 1 through 65535 identifying parts.
+Spatial reorder preserves correspondence; a built tree preserves leaf labels and assigns each interior node the label with greatest total descendant leaf opacity, breaking ties toward the lower label.
+Prepared trees carry labels in a separate SFGL sidecar in node order, including interior nodes.
+The existing `.lodsplat` format is unchanged and does not serialize labels.
+
+The additive `SplatWorldLoader::loadWorld(data, size, labels, labelsSize)` and `loadWorldFile(path, labelsPath)` overloads validate sidecar counts before publishing a world, leaving the pending world untouched on failure.
+For SPZ the sidecar follows decoded source order before spatial reorder; for `.lodsplat` it follows stored node order.
+Existing overloads remain unlabelled.
+These overloads are also available on the shared C++ `SplatEngine`; native hosts can bind them without carrying renderer source changes.
+Tiled label streaming is unsupported and labelled tile uploads are rejected.
+
+### SFGL version 2
+
+All integers are little endian, with no trailing bytes.
+
+| Offset in bytes | Type | Value |
+|---|---|---|
+| 0 | ASCII, 4 bytes | `SFGL` |
+| 4 | u16 | Version 2 |
+| 6 | u16 | Label width 2 bytes |
+| 8 | u32 | Number of nodes or source splats |
+| 12 | u32 | Reserved, must be zero |
+| 16 | u16[count] | One label per node or source splat |
+
+`decodePartLabels` rejects version 1, an unsupported width, reserved bits, truncated or trailing data, and an expected count mismatch.
+`encodePartLabels` writes the same layout.
+
+### Styling and picking
+
+The shared `Highlight` eases selected labels toward a cyan tint and increased brightness, and dims other labels over 0.25 seconds.
+`SplatEngine::highlightParts(labels, count)` starts or retargets that fade on the render thread; an empty selection restores captured appearance and a successful new load resets highlights.
+A direct renderer caller can supply `SplatRenderer::Frame::labelStyles`, a borrowed 65536-entry `LabelStyles` table copied during `draw`; null restores defaults.
+`LabelStyle` contains tint RGB, tint amount, brightness and opacity plus padding, with a 32-byte stride on CPU, Metal and Vulkan.
+Use finite nonnegative colour/brightness values, tint amount in [0, 1] and opacity in [0, 1]; opacity fades reduce the existing footprint.
+The lookup covers label 0 as well as every part label.
+
+GPU splats and projected records remain 32 bytes.
+Unlabelled worlds allocate no label or style buffers.
+Metal specializes visibility with function constant 7 set false, which removes the style work and buffer arguments 12 and 13; labelled visibility pipelines are built lazily and preserve the original pipeline objects.
+Vulkan compiles a separate labelled visibility module with bindings 10 and 11, leaving the default module, ten-binding descriptor layout and existing pipeline families unchanged.
+A labelled world adds two packed label bytes per node, rounded to whole uint32 words, and a 2 MiB style storage buffer per frame slot, copied only after that slot is available.
+Both backends apply styles in visibility before rasterization and retain their existing blend order, sort and presentation stages.
+
+`SplatEngine::setPartPickingEnabled(true)` before loading explicitly retains CPU leaf geometry for picking; the default retains none.
+`pickPart(Ray)` returns an exact uint16 label, with 0 for a miss or an unlabelled occluder, on the render thread.
+The ray direction must be finite and normalized.
+`PickIndex::take` is also available directly and consumes positions, covariances, opacities and labels from its cloud.
+Picking composites ray intersections with three-sigma Gaussian supports, nearest first, and selects the strongest label after at least half coverage.
+This CPU approximation does not reproduce screen-space filtering, current adaptive node selection, style opacity or exact raster coverage; exact means label precision, not pixel-equivalent GPU picking.
+It scans retained leaves and allocates hit scratch per pick, so latency and additional CPU memory require measurement on large worlds.
+
+### Label validation and physical evidence
+
+No phone measurements are claimed for labels.
+Prior Metal measurements combine visibility and radix and do not isolate label cost; the Vulkan saturation-mask rejection remains applicable because labels do not change blending or presentation.
+Use the [profiling protocol](GPU_PROFILING.md) and [capture protocol](GPU_CAPTURE.md), with the 12M reference world and physical acceptance requirements in [validation](VALIDATION.md).
+Compare baseline `0ba2ee5` against this revision with no labels to check the default path, then compare labelled captured styles and an active highlight fade against the same unlabelled view.
+Record world and sidecar hashes, full build commits, device/driver/OS, viewport, SH1, 1.8M budget, pose `[-7.25, 1.6, 5.25, 0, 0]`, identical 30-second orbit speed and starting thermal state.
+Measure upload time, resident/peak CPU and GPU memory, FPS and frame/GPU milliseconds with repeated A-B-B-A runs; retain repeat ranges and absolute/percentage changes.
+Measure pick latency separately with picking enabled, including retained leaf memory, wide labels, unlabelled occlusion and misses.
+Capture matched images, reviewing label boundaries, transparency, LOD transitions and fades separately from the unlabelled image comparison.
+If timing identifies an effect, capture timelines and matched frames outside timing runs, resolving visibility, selection, radix, raster and present only where actual GPU samples support them, plus bandwidth counters where available.
+Power comparisons require unplugged matched-brightness iPhone runs with populated Power Profiler lanes; FPS is not a power measurement.
+Sustained claims require identical repeated 30-second turns for 10-15 minutes with continuous thermal and memory evidence.
+
+Copy `scripts/benchmarks/reference-12m.json` into ignored `build/`, fill device IDs and prepared build paths/commits, and run `nice -n 19 python3 scripts/gpu_benchmark.py plan --config build/labels.json --target metal`, followed by `run` with a new `--out` and `compare --manifest <out>/experiment.json`.
+Use `--target vulkan` for the corresponding Android comparison, `--phase timeline` for diagnostic traces and `--phase power` for supported iPhone power capture.
+The generated `run.json` preserves the world, pose, policy, warmup and orbit schedule.
+The current dev-app run schema does not carry label sidecars or highlight requests, so labelled phone measurements additionally require host wiring to the C++ labelled load and highlight APIs before running this protocol; do not claim the plain run file exercises labels.
+No simulator, Mac GPU or cross-compilation result establishes physical acceptance.
