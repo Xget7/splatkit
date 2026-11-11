@@ -9,6 +9,8 @@ inline std::optional<int> publicEvent(SplatEngine::Event event) {
     case SplatEngine::Event::worldReady:
       return 0;
     case SplatEngine::Event::worldFailed:
+    // Platform hosts receive mismatched labels as a failed world; the message names the cause.
+    case SplatEngine::Event::labelsMismatch:
       return 1;
     case SplatEngine::Event::colliderReady:
       return 2;

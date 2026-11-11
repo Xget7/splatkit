@@ -110,6 +110,8 @@ TEST(AdapterEvents, MapsEveryEngineEventAndDropsUnknownValues) {
             SKSplatEventWorldReady);
   EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFailed),
             SKSplatEventWorldFailed);
+  EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::labelsMismatch),
+            SKSplatEventWorldFailed);
   EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderReady),
             SKSplatEventColliderReady);
   EXPECT_EQ(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderFailed),

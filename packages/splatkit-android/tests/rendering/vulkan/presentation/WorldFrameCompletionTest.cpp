@@ -36,6 +36,7 @@ int main() {
 
   assert(splatkit::publicEvent(splatkit::SplatEngine::Event::worldReady) == 0);
   assert(splatkit::publicEvent(splatkit::SplatEngine::Event::worldFailed) == 1);
+  assert(splatkit::publicEvent(splatkit::SplatEngine::Event::labelsMismatch) == 1);
   assert(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderReady) == 2);
   assert(splatkit::publicEvent(splatkit::SplatEngine::Event::colliderFailed) == 3);
   assert(splatkit::publicEvent(splatkit::SplatEngine::Event::gpuFailed) == 5);
