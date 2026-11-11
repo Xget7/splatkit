@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -64,7 +65,23 @@ class SplatEngine {
   // Render thread, before a decode.
   RenderPolicyResolution setRenderPolicy(const RenderPolicy& requested);
 
-  void render(int64_t frameTimeNanos);
+  // Advance one vsync; true only when the renderer accepted a draw.
+  bool render(int64_t frameTimeNanos);
+  // Display-link/render thread, serialized with input and settings.
+  bool needsFrame() const;
+
+  using ViewDirection = WalkCamera::ViewDirection;
+  // Render thread. Opt in before drawing; disabled hosts do no snapshot work.
+  void setDrawnFrameQueriesEnabled(bool enabled);
+  // Any thread; normalized top-left xy in [0, 1], zero for no part. May take milliseconds.
+  // Queries use only the last successful draw. Picking ignores reveal and requires
+  // setPartPickingEnabled before loading.
+  std::uint16_t pick(float x, float y) const;
+  // Any thread; packed xyz to normalized top-left xy. Returns the in-front count,
+  // writing NaN before publication or behind the near plane.
+  std::size_t project(const float* points, std::size_t count, float* out) const;
+  // False before publication, leaving the output unchanged.
+  bool drawnDirection(ViewDirection& out) const;
   // Render thread. Applies to the next successfully uploaded world; zero seconds disables it.
   bool setReveal(const RevealSettings& settings);
 
@@ -109,9 +126,9 @@ class SplatEngine {
   bool setOrbitLimits(const WalkCamera::OrbitLimits& limits) {
     return camera_.setOrbitLimits(limits);
   }
-  bool frameBounds(const splat::Bounds& bounds, float durationSeconds) {
-    return camera_.frameBounds(bounds, lens_, renderer_->drawExtent(), durationSeconds);
-  }
+  // Direction angles are radians. Holds through resize until a dolly or pose replaces it.
+  bool frameBounds(const splat::Bounds& bounds, float durationSeconds,
+                   std::optional<ViewDirection> from = std::nullopt);
   // Normalized view coordinates, top-left (0, 0), bottom-right (1, 1). False on a miss.
   bool focus(float x, float y);
   // A finite turn in degrees at degrees per second. False without an anchor or for
@@ -230,6 +247,29 @@ class SplatEngine {
   const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
+  struct FrameCamera;
+  struct DrawnView {
+    splat::Mat4 view;
+    splat::Mat4 projection;
+    splat::Mat4 cameraToWorld;
+    Extent extent;
+    Lens lens;
+    ViewDirection direction;
+    std::shared_ptr<const PickIndex> picks;
+    LabelStyles styles;
+    bool styled = false;
+    bool valid = false;
+  };
+  void publishView(const FrameCamera& camera, Extent extent);
+  void configureWorldFrame(SplatRenderer::Frame& frame, const FrameCamera& camera);
+  DrawnView publishedView() const;
+  bool drawnQueriesEnabled_ = false;
+  mutable std::mutex viewMutex_;
+  DrawnView drawnView_;
+  std::atomic<bool> loadsPending_{false};
+  bool streamingPending_ = false;
+  std::optional<splat::Bounds> requestedBounds_;
+  Extent requestedExtent_;
   RevealSettings revealSettings_;
   Reveal reveal_;
   bool pollGpuEvents();
