@@ -1,7 +1,7 @@
 #include "rendering/metal/MetalSplatRenderer.h"
-#include <mutex>
 
 #include <algorithm>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -131,7 +131,6 @@ bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDe
   }
   auto world = MetalWorld::upload(context_->device(), cloud, maxShDegree);
   if (!world) return false;
-  frameLoop_.waitIdle();
   if (!compute_->configureFlatWorld(world->info().count)) return false;
   world_ = std::move(world);
   frameLoop_.clearCompletedWorldFrame();
@@ -148,7 +147,6 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
   if (!compute_->gpuSort()) return false;
   auto world = MetalWorld::upload(context_->device(), tree.nodes, maxShDegree);
   if (!world) return false;
-  frameLoop_.waitIdle();
   if (!compute_->configureLodWorld(tree, budget)) return false;
   world_ = std::move(world);
   frameLoop_.clearCompletedWorldFrame();
@@ -156,9 +154,9 @@ bool MetalSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDeg
 }
 
 bool MetalSplatRenderer::createSlab(uint32_t capacity, int shDegree) {
+  frameLoop_.waitIdle();
   auto world = MetalWorld::slab(context_->device(), capacity, shDegree);
   if (!world) return false;
-  frameLoop_.waitIdle();
   if (!compute_->configureFlatWorld(capacity)) return false;
   world_ = std::move(world);
   frameLoop_.clearCompletedWorldFrame();

@@ -156,8 +156,8 @@ Consistent stage diagnostics remain open; there is no equivalent-feature or univ
 
 No phone measurements are claimed for labels.
 Prior Metal measurements combine visibility and radix and do not isolate label cost; the Vulkan saturation-mask rejection remains applicable because labels do not change blending or presentation.
-Use the [profiling protocol](GPU_PROFILING.md) and [capture protocol](GPU_CAPTURE.md), with the 12M reference world and physical acceptance requirements in [validation](VALIDATION.md).
-Compare baseline `0ba2ee5` against this revision with no labels to check the default path, then compare labelled captured styles and an active highlight fade against the same unlabelled view.
+Use the [profiling protocol](GPU_PROFILING.md) and [capture protocol](GPU_CAPTURE.md), with the 12M reference world and physical acceptance requirements above.
+Compare the unlabelled base build against the candidate build with no labels to check the default path, then compare labelled captured styles and an active highlight fade against the same unlabelled view.
 Record world and sidecar hashes, full build commits, device/driver/OS, viewport, SH1, 1.8M budget, pose `[-7.25, 1.6, 5.25, 0, 0]`, identical 30-second orbit speed and starting thermal state.
 Measure upload time, resident/peak CPU and GPU memory, FPS and frame/GPU milliseconds with repeated A-B-B-A runs; retain repeat ranges and absolute/percentage changes.
 Measure pick latency separately with picking enabled, including retained leaf memory, wide labels, unlabelled occlusion and misses.

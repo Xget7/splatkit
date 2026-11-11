@@ -73,7 +73,6 @@ class MetalVisibilityPass {
   static constexpr int kShDegrees = 4;
 
   bool createPipelines();
-
   std::array<id<MTLComputePipelineState>, kShDegrees> labelled_{};
   std::array<id<MTLComputePipelineState>, kShDegrees> indexedLabelled_{};
 
