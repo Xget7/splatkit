@@ -382,7 +382,6 @@ void VulkanSplatRenderer::rebuildPipelinesIfNeeded() {
   if (!surface_.ready()) return;
   if (splats_ && pipelineFormat_ == surface_.activeFormat()) return;
   if (!createPipelines()) {
-    failed_ = true;
     surface_.drop();
   }
 }

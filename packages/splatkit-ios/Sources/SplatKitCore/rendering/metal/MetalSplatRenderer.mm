@@ -1,5 +1,5 @@
-#include "BackdropShaderSource.h"
 #include "rendering/metal/MetalSplatRenderer.h"
+#include "BackdropShaderSource.h"
 
 #include <algorithm>
 #include <mutex>
@@ -10,31 +10,34 @@
 #include "splatkit/rendering/LodThreshold.h"
 
 namespace splatkit {
-  bool MetalSplatRenderer::setSceneBackdrop(const SceneBackdrop& settings, std::string* reason) {
-    if (!settings.valid()) {
-      if (reason != nullptr) *reason = "Invalid scene backdrop settings";
-      return false;
-    }
-    if (settings.enabled && !compute_->gpuSort()) {
-      if (reason != nullptr) *reason = "Scene backdrop requires offscreen Metal compositing";
-      return false;
-    }
-    if (settings.enabled && backdropLibrary_ == nil) {
-      NSError* error = nil;
-      MTLCompileOptions* options = [MTLCompileOptions new];
-      options.languageVersion = MTLLanguageVersion2_3;
-      backdropLibrary_ = [context_->device() newLibraryWithSource:@(BackdropShaderSource)
-                                                        options:options error:&error];
-      if (backdropLibrary_ == nil) {
-        if (reason != nullptr) *reason = error.localizedDescription.UTF8String ?: "Backdrop compilation failed";
-        return false;
-      }
-    }
-    backdropSettings_ = settings;
-    if (!settings.enabled && activeBackdrop_ != nullptr) activeBackdrop_->releaseTextures();
-    if (reason != nullptr) reason->clear();
-    return true;
+bool MetalSplatRenderer::setSceneBackdrop(const SceneBackdrop& settings, std::string* reason) {
+  if (!settings.valid()) {
+    if (reason != nullptr) *reason = "Invalid scene backdrop settings";
+    return false;
   }
+  if (settings.enabled && !compute_->gpuSort()) {
+    if (reason != nullptr) *reason = "Scene backdrop requires offscreen Metal compositing";
+    return false;
+  }
+  if (settings.enabled && backdropLibrary_ == nil) {
+    NSError* error = nil;
+    MTLCompileOptions* options = [MTLCompileOptions new];
+    options.languageVersion = MTLLanguageVersion2_3;
+    options.preprocessorMacros = @{@"SPLAT_QUAD_MIN_ALPHA" : @(kQuadMinAlpha)};
+    backdropLibrary_ = [context_->device() newLibraryWithSource:@(BackdropShaderSource)
+                                                        options:options
+                                                          error:&error];
+    if (backdropLibrary_ == nil) {
+      if (reason != nullptr)
+        *reason = error.localizedDescription.UTF8String ?: "Backdrop compilation failed";
+      return false;
+    }
+  }
+  backdropSettings_ = settings;
+  if (!settings.enabled && activeBackdrop_ != nullptr) activeBackdrop_->releaseTextures();
+  if (reason != nullptr) reason->clear();
+  return true;
+}
 
 namespace {
 
@@ -76,7 +79,6 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
             built;
   }
   if (!built) {
-    frameLoop_.failureLatch()->store(true);
     LOGE("rendering stopped: no pipelines");
     surface_->setLayer(nil);
   }
@@ -100,7 +102,6 @@ void MetalSplatRenderer::setLinearBlending(bool linear) {
   const bool pipelinesReady =
       pipeline_.create(context_->device(), context_->library(), surface_->targetFormat());
   if (!blitReady || !pipelinesReady) {
-    frameLoop_.failureLatch()->store(true);
     LOGE("rendering stopped: no pipelines");
     surface_->setLayer(nil);
   }
@@ -146,7 +147,8 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
 bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
   if (!compute_->configure(policy, reason)) return false;
   pipeline_.setBackgroundColor(policy.backgroundColor);
-  backdropBackground_ = policy.backgroundColor;
+  std::copy(policy.backgroundColor.begin(), policy.backgroundColor.end(),
+            backdropBackground_.begin());
   return true;
 }
 

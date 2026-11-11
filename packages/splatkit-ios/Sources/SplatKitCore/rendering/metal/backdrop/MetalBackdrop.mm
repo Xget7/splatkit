@@ -126,7 +126,7 @@ bool MetalBackdrop::encode(id<MTLCommandBuffer> cmd, id<MTLTexture> scene,
   [mips endEncoding];
   // Push: fill from the coarsest level down, then soften the fill in two separable passes.
   const float adjustments[6] = {settings.saturation, settings.gain, settings.vignette,
-                                background[0], background[1], background[2]};
+                                background[0],       background[1], background[2]};
   encodePass(cmd, push_, pyramid_, backdrop_, adjustments, sizeof(adjustments));
   const float across[2] = {settings.blurSpacing / backdrop_.width, 0};
   const float down[2] = {0, settings.blurSpacing / backdrop_.height};
