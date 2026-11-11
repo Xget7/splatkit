@@ -503,6 +503,7 @@ Both adapters share these, so a host branches on `errorCode` without checking th
 | --- | --- | --- |
 | `INVALID_REQUEST` | `onWorldEvent`, `onColliderEvent` | The request failed structural validation before native tried to load it. |
 | `WORLD_LOAD_FAILED` | `onWorldEvent` | The world file could not be decoded or loaded, or on iOS needs more memory than the app has left. |
+| `GPU_FAILED` | `onWorldEvent` | A terminal GPU failure stopped rendering. |
 | `GPU_UNAVAILABLE` | `onWorldEvent` | The GPU backend could not be initialized. |
 | `COLLIDER_LOAD_FAILED` | `onColliderEvent` | The collider GLB could not be loaded. |
 | `INVALID_CAMERA` | `onCameraEvent` | The camera request failed validation; the effective camera is unchanged. |

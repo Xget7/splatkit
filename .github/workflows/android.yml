@@ -67,11 +67,14 @@ jobs:
       - name: Check world frame completion contract on host
         run: |
           mkdir -p build/native-contracts
+          # The runner has no Vulkan headers of its own; the NDK's come last so the host's libc wins.
           c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
             -I packages/splatkit-android/src/main/cpp \
             -I packages/splatkit-android/tests \
             -I packages/splatkit-engine/include -I packages/splat-core/include \
+            -idirafter "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include" \
             packages/splatkit-android/tests/rendering/vulkan/presentation/WorldFrameCompletionTest.cpp \
+            packages/splatkit-engine/src/Log.cpp \
             -o build/native-contracts/world-frame-completion
           build/native-contracts/world-frame-completion
       - name: Check surface size wait on host

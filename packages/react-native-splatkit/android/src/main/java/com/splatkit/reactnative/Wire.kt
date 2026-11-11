@@ -35,6 +35,7 @@ internal object PolicyPhase {
 
 internal object ErrorCode {
     const val INVALID_REQUEST = "INVALID_REQUEST"
+    const val GPU_FAILED = "GPU_FAILED"
     const val GPU_UNAVAILABLE = "GPU_UNAVAILABLE"
     const val WORLD_LOAD_FAILED = "WORLD_LOAD_FAILED"
     const val COLLIDER_LOAD_FAILED = "COLLIDER_LOAD_FAILED"

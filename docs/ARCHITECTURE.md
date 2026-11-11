@@ -250,6 +250,8 @@ At 2732x2048 the fill and scratch textures are 342x256, and the pyramid is 256x2
 Pipelines are retained for the scene format and textures are retained until resize or disable.
 Pipeline failure is remembered for the format and allocation failure for the dimensions; both log and retain the original background path without failing the frame.
 
+Metal compiles the optional scene backdrop in a separate library on first enable; a compilation error rejects the setting through its reason output.
+
 ### Drawn-frame queries
 
 The optional C++ engine API declares its thread contracts in [SplatEngine.h](../packages/splatkit-engine/include/splatkit/engine/SplatEngine.h).

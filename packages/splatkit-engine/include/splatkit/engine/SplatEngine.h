@@ -189,7 +189,7 @@ class SplatEngine {
       redrawNeeded_ = true;
       return true;
     }
-    if (reason != nullptr) *reason = "Scene backdrop is supported only on Metal";
+    if (reason != nullptr) *reason = "Scene backdrop is unsupported by this renderer";
     return false;
   }
   void setSpatialUpscaling(bool enabled) { renderer_->setSpatialUpscaling(enabled); }
