@@ -1,5 +1,7 @@
 #pragma once
 
+#include "splatkit/rendering/SceneBackdrop.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
@@ -143,6 +145,17 @@ class SplatEngine {
   // pixel each. Render thread.
   void setRenderScale(float scale) { renderer_->setRenderScale(scale); }
   float renderScale() const { return renderer_->renderScale(); }
+  // Render thread. Unsupported backends retain their existing clear and return a reason.
+  bool setSceneBackdrop(const SceneBackdrop& settings, std::string* reason = nullptr) {
+    auto* extension = dynamic_cast<SceneBackdropRenderer*>(renderer_.get());
+    if (extension != nullptr) {
+      if (!extension->setSceneBackdrop(settings, reason)) return false;
+      redrawNeeded_ = true;
+      return true;
+    }
+    if (reason != nullptr) *reason = "Scene backdrop is supported only on Metal";
+    return false;
+  }
   void setSpatialUpscaling(bool enabled) { renderer_->setSpatialUpscaling(enabled); }
   bool spatialUpscaling() const { return renderer_->spatialUpscaling(); }
 
