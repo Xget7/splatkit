@@ -176,7 +176,9 @@ All integers are little endian, with no trailing bytes.
 
 ### Styling and picking
 
-The shared `Highlight` eases selected labels toward a cyan tint and increased brightness, and dims other labels over 0.25 seconds.
+The shared `Highlight` eases selected labels toward a tint and a brightness, and other labels toward a second brightness, over 0.25 seconds.
+`SplatEngine::setHighlightLook(HighlightLook)` lets the host choose the tint colour, tint amount, part brightness and other brightness; it rejects out-of-range looks whole, fades parts already highlighted to the new look and keeps the look across loads.
+The defaults are a faint cyan tint, 1.15 part brightness and 0.55 other brightness.
 `SplatEngine::highlightParts(labels, count)` starts or retargets that fade on the render thread; an empty selection restores captured appearance and a successful new load resets highlights.
 Requests without a loaded labelled world log a warning and allocate nothing.
 Retargeting starts from the current resolved appearance, completing the oldest fade only when the fixed palette capacity would be exceeded.
