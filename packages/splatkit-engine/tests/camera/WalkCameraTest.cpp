@@ -503,3 +503,29 @@ TEST(WalkCamera, AttitudeInTheReferenceFrameLooksNorth) {
 
 }  // namespace
 }  // namespace splatkit
+
+TEST(WalkCamera, LimitsAndFramingUseInjectedTime) {
+  splatkit::WalkCamera camera;
+  splatkit::WalkCamera::OrbitLimits limits;
+  limits.minAzimuth = -0.5f;
+  limits.maxAzimuth = 0.5f;
+  limits.maxRadius = 10;
+  ASSERT_TRUE(camera.setOrbitLimits(limits));
+  camera.setAnchor({0, 0, 0});
+  ASSERT_TRUE(camera.orbit(10, 10));
+  EXPECT_FLOAT_EQ(camera.orbitAzimuth(), limits.maxAzimuth);
+  EXPECT_FLOAT_EQ(camera.orbitElevation(), limits.maxElevation);
+  ASSERT_TRUE(camera.dolly(100));
+  EXPECT_FLOAT_EQ(camera.orbitRadius(), limits.maxRadius);
+  const splat::Bounds bounds{{1, 1, 1}, {3, 3, 3}};
+  constexpr float kDuration = 2;
+  ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, kDuration));
+  EXPECT_FALSE(camera.update(-1));
+  EXPECT_TRUE(camera.update(kDuration / 2));
+  EXPECT_FLOAT_EQ(camera.anchor()->x, 1);
+  EXPECT_TRUE(camera.update(kDuration / 2));
+  EXPECT_FLOAT_EQ(camera.anchor()->x, 2);
+  EXPECT_FALSE(camera.orbitAnimationRunning());
+  limits.minRadius = -1;
+  EXPECT_FALSE(camera.setOrbitLimits(limits));
+}

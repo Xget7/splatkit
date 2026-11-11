@@ -97,6 +97,12 @@ class SplatEngine {
   void setCameraAnchor(splat::Vec3 point);
   bool orbit(float deltaAzimuth, float deltaElevation);
   bool dolly(float deltaRadius);
+  bool setOrbitLimits(const WalkCamera::OrbitLimits& limits) {
+    return camera_.setOrbitLimits(limits);
+  }
+  bool frameBounds(const splat::Bounds& bounds, float durationSeconds) {
+    return camera_.frameBounds(bounds, lens_, renderer_->drawExtent(), durationSeconds);
+  }
   // Normalized view coordinates, top-left (0, 0), bottom-right (1, 1). False on a miss.
   bool focus(float x, float y);
   // A finite turn in degrees at degrees per second. False without an anchor or for
