@@ -213,6 +213,7 @@ class SplatEngine {
   const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
+  bool pollGpuEvents();
   bool gpuFailureReported_ = false;
   bool worldFramePending_ = false;
   void preparePartPicking(splat::SplatWorldLoader::World& world);

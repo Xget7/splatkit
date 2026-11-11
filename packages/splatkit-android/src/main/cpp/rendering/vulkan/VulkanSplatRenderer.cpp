@@ -33,23 +33,43 @@ VulkanSplatRenderer::~VulkanSplatRenderer() {
 }
 
 void VulkanSplatRenderer::setWindow(ANativeWindow* window) {
-  if (surface_.attach(window)) rebuildPipelinesIfNeeded();
+  if (surface_.attach(window)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
-  if (surface_.resize(width, height)) rebuildPipelinesIfNeeded();
+  if (surface_.resize(width, height)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setRenderScale(float scale) {
-  if (surface_.setRenderScale(scale)) rebuildPipelinesIfNeeded();
+  if (surface_.setRenderScale(scale)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setLinearBlending(bool linear) {
-  if (surface_.setLinearBlending(linear)) rebuildPipelinesIfNeeded();
+  if (surface_.setLinearBlending(linear)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setVsync(bool vsync) {
-  if (surface_.setVsync(vsync)) rebuildPipelinesIfNeeded();
+  if (surface_.setVsync(vsync)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {

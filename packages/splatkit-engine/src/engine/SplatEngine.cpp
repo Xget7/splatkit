@@ -411,21 +411,25 @@ float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
 
 // Every vsync steps the camera, but the GPU only draws when something visible changed:
 // a still scene costs no GPU time and almost no battery.
-void SplatEngine::render(int64_t frameTimeNanos) {
+bool SplatEngine::pollGpuEvents() {
   if (renderer_->gpuFailed()) {
     if (!gpuFailureReported_) {
       gpuFailureReported_ = true;
       worldFramePending_ = false;
       emit(Event::gpuFailed, "GPU failed; recreate the engine");
     }
-    return;
+    return false;
   }
-  if (gpuFailureReported_) return;
+  if (gpuFailureReported_) return false;
   if (worldFramePending_ && renderer_->hasCompletedWorldFrame()) {
     worldFramePending_ = false;
     emit(Event::worldFrameReady, {}, sourceCount_);
   }
-  if (!renderer_->ready()) return;
+  return renderer_->ready();
+}
+
+void SplatEngine::render(int64_t frameTimeNanos) {
+  if (!pollGpuEvents()) return;
   if (uploadFinishedLoads()) redrawNeeded_ = true;
 
   const Extent extent = renderer_->drawExtent();
