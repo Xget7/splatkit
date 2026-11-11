@@ -99,6 +99,10 @@ std::vector<id<MTLComputePipelineState>> MetalVisibilityPass::pipelines() const 
   std::vector<id<MTLComputePipelineState>> all(visibility_.begin(), visibility_.end());
   all.insert(all.end(), indexedVisibility_.begin(), indexedVisibility_.end());
   all.push_back(prepareDraw_);
+  if (labelled_[0]) {
+    all.insert(all.end(), labelled_.begin(), labelled_.end());
+    all.insert(all.end(), indexedLabelled_.begin(), indexedLabelled_.end());
+  }
   return all;
 }
 

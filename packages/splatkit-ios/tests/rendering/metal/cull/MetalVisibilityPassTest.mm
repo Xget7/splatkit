@@ -561,7 +561,9 @@ TEST_F(MetalVisibilityPassTest, WideLabelStylesUseSeparatePipelinesAndPreservePl
   const auto projected = gpu.readback<ProjectedSplat>(visibility.projected());
   const uint32_t expected = uint32_t{splat::toHalf(1.0f)} << 16;
   EXPECT_EQ(projected[0].color0, expected);
-  EXPECT_EQ(visibility.pass.pipelines(), plain);
+  const auto withLabels = visibility.pass.pipelines();
+  ASSERT_EQ(withLabels.size(), 17u);
+  EXPECT_TRUE(std::equal(plain.begin(), plain.end(), withLabels.begin()));
   EXPECT_EQ(plain.size(), 9u);
 }
 
