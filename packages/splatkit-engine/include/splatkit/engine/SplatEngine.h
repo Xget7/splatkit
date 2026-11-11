@@ -108,6 +108,7 @@ class SplatEngine {
 
   // Any thread. Supersedes decoding, pending uploads and completion events.
   // Legacy calls retain last-completion ordering within the current reservation.
+  // A callback selected before supersession may finish afterward without blocking rendering.
   uint64_t beginLoad();
   bool loadWorld(uint64_t request, const std::uint8_t* data, std::size_t size,
                  const std::uint8_t* labels = nullptr, std::size_t labelsSize = 0,
@@ -288,8 +289,8 @@ class SplatEngine {
   bool streamingPending_ = false;
   std::optional<splat::Bounds> requestedBounds_;
   Extent requestedExtent_;
-  // Serializes acceptance with upload and callbacks, including reentrant reservations.
-  std::recursive_mutex loadMutex_;
+  // Serializes reservations with upload and event selection, never host callbacks.
+  std::mutex loadMutex_;
   uint64_t uploadedLoad_ = 0;
   bool finishLoad(uint64_t request,
                   const splat::Result<splat::SplatWorldLoader::WorldReport>& report);

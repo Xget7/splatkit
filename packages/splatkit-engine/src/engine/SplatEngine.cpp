@@ -78,18 +78,18 @@ void SplatEngine::setShDegree(int degree) {
 // Loading: decode on the calling thread, report, and leave the result for the frame.
 
 uint64_t SplatEngine::beginLoad() {
-  const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-  const std::lock_guard<std::mutex> pendingLock(loader_.mutex_);
-  auto request = ++loader_.currentLoad_;
-  if (request == 0) request = ++loader_.currentLoad_;
-  loader_.pendingWorld_.reset();
-  return request;
+  const std::lock_guard<std::mutex> lock(loadMutex_);
+  return loader_.beginLoad();
 }
 
 bool SplatEngine::finishLoad(uint64_t request,
                              const splat::Result<splat::SplatWorldLoader::WorldReport>& report) {
-  const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-  if (request != loader_.currentLoad_.load()) return false;
+  {
+    const std::lock_guard<std::mutex> lock(loadMutex_);
+    if (request != loader_.currentLoad()) return false;
+  }
+  // Selection is serialized with beginLoad, but a selected callback may finish afterward.
+  // Never hold the upload lock while calling host code.
   reportWorld(report);
   return report.ok();
 }
@@ -97,15 +97,14 @@ bool SplatEngine::finishLoad(uint64_t request,
 bool SplatEngine::loadWorld(uint64_t request, const std::uint8_t* data, std::size_t size,
                             const std::uint8_t* labels, std::size_t labelsSize,
                             const LoadOptions& options) {
-  if (request == 0 || request != loader_.currentLoad_.load()) return false;
-  return finishLoad(request,
-                    loader_.loadWorldRequest(request, data, size, labels, labelsSize, options));
+  if (request == 0 || request != loader_.currentLoad()) return false;
+  return finishLoad(request, loader_.loadWorld(request, data, size, labels, labelsSize, options));
 }
 
 bool SplatEngine::loadWorldFile(uint64_t request, const std::string& path,
                                 const std::string& labelsPath, const LoadOptions& options) {
-  if (request == 0 || request != loader_.currentLoad_.load()) return false;
-  return finishLoad(request, loader_.loadWorldFileRequest(request, path, labelsPath, options));
+  if (request == 0 || request != loader_.currentLoad()) return false;
+  return finishLoad(request, loader_.loadWorldFile(request, path, labelsPath, options));
 }
 
 bool SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size,
@@ -128,15 +127,14 @@ bool SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size, const st
 
 bool SplatEngine::loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
                             std::size_t labelsSize, const LoadOptions& options) {
-  const auto request = loader_.currentLoad_.load();
-  return finishLoad(request,
-                    loader_.loadWorldRequest(request, data, size, labels, labelsSize, options));
+  const auto request = loader_.currentLoad();
+  return finishLoad(request, loader_.loadWorld(request, data, size, labels, labelsSize, options));
 }
 
 bool SplatEngine::loadWorldFile(const std::string& path, const std::string& labelsPath,
                                 const LoadOptions& options) {
-  const auto request = loader_.currentLoad_.load();
-  return finishLoad(request, loader_.loadWorldFileRequest(request, path, labelsPath, options));
+  const auto request = loader_.currentLoad();
+  return finishLoad(request, loader_.loadWorldFile(request, path, labelsPath, options));
 }
 bool SplatEngine::setReveal(const RevealSettings& settings) {
   if (!std::isfinite(settings.seconds) || settings.seconds < 0 ||
@@ -166,8 +164,8 @@ bool SplatEngine::loadWorldFile(const std::string& path) {
 }
 
 void SplatEngine::loadTiledWorldFile(const std::string& path) {
-  const auto request = loader_.currentLoad_.load();
-  finishLoad(request, loader_.loadTiledWorldFileRequest(request, path));
+  const auto request = loader_.currentLoad();
+  finishLoad(request, loader_.loadTiledWorldFile(request, path));
 }
 
 void SplatEngine::loadCollider(const std::uint8_t* data, std::size_t size) {
@@ -204,16 +202,17 @@ void SplatEngine::reportCollider(
 // Render thread, once per frame: puts to use what the loader finished decoding on the
 // caller's thread. True when a new world is drawn from now on.
 bool SplatEngine::uploadFinishedLoads() {
-  const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
   if (auto collider = loader_.takeCollider()) {
     camera_.setCollider(std::move(collider));
     emit(Event::colliderReady);
   }
+  std::unique_lock<std::mutex> lock(loadMutex_);
   auto world = loader_.takeWorld();
   if (!world) return false;
 
   if (!renderer_->sortsOnGpu()) {
     LOGE("world load failed: renderer lacks GPU sort support");
+    lock.unlock();
     emit(Event::worldFailed, "renderer lacks GPU sort support");
     return false;
   }
@@ -228,6 +227,7 @@ bool SplatEngine::uploadFinishedLoads() {
     const uint32_t residency = world->residency;
     if (!renderer_->createSlab(residency, std::min(set.shDegree, maxShDegree_.load()))) {
       LOGE("slab of %u splats failed", residency);
+      lock.unlock();
       emit(Event::worldFailed, "GPU upload failed");
       return false;
     }
@@ -238,6 +238,7 @@ bool SplatEngine::uploadFinishedLoads() {
   } else {
     if (world->tree && !renderer_->selectsLodOnGpu()) {
       LOGE("world load failed: renderer lacks GPU level of detail selection");
+      lock.unlock();
       emit(Event::worldFailed, "renderer lacks GPU level of detail selection");
       return false;
     }
@@ -247,6 +248,7 @@ bool SplatEngine::uploadFinishedLoads() {
                               : renderer_->uploadWorld(world->splats(), maxShDegree_.load());
     if (!uploaded) {
       LOGE("world upload failed");
+      lock.unlock();
       emit(Event::worldFailed, "GPU upload failed");
       return false;
     }
@@ -275,8 +277,9 @@ bool SplatEngine::uploadFinishedLoads() {
   }
   const GpuWorldInfo gpu = renderer_->world().value_or(GpuWorldInfo{});
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", gpu.count, millisSince(start), gpu.shDegree);
-  uploadedLoad_ = loader_.currentLoad_.load();
+  uploadedLoad_ = loader_.currentLoad();
   worldFramePending_ = true;
+  lock.unlock();
   emit(Event::worldReady, {}, sourceCount_);
   return true;
 }
@@ -498,12 +501,13 @@ float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
 // Every vsync steps the camera, but the GPU only draws when something visible changed:
 // a still scene costs no GPU time and almost no battery.
 bool SplatEngine::pollGpuEvents() {
-  const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-  if (uploadedLoad_ != loader_.currentLoad_.load()) worldFramePending_ = false;
+  std::unique_lock<std::mutex> lock(loadMutex_);
+  if (uploadedLoad_ != loader_.currentLoad()) worldFramePending_ = false;
   if (renderer_->gpuFailed()) {
     if (!gpuFailureReported_) {
       gpuFailureReported_ = true;
       worldFramePending_ = false;
+      lock.unlock();
       emit(Event::gpuFailed, "GPU failed; recreate the engine");
     }
     return false;
@@ -511,6 +515,7 @@ bool SplatEngine::pollGpuEvents() {
   if (gpuFailureReported_) return false;
   if (worldFramePending_ && renderer_->hasCompletedWorldFrame()) {
     worldFramePending_ = false;
+    lock.unlock();
     emit(Event::worldFrameReady, {}, sourceCount_);
   }
   return renderer_->ready();

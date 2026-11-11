@@ -134,7 +134,9 @@ Existing overloads remain unlabelled.
 Optional `LoadOptions` verify world and labels SHA-256 digests and source splat counts before publication; sidecar validation failures report `labelsMismatch`.
 `SplatEngine::beginLoad()` reserves a replacement and invalidates earlier decoding, pending uploads and completion notifications.
 Reservation overloads return false silently when superseded; legacy calls retain completion ordering within the current reservation.
-The loader checks the reservation at publication, while the engine serializes reservation changes with upload and event delivery.
+The loader owns reservations through its public load overloads, reports `ErrorCode::superseded` for stale outcomes, and checks the reservation under its mutex before publication.
+The engine uses that interface and serializes reservation changes with upload and event selection.
+Host callbacks run outside the engine lock; a callback selected before supersession may finish afterward without blocking rendering.
 These overloads are also available on the shared C++ `SplatEngine`; native hosts can bind them without carrying renderer source changes.
 Part styling requires GPU ordering; labelled CPU-order draws and labelled tile uploads are rejected.
 Tiled label streaming is unsupported.
