@@ -135,35 +135,8 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldRequest(
     return Error{ErrorCode::labelsMismatch, "Labels SHA-256 mismatch"};
   WorldReport report;
   auto start = Clock::now();
-  if (isLodSplat(data, size)) {
-    const int lodBudget = budget() > 0 ? budget() : kDefaultLodBudget;
-    const auto memory =
-        admit(lodSplatLoadCost(data, size, maxShDegree_.load(), lodBudget), kLodSplatAdvice);
-    if (!memory) return memory.error();
-    report.neededBytes = memory.value().needed;
-    report.availableBytes = memory.value().available;
-    auto decoded = decodeLodSplat(data, size, maxShDegree_.load());
-    if (!decoded) return decoded.error();
-    if (identity.expectedSplatCount && decoded.value().leafCount != *identity.expectedSplatCount)
-      return Error{ErrorCode::corrupt, "World splat count mismatch"};
-    if (labelsSize != 0 || labels != nullptr) {
-      auto decodedLabels = decodePartLabels(labels, labelsSize, decoded.value().nodeCount());
-      if (!decodedLabels) return Error{ErrorCode::labelsMismatch, decodedLabels.error().message};
-      decoded.value().nodes.labels = std::move(decodedLabels.value());
-    }
-    auto world = std::make_unique<World>();
-    world->tree = std::make_unique<LodTree>(std::move(decoded.value()));
-    world->budget = lodBudget;
-    world->sourceCount = world->tree->leafCount;
-    report.splatCount = world->sourceCount;
-    report.nodeCount = world->tree->nodeCount();
-    report.shDegree = world->tree->nodes.shDegree;
-    report.bounds = world->tree->nodes.bounds;
-    report.decodeMillis = millisSince(start);
-    const std::lock_guard<std::mutex> lock(mutex_);
-    if (request == currentLoad_.load()) pendingWorld_ = std::move(world);
-    return report;
-  }
+  if (isLodSplat(data, size))
+    return loadLodWorldRequest(request, data, size, labels, labelsSize, identity);
   SplatDecodeOptions options;
   options.maxShDegree = maxShDegree_.load();
   options.sourceFrame = sourceFrame();
@@ -203,6 +176,40 @@ Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadWorldRequest(
     world->cloud = std::move(cloud);
   }
 
+  const std::lock_guard<std::mutex> lock(mutex_);
+  if (request == currentLoad_.load()) pendingWorld_ = std::move(world);
+  return report;
+}
+
+Result<SplatWorldLoader::WorldReport> SplatWorldLoader::loadLodWorldRequest(
+    std::uint64_t request, const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
+    std::size_t labelsSize, const LoadOptions& identity) {
+  WorldReport report;
+  const auto start = Clock::now();
+  const int lodBudget = budget() > 0 ? budget() : kDefaultLodBudget;
+  const auto memory =
+      admit(lodSplatLoadCost(data, size, maxShDegree_.load(), lodBudget), kLodSplatAdvice);
+  if (!memory) return memory.error();
+  report.neededBytes = memory.value().needed;
+  report.availableBytes = memory.value().available;
+  auto decoded = decodeLodSplat(data, size, maxShDegree_.load());
+  if (!decoded) return decoded.error();
+  if (identity.expectedSplatCount && decoded.value().leafCount != *identity.expectedSplatCount)
+    return Error{ErrorCode::corrupt, "World splat count mismatch"};
+  if (labelsSize != 0 || labels != nullptr) {
+    auto decodedLabels = decodePartLabels(labels, labelsSize, decoded.value().nodeCount());
+    if (!decodedLabels) return Error{ErrorCode::labelsMismatch, decodedLabels.error().message};
+    decoded.value().nodes.labels = std::move(decodedLabels.value());
+  }
+  auto world = std::make_unique<World>();
+  world->tree = std::make_unique<LodTree>(std::move(decoded.value()));
+  world->budget = lodBudget;
+  world->sourceCount = world->tree->leafCount;
+  report.splatCount = world->sourceCount;
+  report.nodeCount = world->tree->nodeCount();
+  report.shDegree = world->tree->nodes.shDegree;
+  report.bounds = world->tree->nodes.bounds;
+  report.decodeMillis = millisSince(start);
   const std::lock_guard<std::mutex> lock(mutex_);
   if (request == currentLoad_.load()) pendingWorld_ = std::move(world);
   return report;

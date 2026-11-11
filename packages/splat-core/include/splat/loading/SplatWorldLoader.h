@@ -140,7 +140,10 @@ class SplatWorldLoader {
   std::atomic<std::uint64_t> currentLoad_{0};
   Result<WorldReport> loadWorldRequest(std::uint64_t request, const std::uint8_t* data,
                                        std::size_t size, const std::uint8_t* labels,
-                                       std::size_t labelsSize, const LoadOptions& options);
+                                       std::size_t labelsSize, const LoadOptions& identity);
+  Result<WorldReport> loadLodWorldRequest(std::uint64_t request, const std::uint8_t* data,
+                                          std::size_t size, const std::uint8_t* labels,
+                                          std::size_t labelsSize, const LoadOptions& identity);
   Result<WorldReport> loadWorldFileRequest(std::uint64_t request, const std::string& path,
                                            const std::string& labelsPath,
                                            const LoadOptions& options);
