@@ -386,23 +386,7 @@ StatsPublisher::Sample SplatEngine::sample() const {
 void SplatEngine::preparePartPicking(splat::SplatWorldLoader::World& world) {
   picks_.reset();
   if (!partPickingEnabled_.load() || world.tiles || world.splats().labels.empty()) return;
-  auto& source = world.tree ? world.tree->nodes : *world.cloud;
-  if (world.tree) {
-    // Compact leaves in place before transferring ownership, avoiding a second geometry copy.
-    std::size_t leaf = 0;
-    for (std::size_t i = 0; i < source.count(); ++i) {
-      if (world.tree->layout[i].childCount != 0) continue;
-      std::copy_n(source.positions.data() + i * 3, 3, source.positions.data() + leaf * 3);
-      std::copy_n(source.covariances.data() + i * 6, 6, source.covariances.data() + leaf * 6);
-      source.alphas[leaf] = source.alphas[i];
-      source.labels[leaf++] = source.labels[i];
-    }
-    source.positions.resize(leaf * 3);
-    source.covariances.resize(leaf * 6);
-    source.alphas.resize(leaf);
-    source.labels.resize(leaf);
-  }
-  picks_ = PickIndex::take(source);
+  picks_ = world.tree ? PickIndex::share(world.tree) : PickIndex::take(*world.cloud);
 }
 
 // The frame.

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "splat/formats/SplatCloud.h"
+#include "splat/lod/LodTree.h"
 #include "splat/math/Vec3.h"
 #include "splatkit/labels/LabelStyles.h"
 
@@ -24,6 +25,8 @@ class PickIndex {
   // and missing labels pick nothing.
   static std::shared_ptr<const PickIndex> take(splat::SplatCloud& cloud);
 
+  static std::shared_ptr<const PickIndex> share(std::shared_ptr<const splat::LodTree> tree);
+
   // The label the ray shows, or 0 for an unlabelled part or less than half a covered pixel.
   std::uint16_t pick(const Ray& ray, const LabelStyles* styles = nullptr) const;
 
@@ -33,6 +36,7 @@ class PickIndex {
 
  private:
   PickIndex() = default;
+  std::shared_ptr<const splat::LodTree> tree_;
   std::size_t labelCount_ = 0;
 
   std::vector<float> positions_;

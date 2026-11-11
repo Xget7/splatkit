@@ -65,15 +65,30 @@ std::shared_ptr<const PickIndex> PickIndex::take(splat::SplatCloud& cloud) {
   return index;
 }
 
+std::shared_ptr<const PickIndex> PickIndex::share(std::shared_ptr<const splat::LodTree> tree) {
+  std::shared_ptr<PickIndex> index(new PickIndex());
+  if (tree && !tree->nodes.labels.empty()) {
+    index->labelCount_ =
+        std::size_t{*std::max_element(tree->nodes.labels.begin(), tree->nodes.labels.end())} + 1;
+    index->tree_ = std::move(tree);
+  }
+  return index;
+}
+
 std::uint16_t PickIndex::pick(const Ray& ray, const LabelStyles* styles) const {
-  if (labels_.empty()) return 0;
+  const auto& labels = tree_ ? tree_->nodes.labels : labels_;
+  const auto& positions = tree_ ? tree_->nodes.positions : positions_;
+  const auto& covariances = tree_ ? tree_->nodes.covariances : covariances_;
+  const auto& alphas = tree_ ? tree_->nodes.alphas : alphas_;
+  if (labels.empty()) return 0;
   std::vector<Hit> hits;
   const splat::Vec3 o = ray.origin;
   const splat::Vec3 d = ray.direction;
-  for (std::size_t i = 0; i < labels_.size(); ++i) {
-    if (styles && (*styles)[labels_[i]].opacity == 0) continue;
-    const float* p = &positions_[i * 3];
-    const float* c = &covariances_[i * kCovarianceFloats];
+  for (std::size_t i = 0; i < labels.size(); ++i) {
+    if (tree_ && tree_->layout[i].childCount != 0) continue;
+    if (styles && (*styles)[labels[i]].opacity == 0) continue;
+    const float* p = &positions[i * 3];
+    const float* c = &covariances[i * kCovarianceFloats];
     const splat::Vec3 v{o.x - p[0], o.y - p[1], o.z - p[2]};
     const float along = -splat::dot(v, d);  // the centre's distance along the ray
     if (along <= 0) continue;
@@ -84,9 +99,9 @@ std::uint16_t PickIndex::pick(const Ray& ray, const LabelStyles* styles) const {
     if (!rayDistanceSquared(c, v, d, &distanceSquared) || distanceSquared > kCutoffSquared) {
       continue;
     }
-    const float alpha = alphas_[i] * std::exp(-0.5f * distanceSquared);
+    const float alpha = alphas[i] * std::exp(-0.5f * distanceSquared);
     if (alpha < kMinAlpha) continue;
-    hits.push_back({splat::dot(v, v), alpha, labels_[i]});
+    hits.push_back({splat::dot(v, v), alpha, labels[i]});
   }
   std::sort(hits.begin(), hits.end(),
             [](const Hit& a, const Hit& b) { return a.depthSquared < b.depthSquared; });
