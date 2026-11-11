@@ -121,7 +121,7 @@ TEST(SplatEngineDrawnFrame, OrbitStopsAtAzimuthLimit) {
       request.orbitRadiansPerSecond = 1;
       ASSERT_TRUE(engine.applyCameraRequest(request).accepted);
     } else {
-      ASSERT_TRUE(engine.startOrbitAnimation(90, 90, false));
+      ASSERT_TRUE(engine.startOrbitAnimation(90, 10, false));
     }
     for (int i = 1; i <= 20; ++i) engine.render(i * 100'000'000LL);
     EXPECT_FALSE(engine.needsFrame());
