@@ -857,6 +857,36 @@ TEST_F(MetalSplatRendererTest, DestroyingTheRendererWithFramesInFlightDoesNotCra
 
 namespace splatkit {
 namespace {
+TEST_F(MetalSplatRendererTest, EmptyBackdropUsesConfiguredBackground) {
+  auto renderer = MetalSplatRenderer::create();
+  ASSERT_NE(renderer, nullptr);
+  auto layer = [CAMetalLayer layer];
+  layer.drawableSize = CGSizeMake(64, 64);
+  renderer->setLayer(layer);
+  renderer->setDrawableSize(64, 64);
+  RenderPolicy policy;
+  policy.backgroundColor = {0.2, 0.4, 0.6};
+  ASSERT_TRUE(renderer->applyRenderPolicy(policy, nullptr));
+  SceneBackdrop settings;
+  settings.enabled = true;
+  ASSERT_TRUE(renderer->setSceneBackdrop(settings, nullptr));
+  auto done = dispatch_semaphore_create(0);
+  std::vector<uint8_t> pixels;
+  renderer->captureNextFrame([&](std::vector<uint8_t> image, uint32_t, uint32_t) {
+    pixels = std::move(image);
+    dispatch_semaphore_signal(done);
+  });
+  ASSERT_TRUE(renderer->draw({}));
+  ASSERT_EQ(dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0);
+  ASSERT_EQ(pixels.size(), 64u * 64u * 4u);
+  for (size_t i = 0; i < pixels.size(); i += 4) {
+    EXPECT_NEAR(pixels[i], 153, 2);
+    EXPECT_NEAR(pixels[i + 1], 102, 2);
+    EXPECT_NEAR(pixels[i + 2], 51, 2);
+    EXPECT_EQ(pixels[i + 3], 255);
+  }
+}
+
 TEST_F(MetalSplatRendererTest, DepthAllocationFailureCanRetryWithoutLatching) {
   const BackdropResources resources;
   auto renderer = MetalSplatRenderer::create();
