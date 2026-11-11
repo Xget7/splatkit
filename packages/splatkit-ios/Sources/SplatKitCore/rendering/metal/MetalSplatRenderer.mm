@@ -1,3 +1,4 @@
+#include "BackdropShaderSource.h"
 #include "rendering/metal/MetalSplatRenderer.h"
 
 #include <algorithm>
@@ -9,6 +10,32 @@
 #include "splatkit/rendering/LodThreshold.h"
 
 namespace splatkit {
+  bool MetalSplatRenderer::setSceneBackdrop(const SceneBackdrop& settings, std::string* reason) {
+    if (!settings.valid()) {
+      if (reason != nullptr) *reason = "Invalid scene backdrop settings";
+      return false;
+    }
+    if (settings.enabled && !compute_->gpuSort()) {
+      if (reason != nullptr) *reason = "Scene backdrop requires offscreen Metal compositing";
+      return false;
+    }
+    if (settings.enabled && backdropLibrary_ == nil) {
+      NSError* error = nil;
+      MTLCompileOptions* options = [MTLCompileOptions new];
+      options.languageVersion = MTLLanguageVersion2_3;
+      backdropLibrary_ = [context_->device() newLibraryWithSource:@(BackdropShaderSource)
+                                                        options:options error:&error];
+      if (backdropLibrary_ == nil) {
+        if (reason != nullptr) *reason = error.localizedDescription.UTF8String ?: "Backdrop compilation failed";
+        return false;
+      }
+    }
+    backdropSettings_ = settings;
+    if (!settings.enabled && activeBackdrop_ != nullptr) activeBackdrop_->releaseTextures();
+    if (reason != nullptr) reason->clear();
+    return true;
+  }
+
 namespace {
 
 // The residency range reported to the adapters.
@@ -194,7 +221,7 @@ void MetalSplatRenderer::encodeScene(id<MTLCommandBuffer> cmd, id<MTLTexture> dr
     if (activeBackdrop_ != nullptr && activeBackdrop_ != backdrop.get())
       activeBackdrop_->releaseTextures();
     activeBackdrop_ = backdrop.get();
-    fill = activeBackdrop_->prepare(context_->device(), context_->library(), colour);
+    fill = activeBackdrop_->prepare(context_->device(), backdropLibrary_, colour);
   }
   pipeline_.setTransparentBackground(fill);
   pipeline_.encode(cmd, surface_->target(), drawable, compute_->uniforms(slot), world_.get(),

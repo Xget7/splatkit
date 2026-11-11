@@ -69,3 +69,12 @@ fragment float4 backdropUnder(BlitVertex in [[stage_in]], texture2d<float> backd
   const float noise = fract(52.9829189 * fract(dot(in.position.xy, float2(0.06711056, 0.00583715))));
   return float4(back + (noise - 0.5) / 255.0, 1);
 }
+
+vertex BlitVertex backdropVertex(uint vertexId [[vertex_id]]) {
+  const float2 corners[3] = {float2(-1, -1), float2(3, -1), float2(-1, 3)};
+  BlitVertex out;
+  out.position = float4(corners[vertexId], 0, 1);
+  out.uv = float2(corners[vertexId].x * 0.5 + 0.5, 0.5 - corners[vertexId].y * 0.5);
+  return out;
+}
+

@@ -45,7 +45,7 @@ bool MetalBackdrop::create(id<MTLDevice> device, id<MTLLibrary> library,
   format_ = sceneFormat;
   NSError* error = nil;
   MTLRenderPipelineDescriptor* const desc = [[MTLRenderPipelineDescriptor alloc] init];
-  desc.vertexFunction = [library newFunctionWithName:@"blitVertex"];
+  desc.vertexFunction = [library newFunctionWithName:@"backdropVertex"];
   const auto fullScreen = [&](NSString* fragment, MTLPixelFormat format) {
     desc.fragmentFunction = [library newFunctionWithName:fragment];
     desc.colorAttachments[0].pixelFormat = format;
