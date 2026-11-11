@@ -77,4 +77,3 @@ vertex BlitVertex backdropVertex(uint vertexId [[vertex_id]]) {
   out.uv = float2(corners[vertexId].x * 0.5 + 0.5, 0.5 - corners[vertexId].y * 0.5);
   return out;
 }
-
