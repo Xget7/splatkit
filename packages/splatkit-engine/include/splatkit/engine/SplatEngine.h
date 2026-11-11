@@ -141,10 +141,12 @@ class SplatEngine {
   void setCameraAnchor(splat::Vec3 point);
   bool orbit(float deltaAzimuth, float deltaElevation);
   bool dolly(float deltaRadius);
+  // Accepted limits cancel automatic rotation and framing, then clamp the pose immediately.
   bool setOrbitLimits(const WalkCamera::OrbitLimits& limits) {
     return camera_.setOrbitLimits(limits);
   }
   // Direction angles are radians. Holds through resize until a dolly or pose replaces it.
+  // Explicit framing replaces automatic rotation and any previous framing motion.
   bool frameBounds(const splat::Bounds& bounds, float durationSeconds,
                    std::optional<ViewDirection> from = std::nullopt);
   // Normalized view coordinates, top-left (0, 0), bottom-right (1, 1). False on a miss.

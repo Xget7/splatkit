@@ -552,3 +552,23 @@ TEST(WalkCamera, FramingInterpolatesDirectionAndRejectsInvalidTargets) {
   EXPECT_FALSE(camera.needsUpdate());
   EXPECT_FLOAT_EQ(camera.orbitAzimuth(), 0);
 }
+
+TEST(WalkCamera, ExplicitLimitsAndFramingReplaceAutomaticRotation) {
+  for (const bool framing : {false, true}) {
+    splatkit::WalkCamera camera;
+    splatkit::CameraRequest request;
+    request.mode = splatkit::CameraMode::Orbit;
+    request.orbitRadiansPerSecond = 1;
+    ASSERT_TRUE(camera.applyCameraRequest(request).accepted);
+    if (framing) {
+      ASSERT_TRUE(camera.frameBounds({{-1, -1, -1}, {1, 1, 1}}, {}, {100, 100}, 0));
+    } else {
+      ASSERT_TRUE(camera.setOrbitLimits({}));
+    }
+    EXPECT_FLOAT_EQ(camera.cameraState().orbitRadiansPerSecond, 0);
+    EXPECT_FALSE(camera.needsUpdate());
+    const auto view = camera.viewMatrix().m;
+    EXPECT_FALSE(camera.update(1));
+    EXPECT_EQ(camera.viewMatrix().m, view);
+  }
+}
