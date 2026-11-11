@@ -467,6 +467,11 @@ bool WalkCamera::needsUpdate() const {
   return false;
 }
 
+bool WalkCamera::azimuthPinned(float direction) const {
+  return (direction > 0 && anchor_->azimuth >= limits_.maxAzimuth) ||
+         (direction < 0 && anchor_->azimuth <= limits_.minAzimuth);
+}
+
 bool WalkCamera::update(float dtSeconds) {
   if (!std::isfinite(dtSeconds) || dtSeconds <= 0) return false;
   bool orbitMoved = false;
@@ -492,9 +497,7 @@ bool WalkCamera::update(float dtSeconds) {
     anchor_->azimuth = animation_->startAzimuth + animation_->deltaAzimuth * progress;
     applyOrbitPose();
     orbitMoved = true;
-    if (animation_->elapsed >= animation_->duration ||
-        (animation_->deltaAzimuth > 0 && anchor_->azimuth >= limits_.maxAzimuth) ||
-        (animation_->deltaAzimuth < 0 && anchor_->azimuth <= limits_.minAzimuth))
+    if (animation_->elapsed >= animation_->duration || azimuthPinned(animation_->deltaAzimuth))
       animation_.reset();
   } else if (orbiting_ && anchor_ && orbitRadiansPerSecond_ != 0 && std::isfinite(dtSeconds) &&
              dtSeconds > 0) {
@@ -507,9 +510,7 @@ bool WalkCamera::update(float dtSeconds) {
                                : std::remainder(next, kTwoPi));
     applyOrbitPose();
     orbitMoved = true;
-    if ((orbitRadiansPerSecond_ > 0 && anchor_->azimuth >= limits_.maxAzimuth) ||
-        (orbitRadiansPerSecond_ < 0 && anchor_->azimuth <= limits_.minAzimuth))
-      orbitRadiansPerSecond_ = 0;
+    if (azimuthPinned(orbitRadiansPerSecond_)) orbitRadiansPerSecond_ = 0;
   }
   if (velocityForward_ != 0 || velocityRight_ != 0) {
     walk(velocityForward_ * dtSeconds, velocityRight_ * dtSeconds);

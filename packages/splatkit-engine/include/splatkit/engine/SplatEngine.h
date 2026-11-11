@@ -298,6 +298,7 @@ class SplatEngine {
   bool finishLoad(uint64_t request,
                   const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
   RevealSettings revealSettings_;
+  bool updateReveal(float wallSeconds);
   Reveal reveal_;
   bool revealDrawn_ = false;
   bool pollGpuEvents();

@@ -541,6 +541,11 @@ bool SplatEngine::needsFrame() const {
          renderer_->generation() != lastDrawnGeneration_ || renderer_->surfaceRebuildPending();
 }
 
+bool SplatEngine::updateReveal(float wallSeconds) {
+  // Upload and rejected first draws do not consume the new world's reveal.
+  return revealDrawn_ && reveal_.update(std::min(wallSeconds, kMaxFrameSeconds));
+}
+
 bool SplatEngine::render(int64_t frameTimeNanos) {
   if (!pollGpuEvents()) return false;
   loadsPending_.exchange(false);
@@ -556,8 +561,7 @@ bool SplatEngine::render(int64_t frameTimeNanos) {
   }
   if (world) {
     const float wallSeconds = frameSeconds(frameTimeNanos);
-    // Upload and rejected first draws do not consume the new world's reveal.
-    if (revealDrawn_) redrawNeeded_ |= reveal_.update(std::min(wallSeconds, kMaxFrameSeconds));
+    redrawNeeded_ |= updateReveal(wallSeconds);
     if (highlight_ && highlight_->update(wallSeconds)) redrawNeeded_ = true;
     driveBenchmark(wallSeconds, *world);
     const float dt = std::min(wallSeconds, kMaxFrameSeconds);

@@ -138,6 +138,7 @@ class WalkCamera {
   OrbitLimits limits_;
   std::optional<Framing> framing_;
   void clampOrbit();
+  bool azimuthPinned(float direction) const;
   void teleported() {
     if (teleport_) teleport_();
   }
