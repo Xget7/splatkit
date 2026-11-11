@@ -49,7 +49,8 @@ class MetalVisibilityPass {
   bool encodeProject(id<MTLCommandBuffer> cmd, uint32_t slot, id<MTLBuffer> uniforms,
                      id<MTLBuffer> splats, id<MTLBuffer> sh, int shDegree,
                      const SplatRenderer::Range* ranges, uint32_t rangeCount, id<MTLBuffer> keys,
-                     id<MTLBuffer> indices = nil, id<MTLBuffer> activeCount = nil);
+                     id<MTLBuffer> indices = nil, id<MTLBuffer> activeCount = nil,
+                     id<MTLBuffer> labels = nil, id<MTLBuffer> styles = nil);
   // Turns the slot's survivor count into the indirect draw arguments. Encode it after the
   // sort of the same command buffer.
   void encodeIndirect(id<MTLCommandBuffer> cmd, uint32_t slot);
@@ -71,6 +72,9 @@ class MetalVisibilityPass {
   static constexpr int kShDegrees = 4;
 
   bool createPipelines();
+  bool createLabelPipelines();
+  std::array<id<MTLComputePipelineState>, kShDegrees> labelled_{};
+  std::array<id<MTLComputePipelineState>, kShDegrees> indexedLabelled_{};
 
   id<MTLDevice> device_ = nil;
   id<MTLLibrary> library_ = nil;

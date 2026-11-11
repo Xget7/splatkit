@@ -15,7 +15,7 @@ bool validCloud(const splat::SplatCloud& cloud) {
   const size_t n = cloud.count();
   return n <= std::numeric_limits<uint32_t>::max() && cloud.positions.size() == n * 3 &&
          cloud.covariances.size() == n * 6 && cloud.colors.size() == n * 3 &&
-         cloud.alphas.size() == n;
+         cloud.alphas.size() == n && (cloud.labels.empty() || cloud.labels.size() == n);
 }
 
 }  // namespace
@@ -41,7 +41,27 @@ std::unique_ptr<MetalWorld> MetalWorld::upload(id<MTLDevice> device, const splat
   } else {
     std::memset(world->sh_.contents, 0, sizeof(uint32_t));
   }
+  if (!cloud.labels.empty()) {
+    const auto words = packLabels(cloud);
+    world->labels_ = metal::buffer(device, words.size() * sizeof(uint32_t));
+    if (!world->labels_) return nullptr;
+    std::memcpy(world->labels_.contents, words.data(), words.size() * sizeof(uint32_t));
+    for (auto& buffer : world->styles_) {
+      buffer = metal::buffer(device, kLabelCount * sizeof(LabelStyle));
+      if (!buffer) return nullptr;
+    }
+  }
   return world;
+}
+
+id<MTLBuffer> MetalWorld::styles(uint32_t slot, const LabelStyles* styles) const {
+  if (!labels_) return nil;
+  auto* out = static_cast<LabelStyle*>(styles_[slot].contents);
+  if (styles && styles->size() == kLabelCount)
+    std::copy(styles->begin(), styles->end(), out);
+  else
+    std::fill_n(out, kLabelCount, LabelStyle{});
+  return styles_[slot];
 }
 
 std::unique_ptr<MetalWorld> MetalWorld::slab(id<MTLDevice> device, uint32_t capacity,
@@ -61,7 +81,7 @@ std::unique_ptr<MetalWorld> MetalWorld::slab(id<MTLDevice> device, uint32_t capa
 }
 
 bool MetalWorld::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) {
-  if (!slab_ || !validCloud(cloud)) return false;
+  if (!slab_ || !validCloud(cloud) || !cloud.labels.empty()) return false;
   const size_t n = cloud.count();
   if (offset > count_ || n > count_ - offset) return false;
   if (n == 0) return true;

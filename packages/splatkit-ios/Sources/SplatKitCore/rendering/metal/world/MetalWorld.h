@@ -6,6 +6,7 @@
 #include <array>
 #include <memory>
 
+#include "rendering/metal/layout/MetalFrameSlots.h"
 #include "rendering/metal/layout/MetalShaderTypes.h"
 #include "splatkit/rendering/SplatRenderer.h"
 
@@ -30,6 +31,8 @@ class MetalWorld {
   int drawDegree(int requested) const {
     return std::clamp(std::min(requested, shDegree_), 0, kMaxShDegree);
   }
+  id<MTLBuffer> labels() const { return labels_; }
+  id<MTLBuffer> styles(uint32_t slot, const LabelStyles* styles) const;
   id<MTLBuffer> splats() const { return splats_; }
   id<MTLBuffer> harmonics() const { return sh_; }
   id<MTLBuffer> order() const { return orders_[currentOrder_]; }
@@ -39,6 +42,8 @@ class MetalWorld {
   id<MTLDevice> device_ = nil;
   id<MTLBuffer> splats_ = nil;
   id<MTLBuffer> sh_ = nil;
+  id<MTLBuffer> labels_ = nil;
+  std::array<id<MTLBuffer>, kFramesInFlight> styles_{};
   std::array<id<MTLBuffer>, 2> orders_{};
   uint32_t currentOrder_ = 0;
   uint32_t count_ = 0;

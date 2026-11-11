@@ -11,6 +11,7 @@
 #include "rendering/vulkan/layout/VulkanFrameSlots.h"
 #include "rendering/vulkan/layout/VulkanShaderTypes.h"
 #include "splat/formats/SplatCloud.h"
+#include "splatkit/labels/LabelStyles.h"
 
 namespace splatkit {
 
@@ -42,6 +43,9 @@ class VulkanWorld {
   void recordOrderUpload(VkCommandBuffer cmd, uint32_t frameSlot, const uint32_t* drawOrder,
                          uint32_t drawCount) const;
 
+  std::unique_ptr<VulkanBuffer> labels;
+  std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> styles;
+  bool updateStyles(uint32_t slot, const LabelStyles* table) const;
   std::unique_ptr<VulkanBuffer> splats;
   std::unique_ptr<VulkanBuffer> order;
   // Spherical harmonics bands 1 to `shDegree` in kVulkanShStorage layout.

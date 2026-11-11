@@ -123,6 +123,7 @@ std::optional<std::uint64_t> MetalSplatRenderer::availableMemory() const {
 // Worlds.
 
 bool MetalSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
+  if (!cloud.labels.empty() && !compute_->gpuSort()) return false;
   auto world = MetalWorld::upload(context_->device(), cloud, maxShDegree);
   if (!world) return false;
   frameLoop_.waitIdle();

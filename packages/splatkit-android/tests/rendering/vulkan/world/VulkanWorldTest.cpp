@@ -42,6 +42,16 @@ void uploadShape(const test::VulkanTestContext& gpu) {
   auto world = VulkanWorld::upload(*gpu.context, cloud(3), 3, true);
   require(world && world->count == 3 && world->shDegree == 0, "upload a degree 0 cloud");
   require(world->splats && world->order && world->sh, "upload creates the three buffers");
+  require(!world->labels, "plain upload has no labels allocation");
+  for (const auto& style : world->styles) require(!style, "plain upload has no style allocation");
+  auto labelled = cloud(3);
+  labelled.labels = {256, 65535, 42};
+  auto labelledWorld = VulkanWorld::upload(*gpu.context, labelled, 0, false);
+  require(labelledWorld && labelledWorld->labels, "optional labels upload");
+  const auto bytes = gpu.readback(*labelledWorld->labels, 2 * sizeof(uint32_t));
+  uint32_t words[2]{};
+  std::memcpy(words, bytes.data(), sizeof(words));
+  require(words[0] == 0xffff0100u && words[1] == 42, "packed uint16 GPU label layout");
   require(world->sh->size() == sizeof(uint32_t), "degree 0 keeps a one uint SH placeholder");
   for (const auto& staging : world->orderStaging)
     require(staging && staging->size() == 3 * sizeof(uint32_t), "CPU order staging per slot");

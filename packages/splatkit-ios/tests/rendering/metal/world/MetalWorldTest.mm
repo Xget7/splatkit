@@ -127,5 +127,24 @@ TEST(MetalWorldTest, ChunkedUploadPreservesSHAndRecordsAcrossStagingBoundary) {
       std::memcmp(static_cast<uint8_t*>(readback.contents) + bytes, harmonics.data(), shBytes), 0);
 }
 
+TEST(MetalWorldTest, LabelsAllocateOnlyWhenSuppliedAndRejectMismatchedCounts) {
+  auto& gpu = test::Gpu::get();
+  auto c = cloud();
+  auto plain = MetalWorld::upload(gpu.device, c, 0);
+  ASSERT_NE(plain, nullptr);
+  EXPECT_EQ(plain->labels(), nil);
+  EXPECT_EQ(plain->styles(0, nullptr), nil);
+  c.labels = {256, 65535};
+  auto labelled = MetalWorld::upload(gpu.device, c, 0);
+  ASSERT_NE(labelled, nullptr);
+  EXPECT_EQ(*static_cast<const uint32_t*>(labelled->labels().contents), 0xffff0100u);
+  auto styles = labelled->styles(0, nullptr);
+  EXPECT_EQ(styles.length, kLabelCount * sizeof(LabelStyle));
+  const auto* table = static_cast<const LabelStyle*>(styles.contents);
+  EXPECT_FLOAT_EQ(table[65535].opacity, 1);
+  c.labels.pop_back();
+  EXPECT_EQ(MetalWorld::upload(gpu.device, c, 0), nullptr);
+}
+
 }  // namespace
 }  // namespace splatkit

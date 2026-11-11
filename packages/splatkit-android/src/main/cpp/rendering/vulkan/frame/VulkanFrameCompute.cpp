@@ -258,12 +258,19 @@ void VulkanFrameCompute::copyDiagnostics(VkCommandBuffer cmd, uint32_t slot,
 
 std::optional<VulkanFrameCompute::Draw> VulkanFrameCompute::encode(
     VkCommandBuffer cmd, uint32_t slot, VkBuffer camera, const VulkanBuffer& splats,
-    const VulkanBuffer& sh, int shDegree, const SplatRenderer::Frame& frame) {
+    const VulkanBuffer& sh, int shDegree, const SplatRenderer::Frame& frame,
+    const VulkanBuffer* labels, const VulkanBuffer* styles) {
   if (!cmd || slot >= kFramesInFlight || !camera ||
       frame.orderSource != SplatRenderer::OrderSource::gpu)
     return std::nullopt;
   collect(slot);
   VulkanVisibilityPass::Input input;
+  if (labels && styles) {
+    input.labels = labels->handle();
+    input.labelsBytes = labels->size();
+    input.styles = styles->handle();
+    input.stylesBytes = styles->size();
+  }
   input.camera = camera;
   input.splats = splats.handle();
   input.splatsBytes = splats.size();

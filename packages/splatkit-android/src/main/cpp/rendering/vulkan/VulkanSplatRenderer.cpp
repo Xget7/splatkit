@@ -148,18 +148,25 @@ const VulkanFrameCompute::Pipelines* VulkanSplatRenderer::computePipelines() {
 }
 
 splat::Result<std::unique_ptr<VulkanFrameCompute>> VulkanSplatRenderer::createCompute(
-    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget) {
+    uint32_t sourceCount, const splat::LodTree* tree, uint32_t budget, bool partLabels) {
   const auto* pipelines = computePipelines();
   if (pipelines == nullptr)
     return splat::Error{splat::ErrorCode::gpuUnavailable, "GPU frame pipelines unavailable"};
-  return VulkanFrameCompute::create(ctx_, *pipelines, sourceCount, tree, budget);
+  auto selected = *pipelines;
+  if (partLabels) {
+    selected.visibility = VulkanVisibilityPass::Pipelines::compile(ctx_, true);
+    if (!selected.visibility)
+      return splat::Error{splat::ErrorCode::gpuUnavailable, "part label pipeline unavailable"};
+  }
+  return VulkanFrameCompute::create(ctx_, selected, sourceCount, tree, budget);
 }
 
 bool VulkanSplatRenderer::uploadWorld(const splat::SplatCloud& cloud, int maxShDegree) {
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || cloud.count() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = createCompute(static_cast<uint32_t>(cloud.count()));
+  auto compute = createCompute(static_cast<uint32_t>(cloud.count()), nullptr,
+                               VulkanLodSelection::kMaxBudget, !cloud.labels.empty());
   // sortsOnGpu() promised GPU order, so a world without its compute passes would never draw.
   if (!compute) {
     LOGE("GPU upload rejected: %s", compute.error().message.c_str());
@@ -184,7 +191,8 @@ bool VulkanSplatRenderer::uploadLodWorld(const splat::LodTree& tree, int maxShDe
   const TraceSection section(trace::kUploadWorld);
   if (!splats_ || tree.nodeCount() > std::numeric_limits<uint32_t>::max()) return false;
   ctx_.waitIdle();
-  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget);
+  auto compute = createCompute(static_cast<uint32_t>(tree.nodeCount()), &tree, budget,
+                               !tree.nodes.labels.empty());
   if (!compute) {
     LOGE("GPU LOD upload rejected: %s", compute.error().message.c_str());
     return false;
@@ -244,8 +252,10 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     if (camera != VK_NULL_HANDLE) {
       const TraceSection section(trace::kEncodeCompute);
+      world_->updateStyles(slot, frame.labelStyles);
       gpuDraw = compute_->encode(cmd, slot, camera, *world_->splats, *world_->sh,
-                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame);
+                                 std::clamp(frame.shDegree, 0, world_->shDegree), frame,
+                                 world_->labels.get(), world_->styles[slot].get());
     }
     if (gpuDraw)
       splats_->bindProjected(slot, gpuDraw->projected, gpuDraw->order, gpuDraw->capacity);

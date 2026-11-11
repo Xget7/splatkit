@@ -44,13 +44,15 @@ class VulkanVisibilityPass {
   // them to every pass, so loading another world compiles nothing.
   struct Pipelines {
     // Null when the device lacks the capabilities or a pipeline fails to build.
-    static std::shared_ptr<const Pipelines> compile(const VulkanContext& ctx);
+    static std::shared_ptr<const Pipelines> compile(const VulkanContext& ctx,
+                                                    bool partLabels = false);
     explicit Pipelines(VkDevice device) : device(device) {}
     ~Pipelines();
     Pipelines(const Pipelines&) = delete;
     Pipelines& operator=(const Pipelines&) = delete;
 
     VkDevice device;
+    bool partLabels = false;
     VkDescriptorSetLayout visibilitySet = VK_NULL_HANDLE;
     VkDescriptorSetLayout prepareSet = VK_NULL_HANDLE;
     VkPipelineLayout visibilityLayout = VK_NULL_HANDLE;
@@ -82,6 +84,10 @@ class VulkanVisibilityPass {
   };
   static_assert(sizeof(Range) == 16);
   struct Input {
+    VkBuffer labels = VK_NULL_HANDLE;
+    VkDeviceSize labelsBytes = 0;
+    VkBuffer styles = VK_NULL_HANDLE;
+    VkDeviceSize stylesBytes = 0;
     VkBuffer camera = VK_NULL_HANDLE;  // CameraUniform, std140; setCameraProjection must succeed
     VkDeviceSize cameraOffset = 0;
     VkBuffer splats = VK_NULL_HANDLE;  // resident GpuSplat records, 32 bytes each

@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <utility>
 #include <vector>
+#include "splatkit/labels/LabelStyles.h"
 
 #include "rendering/metal/cull/MetalVisibilityPass.h"
 #include "splat/math/Half.h"
@@ -531,6 +533,36 @@ TEST_F(MetalVisibilityPassTest, CompactsSimdTailsAndClearsReusedSlots) {
     }
     EXPECT_EQ(next, expected);
   }
+}
+
+TEST_F(MetalVisibilityPassTest, WideLabelStylesUseSeparatePipelinesAndPreservePlainPipelines) {
+  auto& gpu = Gpu::get();
+  VisibilityInput input(1);
+  ASSERT_TRUE(visibility.reserve(1));
+  const auto plain = visibility.pass.pipelines();
+  const uint32_t label = 65535;
+  auto labels = [gpu.device newBufferWithBytes:&label
+                                        length:sizeof(label)
+                                       options:MTLResourceStorageModeShared];
+  auto styles = std::make_unique<LabelStyles>();
+  (*styles)[65535].tint[1] = 1;
+  (*styles)[65535].tintAmount = 1;
+  auto table = [gpu.device newBufferWithBytes:styles->data()
+                                       length:kLabelCount * sizeof(LabelStyle)
+                                      options:MTLResourceStorageModeShared];
+  const SplatRenderer::Range range{0, 1};
+  auto cmd = [gpu.queue commandBuffer];
+  ASSERT_TRUE(visibility.pass.encodeProject(cmd, 0, input.uniforms, input.splats, nil, 0, &range, 1,
+                                            visibility.sort.keys(), nil, nil, labels, table));
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  ASSERT_EQ(cmd.status, MTLCommandBufferStatusCompleted);
+  ASSERT_EQ(visibility.count(0), 1u);
+  const auto projected = gpu.readback<ProjectedSplat>(visibility.projected());
+  const uint32_t expected = uint32_t{splat::toHalf(1.0f)} << 16;
+  EXPECT_EQ(projected[0].color0, expected);
+  EXPECT_EQ(visibility.pass.pipelines(), plain);
+  EXPECT_EQ(plain.size(), 9u);
 }
 
 }  // namespace

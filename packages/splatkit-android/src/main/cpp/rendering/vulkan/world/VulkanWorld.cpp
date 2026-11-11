@@ -18,7 +18,7 @@ bool hasConsistentArrays(const splat::SplatCloud& cloud) {
   const size_t n = cloud.count();
   return n <= std::numeric_limits<uint32_t>::max() && cloud.positions.size() == n * 3 &&
          cloud.covariances.size() == n * 6 && cloud.colors.size() == n * 3 &&
-         cloud.alphas.size() == n;
+         cloud.alphas.size() == n && (cloud.labels.empty() || cloud.labels.size() == n);
 }
 
 bool allocateOrderStaging(const VulkanContext& ctx, VulkanWorld& world, VkDeviceSize bytes) {
@@ -129,6 +129,18 @@ std::unique_ptr<VulkanWorld> VulkanWorld::upload(const VulkanContext& ctx,
   world->order = VulkanBuffer::deviceLocal(ctx, orderBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   world->sh = VulkanBuffer::deviceLocalMapped(ctx, shBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
   if (!world->splats || !world->order || !world->sh) return nullptr;
+  if (!cloud.labels.empty()) {
+    const auto words = packLabels(cloud);
+    world->labels = VulkanBuffer::deviceLocal(ctx, words.size() * sizeof(uint32_t),
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+    if (!world->labels || !world->labels->upload(words.data(), words.size() * sizeof(uint32_t)))
+      return nullptr;
+    for (auto& style : world->styles) {
+      style = VulkanBuffer::hostVisible(ctx, kLabelCount * sizeof(LabelStyle),
+                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+      if (!style) return nullptr;
+    }
+  }
   if (cpuOrder && !allocateOrderStaging(ctx, *world, orderBytes)) return nullptr;
   if (!uploadWindows(cloud, *world, stride, cpuOrder)) return nullptr;
   return world;
@@ -162,6 +174,7 @@ std::unique_ptr<VulkanWorld> VulkanWorld::createSlab(const VulkanContext& ctx, u
 }
 
 bool VulkanWorld::uploadTile(uint32_t offset, const splat::SplatCloud& cloud) const {
+  if (!cloud.labels.empty()) return false;
   const size_t n = cloud.count();
   if (n == 0) return true;
   if (offset > count || n > count - offset) return false;
@@ -227,4 +240,14 @@ void VulkanWorld::recordOrderUpload(VkCommandBuffer cmd, uint32_t frameSlot,
                        0, nullptr, 1, &afterCopy, 0, nullptr);
 }
 
+bool VulkanWorld::updateStyles(uint32_t slot, const LabelStyles* table) const {
+  if (!labels) return true;
+  auto* out = static_cast<LabelStyle*>(styles[slot]->mapped());
+  if (table && table->size() == kLabelCount)
+    std::copy(table->begin(), table->end(), out);
+  else
+    std::fill_n(out, kLabelCount, LabelStyle{});
+  styles[slot]->flush(0, kLabelCount * sizeof(LabelStyle));
+  return true;
+}
 }  // namespace splatkit
