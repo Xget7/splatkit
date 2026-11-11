@@ -41,6 +41,31 @@ std::vector<uint8_t> worldBytes() {
   return bytes;
 }
 
+TEST(SplatEngineEvents, UploadAndGpuCompletionHaveDistinctOneShotEvents) {
+  class CompletingRenderer : public StubRenderer {
+   public:
+    bool complete = false;
+    bool hasCompletedWorldFrame() override { return complete; }
+  };
+  auto renderer = std::make_unique<CompletingRenderer>();
+  auto* observed = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  std::vector<SplatEngine::Event> events;
+  engine.setEventSink(
+      [&](SplatEngine::Event event, const std::string&, uint32_t) { events.push_back(event); });
+  const auto bytes = worldBytes();
+  engine.loadWorld(bytes.data(), bytes.size());
+  EXPECT_TRUE(events.empty());
+  engine.render(1);
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_EQ(events[0], SplatEngine::Event::worldReady);
+  observed->complete = true;
+  engine.render(2);
+  engine.render(3);
+  ASSERT_EQ(events.size(), 2u);
+  EXPECT_EQ(events[1], SplatEngine::Event::worldFrameReady);
+}
+
 // The message of the world failure a load reports, if it fails.
 std::optional<std::string> failureLoading(std::optional<std::uint64_t> available) {
   SplatEngine engine(std::make_unique<MemoryReportingRenderer>(available));

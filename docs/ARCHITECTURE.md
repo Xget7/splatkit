@@ -201,3 +201,17 @@ The current and pending worlds remain unchanged on failure; the engine reports i
 Absent a digest, loading takes the existing path without hashing or scratch allocation.
 File loads hash and decode the same mapping; callers must keep the bytes immutable for the call.
 PicoSHA2 is pinned with its source and MIT licence under `third_party/picosha2`, with redistribution terms in `THIRD_PARTY_LICENSES.txt`.
+
+## Host completion and GPU failure
+
+The existing `SplatEngine::EventSink` remains the sole asynchronous engine notification mechanism.
+Install it before loading or rendering, keep it unchanged while those operations run, and do not throw from callbacks.
+Decode failures emit `worldFailed` once on the calling loader thread and preserve the pending and active worlds.
+Upload and allocation failures emit `worldFailed` once on the render thread and retain the previous world.
+The existing `worldReady` means upload succeeded, not GPU execution or presentation.
+The additive `worldFrameReady` fires once on the render thread after a successful GPU frame of that world completes; replacement before completion suppresses the old notification.
+It does not prove display presentation, and background-only frames do not qualify.
+A backend's terminal failure latch produces one `gpuFailed` event on the next `render` call, including when the surface is unavailable.
+The engine then stops drawing and consuming pending loads; the host must recreate it.
+Metal command-buffer failures and Vulkan submission, fence and device failures use this path, as do renderer pipeline rebuild failures.
+Factory failures before an engine exists retain their existing null or error return; rejected render policy preparation retains its existing synchronous resolution.

@@ -242,7 +242,7 @@ bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
 }
 
 bool VulkanSplatRenderer::draw(const Frame& frame) {
-  if (!readyForFrame(frame)) return false;
+  if (gpuFailed() || !readyForFrame(frame)) return false;
   uint32_t imageIndex = 0;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
   VulkanFrameLoop::Status status = [&] {
@@ -366,7 +366,10 @@ bool VulkanSplatRenderer::createPipelines() {
 void VulkanSplatRenderer::rebuildPipelinesIfNeeded() {
   if (!surface_.ready()) return;
   if (splats_ && pipelineFormat_ == surface_.activeFormat()) return;
-  if (!createPipelines()) surface_.drop();
+  if (!createPipelines()) {
+    failed_ = true;
+    surface_.drop();
+  }
 }
 
 // Runs every frame; a few comparisons when nothing was rebuilt.

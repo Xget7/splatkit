@@ -121,7 +121,14 @@ class SplatEngine {
 
   // What the host needs to know about loading. Ready events fire on the render thread
   // once the data is in use; failures fire on whichever thread found them.
-  enum class Event { worldReady = 0, worldFailed = 1, colliderReady = 2, colliderFailed = 3 };
+  enum class Event {
+    worldReady = 0,
+    worldFailed = 1,
+    colliderReady = 2,
+    colliderFailed = 3,
+    gpuFailed = 4,
+    worldFrameReady = 5
+  };
   using EventSink = std::function<void(Event, const std::string& message, uint32_t splatCount)>;
   void setEventSink(EventSink sink) { events_ = std::move(sink); }
 
@@ -206,6 +213,8 @@ class SplatEngine {
   const std::string& gpuDescription() const { return renderer_->deviceDescription(); }
 
  private:
+  bool gpuFailureReported_ = false;
+  bool worldFramePending_ = false;
   void preparePartPicking(splat::SplatWorldLoader::World& world);
   std::atomic<bool> partPickingEnabled_{false};
   std::shared_ptr<const PickIndex> picks_;

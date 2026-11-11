@@ -216,6 +216,7 @@ bool SplatEngine::uploadFinishedLoads() {
   }
   const GpuWorldInfo gpu = renderer_->world().value_or(GpuWorldInfo{});
   LOGI("uploaded %u splats in %.0f ms, sh degree %d", gpu.count, millisSince(start), gpu.shDegree);
+  worldFramePending_ = true;
   emit(Event::worldReady, {}, sourceCount_);
   return true;
 }
@@ -411,6 +412,19 @@ float SplatEngine::frameSeconds(int64_t frameTimeNanos) {
 // Every vsync steps the camera, but the GPU only draws when something visible changed:
 // a still scene costs no GPU time and almost no battery.
 void SplatEngine::render(int64_t frameTimeNanos) {
+  if (renderer_->gpuFailed()) {
+    if (!gpuFailureReported_) {
+      gpuFailureReported_ = true;
+      worldFramePending_ = false;
+      emit(Event::gpuFailed, "GPU failed; recreate the engine");
+    }
+    return;
+  }
+  if (gpuFailureReported_) return;
+  if (worldFramePending_ && renderer_->hasCompletedWorldFrame()) {
+    worldFramePending_ = false;
+    emit(Event::worldFrameReady, {}, sourceCount_);
+  }
   if (!renderer_->ready()) return;
   if (uploadFinishedLoads()) redrawNeeded_ = true;
 
