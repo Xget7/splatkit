@@ -2,27 +2,67 @@
 #include <chrono>
 #include <cstdio>
 #include <exception>
+#include <memory>
 #include <string>
 
 #include "splat/core/CoordinateFrame.h"
+#include "splat/formats/PartLabels.h"
 #include "splat/formats/SplatDecoder.h"
 #include "splat/io/MappedFile.h"
 #include "splat/lod/LodFile.h"
 
 namespace {
+// Per-splat part labels in, per-node labels out: node order exists only once the tree is built.
+struct LabelFiles {
+  std::string in;
+  std::string out;
+};
+
+splat::Result<splat::Ok> attachLabels(splat::SplatCloud& cloud, const std::string& path) {
+  auto mapped = splat::MappedFile::open(path);
+  if (!mapped) return mapped.error();
+  auto labels =
+      splat::decodePartLabels(mapped.value().data(), mapped.value().size(), cloud.count());
+  if (!labels) return labels.error();
+  cloud.labels = std::move(labels.value());
+  return splat::Ok{};
+}
+
+// Like writeLodSplat, never replaces an existing file.
+splat::Result<splat::Ok> writeNodeLabels(const splat::LodTree& tree, const std::string& path) {
+  const auto bytes = splat::encodePartLabels(tree.nodes.labels);
+  const auto closeFile = [](FILE* handle) { std::fclose(handle); };
+  std::unique_ptr<FILE, decltype(closeFile)> file(std::fopen(path.c_str(), "wbx"), closeFile);
+  if (!file)
+    return splat::Error{splat::ErrorCode::unreadable,
+                        "cannot create labels output (exists or unwritable)"};
+  bool ok = std::fwrite(bytes.data(), 1, bytes.size(), file.get()) == bytes.size();
+  ok = std::fclose(file.release()) == 0 && ok;
+  if (!ok) return splat::Error{splat::ErrorCode::unreadable, "labels write failed"};
+  return splat::Ok{};
+}
+
 int run(int argc, char** argv) {
-  if (argc < 3 || (argc - 3) % 2 != 0) {
+  if (argc < 3) {
     std::fprintf(stderr,
                  "usage: splat_lod_build input.spz output.lodsplat [--depth 1..%u] [--sh 0..3]\n"
-                 "         [--source-frame F]\n",
+                 "         [--source-frame F] [--labels in.bin out.bin]\n",
                  splat::kMaxOctreeDepth);
     return 2;
   }
   splat::LodBuildOptions build;
   splat::SplatDecodeOptions decode;
+  LabelFiles labels;
   for (int i = 3; i < argc; i += 2) {
     const std::string key(argv[i]);
+    if (i + 1 >= argc) return 2;
     const std::string text(argv[i + 1]);
+    if (key == "--labels") {
+      if (i + 2 >= argc) return 2;
+      labels = {text, argv[i + 2]};
+      ++i;
+      continue;
+    }
     if (key == "--source-frame") {
       decode.sourceFrame = splat::CoordinateFrame::parse(text);
       if (!decode.sourceFrame) return 2;
@@ -49,6 +89,13 @@ int run(int argc, char** argv) {
     std::fprintf(stderr, "%s\n", cloud.error().message.c_str());
     return 1;
   }
+  if (!labels.in.empty()) {
+    const auto attached = attachLabels(cloud.value(), labels.in);
+    if (!attached) {
+      std::fprintf(stderr, "%s\n", attached.error().message.c_str());
+      return 1;
+    }
+  }
   std::printf("decoded %zu splats, SH%d; building depth %u octree\n", cloud.value().count(),
               cloud.value().shDegree, build.octreeDepth);
   std::fflush(stdout);
@@ -58,6 +105,13 @@ int run(int argc, char** argv) {
   if (!written) {
     std::fprintf(stderr, "%s\n", written.error().message.c_str());
     return 1;
+  }
+  if (!labels.out.empty()) {
+    written = writeNodeLabels(tree, labels.out);
+    if (!written) {
+      std::fprintf(stderr, "%s\n", written.error().message.c_str());
+      return 1;
+    }
   }
   const double seconds =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
