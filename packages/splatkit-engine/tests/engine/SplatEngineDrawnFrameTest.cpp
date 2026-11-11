@@ -20,11 +20,15 @@ class QueryRenderer : public StubRenderer {
   bool completed = true;
   bool rebuild = false;
   uint32_t revision = 0;
+  RevealUniform reveal;
   Extent drawExtent() const override { return extent; }
   uint32_t generation() const override { return revision; }
   bool surfaceRebuildPending() const override { return rebuild; }
   bool hasCompletedWorldFrame() override { return completed; }
-  bool draw(const Frame& frame) override { return accept && StubRenderer::draw(frame); }
+  bool draw(const Frame& frame) override {
+    reveal = frame.reveal;
+    return accept && StubRenderer::draw(frame);
+  }
   uint64_t completedFrames() override { return completed ? frames : 0; }
 };
 
@@ -122,6 +126,32 @@ TEST(SplatEngineDrawnFrame, OrbitStopsAtAzimuthLimit) {
     EXPECT_FALSE(engine.needsFrame());
     EXPECT_FALSE(engine.render(3'000'000'000));
   }
+}
+
+TEST(SplatEngineDrawnFrame, NewLoadReplacesUndrawnWorld) {
+  auto renderer = std::make_unique<QueryRenderer>();
+  auto* gpu = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  std::vector<SplatEngine::Event> events;
+  engine.setEventSink([&](auto event, const std::string&, uint32_t) { events.push_back(event); });
+  RevealSettings settings;
+  settings.seconds = 1;
+  settings.tintAmount = 0.2f;
+  ASSERT_TRUE(engine.setReveal(settings));
+  loadLabelled(engine);
+  engine.beginLoad();
+  settings.tintAmount = 0.8f;
+  ASSERT_TRUE(engine.setReveal(settings));
+  loadLabelled(engine);
+  EXPECT_TRUE(events.empty());
+  ASSERT_TRUE(engine.render(1));
+  EXPECT_FLOAT_EQ(gpu->reveal.tintAmount, 0.8f);
+  const float first = gpu->reveal.level;
+  engine.render(16'000'001);
+  EXPECT_GT(gpu->reveal.level, first);
+  engine.render(32'000'001);
+  EXPECT_EQ(events, (std::vector<SplatEngine::Event>{SplatEngine::Event::worldReady,
+                                                   SplatEngine::Event::worldFrameReady}));
 }
 
 TEST(SplatEngineDrawnFrame, ColliderWaitingForUploadWakesAnIdleScene) {

@@ -535,16 +535,20 @@ TEST(WalkCamera, FramingInterpolatesDirectionAndRejectsInvalidTargets) {
   camera.setAnchor({0, 0, 0});
   const splat::Bounds bounds{{-1, -1, -1}, {1, 1, 1}};
   const float start = camera.orbitAzimuth();
+  const float startElevation = camera.orbitElevation();
   ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, 1,
                                  splatkit::WalkCamera::ViewDirection{start + 1, 0.5f}));
   EXPECT_TRUE(camera.needsUpdate());
   camera.update(0.5f);
   EXPECT_NEAR(camera.orbitAzimuth(), start + 0.5f, 1e-5f);
+  EXPECT_NEAR(camera.orbitElevation(), (startElevation + 0.5f) / 2, 1e-5f);
   camera.update(0.5f);
   EXPECT_NEAR(camera.orbitAzimuth(), start + 1, 1e-5f);
+  EXPECT_NEAR(camera.orbitElevation(), 0.5f, 1e-5f);
   EXPECT_FALSE(camera.needsUpdate());
   ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, 0));
   EXPECT_NEAR(camera.orbitAzimuth(), start + 1, 1e-5f);
+  EXPECT_NEAR(camera.orbitElevation(), 0.5f, 1e-5f);
   EXPECT_FALSE(camera.frameBounds(bounds, splatkit::Lens{}, {100, 100}, 0,
                                   splatkit::WalkCamera::ViewDirection{NAN, 0}));
   ASSERT_TRUE(camera.frameBounds(bounds, splatkit::Lens{}, {}, 1,
