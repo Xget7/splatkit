@@ -101,6 +101,29 @@ TEST(SplatEngineDrawnFrame, PendingLoadCompletionRevealHighlightAndCamera) {
   EXPECT_TRUE(engine.needsFrame());
 }
 
+TEST(SplatEngineDrawnFrame, OrbitStopsAtAzimuthLimit) {
+  for (const bool continuous : {false, true}) {
+    SplatEngine engine(std::make_unique<QueryRenderer>());
+    loadLabelled(engine);
+    engine.render(1);
+    WalkCamera::OrbitLimits limits;
+    limits.minAzimuth = -0.1f;
+    limits.maxAzimuth = 0.1f;
+    ASSERT_TRUE(engine.setOrbitLimits(limits));
+    if (continuous) {
+      CameraRequest request;
+      request.mode = CameraMode::Orbit;
+      request.orbitRadiansPerSecond = 1;
+      ASSERT_TRUE(engine.applyCameraRequest(request).accepted);
+    } else {
+      ASSERT_TRUE(engine.startOrbitAnimation(90, 90, false));
+    }
+    for (int i = 1; i <= 20; ++i) engine.render(i * 100'000'000LL);
+    EXPECT_FALSE(engine.needsFrame());
+    EXPECT_FALSE(engine.render(3'000'000'000));
+  }
+}
+
 TEST(SplatEngineDrawnFrame, ColliderWaitingForUploadWakesAnIdleScene) {
   SplatEngine engine(std::make_unique<QueryRenderer>());
   engine.render(1);
