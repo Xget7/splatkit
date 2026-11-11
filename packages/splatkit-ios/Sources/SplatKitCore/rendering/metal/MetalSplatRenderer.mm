@@ -245,7 +245,6 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   id<MTLCommandBuffer> sort =
       gpuOrder ? compute_->encodeVisibilityAndSort(frame, slot, *world_) : nil;
   if (gpuOrder && sort == nil) {
-    frameLoop_.failureLatch()->store(true);
     // Selection has only been encoded, so no GPU work can still use this slot.
     frameLoop_.release();
     return false;
@@ -254,7 +253,6 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   id<MTLCommandBuffer> cmd = [context_->queue() commandBuffer];
   id<MTLTexture> colour = surface_->target().colorOr(drawable.texture);
   if (cmd == nil || !surface_->ensureDepth(colour.width, colour.height)) {
-    frameLoop_.failureLatch()->store(true);
     frameLoop_.release();
     return false;
   }

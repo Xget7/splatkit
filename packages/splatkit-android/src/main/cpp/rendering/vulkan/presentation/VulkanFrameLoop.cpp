@@ -97,7 +97,7 @@ VulkanFrameLoop::Status VulkanFrameLoop::beginFrame(const VulkanSwapchain& swapc
   if (acquired == VK_ERROR_OUT_OF_DATE_KHR) return Status::swapchainOutOfDate;
   if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR) {
     LOGE("vkAcquireNextImageKHR failed: %d", acquired);
-    completionFailed_ = true;
+    completionFailed_ = acquired == VK_ERROR_DEVICE_LOST;
     return Status::error;
   }
 
@@ -166,7 +166,7 @@ VulkanFrameLoop::Status VulkanFrameLoop::endFrame(const VulkanSwapchain& swapcha
   // compares the transform and the extents to decide on a rebuild.
   if (presented == VK_SUBOPTIMAL_KHR) return Status::swapchainSuboptimal;
   if (presented != VK_SUCCESS) {
-    completionFailed_ = true;
+    completionFailed_ = presented == VK_ERROR_DEVICE_LOST;
     LOGE("vkQueuePresentKHR failed: %d", presented);
     return Status::error;
   }
