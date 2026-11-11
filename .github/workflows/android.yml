@@ -86,7 +86,7 @@ jobs:
         run: |
           mkdir -p build/native-contracts
           c++ -std=c++17 -Wall -Wextra -Wpedantic -Werror \
-            -I packages/splatkit-android/src/main/cpp -I packages/splat-core/include \
+            -I packages/splatkit-android/src/main/cpp -I packages/splat-core/include -I packages/splatkit-engine/include \
             packages/splatkit-android/tests/rendering/vulkan/frame/VulkanCameraProjectionTest.cpp \
             -o build/native-contracts/camera-projection
           build/native-contracts/camera-projection

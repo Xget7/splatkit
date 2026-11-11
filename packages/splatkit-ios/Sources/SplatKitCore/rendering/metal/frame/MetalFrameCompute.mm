@@ -43,6 +43,8 @@ bool MetalFrameCompute::create() {
   for (auto& uniform : uniforms_) {
     uniform = metal::buffer(device_, sizeof(CameraUniform));
     if (uniform == nil) return false;
+    const CameraUniform initial{};
+    std::memcpy(uniform.contents, &initial, sizeof(initial));
   }
   // The pipelines start at the policy's default key width, which the fallback policy reports.
   const KeyBits bits =
@@ -153,7 +155,12 @@ void MetalFrameCompute::updateCamera(const SplatRenderer::Frame& frame, uint32_t
   u.cameraPosition[1] = frame.cameraPosition.y;
   u.cameraPosition[2] = frame.cameraPosition.z;
   u.cameraPosition[3] = 1;
-  std::memcpy(uniforms_[slot].contents, &u, sizeof(u));
+  std::memcpy(uniforms_[slot].contents, &u, offsetof(CameraUniform, reveal));
+  if (!(revealCache_[slot] == frame.reveal)) {
+    std::memcpy(static_cast<char*>(uniforms_[slot].contents) + offsetof(CameraUniform, reveal),
+                &frame.reveal, sizeof(RevealUniform));
+    revealCache_[slot] = frame.reveal;
+  }
 }
 
 void MetalFrameCompute::adaptLodThreshold() {

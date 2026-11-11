@@ -1,4 +1,5 @@
 #pragma once
+#include "splatkit/reveal/Reveal.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -24,8 +25,9 @@ struct alignas(16) CameraUniform {
   float nearPlane;
   float farPlane;
   float pad;
+  RevealUniform reveal;
 };
-static_assert(sizeof(CameraUniform) == 192);
+static_assert(sizeof(CameraUniform) == 224);
 static_assert(offsetof(CameraUniform, proj) == 64);
 static_assert(offsetof(CameraUniform, focal) == 128);
 static_assert(offsetof(CameraUniform, tanHalfFov) == 136);
@@ -49,3 +51,5 @@ inline constexpr int kMaxShDegree = 3;
 inline constexpr uint32_t kShDegreeConstant = 0;
 
 }  // namespace splatkit
+
+static_assert(offsetof(splatkit::CameraUniform, reveal) == 192);

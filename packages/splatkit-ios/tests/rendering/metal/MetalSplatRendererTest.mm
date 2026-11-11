@@ -20,6 +20,75 @@ class MetalSplatRendererTest : public testing::Test {
   }
 };
 
+TEST_F(MetalSplatRendererTest, RevealClipsAndTintsThenRestoresIdenticalImage) {
+  auto renderer = MetalSplatRenderer::create();
+  ASSERT_NE(renderer, nullptr);
+  const auto layer = [CAMetalLayer layer];
+  layer.drawableSize = CGSizeMake(64, 64);
+  renderer->setLayer(layer);
+  renderer->setDrawableSize(64, 64);
+  splat::SplatCloud cloud;
+  cloud.positions = {0, 0, -2};
+  cloud.colors = {1, 0, 0};
+  cloud.alphas = {1};
+  cloud.covariances = {0.04f, 0, 0, 0.04f, 0, 0.04f};
+  cloud.labels = {1};
+  ASSERT_TRUE(renderer->uploadWorld(cloud, 0));
+  SplatRenderer::Frame frame;
+  frame.orderSource = SplatRenderer::OrderSource::gpu;
+  const SplatRenderer::Range range{0, 1};
+  frame.ranges = &range;
+  frame.rangeCount = 1;
+  frame.proj = splat::Mat4::perspective(1, 1, 0.1f, 100);
+  const auto capture = [&](std::vector<uint8_t>* out) {
+    auto done = dispatch_semaphore_create(0);
+    renderer->captureNextFrame([&](std::vector<uint8_t> image, uint32_t, uint32_t) {
+      *out = std::move(image);
+      dispatch_semaphore_signal(done);
+    });
+    ASSERT_TRUE(renderer->draw(frame));
+    ASSERT_EQ(dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)), 0);
+    ASSERT_EQ(out->size(), 64u * 64u * 4u);
+  };
+  std::vector<uint8_t> reference;
+  std::vector<uint8_t> clipped;
+  std::vector<uint8_t> tinted;
+  std::vector<uint8_t> restored;
+  capture(&reference);
+  frame.reveal.level = -1;
+  frame.reveal.band = 1;
+  capture(&clipped);
+  const size_t center = ((32 * 64) + 32) * 4;
+  EXPECT_GT(reference[center + 2], 200);
+  EXPECT_LT(clipped[center + 2], 40);
+  frame.reveal.level = 0;
+  frame.reveal.tintAmount = 1;
+  frame.reveal.brightnessBoost = 0.5f;
+  frame.reveal.tint[0] = 0;
+  frame.reveal.tint[1] = 1;
+  frame.reveal.tint[2] = 0;
+  capture(&tinted);
+  EXPECT_GT(tinted[center + 1], 200);
+  EXPECT_LT(tinted[center + 2], 20);
+  frame.reveal.level = 0.5f;
+  std::vector<uint8_t> fading;
+  capture(&fading);
+  EXPECT_LT(fading[center + 1], tinted[center + 1]);
+  EXPECT_GT(fading[center + 2], tinted[center + 2]);
+  LabelStyles styles(2);
+  auto palette = styles.palette();
+  palette[0].opacity = 0;
+  styles.setPalette(palette);
+  frame.labelStyles = &styles;
+  std::vector<uint8_t> hidden;
+  capture(&hidden);
+  EXPECT_EQ(hidden, clipped);
+  frame.labelStyles = nullptr;
+  frame.reveal = {};
+  capture(&restored);
+  EXPECT_EQ(reference, restored);
+}
+
 TEST_F(MetalSplatRendererTest, WorldReadinessRequiresGpuCompletionAndResetsOnReplacement) {
   auto renderer = MetalSplatRenderer::create();
   ASSERT_NE(renderer, nullptr);

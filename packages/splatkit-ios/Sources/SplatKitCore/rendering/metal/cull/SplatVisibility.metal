@@ -82,6 +82,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
       visible = ba.y * style.opacity >= kQuadMinAlpha;
       }
     }
+    if (visible) revealGlow(cam, s.py, p);
     // Both key widths order by view depth, which the blend order along a view ray needs;
     // positive IEEE float bits sort in ascending numeric order. Behind the camera a
     // negative depth yields a key in the high half, after every visible splat, and

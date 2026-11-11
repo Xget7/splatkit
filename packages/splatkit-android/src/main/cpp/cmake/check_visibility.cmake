@@ -1,6 +1,6 @@
-# Optimized Vulkan 1.1 module from 0ba2ee5, compiled with the pinned NDK.
+# Optimized Vulkan 1.1 module with camera reveal fields, compiled with the pinned NDK.
 file(SHA256 "${INPUT}" actual)
-set(expected "a444aaa8f6ba6e7f39ded988fcd539a53ae3aa5cce70400ba02285c77efdb80d")
+set(expected "a73b5317b0cb42dd22b938b4efcacf579c4f5bc3c62ce4516ec31ef3bfce1d67")
 if(NOT actual STREQUAL expected)
   message(FATAL_ERROR "Default visibility SPIR-V changed: ${actual}")
 endif()

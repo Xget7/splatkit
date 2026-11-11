@@ -282,7 +282,7 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const VkBuffer camera =
       world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
                                surface_.viewExtent(), isSrgb(pipelineFormat_),
-                               surface_.quarterTurns(), policy_.subpixelThreshold, 1)
+                               surface_.quarterTurns(), policy_.subpixelThreshold, 1, frame.reveal)
              : VK_NULL_HANDLE;
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {

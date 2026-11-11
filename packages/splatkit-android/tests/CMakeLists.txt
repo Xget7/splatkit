@@ -20,7 +20,8 @@ target_link_libraries(splatkit_vulkan_test_support PUBLIC
 add_executable(splatkit_vulkan_camera_projection_test
   rendering/vulkan/frame/VulkanCameraProjectionTest.cpp)
 target_include_directories(splatkit_vulkan_camera_projection_test PRIVATE
-  ${SPLATKIT_ANDROID_CPP_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../splat-core/include)
+  ${SPLATKIT_ANDROID_CPP_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../splat-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../splatkit-engine/include)
 target_compile_options(splatkit_vulkan_camera_projection_test PRIVATE -Wall -Wextra -Werror)
 
 add_executable(splatkit_vulkan_context_test rendering/vulkan/device/VulkanContextTest.cpp)

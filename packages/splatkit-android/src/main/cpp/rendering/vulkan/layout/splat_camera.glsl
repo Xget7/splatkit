@@ -13,6 +13,9 @@ layout(set = 0, binding = 0, std140) uniform Camera {
   float minPixelRadius;  // pixels: smallest source sigma times quad radius that is drawn
   float nearPlane;  // positive, finite depth range validated on the CPU
   float farPlane;
+  float revealPad;
+  vec4 reveal; // level, band, tint amount, brightness boost
+  vec4 revealTint;
 } cam;
 
 // Turns clip space clockwise by the display's rotation. The swapchain image has the display's
