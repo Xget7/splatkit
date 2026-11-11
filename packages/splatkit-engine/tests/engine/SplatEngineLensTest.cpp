@@ -101,7 +101,7 @@ TEST(SplatEngineLabels, HighlightLookFadesRetargetsAndRestoresWithoutDisablingDi
   EXPECT_FLOAT_EQ(observed->selectedStyle.brightness, 0.55f);
   EXPECT_FLOAT_EQ(observed->otherStyle.brightness, 1.15f);
   engine.highlightParts(nullptr, 0);
-  engine.render(now += 250'000'000);
+  engine.render(now + 250'000'000);
   for (const auto& style : {observed->selectedStyle, observed->otherStyle}) {
     EXPECT_FLOAT_EQ(style.tintAmount, 0);
     EXPECT_FLOAT_EQ(style.brightness, 1);

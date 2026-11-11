@@ -44,7 +44,7 @@ bool validRenderPolicy(const RenderPolicy& policy, std::string* error) {
   if (policy.sortDepth != SortKeyBits::low16 && policy.sortDepth != SortKeyBits::full32) {
     return reject("sortDepth must be 16 or 32");
   }
-  for (double channel : policy.backgroundColor) {
+  for (const double channel : policy.backgroundColor) {
     if (!std::isfinite(channel) || channel < 0 || channel > 1)
       return reject("backgroundColor must be finite and in [0, 1]");
   }

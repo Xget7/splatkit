@@ -80,8 +80,8 @@ TEST(SplatEnginePolicy, BackgroundColorAppliesOnTheNextRedrawAndRejectsInvalidCh
   EXPECT_EQ(observed->applied.backgroundColor, policy.backgroundColor);
   engine.render(3);
   EXPECT_EQ(observed->frames, frames + 1);
-  for (double invalid : {-0.1, 1.1, std::numeric_limits<double>::infinity(),
-                         std::numeric_limits<double>::quiet_NaN()}) {
+  for (const double invalid : {-0.1, 1.1, std::numeric_limits<double>::infinity(),
+                               std::numeric_limits<double>::quiet_NaN()}) {
     auto bad = policy;
     bad.backgroundColor[1] = invalid;
     EXPECT_FALSE(engine.setRenderPolicy(bad).accepted);
