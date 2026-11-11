@@ -45,7 +45,10 @@ class MetalSplatPipeline {
               id<MTLBuffer> uniforms, const MetalWorld* world, int shDegree, const GpuOrder& gpu,
               uint32_t drawCount, bool gpuOrder) const;
 
+  void setTransparentBackground(bool enabled) { transparentBackground_ = enabled; }
+
  private:
+  bool transparentBackground_ = false;
   std::array<id<MTLRenderPipelineState>, kMaxShDegree + 1> splatPipelines_{};
   // The GPU order path: front to back in batches, a saturation mask between them, the
   // background last.

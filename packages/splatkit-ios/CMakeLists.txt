@@ -32,6 +32,7 @@ splatkit_embed_text(splatkit_ios_shaders
 )
 
 add_library(splatkit_ios STATIC
+  Sources/SplatKitCore/rendering/metal/backdrop/MetalBackdrop.mm
   Sources/SplatKitCore/diagnostics/SKPngWriter.mm
   Sources/SplatKitCore/rendering/metal/MetalSplatRenderer.mm
   Sources/SplatKitCore/rendering/metal/cull/MetalVisibilityPass.mm

@@ -179,6 +179,27 @@ uint32_t MetalSplatRenderer::takePresentTimes(std::vector<int64_t>* times) {
   return frameLoop_.takePresentTimes(times);
 }
 
+void MetalSplatRenderer::encodeScene(id<MTLCommandBuffer> cmd, id<MTLTexture> drawable,
+                                     const Frame& frame, uint32_t slot, uint32_t drawCount,
+                                     bool gpuOrder) {
+  const id<MTLTexture> colour = surface_->target().colorOr(drawable);
+  bool fill = false;
+  if (backdropSettings_.enabled) {
+    auto& backdrop = backdrops_[colour.pixelFormat];
+    if (!backdrop) backdrop = std::make_unique<MetalBackdrop>();
+    if (activeBackdrop_ != nullptr && activeBackdrop_ != backdrop.get())
+      activeBackdrop_->releaseTextures();
+    activeBackdrop_ = backdrop.get();
+    fill = activeBackdrop_->prepare(context_->device(), context_->library(), colour);
+  }
+  pipeline_.setTransparentBackground(fill);
+  pipeline_.encode(cmd, surface_->target(), drawable, compute_->uniforms(slot), world_.get(),
+                   frame.shDegree,
+                   {compute_->projected(), compute_->order(), compute_->drawArguments(slot)},
+                   drawCount, gpuOrder);
+  if (fill) activeBackdrop_->encode(cmd, colour, backdropSettings_);
+}
+
 bool MetalSplatRenderer::draw(const Frame& frame) {
   if (world_ && world_->labels() && frame.labelStyles &&
       !frame.labelStyles->validFor(world_->labelCount())) {
@@ -234,10 +255,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
     frameLoop_.release();
     return false;
   }
-  pipeline_.encode(cmd, surface_->target(), drawable.texture, compute_->uniforms(slot),
-                   world_.get(), frame.shDegree,
-                   {compute_->projected(), compute_->order(), compute_->drawArguments(slot)},
-                   drawCount, gpuOrder);
+  encodeScene(cmd, drawable.texture, frame, slot, drawCount, gpuOrder);
   surface_->encodeOutput(cmd, drawable.texture);
   MetalFrameCapture::Readback readback = capture_->encode(cmd, drawable.texture);
   if (readback) surface_->allowReadback(false);

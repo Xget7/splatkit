@@ -225,3 +225,18 @@ The render-thread setting validates finite nonnegative duration, tint and bright
 Each frame slot initializes idle once and writes the tail only when its cached payload differs, including the final idle transition; ordinary camera uploads retain their original byte count.
 Projection rejects heights above the level and NaN heights; visibility applies glow after label styles, preserving hidden parts.
 The neutral default tint is white, and CPU picking intentionally ignores the sweep.
+
+## Optional scene backdrop
+
+`SplatEngine::setSceneBackdrop(SceneBackdrop, reason)` applies on the render thread to the next frame without reloading the world.
+The optional `SceneBackdropRenderer` extension is implemented only by Metal; unsupported renderers return false with a reason and keep their existing clear.
+Metal rejects enabling the backdrop if GPU sorting is unavailable, since that fallback can draw directly to a framebuffer-only drawable.
+Defaults are disabled, blur spacing 1.5 texels, saturation 0.85, gain 0.55 and vignette 0.45.
+Invalid finite ranges are rejected without replacing the previous settings.
+Disabled frames use the original splat and fixed background passes, with no backdrop textures or passes.
+Enabled frames first prepare resources, then retain splat coverage in alpha and omit the fixed background.
+Hidden labels and clipped reveal regions contribute no coverage.
+A reduced RGBA16F mip pyramid supplies a pull-push fill, followed by two separable blur passes and a dithered under composite before MetalFX or output blitting.
+At 2732x2048 the fill and scratch textures are 342x256, and the pyramid is 256x256 with nine levels.
+Pipelines are retained for the scene format and textures are retained until resize or disable.
+Pipeline failure is remembered for the format and allocation failure for the dimensions; both log and retain the original background path without failing the frame.

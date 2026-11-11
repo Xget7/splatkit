@@ -4,10 +4,12 @@
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+#include "rendering/metal/backdrop/MetalBackdrop.h"
 
 #include "rendering/metal/device/MetalContext.h"
 #include "rendering/metal/diagnostics/MetalFrameCapture.h"
@@ -26,7 +28,7 @@ namespace splatkit {
 // and the offscreen target a render scale needs, and the world bound to them. The layer is
 // attached and sized by the view; the world stays through a detach. draw() is the frame
 // script over those parts. Render thread only, except where noted.
-class MetalSplatRenderer final : public SplatRenderer {
+class MetalSplatRenderer final : public SplatRenderer, public SceneBackdropRenderer {
  public:
   // Null when the device has no Metal.
   static std::unique_ptr<MetalSplatRenderer> create();
@@ -41,6 +43,20 @@ class MetalSplatRenderer final : public SplatRenderer {
   // The layer's size in pixels. Rebuilds the offscreen target if there is one.
   void setDrawableSize(uint32_t width, uint32_t height);
 
+  bool setSceneBackdrop(const SceneBackdrop& settings, std::string* reason) override {
+    if (!settings.valid()) {
+      if (reason != nullptr) *reason = "Invalid scene backdrop settings";
+      return false;
+    }
+    if (settings.enabled && !compute_->gpuSort()) {
+      if (reason != nullptr) *reason = "Scene backdrop requires offscreen Metal compositing";
+      return false;
+    }
+    backdropSettings_ = settings;
+    if (!settings.enabled && activeBackdrop_ != nullptr) activeBackdrop_->releaseTextures();
+    if (reason != nullptr) reason->clear();
+    return true;
+  }
   void setRenderScale(float scale) override;
   float renderScale() const override { return surface_->renderScale(); }
   void setSpatialUpscaling(bool enabled) override;
@@ -112,10 +128,15 @@ class MetalSplatRenderer final : public SplatRenderer {
 
  private:
   MetalSplatRenderer() = default;
+  void encodeScene(id<MTLCommandBuffer> cmd, id<MTLTexture> drawable, const Frame& frame,
+                   uint32_t slot, uint32_t drawCount, bool gpuOrder);
 
   std::unique_ptr<MetalContext> context_;
   MetalFrameLoop frameLoop_{kFramesInFlight};
   MetalSplatPipeline pipeline_;
+  SceneBackdrop backdropSettings_;
+  std::map<MTLPixelFormat, std::unique_ptr<MetalBackdrop>> backdrops_;
+  MetalBackdrop* activeBackdrop_ = nullptr;
 
   std::unique_ptr<MetalFrameCompute> compute_;
   std::unique_ptr<MetalSurface> surface_;
