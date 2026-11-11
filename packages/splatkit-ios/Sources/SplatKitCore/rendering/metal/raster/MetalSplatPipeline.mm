@@ -7,10 +7,6 @@
 
 namespace splatkit {
 
-namespace {
-constexpr MTLClearColor kBackground = {0.05, 0.05, 0.08, 1.0};
-}  // namespace
-
 bool MetalSplatPipeline::create(id<MTLDevice> device, id<MTLLibrary> library,
                                 MTLPixelFormat format) {
   format_ = format;
@@ -111,7 +107,7 @@ void MetalSplatPipeline::encode(id<MTLCommandBuffer> cmd, const MetalRenderTarge
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   // Front to back accumulates onto nothing and puts the background under at the end.
   pass.colorAttachments[0].clearColor =
-      (gpuOrder || transparentBackground_) ? MTLClearColorMake(0, 0, 0, 0) : kBackground;
+      (gpuOrder || transparentBackground_) ? MTLClearColorMake(0, 0, 0, 0) : background_;
   // The depth buffer is nil when the caller could not allocate one.
   if (target.depth() != nil) {
     pass.depthAttachment.texture = target.depth();
@@ -155,9 +151,9 @@ void MetalSplatPipeline::encode(id<MTLCommandBuffer> cmd, const MetalRenderTarge
     }
   }
   if (gpuOrder && !transparentBackground_) {
-    const float background[4] = {static_cast<float>(kBackground.red),
-                                 static_cast<float>(kBackground.green),
-                                 static_cast<float>(kBackground.blue), 1.0f};
+    const float background[4] = {static_cast<float>(background_.red),
+                                 static_cast<float>(background_.green),
+                                 static_cast<float>(background_.blue), 1.0f};
     [encoder setRenderPipelineState:backgroundPipeline_];
     [encoder setDepthStencilState:splatDepth_];
     [encoder setFragmentBytes:background length:sizeof(background) atIndex:0];

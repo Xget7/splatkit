@@ -51,6 +51,9 @@ The decoded cloud waits in [SplatEngine.cpp][engine] until the render thread tak
 
 Both backends:
 
+`RenderPolicy::backgroundColor` sets opaque background RGB through the existing policy interface and requests an engine redraw.
+Its default remains `(0.05, 0.05, 0.08)`; Metal transparent accumulation and scene backdrops retain their own clears.
+
 - Splats blend in the encoded space by default; linear blending (off by default) applies `pow(rgb, 2.2)` to splat colour and presents to an sRGB surface.
 - The render policy applies per backend: both honour the sort depth and the LOD pixel error and splat limit, live ([VulkanFrameCompute.h][vk-frame]).
 - The sub-pixel cutoff rides in the camera uniform, so it applies from the next frame on both order paths: a splat whose source sigma times its quad radius is under it has no quad ([SplatProjection.metalh][mtl-proj], [splat_projection.glsl][vk-proj]).
