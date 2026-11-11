@@ -86,17 +86,34 @@ class SplatEngine {
   bool setReveal(const RevealSettings& settings);
 
   // Decodes an SPZ world. Thread safe. Errors are reported and leave the current world.
-  void loadWorld(const std::uint8_t* data, std::size_t size);
-  void loadWorld(const std::uint8_t* data, std::size_t size,
+  bool loadWorld(const std::uint8_t* data, std::size_t size);
+  bool loadWorld(const std::uint8_t* data, std::size_t size,
                  const splat::SplatWorldLoader::LoadOptions& options);
-  void loadWorldFile(const std::string& path, const splat::SplatWorldLoader::LoadOptions& options);
+  bool loadWorldFile(const std::string& path, const splat::SplatWorldLoader::LoadOptions& options);
   // Decodes a collider GLB and builds its grid. Thread safe; applied on the next frame.
   void loadCollider(const std::uint8_t* data, std::size_t size);
   // The same from a file, mapped rather than copied through the host's heap.
-  void loadWorldFile(const std::string& path);
-  void loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
+  bool loadWorldFile(const std::string& path);
+  bool loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
                  std::size_t labelsSize);
-  void loadWorldFile(const std::string& path, const std::string& labelsPath);
+  using LoadOptions = splat::SplatWorldLoader::LoadOptions;
+  bool loadWorld(const std::uint8_t* data, std::size_t size, const std::uint8_t* labels,
+                 std::size_t labelsSize, const LoadOptions& options);
+  bool loadWorldFile(const std::string& path, const std::string& labelsPath,
+                     const LoadOptions& options);
+  template <typename Path, std::enable_if_t<std::is_convertible_v<Path, std::string>, int> = 0>
+  bool loadWorldFile(const std::string& path, Path&& labelsPath) {
+    return loadWorldFile(path, std::string(std::forward<Path>(labelsPath)), LoadOptions{});
+  }
+
+  // Any thread. Supersedes decoding, pending uploads and completion events.
+  // Legacy calls retain last-completion ordering within the current reservation.
+  uint64_t beginLoad();
+  bool loadWorld(uint64_t request, const std::uint8_t* data, std::size_t size,
+                 const std::uint8_t* labels = nullptr, std::size_t labelsSize = 0,
+                 const LoadOptions& options = {});
+  bool loadWorldFile(uint64_t request, const std::string& path, const std::string& labelsPath = {},
+                     const LoadOptions& options = {});
   // Render thread. Requests before a labelled world arrives are rejected with a warning.
   void highlightParts(const std::uint16_t* labels, std::size_t count);
   // Picking retains CPU geometry only when explicitly enabled before loading.
@@ -150,7 +167,8 @@ class SplatEngine {
     colliderReady = 2,
     colliderFailed = 3,
     gpuFailed = 4,
-    worldFrameReady = 5
+    worldFrameReady = 5,
+    labelsMismatch = 6
   };
   using EventSink = std::function<void(Event, const std::string& message, uint32_t splatCount)>;
   void setEventSink(EventSink sink) { events_ = std::move(sink); }
@@ -270,6 +288,11 @@ class SplatEngine {
   bool streamingPending_ = false;
   std::optional<splat::Bounds> requestedBounds_;
   Extent requestedExtent_;
+  // Serializes acceptance with upload and callbacks, including reentrant reservations.
+  std::recursive_mutex loadMutex_;
+  uint64_t uploadedLoad_ = 0;
+  bool finishLoad(uint64_t request,
+                  const splat::Result<splat::SplatWorldLoader::WorldReport>& report);
   RevealSettings revealSettings_;
   Reveal reveal_;
   bool pollGpuEvents();

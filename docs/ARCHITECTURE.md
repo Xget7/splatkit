@@ -131,6 +131,10 @@ The existing `.lodsplat` format is unchanged and does not serialize labels.
 The additive `SplatWorldLoader::loadWorld(data, size, labels, labelsSize)` and `loadWorldFile(path, labelsPath)` overloads validate sidecar counts before publishing a world, leaving the pending world untouched on failure.
 For SPZ the sidecar follows decoded source order before spatial reorder; for `.lodsplat` it follows stored node order.
 Existing overloads remain unlabelled.
+Optional `LoadOptions` verify world and labels SHA-256 digests and source splat counts before publication; sidecar validation failures report `labelsMismatch`.
+`SplatEngine::beginLoad()` reserves a replacement and invalidates earlier decoding, pending uploads and completion notifications.
+Reservation overloads return false silently when superseded; legacy calls retain completion ordering within the current reservation.
+The loader checks the reservation at publication, while the engine serializes reservation changes with upload and event delivery.
 These overloads are also available on the shared C++ `SplatEngine`; native hosts can bind them without carrying renderer source changes.
 Part styling requires GPU ordering; labelled CPU-order draws and labelled tile uploads are rejected.
 Tiled label streaming is unsupported.
