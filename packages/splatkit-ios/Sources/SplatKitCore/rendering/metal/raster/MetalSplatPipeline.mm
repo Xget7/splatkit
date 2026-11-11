@@ -1,5 +1,7 @@
 #include "rendering/metal/raster/MetalSplatPipeline.h"
 
+#include <TargetConditionals.h>
+
 #include "rendering/metal/layout/MetalDrawArguments.h"
 #include "splatkit/Log.h"
 
@@ -71,6 +73,8 @@ bool MetalSplatPipeline::create(id<MTLDevice> device, id<MTLLibrary> library,
     LOGE("background pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
+  // Simulator GPUs lack the framebuffer fetch used by the saturation mask.
+#if !TARGET_OS_SIMULATOR
   // The saturation mask touches the depth buffer only.
   MTLRenderPipelineDescriptor* mask = [MTLRenderPipelineDescriptor new];
   mask.vertexFunction = [library newFunctionWithName:@"blitVertex"];
@@ -83,6 +87,7 @@ bool MetalSplatPipeline::create(id<MTLDevice> device, id<MTLLibrary> library,
     LOGE("saturation mask pipeline: %s", error.localizedDescription.UTF8String);
     return false;
   }
+#endif
   MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
   depth.depthCompareFunction = MTLCompareFunctionLessEqual;
   depth.depthWriteEnabled = NO;
@@ -122,11 +127,14 @@ void MetalSplatPipeline::encode(id<MTLCommandBuffer> cmd, const MetalRenderTarge
       [encoder setVertexBuffer:gpu.order offset:0 atIndex:2];
       id<MTLBuffer> arguments = gpu.arguments;
       for (uint32_t batch = 0; batch < kDrawBatches; ++batch) {
+#if !TARGET_OS_SIMULATOR
+        // Skip framebuffer fetch on the simulator; all batches still blend front to back.
         if (batch > 0) {
           [encoder setRenderPipelineState:maskPipeline_];
           [encoder setDepthStencilState:maskDepth_];
           [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
         }
+#endif
         [encoder setRenderPipelineState:projectedPipeline_];
         [encoder setDepthStencilState:splatDepth_];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
