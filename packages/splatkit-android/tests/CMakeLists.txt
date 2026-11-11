@@ -54,10 +54,13 @@ add_executable(splatkit_vulkan_radix_sort_test rendering/vulkan/sort/VulkanRadix
   ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_vulkan_radix_sort_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
+# Also draws a labelled GPU-order frame through the compute passes, as the renderer does.
 add_executable(splatkit_vulkan_splat_pipeline_test rendering/vulkan/raster/VulkanSplatPipelineTest.cpp
   ${vulkan_source_dir}/raster/VulkanSplatPipeline.cpp ${vulkan_source_dir}/world/VulkanWorld.cpp
   ${vulkan_source_dir}/frame/VulkanCameraUniforms.cpp
-  ${vulkan_source_dir}/presentation/VulkanRenderTarget.cpp)
+  ${vulkan_source_dir}/presentation/VulkanRenderTarget.cpp
+  ${vulkan_source_dir}/frame/VulkanFrameCompute.cpp ${vulkan_source_dir}/selection/VulkanLodSelection.cpp
+  ${vulkan_source_dir}/cull/VulkanVisibilityPass.cpp ${vulkan_source_dir}/sort/VulkanRadixSort.cpp)
 target_link_libraries(splatkit_vulkan_splat_pipeline_test PRIVATE
   splatkit_vulkan_test_support splatkit_shaders)
 
