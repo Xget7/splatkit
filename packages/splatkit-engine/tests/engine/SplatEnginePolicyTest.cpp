@@ -28,6 +28,43 @@ class PolicyRecordingRenderer final : public StubRenderer {
   RenderPolicy applied;
 };
 
+class BackdropRecordingRenderer final : public StubRenderer, public SceneBackdropRenderer {
+ public:
+  SceneBackdrop applied;
+  SceneBackdrop drawn;
+  bool draw(const Frame& frame) override {
+    drawn = applied;
+    return StubRenderer::draw(frame);
+  }
+  bool setSceneBackdrop(const SceneBackdrop& settings, std::string*) override {
+    applied = settings;
+    return true;
+  }
+};
+
+TEST(SplatEnginePolicy, SceneBackdropReachesTheRendererAndReportsUnsupported) {
+  auto renderer = std::make_unique<BackdropRecordingRenderer>();
+  auto* observed = renderer.get();
+  SplatEngine engine(std::move(renderer));
+  SceneBackdrop settings;
+  settings.enabled = true;
+  settings.gain = 0.7f;
+  ASSERT_TRUE(engine.setSceneBackdrop(settings));
+  EXPECT_TRUE(observed->applied.enabled);
+  EXPECT_FLOAT_EQ(observed->applied.gain, 0.7f);
+  engine.render(1);
+  EXPECT_EQ(observed->frames, 1u);
+  EXPECT_TRUE(observed->drawn.enabled);
+  EXPECT_FLOAT_EQ(observed->drawn.gain, 0.7f);
+  ASSERT_TRUE(engine.setSceneBackdrop({}));
+  engine.render(2);
+  EXPECT_FALSE(observed->drawn.enabled);
+  SplatEngine unsupported(std::make_unique<StubRenderer>());
+  std::string reason;
+  EXPECT_FALSE(unsupported.setSceneBackdrop(settings, &reason));
+  EXPECT_NE(reason.find("Metal"), std::string::npos);
+}
+
 TEST(SplatEnginePolicy, EffectivePolicyReachesTheRenderer) {
   auto renderer = std::make_unique<PolicyRecordingRenderer>();
   PolicyRecordingRenderer* observed = renderer.get();

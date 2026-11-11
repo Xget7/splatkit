@@ -105,7 +105,8 @@ void MetalSplatPipeline::encode(id<MTLCommandBuffer> cmd, const MetalRenderTarge
   pass.colorAttachments[0].loadAction = MTLLoadActionClear;
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   // Front to back accumulates onto nothing and puts the background under at the end.
-  pass.colorAttachments[0].clearColor = gpuOrder ? MTLClearColorMake(0, 0, 0, 0) : kBackground;
+  pass.colorAttachments[0].clearColor =
+      (gpuOrder || transparentBackground_) ? MTLClearColorMake(0, 0, 0, 0) : kBackground;
   // The depth buffer is nil when the caller could not allocate one.
   if (target.depth() != nil) {
     pass.depthAttachment.texture = target.depth();
@@ -145,7 +146,7 @@ void MetalSplatPipeline::encode(id<MTLCommandBuffer> cmd, const MetalRenderTarge
                 instanceCount:drawCount];
     }
   }
-  if (gpuOrder) {
+  if (gpuOrder && !transparentBackground_) {
     const float background[4] = {static_cast<float>(kBackground.red),
                                  static_cast<float>(kBackground.green),
                                  static_cast<float>(kBackground.blue), 1.0f};
