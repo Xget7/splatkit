@@ -47,6 +47,10 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason) override;
 
   // True when a surface with pipelines is up.
+  bool gpuFailed() override {
+    frameLoop_.completedSubmission();
+    return failed_ || frameLoop_.gpuFailed();
+  }
   bool ready() const override { return surface_.ready() && splats_; }
   // The target's size with a render scale, else the swapchain's.
   Extent drawExtent() const override;
@@ -67,7 +71,7 @@ class VulkanSplatRenderer final : public SplatRenderer {
   bool draw(const Frame& frame) override;
   uint64_t submittedFrames() const override { return frameLoop_.lastSubmission(); }
   uint64_t completedFrames() override { return frameLoop_.completedSubmission(); }
-  bool hasCompletedWorldFrame() {
+  bool hasCompletedWorldFrame() override {
     return worldFrameCompletion_.completed(frameLoop_.completedSubmission());
   }
   // Reads the stats of frames the GPU finished, without waiting. Call once per vsync, drawn
@@ -82,7 +86,8 @@ class VulkanSplatRenderer final : public SplatRenderer {
   const std::string& deviceDescription() const override { return ctx_.deviceDescription(); }
 
  private:
-  bool readyForFrame(const Frame& frame) const;
+  bool failed_ = false;
+  bool readyForFrame(const Frame& frame);
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);

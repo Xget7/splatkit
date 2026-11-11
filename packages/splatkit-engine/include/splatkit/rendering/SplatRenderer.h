@@ -70,6 +70,8 @@ class SplatRenderer {
 
   // True when a surface is up: frames can be drawn and worlds uploaded.
   virtual bool ready() const = 0;
+  virtual bool gpuFailed() { return false; }
+  virtual bool hasCompletedWorldFrame() { return false; }
   // Where the splats are drawn: the surface's size with the render scale applied.
   virtual Extent drawExtent() const = 0;
   // Counts the rebuilds of the surface's images. A frame drawn before one is gone.

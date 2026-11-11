@@ -33,23 +33,43 @@ VulkanSplatRenderer::~VulkanSplatRenderer() {
 }
 
 void VulkanSplatRenderer::setWindow(ANativeWindow* window) {
-  if (surface_.attach(window)) rebuildPipelinesIfNeeded();
+  if (surface_.attach(window)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::onSurfaceResized(uint32_t width, uint32_t height) {
-  if (surface_.resize(width, height)) rebuildPipelinesIfNeeded();
+  if (surface_.resize(width, height)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setRenderScale(float scale) {
-  if (surface_.setRenderScale(scale)) rebuildPipelinesIfNeeded();
+  if (surface_.setRenderScale(scale)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setLinearBlending(bool linear) {
-  if (surface_.setLinearBlending(linear)) rebuildPipelinesIfNeeded();
+  if (surface_.setLinearBlending(linear)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 void VulkanSplatRenderer::setVsync(bool vsync) {
-  if (surface_.setVsync(vsync)) rebuildPipelinesIfNeeded();
+  if (surface_.setVsync(vsync)) {
+    rebuildPipelinesIfNeeded();
+  } else {
+    failed_ = true;
+  }
 }
 
 DeviceCapabilities VulkanSplatRenderer::deviceCapabilities() const {
@@ -226,7 +246,8 @@ bool VulkanSplatRenderer::uploadTile(uint32_t offset, const splat::SplatCloud& c
   return world_->uploadTile(offset, cloud);
 }
 
-bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
+bool VulkanSplatRenderer::readyForFrame(const Frame& frame) {
+  if (gpuFailed()) return false;
   if (world_ && world_->labels && frame.labelStyles &&
       !frame.labelStyles->validFor(world_->labelCount())) {
     LOGE("label state count or palette index is invalid");
@@ -366,7 +387,10 @@ bool VulkanSplatRenderer::createPipelines() {
 void VulkanSplatRenderer::rebuildPipelinesIfNeeded() {
   if (!surface_.ready()) return;
   if (splats_ && pipelineFormat_ == surface_.activeFormat()) return;
-  if (!createPipelines()) surface_.drop();
+  if (!createPipelines()) {
+    failed_ = true;
+    surface_.drop();
+  }
 }
 
 // Runs every frame; a few comparisons when nothing was rebuilt.

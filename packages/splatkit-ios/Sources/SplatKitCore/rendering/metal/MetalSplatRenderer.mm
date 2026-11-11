@@ -49,6 +49,7 @@ void MetalSplatRenderer::setLayer(CAMetalLayer* layer) {
             built;
   }
   if (!built) {
+    frameLoop_.failureLatch()->store(true);
     LOGE("rendering stopped: no pipelines");
     surface_->setLayer(nil);
   }
@@ -72,6 +73,7 @@ void MetalSplatRenderer::setLinearBlending(bool linear) {
   const bool pipelinesReady =
       pipeline_.create(context_->device(), context_->library(), surface_->targetFormat());
   if (!blitReady || !pipelinesReady) {
+    frameLoop_.failureLatch()->store(true);
     LOGE("rendering stopped: no pipelines");
     surface_->setLayer(nil);
   }
@@ -219,6 +221,7 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
   id<MTLCommandBuffer> sort =
       gpuOrder ? compute_->encodeVisibilityAndSort(frame, slot, *world_) : nil;
   if (gpuOrder && sort == nil) {
+    frameLoop_.failureLatch()->store(true);
     // Selection has only been encoded, so no GPU work can still use this slot.
     frameLoop_.release();
     return false;
@@ -226,7 +229,11 @@ bool MetalSplatRenderer::draw(const Frame& frame) {
 
   id<MTLCommandBuffer> cmd = [context_->queue() commandBuffer];
   id<MTLTexture> colour = surface_->target().colorOr(drawable.texture);
-  surface_->ensureDepth(colour.width, colour.height);
+  if (cmd == nil || !surface_->ensureDepth(colour.width, colour.height)) {
+    frameLoop_.failureLatch()->store(true);
+    frameLoop_.release();
+    return false;
+  }
   pipeline_.encode(cmd, surface_->target(), drawable.texture, compute_->uniforms(slot),
                    world_.get(), frame.shDegree,
                    {compute_->projected(), compute_->order(), compute_->drawArguments(slot)},

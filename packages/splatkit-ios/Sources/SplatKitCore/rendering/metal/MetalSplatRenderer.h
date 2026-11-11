@@ -56,6 +56,7 @@ class MetalSplatRenderer final : public SplatRenderer {
   std::optional<std::uint64_t> availableMemory() const override;
   bool applyRenderPolicy(const RenderPolicy& policy, std::string* reason) override;
 
+  bool gpuFailed() override { return frameLoop_.gpuFailed(); }
   bool ready() const override { return surface_->ready(); }
   Extent drawExtent() const override { return surface_->drawExtent(); }
   uint32_t generation() const override { return surface_->generation(); }
@@ -71,6 +72,9 @@ class MetalSplatRenderer final : public SplatRenderer {
 
   // Any thread. A successful GPU frame of the current world has finished; uploads
   // alone and background frames do not qualify. Reset when the world is replaced.
+  bool hasCompletedWorldFrame() override {
+    return static_cast<const MetalSplatRenderer&>(*this).hasCompletedWorldFrame();
+  }
   bool hasCompletedWorldFrame() const { return frameLoop_.hasCompletedWorldFrame(); }
 
   // Pixels of a presented frame: BGRA, 8 bits each, rows top down, `width` by `height`.

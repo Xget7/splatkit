@@ -97,6 +97,7 @@ VulkanFrameLoop::Status VulkanFrameLoop::beginFrame(const VulkanSwapchain& swapc
   if (acquired == VK_ERROR_OUT_OF_DATE_KHR) return Status::swapchainOutOfDate;
   if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR) {
     LOGE("vkAcquireNextImageKHR failed: %d", acquired);
+    completionFailed_ = true;
     return Status::error;
   }
 
@@ -107,7 +108,10 @@ VulkanFrameLoop::Status VulkanFrameLoop::beginFrame(const VulkanSwapchain& swapc
   vkResetCommandPool(device, frame.pool, 0);
   VkCommandBufferBeginInfo beginInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  if (vkBeginCommandBuffer(frame.cmd, &beginInfo) != VK_SUCCESS) return Status::error;
+  if (vkBeginCommandBuffer(frame.cmd, &beginInfo) != VK_SUCCESS) {
+    completionFailed_ = true;
+    return Status::error;
+  }
   if (frame.timestamps) {
     vkCmdResetQueryPool(frame.cmd, frame.timestamps, 0, 2);
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, frame.timestamps, 0);
@@ -122,7 +126,10 @@ VulkanFrameLoop::Status VulkanFrameLoop::endFrame(const VulkanSwapchain& swapcha
   if (frame.timestamps) {
     vkCmdWriteTimestamp(frame.cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame.timestamps, 1);
   }
-  if (vkEndCommandBuffer(frame.cmd) != VK_SUCCESS) return Status::error;
+  if (vkEndCommandBuffer(frame.cmd) != VK_SUCCESS) {
+    completionFailed_ = true;
+    return Status::error;
+  }
 
   // 4. Submit: wait for the image before writing color, signal when the render is done.
   const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;

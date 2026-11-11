@@ -30,6 +30,7 @@ class VulkanFrameLoop {
   VulkanFrameLoop(const VulkanFrameLoop&) = delete;
   VulkanFrameLoop& operator=(const VulkanFrameLoop&) = delete;
 
+  bool gpuFailed() const { return completionFailed_; }
   bool valid() const { return valid_; }
   // Slot of the frame being recorded; valid between beginFrame and endFrame.
   uint32_t currentSlot() const { return current_; }
