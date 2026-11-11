@@ -202,7 +202,7 @@ TEST_F(MetalSplatRendererTest, SceneBackdropFillsOpaqueAndTogglesWithoutChanging
   settings.gain = 1;
   ASSERT_TRUE(renderer->setSceneBackdrop(settings, nullptr));
   capture(&dark);
-  EXPECT_LT(dark[center + 2], 3);
+  EXPECT_NEAR(dark[center + 2], 13, 2);
   frame.reveal = {};
   LabelStyles styles(2);
   auto palette = styles.palette();
@@ -210,7 +210,7 @@ TEST_F(MetalSplatRendererTest, SceneBackdropFillsOpaqueAndTogglesWithoutChanging
   styles.setPalette(palette);
   frame.labelStyles = &styles;
   capture(&dark);
-  EXPECT_LT(dark[center + 2], 3);
+  EXPECT_NEAR(dark[center + 2], 13, 2);
   frame.labelStyles = nullptr;
   ASSERT_TRUE(renderer->setSceneBackdrop({}, nullptr));
   capture(&restored);

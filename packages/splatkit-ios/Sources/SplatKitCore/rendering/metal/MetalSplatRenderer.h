@@ -134,6 +134,7 @@ class MetalSplatRenderer final : public SplatRenderer, public SceneBackdropRende
   std::unique_ptr<MetalContext> context_;
   MetalFrameLoop frameLoop_{kFramesInFlight};
   MetalSplatPipeline pipeline_;
+  std::array<float, 3> backdropBackground_{0.05f, 0.05f, 0.08f};
   SceneBackdrop backdropSettings_;
   std::map<MTLPixelFormat, std::unique_ptr<MetalBackdrop>> backdrops_;
   MetalBackdrop* activeBackdrop_ = nullptr;

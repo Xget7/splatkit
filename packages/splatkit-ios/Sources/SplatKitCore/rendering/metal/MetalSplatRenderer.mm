@@ -119,6 +119,7 @@ DeviceCapabilities MetalSplatRenderer::deviceCapabilities() const {
 bool MetalSplatRenderer::applyRenderPolicy(const RenderPolicy& policy, std::string* reason) {
   if (!compute_->configure(policy, reason)) return false;
   pipeline_.setBackgroundColor(policy.backgroundColor);
+  backdropBackground_ = policy.backgroundColor;
   return true;
 }
 
@@ -200,7 +201,7 @@ void MetalSplatRenderer::encodeScene(id<MTLCommandBuffer> cmd, id<MTLTexture> dr
                    frame.shDegree,
                    {compute_->projected(), compute_->order(), compute_->drawArguments(slot)},
                    drawCount, gpuOrder);
-  if (fill) activeBackdrop_->encode(cmd, colour, backdropSettings_);
+  if (fill) activeBackdrop_->encode(cmd, colour, backdropSettings_, backdropBackground_);
 }
 
 bool MetalSplatRenderer::draw(const Frame& frame) {
