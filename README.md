@@ -18,7 +18,7 @@ Beta: APIs and quality/performance tradeoffs may still change before 1.0.
 
 Android: API 29+, Vulkan 1.1, arm64-v8a.
 The GPU path additionally checks subgroup and memory limits.
-Maven Central has `io.github.xget7:splatkit-android:0.1.0-beta.2`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
+Maven Central has `io.github.xget7:splatkit-android:0.1.0-beta.3`; see the [Android releases](https://github.com/Xget7/splatkit/releases).
 The API guides describe current source; changes listed under Unreleased require a source build until the next artifact release.
 To build current source:
 
@@ -27,7 +27,7 @@ cd apps/android-dev
 ./gradlew :splatkit:assembleRelease :splatkit:testDebugUnitTest
 ```
 
-iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-beta.2`.
+iOS: add [splatkit-ios](https://github.com/Xget7/splatkit-ios) to Swift Package Manager, version `0.1.0-beta.3`.
 Use the native view, forward lifecycle and load worlds asynchronously; see each SDK's README for examples.
 
 Worlds are `.spz`, `.lodsplat` or a tileset of `.spz` tiles, prepared on a computer.
