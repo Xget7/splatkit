@@ -1,3 +1,4 @@
+#include "../../../../../../splatkit-engine/src/labels/LabelStyleUpload.h"
 #pragma once
 
 #import <Metal/Metal.h>
@@ -34,6 +35,8 @@ class MetalWorld {
   }
   id<MTLBuffer> labels() const { return labels_; }
   id<MTLBuffer> styles(uint32_t slot, const LabelStyles* styles) const;
+  std::size_t styleUploadBytes(uint32_t slot) const { return styleUploads_[slot].uploadedBytes(); }
+  std::size_t styleUploadOffset(uint32_t slot) const { return styleUploads_[slot].uploadOffset(); }
   id<MTLBuffer> splats() const { return splats_; }
   id<MTLBuffer> harmonics() const { return sh_; }
   id<MTLBuffer> order() const { return orders_[currentOrder_]; }

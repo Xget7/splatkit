@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <new>
+#include "splatkit/highlight/Highlight.h"
 
 #include <cstring>
 
@@ -146,6 +148,29 @@ TEST(MetalWorldTest, LabelsAllocateOnlyWhenSuppliedAndRejectMismatchedCounts) {
   auto small = MetalWorld::upload(gpu.device, c, 0);
   ASSERT_NE(small, nullptr);
   EXPECT_EQ(small->styles(0, nullptr).length, labelStyleBytes(45));
+  Highlight highlight(45);
+  small->styles(0, &highlight.styles());
+  small->styles(0, &highlight.styles());
+  EXPECT_EQ(small->styleUploadBytes(0), 0u);
+  uint16_t selected = 44;
+  highlight.set(&selected, 1);
+  small->styles(0, &highlight.styles());
+  EXPECT_EQ(small->styleUploadBytes(0), labelStyleBytes(45));
+  highlight.update(Highlight::kFadeSeconds / 2);
+  small->styles(0, &highlight.styles());
+  EXPECT_EQ(small->styleUploadBytes(0), kPaletteBytes);
+  EXPECT_EQ(small->styleUploadOffset(0), 0u);
+  small->styles(0, &highlight.styles());
+  EXPECT_EQ(small->styleUploadBytes(0), 0u);
+  // Reconstructing at the same address must not reuse the previous slot revision.
+  alignas(LabelStyles) unsigned char storage[sizeof(LabelStyles)];
+  auto* first = new (storage) LabelStyles(45);
+  small->styles(0, first);
+  first->~LabelStyles();
+  auto* replacement = new (storage) LabelStyles(45);
+  small->styles(0, replacement);
+  EXPECT_EQ(small->styleUploadBytes(0), labelStyleBytes(45));
+  replacement->~LabelStyles();
   c.labels.pop_back();
   EXPECT_EQ(MetalWorld::upload(gpu.device, c, 0), nullptr);
 }

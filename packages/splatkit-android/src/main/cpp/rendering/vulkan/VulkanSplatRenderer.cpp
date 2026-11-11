@@ -241,14 +241,6 @@ bool VulkanSplatRenderer::readyForFrame(const Frame& frame) const {
   return ready();
 }
 
-VkBuffer VulkanSplatRenderer::updateCamera(const Frame& frame, uint32_t slot) {
-  if (!world_) return VK_NULL_HANDLE;
-  return camera_->update(slot, frame.view, frame.proj, frame.cameraPosition, surface_.viewExtent(),
-                         isSrgb(pipelineFormat_), surface_.quarterTurns(),
-                         policy_.subpixelThreshold,
-                         frame.labelStyles ? frame.labelStyles->fade : 1);
-}
-
 bool VulkanSplatRenderer::draw(const Frame& frame) {
   if (!readyForFrame(frame)) return false;
   uint32_t imageIndex = 0;
@@ -266,7 +258,11 @@ bool VulkanSplatRenderer::draw(const Frame& frame) {
   const VkExtent2D extent = surface_.drawExtent();
   const uint32_t slot = frameLoop_.currentSlot();
   // Outside the render pass: transfers are not allowed inside one.
-  const VkBuffer camera = updateCamera(frame, slot);
+  const VkBuffer camera =
+      world_ ? camera_->update(slot, frame.view, frame.proj, frame.cameraPosition,
+                               surface_.viewExtent(), isSrgb(pipelineFormat_),
+                               surface_.quarterTurns(), policy_.subpixelThreshold, 1)
+             : VK_NULL_HANDLE;
   std::optional<VulkanFrameCompute::Draw> gpuDraw;
   if (world_ && compute_ && frame.orderSource == OrderSource::gpu) {
     if (camera != VK_NULL_HANDLE) {

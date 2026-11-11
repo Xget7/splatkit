@@ -14,7 +14,7 @@ class Highlight {
   explicit Highlight(std::size_t labelCount = 0) : current_(labelCount) {}
   // Empty labels restore captured styles, unselected labels dim, and repeated targets preserve the
   // current fade.
-  // A changed target completes the previous transition before retargeting.
+  // A changed target starts from the currently resolved appearance.
   void set(const std::uint16_t* labels, std::size_t count);
 
   // Returns whether styles changed.
@@ -34,8 +34,11 @@ class Highlight {
   static constexpr float kDimBrightness = 0.55f;
 
  private:
+  void completeTransition();
   std::vector<std::uint16_t> parts_;
   LabelStyles current_;
+  std::array<LabelStyle, kStyleStates> from_{}, to_{};
+  bool warnedInvalid_ = false;
   float elapsed_ = kFadeSeconds;
 };
 

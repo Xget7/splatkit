@@ -83,7 +83,6 @@ class VulkanSplatRenderer final : public SplatRenderer {
 
  private:
   bool readyForFrame(const Frame& frame) const;
-  VkBuffer updateCamera(const Frame& frame, uint32_t slot);
   bool createPipelines();
   void rebuildPipelinesIfNeeded();
   void rebuildSurface(VulkanFrameLoop::Status status);

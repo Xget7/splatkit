@@ -9,7 +9,7 @@ struct PartStyle {
   float opacity;
   float2 reserved;
 };
-struct PartStyles { PartStyle from[10]; PartStyle to[10]; uint states[1]; };
+struct PartStyles { PartStyle palette[10]; uint states[1]; };
 constant bool kIndexedLOD [[function_constant(3)]];
 constant bool kQuantizedDepth [[function_constant(4)]];
 
@@ -69,13 +69,7 @@ kernel void visibility(uint t [[thread_position_in_grid]],
     visible = projectSplat(cam, s, index, shData, p);
     if (kPartLabels && visible) {
       uint state = styles.states[labels[index]];
-      PartStyle a = styles.from[state], b = styles.to[state];
-      float t = cam.cameraPosition.w;
-      PartStyle style;
-      style.tint = mix(float3(a.tint), float3(b.tint), t);
-      style.tintAmount = mix(a.tintAmount, b.tintAmount, t);
-      style.brightness = mix(a.brightness, b.brightness, t);
-      style.opacity = mix(a.opacity, b.opacity, t);
+      PartStyle style = styles.palette[state];
       if (style.tintAmount != 0 || style.brightness != 1 || style.opacity != 1) {
       float2 rg = float2(as_type<half2>(p.color0));
       float2 ba = float2(as_type<half2>(p.color1));

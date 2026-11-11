@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "splatkit/highlight/Highlight.h"
 
 #include "rendering/vulkan/layout/VulkanShStorage.h"
 #include "rendering/vulkan/world/VulkanWorld.h"
@@ -163,6 +164,19 @@ void labels(const test::VulkanTestContext& gpu) {
   auto labelled = VulkanWorld::upload(*gpu.context, source, 0, false);
   require(labelled && labelled->styles[0]->size() == splatkit::labelStyleBytes(kHighestLabel + 1),
           "state buffer scales to highest label");
+  splatkit::Highlight highlight(45);
+  labelled->updateStyles(0, &highlight.styles());
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == 0, "unchanged frame writes nothing");
+  const uint16_t selected = 44;
+  highlight.set(&selected, 1);
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == splatkit::labelStyleBytes(45), "membership upload");
+  highlight.update(splatkit::Highlight::kFadeSeconds / 2);
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == splatkit::kPaletteBytes, "fade writes palette only");
+  labelled->updateStyles(0, &highlight.styles());
+  require(labelled->styleUploadBytes(0) == 0, "unchanged fade writes nothing");
   auto slab = VulkanWorld::createSlab(*gpu.context, 2, 0, false);
   require(slab && !slab->uploadTile(0, source), "reject labelled tiles");
 }

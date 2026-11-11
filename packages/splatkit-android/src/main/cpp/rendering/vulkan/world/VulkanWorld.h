@@ -1,3 +1,4 @@
+#include "../../../../../../../splatkit-engine/src/labels/LabelStyleUpload.h"
 #pragma once
 
 #include <array>
@@ -47,6 +48,8 @@ class VulkanWorld {
   std::unique_ptr<VulkanBuffer> labels;
   std::array<std::unique_ptr<VulkanBuffer>, kFramesInFlight> styles;
   void updateStyles(uint32_t slot, const LabelStyles* table) const;
+  std::size_t styleUploadBytes(uint32_t slot) const { return styleUploads_[slot].uploadedBytes(); }
+  std::size_t styleUploadOffset(uint32_t slot) const { return styleUploads_[slot].uploadOffset(); }
   std::unique_ptr<VulkanBuffer> splats;
   std::unique_ptr<VulkanBuffer> order;
   // Spherical harmonics bands 1 to `shDegree` in kVulkanShStorage layout.
