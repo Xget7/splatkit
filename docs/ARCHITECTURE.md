@@ -243,3 +243,12 @@ A reduced RGBA16F mip pyramid supplies a pull-push fill, followed by two separab
 At 2732x2048 the fill and scratch textures are 342x256, and the pyramid is 256x256 with nine levels.
 Pipelines are retained for the scene format and textures are retained until resize or disable.
 Pipeline failure is remembered for the format and allocation failure for the dimensions; both log and retain the original background path without failing the frame.
+
+### Drawn-frame queries
+
+The optional C++ engine API declares its thread contracts in [SplatEngine.h](../packages/splatkit-engine/include/splatkit/engine/SplatEngine.h).
+Enable drawn-frame queries before drawing to publish camera, lens, shared pick geometry and resolved label styles after successful submissions.
+Publication reuses style storage; queries copy the snapshot under a mutex and release it before tracing or projecting.
+Picking still requires enabling part picking before loading and follows the existing style visibility policy, independently of reveal.
+Render-thread display links can use the draw result and pending-work query to sleep until input, load completion or surface changes wake them.
+Explicit bounds framing retains its bounds across view-size changes until a dolly or explicit pose replaces it.
