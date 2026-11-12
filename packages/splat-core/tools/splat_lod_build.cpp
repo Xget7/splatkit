@@ -42,77 +42,81 @@ splat::Result<splat::Ok> writeNodeLabels(const splat::LodTree& tree, const std::
   return splat::Ok{};
 }
 
+struct Options {
+  splat::LodBuildOptions build;
+  splat::SplatDecodeOptions decode;
+  LabelFiles labels;
+};
+
+// Applies one numeric flag; false rejects an unknown key or an out-of-range value.
+bool applyNumber(Options& options, const std::string& key, const std::string& text) {
+  int value = 0;
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) return false;
+  if (key == "--depth" && value >= 1 && value <= static_cast<int>(splat::kMaxOctreeDepth)) {
+    options.build.octreeDepth = static_cast<uint32_t>(value);
+    return true;
+  }
+  if (key == "--sh" && value >= 0 && value <= 3) {
+    options.decode.maxShDegree = value;
+    return true;
+  }
+  return false;
+}
+
+bool parseOptions(int argc, char** argv, Options& options) {
+  for (int i = 3; i < argc; i += 2) {
+    const std::string key(argv[i]);
+    if (i + 1 >= argc) return false;
+    const std::string text(argv[i + 1]);
+    if (key == "--labels") {
+      if (i + 2 >= argc) return false;
+      options.labels = {text, argv[i + 2]};
+      ++i;
+    } else if (key == "--source-frame") {
+      options.decode.sourceFrame = splat::CoordinateFrame::parse(text);
+      if (!options.decode.sourceFrame) return false;
+    } else if (!applyNumber(options, key, text)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Prints a failed step's message; true means the caller should stop.
+template <typename T>
+bool failed(const splat::Result<T>& result) {
+  if (result) return false;
+  std::fprintf(stderr, "%s\n", result.error().message.c_str());
+  return true;
+}
+
 int run(int argc, char** argv) {
-  if (argc < 3) {
+  Options options;
+  if (argc < 3 || !parseOptions(argc, argv, options)) {
     std::fprintf(stderr,
                  "usage: splat_lod_build input.spz output.lodsplat [--depth 1..%u] [--sh 0..3]\n"
                  "         [--source-frame F] [--labels in.bin out.bin]\n",
                  splat::kMaxOctreeDepth);
     return 2;
   }
-  splat::LodBuildOptions build;
-  splat::SplatDecodeOptions decode;
-  LabelFiles labels;
-  for (int i = 3; i < argc; i += 2) {
-    const std::string key(argv[i]);
-    if (i + 1 >= argc) return 2;
-    const std::string text(argv[i + 1]);
-    if (key == "--labels") {
-      if (i + 2 >= argc) return 2;
-      labels = {text, argv[i + 2]};
-      ++i;
-      continue;
-    }
-    if (key == "--source-frame") {
-      decode.sourceFrame = splat::CoordinateFrame::parse(text);
-      if (!decode.sourceFrame) return 2;
-      continue;
-    }
-    int value = 0;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) return 2;
-    if (key == "--depth" && value >= 1 && value <= static_cast<int>(splat::kMaxOctreeDepth))
-      build.octreeDepth = static_cast<uint32_t>(value);
-    else if (key == "--sh" && value >= 0 && value <= 3)
-      decode.maxShDegree = value;
-    else
-      return 2;
-  }
   const auto start = std::chrono::steady_clock::now();
   // Mapping is released before building the hierarchy, limiting peak resident memory.
   auto cloud = [&]() -> splat::Result<splat::SplatCloud> {
     auto mapped = splat::MappedFile::open(argv[1]);
     if (!mapped) return mapped.error();
-    return splat::decodeSplatFile(mapped.value().data(), mapped.value().size(), decode);
+    return splat::decodeSplatFile(mapped.value().data(), mapped.value().size(), options.decode);
   }();
-  if (!cloud) {
-    std::fprintf(stderr, "%s\n", cloud.error().message.c_str());
+  if (failed(cloud)) return 1;
+  if (!options.labels.in.empty() && failed(attachLabels(cloud.value(), options.labels.in)))
     return 1;
-  }
-  if (!labels.in.empty()) {
-    const auto attached = attachLabels(cloud.value(), labels.in);
-    if (!attached) {
-      std::fprintf(stderr, "%s\n", attached.error().message.c_str());
-      return 1;
-    }
-  }
   std::printf("decoded %zu splats, SH%d; building depth %u octree\n", cloud.value().count(),
-              cloud.value().shDegree, build.octreeDepth);
+              cloud.value().shDegree, options.build.octreeDepth);
   std::fflush(stdout);
-  auto tree = splat::buildLodTree(std::move(cloud.value()), build);
+  auto tree = splat::buildLodTree(std::move(cloud.value()), options.build);
   tree.selection = splat::buildLodSelectionData(tree);
-  auto written = splat::writeLodSplat(tree, argv[2]);
-  if (!written) {
-    std::fprintf(stderr, "%s\n", written.error().message.c_str());
-    return 1;
-  }
-  if (!labels.out.empty()) {
-    written = writeNodeLabels(tree, labels.out);
-    if (!written) {
-      std::fprintf(stderr, "%s\n", written.error().message.c_str());
-      return 1;
-    }
-  }
+  if (failed(splat::writeLodSplat(tree, argv[2]))) return 1;
+  if (!options.labels.out.empty() && failed(writeNodeLabels(tree, options.labels.out))) return 1;
   const double seconds =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
   std::printf("wrote %zu nodes (%zu original leaves), %.2f seconds: %s\n", tree.nodeCount(),
